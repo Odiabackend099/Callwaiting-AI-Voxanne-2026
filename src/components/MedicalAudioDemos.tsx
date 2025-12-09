@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, Activity, Phone, Instagram, AlertCircle } from 'lucide-react';
 
@@ -13,6 +13,7 @@ interface AudioDemo {
     color: string;
     src: string; // Placeholder path
     transcript: string;
+    context: string;
 }
 
 const demos: AudioDemo[] = [
@@ -20,31 +21,34 @@ const demos: AudioDemo[] = [
         id: 'bbl',
         title: 'BBL Inquiry & Pricing',
         subtitle: 'Handling price objections and booking pre-op',
-        duration: '1:00',
+        duration: '0:30',
         icon: Activity,
         color: 'cyan',
-        src: '/audio/demos/bbl-inquiry-pricing.wav',
-        transcript: "Great question! Dr. Chen's BBL packages start at £8,500. Have you had a consultation before? ... Perfect! Let's schedule your pre-op appointment for Thursday at 2 PM."
+        src: '/audio/demos/bbl-inquiry-pricing.mp3',
+        context: "User asks: 'I'm dying for a BBL but I heard it's super expensive. What's the price?'",
+        transcript: "I completely understand why you'd ask about pricing first. It's a significant investment in yourself. Dr. Chen's all-inclusive BBL packages start at £8,500. That covers everything—anesthesia, facility fees, and your post-op care—so there are absolutely no hidden costs..."
     },
     {
         id: 'emergency',
         title: 'After-Hours Nurse Triage',
         subtitle: 'Escalating post-op complications safely',
-        duration: '0:45',
+        duration: '0:20',
         icon: AlertCircle,
         color: 'red',
-        src: '/audio/demos/after-hours-triage.wav',
-        transcript: "I understand you're experiencing swelling three days post-op. That requires immediate attention. I'm connecting you to the on-call surgical nurse now."
+        src: '/audio/demos/after-hours-triage.mp3',
+        context: "User says: 'My leg is really red and hot and I'm 3 days post-op. I'm freaking out.'",
+        transcript: "I hear that your leg is red and hot three days post-op. I am flagging this immediately. While I don't want you to panic, standard protocol requires us to assess this right away to rule out any complications. I am connecting you directly to Nurse Sarah..."
     },
     {
         id: 'lead',
         title: 'Instagram Lead Conversion',
         subtitle: 'Turning DM inquiries into bookings',
-        duration: '1:30',
+        duration: '0:25',
         icon: Instagram,
         color: 'purple',
-        src: '/audio/demos/instagram-lead-conversion.wav',
-        transcript: "Absolutely! I saw your message about Botox. Are you looking to treat forehead lines, crow's feet, or both? ... I have an opening this Thursday at 2 PM with Nurse Sarah."
+        src: '/audio/demos/instagram-lead-conversion.mp3',
+        context: "User DMs: 'Does the lunch break Botox really only take 15 mins? I have zero free time.'",
+        transcript: "Thanks for reaching out! The 'Lunch Break' Botox is honestly a game changer. It only takes about 15 minutes, so you can come in, get refreshed, and be back to your day instantly. We have a 'Glow and Go' spot available this Thursday..."
     }
 ];
 
@@ -76,7 +80,7 @@ export const MedicalAudioDemos = () => {
                         <span>Hear Roxanne in Action</span>
                     </div>
                     <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-                        Don't just read about it. <br />
+                        Don&apos;t just read about it. <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
                             Listen to the medical accuracy.
                         </span>
@@ -152,10 +156,18 @@ export const MedicalAudioDemos = () => {
                                 </div>
 
                                 {/* Transcript Snippet */}
-                                <div className="relative pl-4 border-l-2 border-slate-800">
-                                    <p className="text-sm text-slate-400 italic leading-relaxed">
-                                        "{demo.transcript}"
+                                <div className="space-y-3">
+                                    <div className="text-xs font-medium text-cyan-400 uppercase tracking-wider">in response to:</div>
+                                    <p className="text-sm text-slate-500 mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                                        {demo.context}
                                     </p>
+
+                                    <div className="relative pl-4 border-l-2 border-slate-700">
+                                        <div className="text-xs font-medium text-white mb-1">Roxanne:</div>
+                                        <p className="text-sm text-slate-300 italic leading-relaxed">
+                                            &quot;{demo.transcript}&quot;
+                                        </p>
+                                    </div>
                                 </div>
                             </motion.div>
                         );

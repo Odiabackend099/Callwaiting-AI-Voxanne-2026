@@ -35,10 +35,20 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
     // Get WebSocket URL
     const getWebSocketUrl = useCallback(() => {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // Always connect to backend server on port 8000 (Python FastAPI)
-        // We use a specific env var or default to 8000 to avoid conflicting with legacy Node server on 3000
-        const host = process.env.NEXT_PUBLIC_VOICE_BACKEND_URL || 'localhost:8000';
+        // Use secure WebSocket when talking to the hosted Roxanne backend.
+        // In dev, the frontend runs on localhost:9120 but the voice orchestrator
+        // is deployed on Render at roxanneai.onrender.com.
+
+        // If an explicit env var is provided, always prefer that.
+        const configuredHost = process.env.NEXT_PUBLIC_VOICE_BACKEND_URL;
+
+        // Default to the Render host if not overridden.
+        const host = configuredHost || 'roxanneai.onrender.com';
+
+        // Use wss for remote HTTPS host, ws for localhost/dev overrides.
+        const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+        const protocol = isLocal ? 'ws:' : 'wss:';
+
         return `${protocol}//${host}/ws/web-client`;
     }, []);
 
