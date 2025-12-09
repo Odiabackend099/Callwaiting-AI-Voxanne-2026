@@ -467,6 +467,254 @@ async def websocket_handler(ws: WebSocket):
             await agent.stop()
 
 
+# ============================================================================
+# WEB CLIENT WEBSOCKET - For browser-based voice chat
+# ============================================================================
+
+@app.websocket("/ws/web-client")
+async def web_client_handler(ws: WebSocket):
+    """Handle WebSocket connections from web browser clients."""
+    await ws.accept()
+    session_id = None
+    logger.info("🌐 Web client connected")
+    
+    # Send connected message
+    await ws.send_json({"type": "connected", "message": "Roxanne is ready"})
+    
+    agent = None
+    
+    try:
+        # Create a web-specific agent
+        agent = WebClientAgent(ws)
+        await agent.start()
+        
+        while True:
+            # Handle both text and binary messages
+            message = await ws.receive()
+            
+            if message["type"] == "websocket.receive":
+                if "text" in message:
+                    # JSON control messages
+                    data = json.loads(message["text"])
+                    msg_type = data.get("type")
+                    
+                    if msg_type == "ping":
+                        await ws.send_json({"type": "pong"})
+                    elif msg_type == "stop":
+                        break
+                        
+                elif "bytes" in message:
+                    # Binary audio data from browser mic
+                    audio_bytes = message["bytes"]
+                    if agent and len(audio_bytes) > 0:
+                        await agent.send_audio_bytes(audio_bytes)
+                        
+            elif message["type"] == "websocket.disconnect":
+                break
+                
+    except Exception as e:
+        logger.error(f"❌ Web client error: {e}")
+        try:
+            await ws.send_json({"type": "error", "error": str(e)})
+        except:
+            pass
+    finally:
+        if agent:
+            await agent.stop()
+        logger.info("🌐 Web client disconnected")
+
+
+class WebClientAgent:
+    """Agent for handling web browser voice clients."""
+    
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
+        self.deepgram_ws = None
+        self.groq = AsyncGroq(api_key=GROQ_KEY)
+        self.http_session = None
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        self.state = State.LISTENING
+        self.is_speaking = False
+        self.cancel_speech = False
+        self.tasks = []
+        
+    async def start(self):
+        """Initialize connections."""
+        self.http_session = aiohttp.ClientSession()
+        await self._connect_deepgram()
+        logger.info("🌐 Web client agent started")
+        
+    async def stop(self):
+        """Clean up resources."""
+        for task in self.tasks:
+            task.cancel()
+        if self.deepgram_ws:
+            await self.deepgram_ws.close()
+        if self.http_session:
+            await self.http_session.close()
+        logger.info("🌐 Web client agent stopped")
+        
+    async def _connect_deepgram(self):
+        """Connect to Deepgram for STT with web audio settings."""
+        # Web browsers typically send 16kHz PCM audio
+        url = (
+            "wss://api.deepgram.com/v1/listen?"
+            "model=nova-2&encoding=linear16&sample_rate=16000&channels=1&"
+            "interim_results=true&endpointing=180&utterance_end_ms=1000&"
+            "smart_format=true&punctuate=true"
+        )
+        
+        self.deepgram_ws = await websockets.connect(url, additional_headers={
+            "Authorization": f"Token {DEEPGRAM_KEY}"
+        })
+        
+        # Start listening for transcripts
+        task = asyncio.create_task(self._listen_deepgram())
+        self.tasks.append(task)
+        logger.info("🎤 Deepgram connected for web client")
+        
+    async def _listen_deepgram(self):
+        """Listen for Deepgram transcripts."""
+        try:
+            async for message in self.deepgram_ws:
+                data = json.loads(message)
+                
+                if data.get("type") == "Results":
+                    alt = data.get("channel", {}).get("alternatives", [{}])[0]
+                    transcript = alt.get("transcript", "").strip()
+                    is_final = data.get("is_final", False)
+                    
+                    if transcript:
+                        # Send transcript to web client
+                        await self.ws.send_json({
+                            "type": "transcript",
+                            "text": transcript,
+                            "is_final": is_final,
+                            "speaker": "user",
+                            "confidence": alt.get("confidence", 0)
+                        })
+                        
+                        # Process final transcripts
+                        if is_final and self.state == State.LISTENING:
+                            await self._process_input(transcript)
+                            
+        except Exception as e:
+            logger.error(f"❌ Deepgram listener error: {e}")
+            
+    async def send_audio_bytes(self, audio_bytes: bytes):
+        """Send raw audio bytes to Deepgram."""
+        if self.deepgram_ws and self.state == State.LISTENING:
+            try:
+                await self.deepgram_ws.send(audio_bytes)
+            except Exception as e:
+                logger.error(f"❌ Error sending audio to Deepgram: {e}")
+                
+    async def _process_input(self, text: str):
+        """Process user input and generate response."""
+        if not text or len(text) < 2:
+            return
+            
+        self.state = State.PROCESSING
+        self.cancel_speech = False
+        
+        # Notify client we're processing
+        await self.ws.send_json({"type": "state", "to": "PROCESSING"})
+        
+        self.messages.append({"role": "user", "content": text})
+        
+        try:
+            # Stream LLM response
+            response_text = ""
+            sentence_buffer = ""
+            
+            stream = await self.groq.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=self.messages,
+                temperature=0.9,
+                max_tokens=200,
+                stream=True
+            )
+            
+            self.state = State.SPEAKING
+            self.is_speaking = True
+            await self.ws.send_json({"type": "state", "to": "SPEAKING"})
+            
+            async for chunk in stream:
+                if self.cancel_speech:
+                    break
+                    
+                delta = chunk.choices[0].delta.content or ""
+                response_text += delta
+                sentence_buffer += delta
+                
+                # Check for sentence boundaries
+                for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
+                    if punct in sentence_buffer:
+                        parts = sentence_buffer.split(punct, 1)
+                        sentence = parts[0] + punct.strip()
+                        sentence_buffer = parts[1] if len(parts) > 1 else ""
+                        
+                        if sentence.strip():
+                            # Send text to client
+                            await self.ws.send_json({
+                                "type": "response",
+                                "text": sentence.strip(),
+                                "speaker": "agent"
+                            })
+                            
+                            # Generate and stream TTS
+                            await self._speak_sentence(sentence.strip())
+                        break
+                        
+            # Handle remaining text
+            if sentence_buffer.strip() and not self.cancel_speech:
+                await self.ws.send_json({
+                    "type": "response",
+                    "text": sentence_buffer.strip(),
+                    "speaker": "agent"
+                })
+                await self._speak_sentence(sentence_buffer.strip())
+                
+            # Save response
+            if response_text:
+                self.messages.append({"role": "assistant", "content": response_text})
+                
+        except Exception as e:
+            logger.error(f"❌ LLM error: {e}")
+            await self.ws.send_json({"type": "error", "error": str(e)})
+        finally:
+            self.state = State.LISTENING
+            self.is_speaking = False
+            await self.ws.send_json({"type": "state", "to": "LISTENING"})
+            
+    async def _speak_sentence(self, text: str):
+        """Generate TTS and send audio to web client."""
+        if self.cancel_speech:
+            return
+            
+        try:
+            # Use Deepgram TTS with web-compatible format (mp3)
+            url = f"https://api.deepgram.com/v1/speak?model={TTS_MODEL}&encoding=mp3"
+            
+            async with self.http_session.post(
+                url,
+                headers={
+                    "Authorization": f"Token {DEEPGRAM_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={"text": text}
+            ) as resp:
+                if resp.status == 200:
+                    audio_data = await resp.read()
+                    # Send as binary WebSocket message
+                    await self.ws.send_bytes(audio_data)
+                else:
+                    logger.error(f"❌ TTS error: {resp.status}")
+                    
+        except Exception as e:
+            logger.error(f"❌ TTS error: {e}")
+
+
 if __name__ == "__main__":
     import uvicorn
     
