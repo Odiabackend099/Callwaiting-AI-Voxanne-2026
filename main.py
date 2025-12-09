@@ -564,9 +564,18 @@ class WebClientAgent:
             "smart_format=true&punctuate=true"
         )
         
-        self.deepgram_ws = await websockets.connect(url, additional_headers={
-            "Authorization": f"Token {DEEPGRAM_KEY}"
-        })
+        # Use extra_headers for newer websockets versions, fallback for older
+        try:
+            self.deepgram_ws = await websockets.connect(
+                url, 
+                extra_headers={"Authorization": f"Token {DEEPGRAM_KEY}"}
+            )
+        except TypeError:
+            # Fallback for older websockets versions
+            self.deepgram_ws = await websockets.connect(
+                url,
+                additional_headers={"Authorization": f"Token {DEEPGRAM_KEY}"}
+            )
         
         # Start listening for transcripts
         task = asyncio.create_task(self._listen_deepgram())
