@@ -20,21 +20,21 @@ export default function Hero({
     ctaText = "Book Your Strategy Call"
 }: HeroProps) {
     return (
-        <section className="relative h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-black text-white">
+        <section className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-black text-white pt-32 pb-20">
             {/* Background Ambience */}
-            <div className="absolute inset-0 z-0">
+            <div className="absolute inset-0 z-0 pointer-events-none">
                 <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-900/20 rounded-full blur-[120px] animate-pulse-glow" />
                 <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/20 rounded-full blur-[120px] animate-pulse-glow [animation-delay:1s]" />
             </div>
 
-            <div className="container relative z-10 px-4 md:px-6 flex flex-col items-center text-center">
+            <div className="container relative z-10 px-4 md:px-6 flex flex-col items-center text-center max-w-5xl mx-auto">
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="mb-6"
+                    className="mb-8"
                 >
-                    <span className="inline-block py-1 px-3 rounded-full bg-white/10 border border-white/20 text-sm font-light tracking-wider uppercase backdrop-blur-md">
+                    <span className="inline-block py-1.5 px-4 rounded-full bg-white/10 border border-white/20 text-sm font-light tracking-wider uppercase backdrop-blur-md">
                         {badgeText}
                     </span>
                 </motion.div>
@@ -43,7 +43,7 @@ export default function Hero({
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-                    className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60"
+                    className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 leading-tight"
                 >
                     {title}
                 </motion.h1>
@@ -52,58 +52,49 @@ export default function Hero({
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-                    className="text-lg md:text-xl text-slate-400 max-w-2xl mb-10 font-light leading-relaxed"
+                    className="text-lg md:text-2xl text-slate-400 max-w-3xl mb-12 font-light leading-relaxed"
                 >
                     {subtitle}
                 </motion.p>
 
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-                    className="flex flex-col items-center gap-6 w-full"
+                    className="flex flex-col items-center gap-12 w-full"
                 >
-                    <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                    <div className="flex flex-col sm:flex-row gap-6 w-full justify-center">
                         <button
                             onClick={onBookDemo}
-                            className="px-8 py-4 bg-white text-black rounded-full text-lg font-semibold hover:bg-slate-200 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
+                            className="px-10 py-5 bg-white text-black rounded-full text-xl font-bold hover:bg-slate-200 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)] transform hover:-translate-y-1"
                         >
                             {ctaText}
                         </button>
                     </div>
 
-                    <div className="w-full max-w-2xl mt-8 flex flex-col items-center gap-8">
+                    <div className="w-full max-w-3xl flex flex-col items-center gap-10">
                         {/* Passive Audio Experience */}
                         <HeroAudioPlayer />
 
                         {/* Active Divider */}
-                        <div className="flex items-center gap-4 w-full opacity-50">
+                        <div className="flex items-center gap-4 w-full opacity-40 max-w-md">
                             <div className="h-[1px] bg-white/20 flex-1" />
-                            <span className="text-xs uppercase tracking-widest text-slate-500">OR Try It Live</span>
+                            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold">Live Interactive Demo</span>
                             <div className="h-[1px] bg-white/20 flex-1" />
                         </div>
 
                         {/* Active Call Experience */}
-                        <div className="w-full max-w-md">
-                            <p className="text-center text-sm text-slate-500 mb-3 uppercase tracking-widest font-medium">
-                                Enter your number to get a call:
+                        <div className="w-full max-w-md relative">
+                            <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-3xl blur-xl -z-10" />
+                            <p className="text-center text-sm text-slate-400 mb-4 uppercase tracking-widest font-medium">
+                                Enter your number to get a call now:
                             </p>
                             <OutboundDemo />
                         </div>
                     </div>
                 </motion.div>
             </div>
-
-            {/* Scroll Indicator */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.5, duration: 1 }}
-                className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-            >
-                <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Scroll</span>
-                <div className="w-[1px] h-12 bg-gradient-to-b from-slate-500 to-transparent opacity-50" />
-            </motion.div>
         </section>
+    );
     );
 }
