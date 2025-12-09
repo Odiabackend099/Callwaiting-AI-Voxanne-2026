@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import OutboundDemo from "./OutboundDemo";
+import HeroAudioPlayer from "./HeroAudioPlayer";
 
 interface HeroProps {
     onBookDemo?: () => void;
@@ -71,11 +72,24 @@ export default function Hero({
                         </button>
                     </div>
 
-                    <div className="w-full max-w-md mt-4">
-                        <p className="text-center text-sm text-slate-500 mb-3 uppercase tracking-widest font-medium">
-                            Hear Roxanne Handle a Plastic Surgery Call—Live:
-                        </p>
-                        <OutboundDemo />
+                    <div className="w-full max-w-2xl mt-8 flex flex-col items-center gap-8">
+                        {/* Passive Audio Experience */}
+                        <HeroAudioPlayer />
+
+                        {/* Active Divider */}
+                        <div className="flex items-center gap-4 w-full opacity-50">
+                            <div className="h-[1px] bg-white/20 flex-1" />
+                            <span className="text-xs uppercase tracking-widest text-slate-500">OR Try It Live</span>
+                            <div className="h-[1px] bg-white/20 flex-1" />
+                        </div>
+
+                        {/* Active Call Experience */}
+                        <div className="w-full max-w-md">
+                            <p className="text-center text-sm text-slate-500 mb-3 uppercase tracking-widest font-medium">
+                                Enter your number to get a call:
+                            </p>
+                            <OutboundDemo />
+                        </div>
                     </div>
                 </motion.div>
             </div>

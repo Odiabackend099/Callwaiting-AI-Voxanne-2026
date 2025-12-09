@@ -3,14 +3,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
 import { useVoiceAgent } from '@/hooks/useVoiceAgent';
-import { VoiceControls } from '@/components/voice/VoiceControls';
-import { TranscriptDisplay } from '@/components/voice/TranscriptDisplay';
 
 export default function VoiceTestPage() {
     const router = useRouter();
     const [callStarted, setCallStarted] = useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
 
     const {
         isConnected,
@@ -25,35 +24,41 @@ export default function VoiceTestPage() {
     } = useVoiceAgent({
         onConnected: () => {
             console.log('✅ Connected to voice agent');
+            setIsConnecting(false);
         },
         onDisconnected: () => {
             console.log('🔌 Disconnected from voice agent');
             setCallStarted(false);
+            setIsConnecting(false);
         },
         onError: (err) => {
             console.error('❌ Voice agent error:', err);
+            setIsConnecting(false);
         },
     });
 
     const handleStartCall = async () => {
         try {
+            setIsConnecting(true);
             await connect();
             setCallStarted(true);
             // Auto-start recording after connection
             setTimeout(async () => {
                 await startRecording();
-            }, 1000);
+            }, 500);
         } catch (error) {
             console.error('Failed to start call:', error);
+            setIsConnecting(false);
         }
     };
 
     const handleEndCall = () => {
+        stopRecording();
         disconnect();
         setCallStarted(false);
     };
 
-    const toggleRecording = async () => {
+    const toggleMute = async () => {
         if (isRecording) {
             stopRecording();
         } else {
@@ -62,25 +67,34 @@ export default function VoiceTestPage() {
     };
 
     return (
-        <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
-            {/* Header - Minimal & Centered */}
-            <div className="flex-shrink-0 p-4 flex justify-between items-center max-w-2xl mx-auto w-full z-30">
-                <button
-                    onClick={() => router.push('/dashboard')}
-                    className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors"
-                    aria-label="Back to Dashboard"
-                >
-                    <ArrowLeft className="w-5 h-5" />
-                </button>
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+            {/* Header */}
+            <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-white/5">
+                <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+                    <button
+                        onClick={() => router.push('/dashboard')}
+                        className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                        <span className="text-sm font-medium">Back</span>
+                    </button>
+                    
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                            <span className="text-white text-sm font-bold">R</span>
+                        </div>
+                        <div>
+                            <h1 className="text-white font-semibold">Roxanne AI</h1>
+                            <p className="text-xs text-slate-400">Voice Assistant</p>
+                        </div>
+                    </div>
+                    
+                    <div className="w-16" /> {/* Spacer */}
+                </div>
+            </header>
 
-                <h1 className="text-sm font-medium text-slate-300">Roxanne AI</h1>
-
-                <div className="w-9" /> {/* Spacer for balance */}
-            </div>
-
-            {/* Main Content Container - Centered */}
-            <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto relative min-h-0">
-
+            {/* Main Content */}
+            <main className="pt-24 pb-40 px-4 max-w-4xl mx-auto">
                 {/* Error Banner */}
                 <AnimatePresence>
                     {error && (
@@ -88,36 +102,147 @@ export default function VoiceTestPage() {
                             initial={{ opacity: 0, y: -20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            className="absolute top-0 left-4 right-4 z-20"
+                            className="mb-6"
                         >
-                            <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-3 flex items-center gap-3 justify-center backdrop-blur-md">
-                                <AlertCircle className="w-4 h-4 text-red-400" />
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-center gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
                                 <p className="text-red-300 text-sm">{error}</p>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Chat/Transcript Area - Flexible Height with proper padding for mobile */}
-                <div className="flex-1 overflow-hidden relative min-h-0">
-                    {/* Gradient Overlay Top */}
-                    <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-slate-950 to-transparent z-10 pointer-events-none" />
+                {/* Conversation Area */}
+                <div className="min-h-[60vh] flex flex-col">
+                    {transcripts.length === 0 ? (
+                        /* Empty State */
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex-1 flex flex-col items-center justify-center text-center py-20"
+                        >
+                            {/* Animated Avatar */}
+                            <motion.div 
+                                className={`relative mb-8 ${
+                                    callStarted && isSpeaking ? 'animate-pulse' : ''
+                                }`}
+                            >
+                                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 flex items-center justify-center shadow-2xl shadow-purple-500/30">
+                                    <span className="text-white text-5xl font-bold">R</span>
+                                </div>
+                                {callStarted && (
+                                    <motion.div
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-green-500 flex items-center justify-center border-4 border-slate-900"
+                                    >
+                                        {isSpeaking ? (
+                                            <Volume2 className="w-5 h-5 text-white animate-pulse" />
+                                        ) : isRecording ? (
+                                            <Mic className="w-5 h-5 text-white" />
+                                        ) : (
+                                            <Phone className="w-4 h-4 text-white" />
+                                        )}
+                                    </motion.div>
+                                )}
+                            </motion.div>
 
-                    <TranscriptDisplay
-                        transcripts={transcripts}
-                        isSpeaking={isSpeaking}
-                        className="h-full pt-4 pb-32" // Extra bottom padding for mobile controls
-                    />
+                            <h2 className="text-2xl font-bold text-white mb-3">
+                                {callStarted 
+                                    ? isSpeaking 
+                                        ? "Roxanne is speaking..." 
+                                        : isRecording 
+                                            ? "Listening..." 
+                                            : "Connected"
+                                    : "Talk to Roxanne"
+                                }
+                            </h2>
+                            <p className="text-slate-400 max-w-md">
+                                {callStarted 
+                                    ? "Speak naturally. Roxanne will respond in real-time."
+                                    : "Experience our AI voice receptionist. Click below to start a conversation."
+                                }
+                            </p>
 
-                    {/* Gradient Overlay Bottom - taller for mobile */}
-                    <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent z-10 pointer-events-none" />
+                            {/* Features List - Only show when not in call */}
+                            {!callStarted && (
+                                <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-lg">
+                                    {[
+                                        { icon: "🎯", title: "Natural Speech", desc: "Just talk normally" },
+                                        { icon: "⚡", title: "Real-time", desc: "Instant responses" },
+                                        { icon: "🔒", title: "Private", desc: "Secure connection" },
+                                    ].map((feature, i) => (
+                                        <motion.div
+                                            key={i}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.1 * i }}
+                                            className="bg-white/5 rounded-2xl p-4 text-center border border-white/5"
+                                        >
+                                            <div className="text-2xl mb-2">{feature.icon}</div>
+                                            <div className="text-white font-medium text-sm">{feature.title}</div>
+                                            <div className="text-slate-500 text-xs">{feature.desc}</div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            )}
+                        </motion.div>
+                    ) : (
+                        /* Transcript Messages */
+                        <div className="space-y-4 py-4">
+                            {transcripts.map((msg, index) => (
+                                <motion.div
+                                    key={msg.id || index}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`flex ${
+                                        msg.speaker === 'agent' ? 'justify-start' : 'justify-end'
+                                    }`}
+                                >
+                                    <div
+                                        className={`max-w-[80%] rounded-2xl px-5 py-3 ${
+                                            msg.speaker === 'agent'
+                                                ? 'bg-gradient-to-br from-violet-600/80 to-purple-600/80 text-white'
+                                                : 'bg-white/10 text-white border border-white/10'
+                                        }`}
+                                    >
+                                        <p className="text-sm leading-relaxed">{msg.text}</p>
+                                        <p className={`text-xs mt-1 ${
+                                            msg.speaker === 'agent' ? 'text-violet-200' : 'text-slate-500'
+                                        }`}>
+                                            {msg.speaker === 'agent' ? 'Roxanne' : 'You'}
+                                        </p>
+                                    </div>
+                                </motion.div>
+                            ))}
+                            
+                            {/* Speaking Indicator */}
+                            {isSpeaking && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="flex justify-start"
+                                >
+                                    <div className="bg-violet-600/50 rounded-2xl px-5 py-3 flex items-center gap-2">
+                                        <div className="flex gap-1">
+                                            <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                            <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                            <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                        </div>
+                                        <span className="text-violet-200 text-sm">Roxanne is speaking...</span>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </div>
+                    )}
                 </div>
-            </div>
+            </main>
 
-            {/* Bottom Controls Area - FIXED at bottom for mobile */}
-            <div className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/50 z-40 pb-safe">
-                <div className="w-full max-w-2xl mx-auto px-4 py-4">
+            {/* Bottom Controls */}
+            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent pt-10 pb-8 px-4">
+                <div className="max-w-md mx-auto">
                     {!callStarted ? (
+                        /* Start Button */
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -125,23 +250,88 @@ export default function VoiceTestPage() {
                         >
                             <button
                                 onClick={handleStartCall}
-                                className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-950 rounded-full hover:scale-105 transition-all font-semibold text-lg shadow-xl shadow-white/10"
+                                disabled={isConnecting}
+                                className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-full font-semibold text-lg shadow-2xl shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                             >
-                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                Start Conversation
+                                {isConnecting ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Connecting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Phone className="w-5 h-5" />
+                                        Start Conversation
+                                    </>
+                                )}
+                                
+                                {/* Glow effect */}
+                                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 blur-xl opacity-50 group-hover:opacity-75 transition-opacity -z-10" />
                             </button>
-                            <p className="mt-3 text-slate-500 text-sm">
-                                Tap to start speaking with Roxanne
+                            <p className="mt-4 text-slate-500 text-sm">
+                                Click to start talking with Roxanne
                             </p>
                         </motion.div>
                     ) : (
-                        <VoiceControls
-                            isConnected={isConnected}
-                            isRecording={isRecording}
-                            isSpeaking={isSpeaking}
-                            onToggleRecording={toggleRecording}
-                            onEndCall={handleEndCall}
-                        />
+                        /* In-Call Controls */
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex items-center justify-center gap-6"
+                        >
+                            {/* Mute Button */}
+                            <button
+                                onClick={toggleMute}
+                                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                                    isRecording
+                                        ? 'bg-white/10 text-white hover:bg-white/20'
+                                        : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                                }`}
+                            >
+                                {isRecording ? (
+                                    <Mic className="w-7 h-7" />
+                                ) : (
+                                    <MicOff className="w-7 h-7" />
+                                )}
+                            </button>
+
+                            {/* End Call Button */}
+                            <button
+                                onClick={handleEndCall}
+                                className="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-2xl shadow-red-500/30 hover:scale-105 transition-all"
+                            >
+                                <PhoneOff className="w-8 h-8" />
+                            </button>
+
+                            {/* Speaker Indicator */}
+                            <div
+                                className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                                    isSpeaking
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : 'bg-white/5 text-slate-500'
+                                }`}
+                            >
+                                <Volume2 className={`w-7 h-7 ${isSpeaking ? 'animate-pulse' : ''}`} />
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* Connection Status */}
+                    {callStarted && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="mt-4 text-center"
+                        >
+                            <div className="inline-flex items-center gap-2 text-sm">
+                                <span className={`w-2 h-2 rounded-full ${
+                                    isConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'
+                                }`} />
+                                <span className="text-slate-400">
+                                    {isConnected ? 'Connected' : 'Reconnecting...'}
+                                </span>
+                            </div>
+                        </motion.div>
                     )}
                 </div>
             </div>
