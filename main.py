@@ -470,13 +470,17 @@ async def websocket_handler(ws: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     
+    # Get port from environment (Render sets this)
+    port = int(os.getenv("PORT", 3000))
+    
     print("=" * 60)
     print("  ROXANNE ULTRA - VAPI LEVEL ENHANCEMENTS")
     print("=" * 60)
     print(f"  📡 Deepgram: {'✅' if DEEPGRAM_KEY else '❌'}")
     print(f"  🤖 Groq: {'✅' if GROQ_KEY else '❌'}")
+    print(f"  🌐 Port: {port}")
     print("  ⚡ Latency: 180ms Endpointing")
-    print("  🎯 Brain: Maya-Level + Freedom + Multilingual")
+    print("  🎯 Brain: Maya-Level + Freedom + Agency")
     print("=" * 60)
     
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=port)
