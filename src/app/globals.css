@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+}
+
+@theme {
+  --font-sans: var(--font-lato);
+  --font-serif: var(--font-playfair);
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  background-image: url('/ceramic-light.png');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  font-family: var(--font-lato), sans-serif;
+  transition: background-image 0.3s ease-in-out;
+}
+
+.dark body {
+  background-image: none;
+  background: #000000;
+}
+
+@keyframes aurora {
+  0% {
+    background-position: 50% 50%, 50% 50%;
+  }
+
+  100% {
+    background-position: 350% 50%, 350% 50%;
+  }
+}
+
+.animate-aurora {
+  animation: aurora 60s linear infinite;
+}
+
+.glass-panel {
+  @apply bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl border border-white/20 dark:border-zinc-800/50 shadow-xl;
+}
+
+.glass-card {
+  @apply bg-white/40 dark:bg-zinc-900/40 backdrop-blur-lg border border-white/30 dark:border-zinc-800/50 hover:bg-white/60 dark:hover:bg-zinc-900/60 transition-all duration-300;
+}
+
+@keyframes heartbeat {
+  0% {
+    transform: scale(1);
+  }
+
+  15% {
+    transform: scale(1.05);
+  }
+
+  30% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.05);
+  }
+
+  60% {
+    transform: scale(1);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 3s infinite;
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.8);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes marquee2 {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
+
+.animate-marquee2 {
+  animation: marquee2 25s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+.animate-scanline {
+  animation: scanline 2.5s linear infinite;
+}

@@ -1,0 +1,118 @@
+# Prometheus alert rules for CallWaiting AI
+groups:
+  - name: callwaiting-ai-alerts
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: rate(voice_orchestrator_errors_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 2 minutes"
+
+      # High latency alerts
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, voice_orchestrator_latency_seconds_bucket) > 0.6
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency detected"
+          description: "P95 latency is {{ $value | humanizeDuration }} for the last 3 minutes"
+
+      - alert: HighP99Latency
+        expr: histogram_quantile(0.99, voice_orchestrator_latency_seconds_bucket) > 0.8
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical P99 latency detected"
+          description: "P99 latency is {{ $value | humanizeDuration }} for the last 2 minutes"
+
+      # Component latency alerts
+      - alert: HighSTTLatency
+        expr: voice_orchestrator_stt_ttft_seconds > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High STT latency"
+          description: "STT TTFT is {{ $value | humanizeDuration }}"
+
+      - alert: HighLLMLatency
+        expr: voice_orchestrator_llm_ttft_seconds > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High LLM latency"
+          description: "LLM TTFT is {{ $value | humanizeDuration }}"
+
+      - alert: HighTTSLatency
+        expr: voice_orchestrator_tts_ttft_seconds > 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High TTS latency"
+          description: "TTS TTFT is {{ $value | humanizeDuration }}"
+
+      # System resource alerts
+      - alert: HighCPUUsage
+        expr: cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% for the last 10 minutes"
+
+      - alert: HighMemoryUsage
+        expr: memory_usage_mb > 2048
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}MB for the last 5 minutes"
+
+      # Active calls alert
+      - alert: TooManyActiveCalls
+        expr: active_calls > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of active calls"
+          description: "{{ $value }} active calls for the last 2 minutes"
+
+      # Interruption rate alert
+      - alert: HighInterruptionRate
+        expr: rate(voice_orchestrator_interruptions_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High interruption rate"
+          description: "Interruption rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # WebSocket connection alerts
+      - alert: WebSocketConnectionsHigh
+        expr: websocket_connections > 200
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket connection count"
+          description: "{{ $value }} WebSocket connections for the last 2 minutes"
+
+      - alert: WebSocketDisconnectRateHigh
+        expr: rate(websocket_disconnects_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket disconnect rate"
+          description: "WebSocket disconnect rate is {{ $value | humanizePercentage }} for the last 3 minutes"
