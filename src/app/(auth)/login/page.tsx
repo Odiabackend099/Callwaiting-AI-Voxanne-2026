@@ -250,15 +250,16 @@ export default function LoginPage() {
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 1, ease: "easeInOut" }}
                             className="absolute inset-0"
-                            as="div"
                         >
-                            <Image
-                                src={BRANDING_IMAGES[currentImageIndex]}
-                                alt={`CallWaiting AI Branding ${currentImageIndex + 1}`}
-                                fill
-                                className="object-contain"
-                                priority={currentImageIndex === 0}
-                            />
+                            <div className="relative w-full h-full">
+                                <Image
+                                    src={BRANDING_IMAGES[currentImageIndex]}
+                                    alt={`CallWaiting AI Branding ${currentImageIndex + 1}`}
+                                    fill
+                                    className="object-contain"
+                                    priority={currentImageIndex === 0}
+                                />
+                            </div>
                         </motion.div>
                     </AnimatePresence>
 
