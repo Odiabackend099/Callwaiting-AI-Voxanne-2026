@@ -62,12 +62,15 @@ export default function LoginPage() {
             }
 
             if (user) {
+                // Wait a moment for auth state to update, then redirect
+                await new Promise(resolve => setTimeout(resolve, 500));
                 router.push('/dashboard');
+            } else {
+                throw new Error('Sign in failed - no user returned');
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Sign in failed';
             setError(message);
-        } finally {
             setLoading(false);
         }
     };

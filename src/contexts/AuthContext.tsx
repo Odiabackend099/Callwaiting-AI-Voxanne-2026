@@ -106,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }
                 } else if (event === 'SIGNED_OUT') {
                     setUserSettings(null);
+                    setLoading(false);
                     router.push('/login');
                 }
             }
