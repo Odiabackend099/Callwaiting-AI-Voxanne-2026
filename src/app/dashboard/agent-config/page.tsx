@@ -40,6 +40,7 @@ interface AgentConfig {
   systemPrompt: string;
   firstMessage: string;
   voice: string;
+  language: string;
   maxDuration: number;
 }
 
@@ -64,6 +65,7 @@ export default function AgentConfigPage() {
     systemPrompt: '',
     firstMessage: '',
     voice: '',
+    language: 'en-GB',
     maxDuration: AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
   });
   
@@ -71,6 +73,7 @@ export default function AgentConfigPage() {
     systemPrompt: '',
     firstMessage: '',
     voice: '',
+    language: 'en-GB',
     maxDuration: AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
   });
   
@@ -116,6 +119,7 @@ export default function AgentConfigPage() {
               systemPrompt: vapi.systemPrompt || '',
               firstMessage: vapi.firstMessage || '',
               voice: vapi.voice || '',
+              language: vapi.language || 'en-GB',
               maxDuration
             };
             setConfig(newConfig);
@@ -137,6 +141,7 @@ export default function AgentConfigPage() {
     return config.systemPrompt !== originalConfig.systemPrompt ||
            config.firstMessage !== originalConfig.firstMessage ||
            config.voice !== originalConfig.voice ||
+           config.language !== originalConfig.language ||
            config.maxDuration !== originalConfig.maxDuration;
   };
 
@@ -144,6 +149,7 @@ export default function AgentConfigPage() {
     if (!config.systemPrompt.trim()) return ERROR_MESSAGES.EMPTY_VALUE;
     if (!config.firstMessage.trim()) return ERROR_MESSAGES.EMPTY_VALUE;
     if (!config.voice) return 'Please select a voice';
+    if (!config.language) return 'Please select a language';
     if (config.maxDuration < AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS || 
         config.maxDuration > AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS) {
       return ERROR_MESSAGES.INVALID_DURATION;
@@ -167,6 +173,7 @@ export default function AgentConfigPage() {
         systemPrompt: config.systemPrompt,
         firstMessage: config.firstMessage,
         voiceId: config.voice,
+        language: config.language,
         maxDurationSeconds: config.maxDuration
       };
 
@@ -362,6 +369,39 @@ export default function AgentConfigPage() {
               {!vapiConfigured && (
                 <p className="text-xs text-amber-400 mt-2">{ERROR_MESSAGES.VAPI_NOT_CONFIGURED}</p>
               )}
+            </div>
+
+            {/* Language Selection */}
+            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
+              <h3 className="font-bold mb-4 flex items-center gap-2">
+                <Bot className="w-5 h-5 text-cyan-400" />
+                Language
+              </h3>
+              <select
+                value={config.language}
+                onChange={(e) => setConfig(prev => ({ ...prev, language: e.target.value }))}
+                className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none"
+              >
+                <option value="en-GB">English (UK)</option>
+                <option value="en-US">English (US)</option>
+                <option value="es-ES">Spanish (Spain)</option>
+                <option value="es-MX">Spanish (Mexico)</option>
+                <option value="fr-FR">French</option>
+                <option value="de-DE">German</option>
+                <option value="it-IT">Italian</option>
+                <option value="pt-BR">Portuguese (Brazil)</option>
+                <option value="pt-PT">Portuguese (Portugal)</option>
+                <option value="nl-NL">Dutch</option>
+                <option value="pl-PL">Polish</option>
+                <option value="ru-RU">Russian</option>
+                <option value="ja-JP">Japanese</option>
+                <option value="zh-CN">Chinese (Simplified)</option>
+                <option value="zh-TW">Chinese (Traditional)</option>
+                <option value="ko-KR">Korean</option>
+                <option value="ar-SA">Arabic</option>
+                <option value="hi-IN">Hindi</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-2">Language for speech recognition and synthesis</p>
             </div>
 
             {/* First Message */}

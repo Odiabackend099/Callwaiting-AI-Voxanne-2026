@@ -97,6 +97,17 @@ function isValidVoiceId(voiceId: string): boolean {
   return VOICE_REGISTRY.some(v => v.id.toLowerCase() === (voiceId || '').toLowerCase());
 }
 
+/**
+ * Validates if a language code is supported
+ */
+function isValidLanguage(language: string): boolean {
+  const supportedLanguages = [
+    'en-GB', 'en-US', 'es-ES', 'es-MX', 'fr-FR', 'de-DE', 'it-IT',
+    'pt-BR', 'pt-PT', 'nl-NL', 'pl-PL', 'ru-RU', 'ja-JP',
+    'zh-CN', 'zh-TW', 'ko-KR', 'ar-SA', 'hi-IN'
+  ];
+  return supportedLanguages.includes(language);
+}
 
 // ========== TYPE DEFINITIONS ==========
 
@@ -1389,18 +1400,19 @@ router.post(
 
     try {
       const orgId: string = user.orgId;
-      const { systemPrompt, firstMessage, voiceId, maxDurationSeconds } = req.body;
+      const { systemPrompt, firstMessage, voiceId, maxDurationSeconds, language } = req.body;
 
       logger.info('Parsed request fields', {
         requestId,
         systemPromptLength: systemPrompt?.length,
         firstMessageLength: firstMessage?.length,
         voiceId,
-        maxDurationSeconds
+        maxDurationSeconds,
+        language
       });
 
       // Validate at least one field is provided
-      if (!systemPrompt && !firstMessage && !voiceId && maxDurationSeconds === undefined) {
+      if (!systemPrompt && !firstMessage && !voiceId && maxDurationSeconds === undefined && !language) {
         res.status(400).json({ error: 'No fields to update', requestId });
         return;
       }
@@ -1408,6 +1420,12 @@ router.post(
       // Validate voiceId if provided
       if (voiceId && !isValidVoiceId(voiceId)) {
         res.status(400).json({ error: 'Invalid voice selection', requestId });
+        return;
+      }
+
+      // Validate language if provided
+      if (language && !isValidLanguage(language)) {
+        res.status(400).json({ error: 'Invalid language selection', requestId });
         return;
       }
 
@@ -1509,6 +1527,7 @@ router.post(
       if (systemPrompt !== undefined) updatePayload.system_prompt = systemPrompt;
       if (firstMessage !== undefined) updatePayload.first_message = firstMessage;
       if (voiceId !== undefined) updatePayload.voice = voiceId;
+      if (language !== undefined) updatePayload.language = language;
       if (maxDurationSeconds !== undefined) updatePayload.max_call_duration = maxDurationSeconds;
 
       // Update agent behavior in database (partial update)
@@ -1671,7 +1690,8 @@ router.post(
         return;
       }
 
-      const assistantId = agent.vapi_assistant_id || (await ensureAssistantSynced(agent.id, vapiApiKey));
+      // Always re-sync to pick up latest system_prompt, voice, language, and other changes
+      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
 
       // Get Twilio phone number from settings
       const twilioFromNumber = settings.twilio_from_number;
@@ -1881,7 +1901,7 @@ router.post(
 
       const { data: agent } = await supabase
         .from('agents')
-        .select('id, vapi_assistant_id')
+        .select('id, system_prompt, first_message, voice, language, max_call_duration')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .maybeSingle();
@@ -1891,7 +1911,25 @@ router.post(
         return;
       }
 
-      const assistantId = agent.vapi_assistant_id || (await ensureAssistantSynced(agent.id, vapiApiKey));
+      // Validate agent has all required behavior fields
+      if (!agent.system_prompt || !agent.first_message || !agent.voice || !agent.language || !agent.max_call_duration) {
+        const missingFields = [
+          !agent.system_prompt && 'System Prompt',
+          !agent.first_message && 'First Message',
+          !agent.voice && 'Voice',
+          !agent.language && 'Language',
+          !agent.max_call_duration && 'Max Call Duration'
+        ].filter(Boolean);
+        
+        res.status(400).json({
+          error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
+          requestId
+        });
+        return;
+      }
+
+      // Always re-sync to pick up latest system_prompt, voice, language, and other changes
+      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
 
       // Create call_tracking row for web test
       const { data: trackingRow, error: trackingInsertError } = await supabase
