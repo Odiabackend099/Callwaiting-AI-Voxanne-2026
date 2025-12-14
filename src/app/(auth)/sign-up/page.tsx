@@ -1,9 +1,14 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { Mail, Lock, Building2, ArrowRight, Loader, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import Logo from '@/components/Logo';
 import Image from 'next/image';
 import { Calendar, CheckCircle, Users, Zap } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function SignUpPage() {
     return (
@@ -18,17 +23,9 @@ export default function SignUpPage() {
 
                 <div className="max-w-md w-full relative z-10">
                     <div className="text-center mb-8">
-                        <Link href="/" className="inline-flex items-center gap-3 mb-6">
-                            <div className="relative w-12 h-12">
-                                <Image
-                                    src="/callwaiting-ai-logo.png"
-                                    alt="CallWaiting AI Logo"
-                                    fill
-                                    className="object-contain"
-                                />
-                            </div>
-                            <span className="text-3xl font-bold tracking-tight">CallWaiting AI</span>
-                        </Link>
+                        <div className="flex justify-center mb-6">
+                            <Logo size="lg" showText={false} href="/" priority={true} />
+                        </div>
                         <h1 className="text-4xl font-serif font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
                             Book Your Demo
                         </h1>
