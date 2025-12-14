@@ -250,6 +250,7 @@ export default function LoginPage() {
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 1, ease: "easeInOut" }}
                             className="absolute inset-0"
+                            as="div"
                         >
                             <Image
                                 src={BRANDING_IMAGES[currentImageIndex]}
