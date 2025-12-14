@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ArrowRight, LayoutDashboard, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import Logo from "./Logo";
 
 export default function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -29,19 +29,7 @@ export default function Navbar() {
             >
                 <div className="container mx-auto px-6 flex items-center justify-between">
                     {/* Logo */}
-                    <Link href="/" className="flex items-center gap-3 group relative">
-                        <div className="relative w-14 h-14 transition-transform duration-300 group-hover:scale-105">
-                            <Image
-                                src="/callwaiting-ai-logo.png"
-                                alt="CallWaiting AI"
-                                fill
-                                sizes="56px"
-                                className="object-contain"
-                                priority
-                            />
-                        </div>
-                        <span className="text-3xl font-bold text-white tracking-tight">CallWaiting AI</span>
-                    </Link>
+                    <Logo size="xl" showText={true} href="/" priority={true} />
                     {/* Desktop Links */}
                     <div className="hidden md:flex items-center gap-8">
                         {["Features", "Pricing", "About", "Contact"].map((item) => (
