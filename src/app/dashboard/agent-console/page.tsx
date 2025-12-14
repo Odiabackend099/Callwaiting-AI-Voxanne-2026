@@ -243,7 +243,7 @@ export default function AgentConsolePage() {
                                             value={systemPrompt}
                                             onChange={(e) => setSystemPrompt(e.target.value)}
                                             className="flex-1 w-full bg-slate-900/50 border border-white/10 rounded-xl p-4 text-sm font-mono text-slate-300 focus:outline-none focus:border-emerald-500/50 resize-none"
-                                            placeholder="You are a helpful assistant..."
+                                            placeholder="Paste your system prompt here..."
                                         />
                                     </div>
                                 ) : (
