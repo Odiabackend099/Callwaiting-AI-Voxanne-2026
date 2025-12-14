@@ -462,28 +462,36 @@ async function handleTranscript(event: any) {
       }
 
       // Broadcast transcript to connected voice session clients (real-time display)
-      // Send as 'transcript' event type with speaker mapping for frontend
-      const frontendSpeaker = speaker === 'agent' ? 'agent' : 'user';
+      const userId = callTracking?.metadata?.userId;
       
-      // Send directly to connected clients via wsBroadcast
-      // Note: wsBroadcast will forward to all connected WebSocket clients
+      // Validate userId is present and valid (security check)
+      if (!userId || typeof userId !== 'string') {
+        console.warn('[handleTranscript] Invalid or missing userId in call metadata', {
+          vapiCallId: call.id,
+          trackingId: callTracking.id
+        });
+        // Still store transcript but don't broadcast without valid userId
+        return;
+      }
+      
+      // Broadcast transcript with validated userId (ensures user-scoped delivery)
       wsBroadcast({
         type: 'transcript',
         vapiCallId: call.id,
         trackingId: callTracking.id,
-        userId: callTracking?.metadata?.userId,
-        speaker: speaker,  // Keep as 'agent'/'customer' for broadcast, frontend will handle mapping
+        userId: userId,
+        speaker: speaker,  // 'agent' | 'customer' for database compatibility
         text: cleanTranscript,
         is_final: true,
         confidence: 0.95,
-        frontendSpeaker: frontendSpeaker,  // Include mapped speaker for frontend
         ts: Date.now()
       });
       
       console.log('[handleTranscript] Broadcast transcript to UI', {
         vapiCallId: call.id,
         trackingId: callTracking.id,
-        speaker: frontendSpeaker,
+        userId: userId,
+        speaker,
         textLength: cleanTranscript.length
       });
     } else {

@@ -5,8 +5,11 @@ import { AudioRecorder } from '@/lib/audio/recorder';
 import { AudioPlayer } from '@/lib/audio/player';
 import { supabase } from '@/lib/supabase';
 import type { VoiceAgentState, TranscriptMessage, WebSocketEvent } from '@/types/voice';
+import { mapDbSpeakerToFrontend, type FrontendSpeaker } from '@/types/transcript';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const MAX_TRANSCRIPT_HISTORY = 100;
+const INTERIM_TRANSCRIPT_TIMEOUT_MS = 5000;
 
 interface UseVoiceAgentOptions {
     onConnected?: () => void;
@@ -41,10 +44,134 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
+    const interimTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const MAX_RECONNECT_ATTEMPTS = 3;
     const RECONNECT_DELAY = 2000;
     const CONNECTION_TIMEOUT_MS = 10000;
+
+    /**
+     * Handle transcript event with proper speaker mapping and deduplication
+     */
+    const handleTranscriptEvent = useCallback((data: any, state: VoiceAgentState): VoiceAgentState => {
+        if (!data.text) {
+            console.warn('[VoiceAgent] Transcript missing text field');
+            return state;
+        }
+
+        const isFinal = data.is_final === true;
+        const dbSpeaker = data.speaker || 'customer';
+        const speaker: FrontendSpeaker = mapDbSpeakerToFrontend(dbSpeaker as any);
+        const transcriptText: string = data.text || '';
+
+        const lastMsg = state.transcripts[state.transcripts.length - 1];
+
+        if (isFinal) {
+            // Deduplicate final transcripts
+            const isDuplicate = lastMsg &&
+                lastMsg.text === transcriptText &&
+                lastMsg.speaker === speaker &&
+                (new Date().getTime() - lastMsg.timestamp.getTime() < 500);
+
+            if (isDuplicate) return state;
+
+            // Convert interim to final if same speaker and text
+            if (lastMsg && lastMsg.speaker === speaker && !lastMsg.isFinal && lastMsg.text === transcriptText) {
+                const updatedTranscripts = [...state.transcripts];
+                updatedTranscripts[updatedTranscripts.length - 1] = {
+                    ...lastMsg,
+                    isFinal: true,
+                    confidence: data.confidence || 0.95,
+                };
+                return {
+                    ...state,
+                    transcripts: updatedTranscripts,
+                    session: state.session ? {
+                        ...state.session,
+                        totalMessages: state.session.totalMessages + 1,
+                    } : null,
+                };
+            }
+
+            // Add new final transcript
+            const transcript: TranscriptMessage = {
+                id: `${Date.now()}_${Math.random()}`,
+                speaker,
+                text: transcriptText,
+                confidence: data.confidence || 0.95,
+                isFinal: true,
+                timestamp: new Date(),
+            };
+
+            // Keep only last MAX_TRANSCRIPT_HISTORY transcripts
+            const newTranscripts = [...state.transcripts, transcript].slice(-MAX_TRANSCRIPT_HISTORY);
+
+            return {
+                ...state,
+                transcripts: newTranscripts,
+                session: state.session ? {
+                    ...state.session,
+                    totalMessages: state.session.totalMessages + 1,
+                } : null,
+            };
+        } else {
+            // Interim transcript
+            if (lastMsg && lastMsg.speaker === speaker && !lastMsg.isFinal) {
+                // Update existing interim
+                const updatedTranscripts = [...state.transcripts];
+                updatedTranscripts[updatedTranscripts.length - 1] = {
+                    ...lastMsg,
+                    text: transcriptText,
+                    confidence: data.confidence || 0.95,
+                    timestamp: new Date(),
+                };
+                return {
+                    ...state,
+                    transcripts: updatedTranscripts,
+                };
+            }
+
+            // New interim transcript
+            const interimTranscript: TranscriptMessage = {
+                id: `interim_${Date.now()}_${Math.random()}`,
+                speaker,
+                text: transcriptText,
+                confidence: data.confidence || 0.95,
+                isFinal: false,
+                timestamp: new Date(),
+            };
+
+            return {
+                ...state,
+                transcripts: [...state.transcripts, interimTranscript],
+            };
+        }
+    }, []);
+
+    /**
+     * Auto-convert interim transcripts to final after timeout
+     */
+    const scheduleInterimTimeout = useCallback((state: VoiceAgentState) => {
+        if (interimTranscriptTimeoutRef.current) {
+            clearTimeout(interimTranscriptTimeoutRef.current);
+        }
+
+        const lastMsg = state.transcripts[state.transcripts.length - 1];
+        if (lastMsg && !lastMsg.isFinal) {
+            interimTranscriptTimeoutRef.current = setTimeout(() => {
+                setState(prev => {
+                    const updatedTranscripts = [...prev.transcripts];
+                    if (updatedTranscripts.length > 0 && !updatedTranscripts[updatedTranscripts.length - 1].isFinal) {
+                        updatedTranscripts[updatedTranscripts.length - 1] = {
+                            ...updatedTranscripts[updatedTranscripts.length - 1],
+                            isFinal: true,
+                        };
+                    }
+                    return { ...prev, transcripts: updatedTranscripts };
+                });
+            }, INTERIM_TRANSCRIPT_TIMEOUT_MS);
+        }
+    }, []);
 
     const getAuthToken = useCallback(async () => {
         try {
@@ -121,9 +248,12 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 }
                 console.log('[VoiceAgent] WebSocket connected');
                 reconnectAttemptsRef.current = 0;
+                
+                // Clear transcripts on new connection (fresh session)
                 setState(prev => ({
                     ...prev,
                     isConnected: true,
+                    transcripts: [],
                     session: {
                         id: data.trackingId,
                         sessionId: data.trackingId,
@@ -177,95 +307,10 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                                 isFinal: data.is_final
                             });
                             
-                            if (!data.text) {
-                                console.warn('[VoiceAgent] Transcript missing text field');
-                                break;
-                            }
-
-                            const isFinal = data.is_final === true;
-                            const speaker = data.speaker === 'customer' ? 'user' : (data.speaker || 'user');
-                            const transcriptText: string = data.text || '';
-
                             setState(prev => {
-                                const lastMsg = prev.transcripts[prev.transcripts.length - 1];
-                                
-                                if (isFinal) {
-                                    // Deduplicate final transcripts
-                                    const isDuplicate = lastMsg &&
-                                        lastMsg.text === transcriptText &&
-                                        lastMsg.speaker === speaker &&
-                                        (new Date().getTime() - lastMsg.timestamp.getTime() < 500);
-
-                                    if (isDuplicate) return prev;
-
-                                    // Convert interim to final if same speaker and text
-                                    if (lastMsg && lastMsg.speaker === speaker && !lastMsg.isFinal && lastMsg.text === transcriptText) {
-                                        const updatedTranscripts = [...prev.transcripts];
-                                        updatedTranscripts[updatedTranscripts.length - 1] = {
-                                            ...lastMsg,
-                                            isFinal: true,
-                                            confidence: data.confidence || 0.95,
-                                        };
-                                        return {
-                                            ...prev,
-                                            transcripts: updatedTranscripts,
-                                            session: prev.session ? {
-                                                ...prev.session,
-                                                totalMessages: prev.session.totalMessages + 1,
-                                            } : null,
-                                        };
-                                    }
-
-                                    // Add new final transcript
-                                    const transcript: TranscriptMessage = {
-                                        id: `${Date.now()}_${Math.random()}`,
-                                        speaker: speaker as 'user' | 'agent',
-                                        text: transcriptText,
-                                        confidence: data.confidence || 0.95,
-                                        isFinal: true,
-                                        timestamp: new Date(),
-                                    };
-
-                                    return {
-                                        ...prev,
-                                        transcripts: [...prev.transcripts, transcript],
-                                        session: prev.session ? {
-                                            ...prev.session,
-                                            totalMessages: prev.session.totalMessages + 1,
-                                        } : null,
-                                    };
-                                } else {
-                                    // Interim transcript
-                                    if (lastMsg && lastMsg.speaker === speaker && !lastMsg.isFinal) {
-                                        // Update existing interim
-                                        const updatedTranscripts = [...prev.transcripts];
-                                        updatedTranscripts[updatedTranscripts.length - 1] = {
-                                            ...lastMsg,
-                                            text: transcriptText,
-                                            confidence: data.confidence || 0.95,
-                                            timestamp: new Date(),
-                                        };
-                                        return {
-                                            ...prev,
-                                            transcripts: updatedTranscripts,
-                                        };
-                                    }
-
-                                    // New interim transcript
-                                    const interimTranscript: TranscriptMessage = {
-                                        id: `interim_${Date.now()}_${Math.random()}`,
-                                        speaker: speaker as 'user' | 'agent',
-                                        text: transcriptText,
-                                        confidence: data.confidence || 0.95,
-                                        isFinal: false,
-                                        timestamp: new Date(),
-                                    };
-
-                                    return {
-                                        ...prev,
-                                        transcripts: [...prev.transcripts, interimTranscript],
-                                    };
-                                }
+                                const newState = handleTranscriptEvent(data, prev);
+                                scheduleInterimTimeout(newState);
+                                return newState;
                             });
                             break;
 
