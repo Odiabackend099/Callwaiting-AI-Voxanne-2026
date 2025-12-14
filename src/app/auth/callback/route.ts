@@ -29,8 +29,13 @@ export async function GET(request: Request) {
         await supabase.auth.exchangeCodeForSession(code);
     }
 
-    // URL to redirect to after sign in process completes. 
+    // URL to redirect to after sign in process completes.
     // Handle the 'next' query param for redirects (e.g. to /update-password)
     const next = requestUrl.searchParams.get('next') || '/dashboard';
-    return NextResponse.redirect(requestUrl.origin + next);
+    
+    // Use NEXT_PUBLIC_APP_URL for production domain, fallback to requestUrl.origin for dev
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin;
+    const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+    
+    return NextResponse.redirect(baseUrl + next);
 }

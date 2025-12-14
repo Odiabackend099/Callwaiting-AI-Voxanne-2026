@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
+import { getAuthCallbackUrl, getPasswordResetCallbackUrl } from '@/lib/auth-redirect';
 
 interface UserSettings {
     business_name?: string;
@@ -98,7 +99,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .eq('user_id', userId)
                 .single();
 
-            if (error && error.code !== 'PGRST116') {
+            // Silently ignore:
+            // - PGRST116: No rows found (user has no settings yet)
+            // - PGRST205: Table doesn't exist (user_settings not created yet)
+            if (error && error.code !== 'PGRST116' && error.code !== 'PGRST205') {
                 if (process.env.NODE_ENV !== 'production') {
                     console.error('Fetch settings error:', error);
                 }
@@ -119,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 email,
                 password,
                 options: {
-                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                    emailRedirectTo: getAuthCallbackUrl(),
                     data: userData
                 }
             });
@@ -164,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: getAuthCallbackUrl(),
                     queryParams: {
                         access_type: 'offline',
                         prompt: 'consent',
@@ -189,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             setError(null);
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
+                redirectTo: getPasswordResetCallbackUrl(),
             });
 
             if (error) {
