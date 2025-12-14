@@ -5,7 +5,7 @@ export default function JsonLd() {
         "@type": "Organization",
         "name": "CallWaiting AI",
         "url": "https://callwaitingai.dev",
-        "logo": "https://callwaitingai.dev/callwaiting ai logo.png",
+        "logo": "https://callwaitingai.dev/callwaiting-ai-logo.png",
         "description": "AI-powered receptionist for healthcare practices. Never miss a call, never lose a lead.",
         "address": {
             "@type": "PostalAddress",

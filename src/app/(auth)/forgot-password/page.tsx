@@ -132,10 +132,11 @@ export default function ForgotPasswordPage() {
                         <div className="flex items-center gap-3 mb-4">
                             <div className="relative w-10 h-10">
                                 <Image
-                                    src="/callwaiting ai logo.png"
+                                    src="/callwaiting-ai-logo.png"
                                     alt="CallWaiting AI Logo"
                                     fill
                                     className="object-contain"
+                                    priority
                                 />
                             </div>
                             <span className="text-xl font-bold tracking-tight">CallWaiting AI</span>
