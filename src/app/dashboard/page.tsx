@@ -1,18 +1,80 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { Activity, CheckCircle, AlertCircle, Phone, Calendar, DollarSign, Zap, ChevronRight, Download, Play, Settings, PhoneCall, TrendingUp, Users, Clock } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Activity, CheckCircle, AlertCircle, Phone, Calendar, DollarSign, Zap, ChevronRight, Download, Play, Settings, PhoneCall, TrendingUp, Users, Clock, Mic, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { AuroraBackground } from '@/components/AuroraBackground';
-import { GlassCard } from '@/components/GlassCard';
 import { motion } from 'framer-motion';
+
+// Navigation Component
+function DashboardNav() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const { user, logout } = useAuth();
+
+    const navItems = [
+        { label: 'Dashboard', href: '/dashboard', icon: Activity },
+        { label: 'Voice Test', href: '/dashboard/voice-test', icon: Mic },
+        { label: 'Settings', href: '/dashboard/settings', icon: Settings }
+    ];
+
+    return (
+        <nav className="bg-white border-b border-gray-200 shadow-sm">
+            <div className="max-w-7xl mx-auto px-6 py-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-8">
+                        <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+                                <Phone className="w-6 h-6 text-white" />
+                            </div>
+                            <span className="text-xl font-bold text-gray-900">Voxanne</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            {navItems.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = pathname === item.href;
+                                return (
+                                    <button
+                                        key={item.href}
+                                        onClick={() => router.push(item.href)}
+                                        className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium ${
+                                            isActive
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                        {item.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="text-sm">
+                            <p className="font-medium text-gray-900">{user?.email}</p>
+                            <p className="text-gray-500">Account</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                logout();
+                                router.push('/login');
+                            }}
+                            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
+}
 
 export default function VoxanneDashboard() {
     const router = useRouter();
     const { user, loading } = useAuth();
     const [selectedPeriod, setSelectedPeriod] = useState('7d');
-    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -22,10 +84,10 @@ export default function VoxanneDashboard() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-slate-700 border-t-cyan-400 rounded-full animate-spin" />
-                    <p className="text-slate-400">Loading...</p>
+                    <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+                    <p className="text-gray-600">Loading...</p>
                 </div>
             </div>
         );
@@ -92,282 +154,190 @@ export default function VoxanneDashboard() {
     };
 
     return (
-        <AuroraBackground>
-            <div className="min-h-screen w-full relative z-10 overflow-y-auto">
+        <>
+            <DashboardNav />
+            <div className="min-h-screen bg-white">
                 <div className="max-w-7xl mx-auto px-6 py-8 pb-32">
                     {/* Header */}
-                    <motion.header
-                        variants={itemVariants}
-                        className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 gap-6"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="relative">
-                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                                    <Activity className="w-8 h-8 text-white relative z-10" />
-                                </div>
-                                <div className="absolute inset-0 bg-emerald-400/30 blur-xl rounded-full" />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-slate-400">
-                                    Voxanne Dashboard
-                                </h1>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                    <p className="text-sm text-slate-400 font-medium">Elite Aesthetics Clinic • Live System Active</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <GlassCard className="!p-1 !rounded-xl !bg-slate-800/80 backdrop-blur-md">
-                                <div className="flex items-center gap-1">
-                                    {['24h', '7d', '30d', '90d'].map(period => (
-                                        <button
-                                            key={period}
-                                            onClick={() => setSelectedPeriod(period)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 relative overflow-hidden ${selectedPeriod === period
-                                                ? 'text-white'
-                                                : 'text-slate-400 hover:text-white'
-                                                }`}
-                                        >
-                                            {selectedPeriod === period && (
-                                                <motion.div
-                                                    layoutId="period-selector"
-                                                    className="absolute inset-0 bg-gradient-to-r from-emerald-500/80 to-cyan-500/80 rounded-lg"
-                                                />
-                                            )}
-                                            <span className="relative z-10">
-                                                {period === '24h' ? 'Today' : period === '7d' ? 'Week' : period === '30d' ? 'Month' : 'Quarter'}
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </GlassCard>
-
-                            <button onClick={() => router.push('/dashboard/settings')} className="group relative px-6 py-3 rounded-xl bg-slate-800/80 border border-white/10 text-white font-semibold transition-all hover:scale-105 active:scale-95 hover:border-purple-500/30">
-                                <div className="flex items-center gap-2">
-                                    <Settings className="w-5 h-5 text-purple-400" />
-                                    <span>Settings</span>
-                                </div>
-                            </button>
-
-                            <button onClick={() => router.push('/dashboard/agent-console')} className="group relative px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-emerald-500/25">
-                                <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <div className="flex items-center gap-2">
-                                    <PhoneCall className="w-5 h-5" />
-                                    <span>Agent Console</span>
-                                </div>
-                            </button>
-                        </div>
-                    </motion.header>
+                    <div className="mb-12">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
+                        <p className="text-gray-600">Welcome back! Here's your system overview.</p>
+                    </div>
 
                     {/* Key Metrics Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                         {/* Total Calls */}
-                        <motion.div variants={itemVariants}>
-                            <GlassCard className="relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
-                                <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 duration-500">
-                                    <Phone className="w-16 h-16 text-emerald-500/10" />
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
+                                    <Phone className="w-6 h-6 text-emerald-600" />
                                 </div>
-                                <div className="flex items-start justify-between mb-4 relative z-10">
-                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center border border-emerald-500/10">
-                                        <Phone className="w-6 h-6 text-emerald-400" />
-                                    </div>
-                                    <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/10 flex items-center gap-1">
-                                        <TrendingUp className="w-3 h-3" /> +12.5%
-                                    </span>
+                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" /> +12.5%
+                                </span>
+                            </div>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.totalCalls}</h3>
+                            <p className="text-sm text-gray-600 font-medium mb-4">Total Calls</p>
+                            <div className="pt-4 border-t border-gray-200">
+                                <div className="flex items-center justify-between text-xs font-medium">
+                                    <span className="text-gray-600">Today: {stats.callsToday}</span>
+                                    <span className="text-emerald-600">98.1% answered</span>
                                 </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-4xl font-bold mb-1 bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">{stats.totalCalls}</h3>
-                                    <p className="text-sm text-slate-400 font-medium">Total Calls</p>
-                                </div>
-                                <div className="mt-6 pt-4 border-t border-white/5 relative z-10">
-                                    <div className="flex items-center justify-between text-xs font-medium">
-                                        <span className="text-slate-500">Today: {stats.callsToday}</span>
-                                        <span className="text-emerald-400">98.1% answered</span>
-                                    </div>
-                                </div>
-                            </GlassCard>
-                        </motion.div>
+                            </div>
+                        </div>
 
                         {/* Bookings */}
-                        <motion.div variants={itemVariants}>
-                            <GlassCard className="relative overflow-hidden group hover:border-cyan-500/30 transition-colors">
-                                <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 duration-500">
-                                    <Calendar className="w-16 h-16 text-cyan-500/10" />
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center">
+                                    <Calendar className="w-6 h-6 text-cyan-600" />
                                 </div>
-                                <div className="flex items-start justify-between mb-4 relative z-10">
-                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 flex items-center justify-center border border-cyan-500/10">
-                                        <Calendar className="w-6 h-6 text-cyan-400" />
-                                    </div>
-                                    <span className="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-full border border-cyan-500/10 flex items-center gap-1">
-                                        <TrendingUp className="w-3 h-3" /> +24%
-                                    </span>
+                                <span className="text-xs font-bold text-cyan-600 bg-cyan-50 px-3 py-1 rounded-full flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" /> +24%
+                                </span>
+                            </div>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.bookings}</h3>
+                            <p className="text-sm text-gray-600 font-medium mb-4">Appointments Booked</p>
+                            <div className="pt-4 border-t border-gray-200">
+                                <div className="flex items-center justify-between text-xs font-medium">
+                                    <span className="text-gray-600">Today: {stats.bookingsToday}</span>
+                                    <span className="text-cyan-600">15% conv. rate</span>
                                 </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-4xl font-bold mb-1 bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">{stats.bookings}</h3>
-                                    <p className="text-sm text-slate-400 font-medium">Appointments Booked</p>
-                                </div>
-                                <div className="mt-6 pt-4 border-t border-white/5 relative z-10">
-                                    <div className="flex items-center justify-between text-xs font-medium">
-                                        <span className="text-slate-500">Today: {stats.bookingsToday}</span>
-                                        <span className="text-cyan-400">15% conv. rate</span>
-                                    </div>
-                                </div>
-                            </GlassCard>
-                        </motion.div>
+                            </div>
+                        </div>
 
                         {/* Revenue */}
-                        <motion.div variants={itemVariants}>
-                            <GlassCard className="relative overflow-hidden group hover:border-purple-500/30 transition-colors">
-                                <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 duration-500">
-                                    <DollarSign className="w-16 h-16 text-purple-500/10" />
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center">
+                                    <DollarSign className="w-6 h-6 text-purple-600" />
                                 </div>
-                                <div className="flex items-start justify-between mb-4 relative z-10">
-                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 flex items-center justify-center border border-purple-500/10">
-                                        <DollarSign className="w-6 h-6 text-purple-400" />
-                                    </div>
-                                    <span className="text-xs font-bold text-purple-400 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/10 flex items-center gap-1">
-                                        <TrendingUp className="w-3 h-3" /> +31%
-                                    </span>
+                                <span className="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" /> +31%
+                                </span>
+                            </div>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">£{(stats.revenue / 1000).toFixed(1)}k</h3>
+                            <p className="text-sm text-gray-600 font-medium mb-4">Pipeline Revenue</p>
+                            <div className="pt-4 border-t border-gray-200">
+                                <div className="flex items-center justify-between text-xs font-medium">
+                                    <span className="text-gray-600">Avg: £360/booking</span>
+                                    <span className="text-purple-600">ROI: 12,300%</span>
                                 </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-4xl font-bold mb-1 bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">£{(stats.revenue / 1000).toFixed(1)}k</h3>
-                                    <p className="text-sm text-slate-400 font-medium">Pipeline Revenue</p>
-                                </div>
-                                <div className="mt-6 pt-4 border-t border-white/5 relative z-10">
-                                    <div className="flex items-center justify-between text-xs font-medium">
-                                        <span className="text-slate-500">Avg: £360/booking</span>
-                                        <span className="text-purple-400">ROI: 12,300%</span>
-                                    </div>
-                                </div>
-                            </GlassCard>
-                        </motion.div>
+                            </div>
+                        </div>
 
                         {/* Response Time */}
-                        <motion.div variants={itemVariants}>
-                            <GlassCard className="relative overflow-hidden group hover:border-amber-500/30 transition-colors">
-                                <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 duration-500">
-                                    <Zap className="w-16 h-16 text-amber-500/10" />
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
+                                    <Zap className="w-6 h-6 text-amber-600" />
                                 </div>
-                                <div className="flex items-start justify-between mb-4 relative z-10">
-                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 flex items-center justify-center border border-amber-500/10">
-                                        <Zap className="w-6 h-6 text-amber-400" />
-                                    </div>
-                                    <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/10 flex items-center gap-1">
-                                        Excellent
-                                    </span>
+                                <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
+                                    Excellent
+                                </span>
+                            </div>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.avgResponseTime}</h3>
+                            <p className="text-sm text-gray-600 font-medium mb-4">Avg Response Time</p>
+                            <div className="pt-4 border-t border-gray-200">
+                                <div className="flex items-center justify-between text-xs font-medium">
+                                    <span className="text-gray-600">Target: &lt;1s</span>
+                                    <span className="text-amber-600">52% faster</span>
                                 </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-4xl font-bold mb-1 bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">{stats.avgResponseTime}</h3>
-                                    <p className="text-sm text-slate-400 font-medium">Avg Response Time</p>
-                                </div>
-                                <div className="mt-6 pt-4 border-t border-white/5 relative z-10">
-                                    <div className="flex items-center justify-between text-xs font-medium">
-                                        <span className="text-slate-500">Target: &lt;1s</span>
-                                        <span className="text-amber-400">52% faster</span>
-                                    </div>
-                                </div>
-                            </GlassCard>
-                        </motion.div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Main Content Grid */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Recent Calls */}
-                        <motion.div variants={itemVariants} className="lg:col-span-2">
-                            <GlassCard className="h-full">
-                                <div className="flex items-center justify-between mb-8">
-                                    <div>
-                                        <h3 className="text-2xl font-bold mb-1">Recent Calls</h3>
-                                        <p className="text-sm text-slate-400">Live call activity and outcomes</p>
-                                    </div>
-                                    <button className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-all text-sm font-medium flex items-center gap-2 border border-white/5">
-                                        <Download className="w-4 h-4" />
-                                        Export
-                                    </button>
+                        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-8">
+                            <div className="flex items-center justify-between mb-8">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-gray-900 mb-1">Recent Calls</h3>
+                                    <p className="text-sm text-gray-600">Live call activity and outcomes</p>
                                 </div>
-
-                                <div className="space-y-4">
-                                    {recentCalls.map((call, idx) => (
-                                        <motion.div
-                                            key={call.id}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: idx * 0.1 }}
-                                            className="bg-slate-900/40 rounded-2xl p-4 border border-white/5 hover:border-white/10 transition-all group cursor-pointer"
-                                        >
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${call.status === 'success' ? 'bg-emerald-500/10' :
-                                                        call.status === 'escalated' ? 'bg-amber-500/10' : 'bg-cyan-500/10'
-                                                        }`}>
-                                                        {call.status === 'success' ? <CheckCircle className="w-6 h-6 text-emerald-400" /> :
-                                                            call.status === 'escalated' ? <AlertCircle className="w-6 h-6 text-amber-400" /> :
-                                                                <Phone className="w-6 h-6 text-cyan-400" />}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-lg">{call.caller}</h4>
-                                                        <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-                                                            <Clock className="w-3 h-3" />
-                                                            {call.time} • {call.duration}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`text-xs font-bold px-3 py-1.5 rounded-full border ${call.type === 'Booking' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' :
-                                                        call.type === 'Medical' ? 'bg-amber-500/10 text-amber-400 border-amber-500/10' :
-                                                            call.type === 'Pricing' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/10' :
-                                                                'bg-slate-500/10 text-slate-400 border-slate-500/10'
-                                                        }`}>
-                                                        {call.type}
-                                                    </span>
-                                                    {call.recording && (
-                                                        <button className="w-10 h-10 rounded-xl bg-white/5 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all flex items-center justify-center group/btn">
-                                                            <Play className="w-4 h-4 fill-current group-hover/btn:scale-110 transition-transform" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between pl-16">
-                                                <p className="text-sm text-slate-300 font-medium">{call.outcome}</p>
-                                                <div className="flex items-center gap-1 text-xs text-slate-500 group-hover:text-emerald-400 transition-colors font-medium">
-                                                    View Details
-                                                    <ChevronRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-
-                                <button className="w-full mt-6 py-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all text-sm font-bold border border-white/5 flex items-center justify-center gap-2 group">
-                                    View All Activities
-                                    <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                <button className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2 text-gray-700">
+                                    <Download className="w-4 h-4" />
+                                    Export
                                 </button>
-                            </GlassCard>
-                        </motion.div>
+                            </div>
 
-                        {/* Recent Changes Side Panel */}
-                        <motion.div variants={itemVariants} className="space-y-6">
+                            <div className="space-y-4">
+                                {recentCalls.map((call, idx) => (
+                                    <div
+                                        key={call.id}
+                                        className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all group cursor-pointer"
+                                    >
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${call.status === 'success' ? 'bg-emerald-50' :
+                                                    call.status === 'escalated' ? 'bg-amber-50' : 'bg-cyan-50'
+                                                    }`}>
+                                                    {call.status === 'success' ? <CheckCircle className="w-6 h-6 text-emerald-600" /> :
+                                                        call.status === 'escalated' ? <AlertCircle className="w-6 h-6 text-amber-600" /> :
+                                                            <Phone className="w-6 h-6 text-cyan-600" />}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-gray-900">{call.caller}</h4>
+                                                    <div className="flex items-center gap-2 text-xs text-gray-600 font-medium">
+                                                        <Clock className="w-3 h-3" />
+                                                        {call.time} • {call.duration}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${call.type === 'Booking' ? 'bg-emerald-50 text-emerald-700' :
+                                                    call.type === 'Medical' ? 'bg-amber-50 text-amber-700' :
+                                                        call.type === 'Pricing' ? 'bg-cyan-50 text-cyan-700' :
+                                                            'bg-gray-100 text-gray-700'
+                                                    }`}>
+                                                    {call.type}
+                                                </span>
+                                                {call.recording && (
+                                                    <button className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-emerald-100 hover:text-emerald-600 transition-all flex items-center justify-center group/btn">
+                                                        <Play className="w-4 h-4 fill-current group-hover/btn:scale-110 transition-transform" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between pl-16">
+                                            <p className="text-sm text-gray-700 font-medium">{call.outcome}</p>
+                                            <div className="flex items-center gap-1 text-xs text-gray-600 group-hover:text-emerald-600 transition-colors font-medium">
+                                                View Details
+                                                <ChevronRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button className="w-full mt-6 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-bold text-gray-700 flex items-center justify-center gap-2 group">
+                                View All Activities
+                                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                            </button>
+                        </div>
+
+                        {/* Upcoming Bookings & Status */}
+                        <div className="space-y-6">
                             {/* Upcoming Bookings */}
-                            <GlassCard>
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
                                 <div className="mb-6">
-                                    <h3 className="text-xl font-bold mb-1">Upcoming</h3>
-                                    <p className="text-sm text-slate-400">Next appointments</p>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-1">Upcoming</h3>
+                                    <p className="text-sm text-gray-600">Next appointments</p>
                                 </div>
 
                                 <div className="space-y-4">
-                                    {upcomingBookings.map((booking, idx) => (
-                                        <div key={booking.id} className="relative pl-6 pb-2 border-l border-white/10 last:pb-0">
-                                            <div className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${booking.status === 'confirmed' ? 'bg-emerald-500' : 'bg-amber-500'
+                                    {upcomingBookings.map((booking) => (
+                                        <div key={booking.id} className="relative pl-6 pb-2 border-l border-gray-200 last:pb-0">
+                                            <div className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white ${booking.status === 'confirmed' ? 'bg-emerald-600' : 'bg-amber-600'
                                                 }`} />
-                                            <div className="bg-white/5 rounded-xl p-3 border border-white/5 hover:border-white/10 transition-all">
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-gray-300 transition-all">
                                                 <div className="flex justify-between items-start mb-1">
-                                                    <h4 className="font-bold text-sm">{booking.patient}</h4>
-                                                    <span className="text-xs font-bold text-emerald-400">£{booking.value.toLocaleString()}</span>
+                                                    <h4 className="font-bold text-sm text-gray-900">{booking.patient}</h4>
+                                                    <span className="text-xs font-bold text-emerald-600">£{booking.value.toLocaleString()}</span>
                                                 </div>
-                                                <p className="text-xs text-slate-400 mb-2">{booking.procedure}</p>
-                                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-black/20 rounded-lg px-2 py-1 inline-block">
+                                                <p className="text-xs text-gray-600 mb-2">{booking.procedure}</p>
+                                                <div className="flex items-center gap-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg px-2 py-1 inline-block">
                                                     <Calendar className="w-3 h-3" />
                                                     {booking.date} • {booking.time}
                                                 </div>
@@ -375,29 +345,29 @@ export default function VoxanneDashboard() {
                                         </div>
                                     ))}
                                 </div>
-                            </GlassCard>
+                            </div>
 
                             {/* Safe Mode Status Banner */}
-                            <GlassCard className="!bg-gradient-to-br !from-emerald-900/40 !to-cyan-900/40 !border-emerald-500/20">
+                            <div className="bg-gradient-to-br from-emerald-50 to-cyan-50 border border-emerald-200 rounded-2xl p-6">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0 animate-pulse">
-                                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 animate-pulse">
+                                        <CheckCircle className="w-5 h-5 text-emerald-600" />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold mb-1 text-emerald-100">Safe Mode™ Active</h3>
-                                        <p className="text-xs text-emerald-200/70 leading-relaxed mb-3">
+                                        <h3 className="font-bold mb-1 text-emerald-900">Safe Mode™ Active</h3>
+                                        <p className="text-xs text-emerald-800 leading-relaxed mb-3">
                                             Zero medical advice incidents • 831 calls handled safely
                                         </p>
-                                        <button className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1">
+                                        <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1">
                                             View Report <ChevronRight className="w-3 h-3" />
                                         </button>
                                     </div>
                                 </div>
-                            </GlassCard>
-                        </motion.div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </AuroraBackground>
+        </>
     );
 }

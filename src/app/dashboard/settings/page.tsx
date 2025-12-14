@@ -1,9 +1,74 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { Key, Bot, Phone, Save, Check, X, Eye, EyeOff, AlertCircle, Loader2, ArrowLeft, Mic } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Key, Bot, Phone, Save, Check, X, Eye, EyeOff, AlertCircle, Loader2, Mic, Activity, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Navigation Component
+function DashboardNav() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const { user, logout } = useAuth();
+
+    const navItems = [
+        { label: 'Dashboard', href: '/dashboard', icon: Activity },
+        { label: 'Voice Test', href: '/dashboard/voice-test', icon: Mic },
+        { label: 'Settings', href: '/dashboard/settings', icon: Settings }
+    ];
+
+    return (
+        <nav className="bg-white border-b border-gray-200 shadow-sm">
+            <div className="max-w-7xl mx-auto px-6 py-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-8">
+                        <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+                                <Phone className="w-6 h-6 text-white" />
+                            </div>
+                            <span className="text-xl font-bold text-gray-900">Voxanne</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            {navItems.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = pathname === item.href;
+                                return (
+                                    <button
+                                        key={item.href}
+                                        onClick={() => router.push(item.href)}
+                                        className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium ${
+                                            isActive
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                        {item.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="text-sm">
+                            <p className="font-medium text-gray-900">{user?.email}</p>
+                            <p className="text-gray-500">Account</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                logout();
+                                router.push('/login');
+                            }}
+                            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
@@ -421,43 +486,29 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Dashboard
-            </button>
-            <h1 className="text-3xl font-bold mb-2">Settings</h1>
-            <p className="text-slate-400">Configure your integrations and agent</p>
+    <>
+      <DashboardNav />
+      <div className="min-h-screen bg-white p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
+            <p className="text-gray-600">Configure your integrations and agent</p>
           </div>
-          <button
-            onClick={() => router.push('/dashboard/voice-test')}
-            className="px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold hover:opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"
-          >
-            <Mic className="w-5 h-5" />
-            Start Voice Test
-          </button>
-        </div>
 
         {loadError && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 flex items-center gap-3">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             {loadError}
           </div>
         )}
 
-        <div className="flex gap-2 mb-8 border-b border-slate-700 pb-4">
+        <div className="flex gap-2 mb-8 border-b border-gray-200 pb-4">
           <button
             onClick={() => setActiveTab('api-keys')}
-            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all ${
+            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all font-medium ${
               activeTab === 'api-keys'
-                ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             <Key className="w-5 h-5" />
@@ -465,10 +516,10 @@ export default function SettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab('agent-config')}
-            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all ${
+            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all font-medium ${
               activeTab === 'agent-config'
-                ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             <Bot className="w-5 h-5" />
