@@ -4,12 +4,27 @@ import { supabase } from '../services/supabase-client';
 
 export const assistantsRouter = express.Router();
 
-const vapiApiKey = process.env.VAPI_API_KEY;
-if (!vapiApiKey) {
-  throw new Error('Missing VAPI_API_KEY environment variable');
+function getVapiClient(): VapiClient | null {
+  const vapiApiKey = process.env.VAPI_API_KEY;
+  if (!vapiApiKey) {
+    return null;
+  }
+
+  return new VapiClient(vapiApiKey);
 }
 
-const vapi = new VapiClient(vapiApiKey);
+function requireVapi(res: Response): VapiClient | null {
+  const client = getVapiClient();
+  if (!client) {
+    res.status(503).json({
+      error: 'Vapi not configured',
+      message: 'Missing VAPI_API_KEY environment variable'
+    });
+    return null;
+  }
+
+  return client;
+}
 
 // Helper to determine voice provider from voice ID (case-insensitive)
 function determineVoiceProvider(voiceId: string): string {
@@ -278,6 +293,9 @@ assistantsRouter.get('/:assistantId', async (req: Request, res: Response) => {
   try {
     const { assistantId } = req.params;
 
+    const vapi = requireVapi(res);
+    if (!vapi) return;
+
     const assistant = await vapi.getAssistant(assistantId);
     res.json(assistant);
   } catch (error: any) {
@@ -291,6 +309,9 @@ assistantsRouter.get('/:assistantId', async (req: Request, res: Response) => {
 // List assistants
 assistantsRouter.get('/', async (req: Request, res: Response) => {
   try {
+    const vapi = requireVapi(res);
+    if (!vapi) return;
+
     const assistants = await vapi.listAssistants();
     res.json(assistants);
   } catch (error: any) {

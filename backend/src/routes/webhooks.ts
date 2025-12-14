@@ -4,7 +4,6 @@ import rateLimit from 'express-rate-limit';
 import { supabase } from '../services/supabase-client';
 import { sendDemoEmail, sendDemoSms, sendDemoWhatsApp, DemoRecipient, DemoContext } from '../services/demo-service';
 import { wsBroadcast } from '../services/websocket';
-import { handleCallOutcome } from '../services/campaign-orchestration';
 import { getIntegrationSettings } from './founder-console-settings';
 
 export const webhooksRouter = express.Router();
@@ -625,40 +624,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
         );
       }
 
-      // Queue follow-up automation based on call outcome
-      if (callLog?.lead_id && artifact?.transcript) {
-        try {
-          // Analyze transcript to determine interest level
-          const transcript = artifact.transcript.toLowerCase();
-          const interested = transcript.includes('interested') || 
-                            transcript.includes('sounds good') ||
-                            transcript.includes('let\'s') ||
-                            transcript.includes('demo') ||
-                            transcript.includes('next step');
-          
-          const demoBooked = transcript.includes('demo booked') ||
-                            transcript.includes('calendar') ||
-                            transcript.includes('scheduled');
-
-          // Trigger follow-up automation
-          await handleCallOutcome(
-            callLog.lead_id,
-            call.id,
-            interested,
-            demoBooked,
-            artifact.transcript.substring(0, 500)
-          );
-
-          console.log('[handleEndOfCallReport] Follow-up queued for lead:', {
-            leadId: callLog.lead_id,
-            interested,
-            demoBooked
-          });
-        } catch (followUpError) {
-          console.error('[handleEndOfCallReport] Failed to queue follow-up:', followUpError);
-          // Don't fail the webhook - follow-up is best-effort
-        }
-      }
+      // Lead/campaign follow-up automation intentionally disabled for this project.
     }
   } catch (error) {
     console.error('[handleEndOfCallReport] Error:', error);
@@ -724,24 +690,6 @@ async function handleFunctionCall(event: any) {
        };
        await sendDemoSms(recipient, context);
        return { result: `Demo SMS sent to ${parameters.prospect_phone}` };
-    } else if (name === 'create_lead' || name === 'book_demo_call') {
-      // Find lead by phone and update status if demo booked
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('phone', call.customer?.number)
-        .single();
-
-      if (lead && name === 'book_demo_call') {
-        await supabase
-          .from('leads')
-          .update({ status: 'demo_booked' })
-          .eq('id', lead.id);
-
-        console.log('[handleFunctionCall] Demo booked for lead:', lead.id);
-        return { result: 'Demo booked successfully' };
-      }
-      return { result: 'Lead processed' };
     }
     
     return { result: `Function ${name} executed` };

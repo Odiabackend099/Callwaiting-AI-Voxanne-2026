@@ -7,11 +7,8 @@ import helmet from 'helmet';
 import { createServer } from 'http';
 import { webhooksRouter } from './routes/webhooks';
 import { callsRouter } from './routes/calls';
-import { leadsRouter } from './routes/leads';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
-import demoDeliveryRouter from './routes/demo-delivery';
-import campaignsRouter from './routes/campaigns';
 import integrationsRouter from './routes/integrations';
 import founderConsoleRouter from './routes/founder-console';
 import founderConsoleSettingsRouter from './routes/founder-console-settings';
@@ -24,7 +21,7 @@ import webTestDiagnosticsRouter from './routes/web-test-diagnostics';
 initLogger();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Trust reverse proxy headers (x-forwarded-proto/host). Required for correct absolute URL generation.
 app.set('trust proxy', true);
@@ -43,11 +40,8 @@ app.use(requestLogger());
 // Routes
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/calls', callsRouter);
-app.use('/api/leads', leadsRouter);
 app.use('/api/assistants', assistantsRouter);
 app.use('/api/phone-numbers', phoneNumbersRouter);
-app.use('/api/demo', demoDeliveryRouter);
-app.use('/api/campaigns', campaignsRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
@@ -217,15 +211,6 @@ Endpoints:
   POST /api/phone-numbers/import
   GET  /api/phone-numbers
   GET  /api/phone-numbers/:phoneNumberId
-  
-  Campaign Engine:
-  POST /api/campaigns/score-all
-  POST /api/campaigns/launch
-  POST /api/campaigns/send-email
-  POST /api/campaigns/queue-calls
-  GET  /api/campaigns/metrics
-  GET  /api/campaigns/pipeline
-  GET  /api/campaigns/leads/:tier
 
   Founder Console:
   GET  /api/founder-console/agent/config
