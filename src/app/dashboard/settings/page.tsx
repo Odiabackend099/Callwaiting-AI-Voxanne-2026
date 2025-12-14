@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Key, Bot, Phone, Save, Check, X, Eye, EyeOff, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { Key, Bot, Phone, Save, Check, X, Eye, EyeOff, AlertCircle, Loader2, ArrowLeft, Mic } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
@@ -423,16 +423,26 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-8">
       <div className="max-w-4xl mx-auto">
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Dashboard
-        </button>
-
-        <h1 className="text-3xl font-bold mb-2">Settings</h1>
-        <p className="text-slate-400 mb-8">Configure your integrations and agent</p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Dashboard
+            </button>
+            <h1 className="text-3xl font-bold mb-2">Settings</h1>
+            <p className="text-slate-400">Configure your integrations and agent</p>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard/voice-test')}
+            className="px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold hover:opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"
+          >
+            <Mic className="w-5 h-5" />
+            Start Voice Test
+          </button>
+        </div>
 
         {loadError && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 flex items-center gap-3">
