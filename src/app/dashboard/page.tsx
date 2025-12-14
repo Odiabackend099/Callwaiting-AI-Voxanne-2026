@@ -93,13 +93,8 @@ export default function VoxanneDashboard() {
 
     return (
         <AuroraBackground>
-            <div ref={containerRef} className="h-screen overflow-y-auto w-full relative z-10 scrollbar-hide">
-                <motion.div
-                    initial="hidden"
-                    animate="visible"
-                    variants={containerVariants}
-                    className="max-w-7xl mx-auto px-6 py-8 pb-32"
-                >
+            <div className="min-h-screen w-full relative z-10 overflow-y-auto">
+                <div className="max-w-7xl mx-auto px-6 py-8 pb-32">
                     {/* Header */}
                     <motion.header
                         variants={itemVariants}
@@ -167,10 +162,7 @@ export default function VoxanneDashboard() {
                     </motion.header>
 
                     {/* Key Metrics Grid */}
-                    <motion.div
-                        variants={containerVariants}
-                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12"
-                    >
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                         {/* Total Calls */}
                         <motion.div variants={itemVariants}>
                             <GlassCard className="relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
@@ -278,13 +270,10 @@ export default function VoxanneDashboard() {
                                 </div>
                             </GlassCard>
                         </motion.div>
-                    </motion.div>
+                    </div>
 
                     {/* Main Content Grid */}
-                    <motion.div
-                        variants={containerVariants}
-                        className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-                    >
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Recent Calls */}
                         <motion.div variants={itemVariants} className="lg:col-span-2">
                             <GlassCard className="h-full">
@@ -406,8 +395,8 @@ export default function VoxanneDashboard() {
                                 </div>
                             </GlassCard>
                         </motion.div>
-                    </motion.div>
-                </motion.div>
+                    </div>
+                </div>
             </div>
         </AuroraBackground>
     );
