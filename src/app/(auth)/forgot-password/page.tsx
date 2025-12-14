@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
-import { Mail, ArrowRight, Loader, ArrowLeft } from 'lucide-react';
+import { Mail, ArrowLeft, Loader, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Logo from '@/components/Logo';
 
 // Branding images for carousel
 const BRANDING_IMAGES = [
@@ -129,17 +130,8 @@ export default function ForgotPasswordPage() {
                             Back to Login
                         </Link>
 
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="relative w-10 h-10">
-                                <Image
-                                    src="/callwaiting-ai-logo.png"
-                                    alt="CallWaiting AI Logo"
-                                    fill
-                                    className="object-contain"
-                                    priority
-                                />
-                            </div>
-                            <span className="text-xl font-bold tracking-tight">CallWaiting AI</span>
+                        <div className="mb-4">
+                            <Logo size="md" showText={true} href="/" priority={true} />
                         </div>
                         <h1 className="text-4xl font-serif font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
                             Reset Password
