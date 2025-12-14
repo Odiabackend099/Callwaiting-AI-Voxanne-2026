@@ -89,3 +89,15 @@
  GET / 200 in 38ms (compile: 4ms, proxy.ts: 9ms, render: 25ms)
  GET / 200 in 33ms (compile: 4ms, proxy.ts: 9ms, render: 20ms)
  GET /callwaiting%20ai%20logo.png 404 in 1738ms (compile: 1241ms, render: 497ms)
+ GET / 200 in 2.1s (compile: 370ms, proxy.ts: 452ms, render: 1248ms)
+ ○ Compiling /dashboard ...
+ GET /dashboard 200 in 11.2s (compile: 11.1s, proxy.ts: 16ms, render: 91ms)
+ GET /callwaiting%20ai%20logo.png 404 in 237ms (compile: 53ms, render: 184ms)
+ ○ Compiling /dashboard/settings ...
+ GET /dashboard/settings 200 in 4.7s (compile: 4.6s, proxy.ts: 17ms, render: 82ms)
+ GET /callwaiting%20ai%20logo.png 404 in 221ms (compile: 61ms, render: 161ms)
+ GET /callwaiting%20ai%20logo.png 404 in 137ms (compile: 22ms, render: 115ms)
+ GET /dashboard/voice-test 200 in 1337ms (compile: 1284ms, proxy.ts: 14ms, render: 38ms)
+ GET /callwaiting%20ai%20logo.png 404 in 107ms (compile: 26ms, render: 81ms)
+ GET /dashboard 200 in 51ms (compile: 9ms, proxy.ts: 15ms, render: 27ms)
+ GET /callwaiting%20ai%20logo.png 404 in 128ms (compile: 36ms, render: 92ms)
