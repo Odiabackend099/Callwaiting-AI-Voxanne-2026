@@ -44,10 +44,11 @@ export const metadata: Metadata = {
     siteName: 'CallWaiting AI',
     images: [
       {
-        url: '/callwaiting-ai-logo.png', // Ideally should be a social card image, using logo for now
-        width: 1200,
-        height: 630,
+        url: 'https://callwaitingai.dev/callwaiting-ai-logo.png',
+        width: 512,
+        height: 512,
         alt: 'CallWaiting AI Logo',
+        type: 'image/png',
       },
     ],
     locale: 'en_US',

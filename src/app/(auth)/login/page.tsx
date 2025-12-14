@@ -100,10 +100,11 @@ export default function LoginPage() {
                         <Link href="/" className="inline-flex items-center gap-3 mb-4">
                             <div className="relative w-12 h-12">
                                 <Image
-                                    src="/callwaiting ai logo.png"
+                                    src="/callwaiting-ai-logo.png"
                                     alt="CallWaiting AI Logo"
                                     fill
                                     className="object-contain"
+                                    priority
                                 />
                             </div>
                             <span className="text-3xl font-bold tracking-tight">CallWaiting AI</span>
