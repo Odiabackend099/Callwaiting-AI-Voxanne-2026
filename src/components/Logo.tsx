@@ -27,17 +27,17 @@ export default function Logo({
 }: LogoProps) {
     const sizeConfig = sizeMap[size];
 
+    const sizePixels = size === 'sm' ? 32 : size === 'md' ? 40 : size === 'lg' ? 48 : 56;
+
     const logoImage = (
-        <div className={`relative ${sizeConfig.container} transition-transform duration-300 hover:scale-105`}>
-            <Image
-                src="/callwaiting-ai-logo.png"
-                alt="CallWaiting AI Logo"
-                fill
-                sizes={size === 'sm' ? '32px' : size === 'md' ? '40px' : size === 'lg' ? '48px' : '56px'}
-                className="object-contain"
-                priority={priority}
-            />
-        </div>
+        <Image
+            src="/callwaiting-ai-logo.png"
+            alt="CallWaiting AI Logo"
+            width={sizePixels}
+            height={sizePixels}
+            className="object-contain transition-transform duration-300 hover:scale-105"
+            priority={priority}
+        />
     );
 
     const content = (
