@@ -12,8 +12,9 @@ export class AudioPlayer {
 
     // Jitter buffer to smooth out network irregularities
     private jitterBuffer: ArrayBuffer[] = [];
-    private readonly JITTER_BUFFER_SIZE = 2; // Reduced from 3 to lower latency
+    private readonly JITTER_BUFFER_SIZE = 4; // Increased from 2 to smooth network jitter
     private bufferDraining = false;
+    private drainTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // Source sample rate from Vapi (16kHz PCM16)
     private readonly SOURCE_SAMPLE_RATE = 16000;
@@ -21,19 +22,18 @@ export class AudioPlayer {
     constructor() {
         // Let browser choose optimal output sample rate
         this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        
+
         // Create gain node to prevent clipping and reduce crackling
         this.gainNode = this.ctx.createGain();
-        this.gainNode.gain.value = 0.85; // Slight reduction to prevent clipping
+        this.gainNode.gain.value = 0.75; // Reduced further to prevent distortion
         this.gainNode.connect(this.ctx.destination);
-        
+
         console.log(`✅ Audio Player: output ${this.ctx.sampleRate}Hz, source ${this.SOURCE_SAMPLE_RATE}Hz`);
     }
 
     async playChunk(audioData: ArrayBuffer): Promise<void> {
         try {
             // Guard against odd-length buffers (PCM16 requires even byte count)
-            // This is expected from some Vapi streams - silently fix without spamming console
             if (audioData.byteLength % 2 !== 0) {
                 audioData = audioData.slice(0, audioData.byteLength - 1);
             }
@@ -46,10 +46,24 @@ export class AudioPlayer {
             // Add to jitter buffer
             this.jitterBuffer.push(audioData);
 
-            // Start draining buffer once we have enough packets
-            if (this.jitterBuffer.length >= this.JITTER_BUFFER_SIZE && !this.bufferDraining) {
-                this.bufferDraining = true;
-                this.drainJitterBuffer();
+            // Start draining if buffer is ready
+            if (!this.bufferDraining) {
+                if (this.jitterBuffer.length >= this.JITTER_BUFFER_SIZE) {
+                    // Enough packets buffered, start draining immediately
+                    this.bufferDraining = true;
+                    this.drainJitterBuffer();
+                } else {
+                    // Not enough yet, schedule a delayed drain to prevent stalling
+                    if (!this.drainTimeoutId) {
+                        this.drainTimeoutId = setTimeout(() => {
+                            this.drainTimeoutId = null;
+                            if (this.jitterBuffer.length > 0 && !this.bufferDraining) {
+                                this.bufferDraining = true;
+                                this.drainJitterBuffer();
+                            }
+                        }, 100); // 100ms max wait
+                    }
+                }
             }
 
         } catch (error) {
@@ -64,7 +78,17 @@ export class AudioPlayer {
             await this.playBufferedChunk(audioData);
         }
 
-        this.bufferDraining = false;
+        // Check for more incoming packets
+        // Short delay to aggregate packets that are in-flight
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        if (this.jitterBuffer.length > 0) {
+            // More packets arrived, keep draining
+            await this.drainJitterBuffer();
+        } else {
+            // No more packets, stop draining
+            this.bufferDraining = false;
+        }
     }
 
     private async playBufferedChunk(audioData: ArrayBuffer): Promise<void> {
@@ -76,14 +100,13 @@ export class AudioPlayer {
             for (let i = 0; i < pcm16.length; i++) {
                 // Normalize to [-1, 1] range
                 let sample = pcm16[i] / 32768.0;
-                // Apply soft clipping to reduce harsh peaks
-                if (sample > 0.95) sample = 0.95 + (sample - 0.95) * 0.1;
-                if (sample < -0.95) sample = -0.95 + (sample + 0.95) * 0.1;
+                // Apply soft clipping to reduce harsh peaks (tanh-like curve)
+                if (sample > 0.8) sample = 0.8 + (sample - 0.8) * 0.25;
+                if (sample < -0.8) sample = -0.8 + (sample + 0.8) * 0.25;
                 float32Data[i] = sample;
             }
 
             // Create buffer at SOURCE sample rate (16kHz)
-            // Browser handles resampling to output rate automatically
             const buffer = this.ctx.createBuffer(
                 1,
                 float32Data.length,
@@ -97,12 +120,10 @@ export class AudioPlayer {
             source.connect(this.gainNode || this.ctx.destination);
 
             // CRITICAL: Gapless scheduling
-            // Calculate when this buffer should start to avoid gaps/overlaps
             const now = this.ctx.currentTime;
             const lastEndTime = this.playQueue.at(-1)?.when || 0;
 
-            // Start immediately if queue is empty or in the past,
-            // otherwise chain to previous buffer
+            // Start immediately if queue is empty or in the past
             const startTime = Math.max(now, lastEndTime);
 
             // Schedule playback
@@ -112,8 +133,8 @@ export class AudioPlayer {
             const endTime = startTime + buffer.duration;
             this.playQueue.push({ when: endTime });
 
-            // Cleanup old entries (older than 1 second)
-            const cutoff = now - 1;
+            // Cleanup old entries (older than 2 seconds)
+            const cutoff = now - 2;
             this.playQueue = this.playQueue.filter(item => item.when > cutoff);
 
             this.isPlaying = true;
@@ -125,6 +146,10 @@ export class AudioPlayer {
 
     // Stop all playback
     stop(): void {
+        if (this.drainTimeoutId) {
+            clearTimeout(this.drainTimeoutId);
+            this.drainTimeoutId = null;
+        }
         this.jitterBuffer = [];
         this.playQueue = [];
         this.isPlaying = false;

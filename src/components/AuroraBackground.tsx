@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 export const AuroraBackground = ({ children }: { children: React.ReactNode }) => {
     return (
-        <div className="relative flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900 text-slate-950 transition-bg">
+        <div className="relative flex flex-col items-center justify-center min-h-screen w-full bg-zinc-50 dark:bg-zinc-900 text-slate-950 transition-bg">
             <div className="absolute inset-0 overflow-hidden">
                 <div
                     className={`

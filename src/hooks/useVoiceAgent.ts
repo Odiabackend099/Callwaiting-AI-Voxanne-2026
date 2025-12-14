@@ -187,9 +187,24 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         }
     }, []);
 
+    const isConnectingRef = useRef(false);
+
     const connect = useCallback(async () => {
+        // Prevent race conditions and double connections
+        if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
+            console.warn('[VoiceAgent] Already connecting or connected. Ignoring request.');
+            return;
+        }
+
         try {
+            isConnectingRef.current = true;
             setState(prev => ({ ...prev, error: null, isConnected: false }));
+
+            // Cleanup any existing stale connection
+            if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+            }
 
             const token = await getAuthToken();
             if (!token) {
@@ -218,7 +233,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             }
 
             const data: WebTestResponse = await response.json();
-            
+
             if (!data.success || !data.bridgeWebsocketUrl) {
                 throw new Error(data.error || 'Failed to get WebSocket URL from backend');
             }
@@ -238,17 +253,19 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     ws.close();
                     setState(prev => ({ ...prev, error: 'Connection timeout. Please try again.' }));
                     options.onError?.('Connection timeout');
+                    isConnectingRef.current = false;
                 }
             }, CONNECTION_TIMEOUT_MS);
 
             ws.onopen = () => {
+                isConnectingRef.current = false;
                 if (connectionTimeoutRef.current) {
                     clearTimeout(connectionTimeoutRef.current);
                     connectionTimeoutRef.current = null;
                 }
                 console.log('[VoiceAgent] WebSocket connected');
                 reconnectAttemptsRef.current = 0;
-                
+
                 // Clear transcripts on new connection (fresh session)
                 setState(prev => ({
                     ...prev,
@@ -271,6 +288,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     if (event.data instanceof Blob) {
                         const arrayBuffer = await event.data.arrayBuffer();
                         if (playerRef.current && arrayBuffer.byteLength > 0) {
+                            // Ensure player is ready
+                            await playerRef.current.resume();
                             await playerRef.current.playChunk(arrayBuffer);
                             setState(prev => ({ ...prev, isSpeaking: true }));
                             setTimeout(() => {
@@ -282,6 +301,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
                     if (event.data instanceof ArrayBuffer) {
                         if (playerRef.current && event.data.byteLength > 0) {
+                            await playerRef.current.resume();
                             await playerRef.current.playChunk(event.data);
                             setState(prev => ({ ...prev, isSpeaking: true }));
                             setTimeout(() => {
@@ -293,6 +313,10 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
                     // Handle JSON messages
                     const data: WebSocketEvent = JSON.parse(event.data);
+
+                    // Filter out keepalive/ping if necessary
+                    if (data.type === 'ping') return;
+
                     console.log('[VoiceAgent] WebSocket message:', data.type);
 
                     switch (data.type) {
@@ -306,7 +330,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                                 textLength: data.text?.length,
                                 isFinal: data.is_final
                             });
-                            
+
                             setState(prev => {
                                 const newState = handleTranscriptEvent(data, prev);
                                 scheduleInterimTimeout(newState);
@@ -341,6 +365,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                         case 'audio':
                             if (data.audio && playerRef.current) {
                                 const audioData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+                                await playerRef.current.resume();
                                 await playerRef.current.playChunk(audioData.buffer);
                                 setState(prev => ({ ...prev, isSpeaking: true }));
                             }
@@ -375,10 +400,12 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             ws.onerror = (error) => {
                 console.error('[VoiceAgent] WebSocket error:', error);
                 setState(prev => ({ ...prev, error: 'Connection error occurred' }));
+                isConnectingRef.current = false;
             };
 
             ws.onclose = (event) => {
                 console.log('[VoiceAgent] WebSocket closed:', event.code);
+                isConnectingRef.current = false;
                 setState(prev => ({
                     ...prev,
                     isConnected: false,
@@ -387,6 +414,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                         ...prev.session,
                         status: 'disconnected',
                         endedAt: new Date(),
+                        durationSeconds: Math.floor((new Date().getTime() - prev.session.startedAt.getTime()) / 1000),
                     } : null,
                 }));
 
@@ -408,8 +436,9 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             setState(prev => ({ ...prev, error: errorMessage }));
             options.onError?.(errorMessage);
+            isConnectingRef.current = false;
         }
-    }, [getAuthToken, options]);
+    }, [getAuthToken, options, handleTranscriptEvent, scheduleInterimTimeout]);
 
     const startRecording = useCallback(async () => {
         try {

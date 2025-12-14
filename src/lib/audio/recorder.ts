@@ -8,7 +8,7 @@ export class AudioRecorder {
     private audioContext: AudioContext | null = null;
     private mediaStream: MediaStream | null = null;
     private sourceNode: MediaStreamAudioSourceNode | null = null;
-    private processorNode: ScriptProcessorNode | null = null;
+    private workletNode: AudioWorkletNode | null = null;
     private ws: WebSocket;
     private isRecording = false;
     private chunkCount = 0;
@@ -21,7 +21,7 @@ export class AudioRecorder {
 
     async start(): Promise<void> {
         try {
-            // Request microphone access with error handling
+            // Request microphone access
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -30,11 +30,11 @@ export class AudioRecorder {
                     sampleRate: 16000
                 }
             }).catch(error => {
-                const errorMsg = error.name === 'NotAllowedError' 
+                const errorMsg = error.name === 'NotAllowedError'
                     ? 'Microphone permission denied. Please allow microphone access.'
                     : error.name === 'NotFoundError'
-                    ? 'No microphone found. Please check your device.'
-                    : `Microphone error: ${error.message}`;
+                        ? 'No microphone found. Please check your device.'
+                        : `Microphone error: ${error.message}`;
                 this.onError?.(errorMsg);
                 throw new Error(errorMsg);
             });
@@ -42,33 +42,31 @@ export class AudioRecorder {
             // Create AudioContext at 16kHz
             this.audioContext = new AudioContext({ sampleRate: 16000 });
 
-            // Create source from microphone
+            // Load AudioWorklet
+            try {
+                await this.audioContext.audioWorklet.addModule('/worklets/audio-processor.js');
+            } catch (e) {
+                console.error('[AudioRecorder] Failed to load audio worklet:', e);
+                throw new Error('Failed to load audio processor. Please refresh and try again.');
+            }
+
+            // Create source
             this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-            // Create processor node (2048 samples = 128ms at 16kHz for lower latency)
-            // ScriptProcessorNode is deprecated but still functional; AudioWorklet is preferred for new code
-            this.processorNode = this.audioContext.createScriptProcessor(2048, 1, 1);
+            // Create AudioWorkletNode
+            this.workletNode = new AudioWorkletNode(this.audioContext, 'audio-processor');
 
-            // Connect processor to destination (required for onaudioprocess to fire)
-            this.processorNode.connect(this.audioContext.destination);
-
-            // Process audio frames
-            this.processorNode.onaudioprocess = (event) => {
+            // Handle messages from worklet (PCM16 chunks)
+            this.workletNode.port.onmessage = (event) => {
                 if (!this.isRecording) return;
                 if (this.ws.readyState !== WebSocket.OPEN) {
                     this.isRecording = false;
                     return;
                 }
 
-                const inputBuffer = event.inputBuffer;
-                const float32Data = inputBuffer.getChannelData(0);
-
-                // Convert Float32 [-1,1] to Int16 PCM
-                const pcm16 = this.float32ToInt16(float32Data);
-
-                // Send to server
                 try {
-                    this.ws.send(pcm16.buffer);
+                    // Send PCM16 buffer directly to server
+                    this.ws.send(event.data);
                     this.chunkCount++;
                 } catch (error) {
                     console.error('[AudioRecorder] Failed to send audio chunk:', error);
@@ -76,32 +74,19 @@ export class AudioRecorder {
                 }
             };
 
-            // Connect: mic -> processor -> destination
-            this.sourceNode.connect(this.processorNode);
+            // Connect graph
+            this.sourceNode.connect(this.workletNode);
+            this.workletNode.connect(this.audioContext.destination);
 
             this.isRecording = true;
             this.chunkCount = 0;
-            console.log('[AudioRecorder] Recording started at 16kHz');
+            console.log('[AudioRecorder] Recording started at 16kHz (AudioWorklet)');
 
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to start recording';
             this.onError?.(errorMsg);
             throw error;
         }
-    }
-
-    // Convert Float32 samples to Int16 PCM
-    private float32ToInt16(float32Array: Float32Array): Int16Array {
-        const int16 = new Int16Array(float32Array.length);
-
-        for (let i = 0; i < float32Array.length; i++) {
-            // Clamp to [-1, 1]
-            const sample = Math.max(-1, Math.min(1, float32Array[i]));
-            // Convert to Int16 range
-            int16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-        }
-
-        return int16;
     }
 
     stop(): void {
@@ -114,9 +99,9 @@ export class AudioRecorder {
             this.sourceNode = null;
         }
 
-        if (this.processorNode) {
-            this.processorNode.disconnect();
-            this.processorNode = null;
+        if (this.workletNode) {
+            this.workletNode.disconnect();
+            this.workletNode = null;
         }
 
         if (this.mediaStream) {

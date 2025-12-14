@@ -33,10 +33,16 @@ export interface TranscriptMessage {
 }
 
 /**
- * Convert speaker from database format to frontend format
+ * Convert speaker from database/backend format to frontend format
+ * The backend can send either 'customer' (database format) or 'user' (Vapi format)
+ * Both should map to 'user' on the frontend
  */
-export function mapDbSpeakerToFrontend(dbSpeaker: DbSpeaker): FrontendSpeaker {
-  return dbSpeaker === 'customer' ? 'user' : 'agent';
+export function mapDbSpeakerToFrontend(dbSpeaker: string): FrontendSpeaker {
+  // Handle both 'customer' (from DB) and 'user' (from Vapi)
+  if (dbSpeaker === 'customer' || dbSpeaker === 'user') {
+    return 'user';
+  }
+  return 'agent';
 }
 
 /**
