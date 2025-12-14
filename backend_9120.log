@@ -23,3 +23,12 @@ INFO:     Finished server process [22442]
 INFO:     Started server process [26916]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'auto_deploy_auth_fix.py', 'deploy_twilio.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [26916]
+Python(45139) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+INFO:     Started server process [45139]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
