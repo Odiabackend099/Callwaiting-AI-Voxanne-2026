@@ -461,15 +461,27 @@ async function handleTranscript(event: any) {
         // Continue anyway (transcript was inserted)
       }
 
-      // Broadcast to UI
+      // Broadcast transcript to connected voice session clients (real-time display)
+      // Map speaker: 'agent'/'customer' from webhook → 'agent'/'user' for frontend
+      const frontendSpeaker = speaker === 'agent' ? 'agent' : 'user';
+      
       wsBroadcast({
-        type: 'transcript_delta',
+        type: 'transcript',
         vapiCallId: call.id,
         trackingId: callTracking.id,
         userId: callTracking?.metadata?.userId,
-        speaker,
+        speaker: frontendSpeaker,
         text: cleanTranscript,
+        is_final: true,
+        confidence: 0.95,
         ts: Date.now()
+      });
+      
+      console.log('[handleTranscript] Broadcast transcript to UI', {
+        vapiCallId: call.id,
+        trackingId: callTracking.id,
+        speaker: frontendSpeaker,
+        textLength: cleanTranscript.length
       });
     } else {
       console.warn('[handleTranscript] Call tracking not found after retries', { vapiCallId: call.id });
