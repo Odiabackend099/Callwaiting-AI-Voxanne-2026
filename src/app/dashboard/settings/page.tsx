@@ -7,10 +7,36 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
 // Retry configuration for network failures
 const RETRY_CONFIG = {
   maxAttempts: 3,
   delays: [250, 500, 1000] // ms
+};
+
+// UI timing constants
+const SAVE_SUCCESS_DISPLAY_MS = 3000; // Show "Saved" indicator for 3 seconds
+const BATCH_SAVE_DEBOUNCE_MS = 500; // Wait 500ms before batching saves
+
+// Validation constraints
+const AGENT_CONFIG_CONSTRAINTS = {
+  MIN_DURATION_SECONDS: 60,
+  MAX_DURATION_SECONDS: 3600,
+  DEFAULT_DURATION_SECONDS: 300
+};
+
+// Error messages
+const ERROR_MESSAGES = {
+  EMPTY_VALUE: 'This field cannot be empty',
+  INVALID_DURATION: `Duration must be between ${AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS} and ${AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS} seconds`,
+  AGENT_NOT_LOADED: 'Agent configuration not loaded. Please refresh the page.',
+  INVALID_API_KEY: 'Invalid API key - connection failed',
+  FAILED_TO_SAVE: 'Failed to save. Please try again.',
+  FAILED_TO_LOAD: 'Failed to load settings. Please refresh the page.',
+  VAPI_NOT_CONFIGURED: 'Configure Vapi API key first to enable this feature'
 };
 
 interface Voice {
@@ -35,6 +61,12 @@ type TabType = 'api-keys' | 'agent-config';
 function maskApiKey(key: string): string {
   if (!key || key.length < 8) return key ? '••••••••' : '';
   return '••••••••' + key.slice(-4);
+}
+
+function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  return token || null;
 }
 
 export default function SettingsPage() {
@@ -97,7 +129,7 @@ export default function SettingsPage() {
         const [settingsRes, voicesRes, agentRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/founder-console/settings`),
           fetch(`${API_BASE_URL}/api/assistants/voices/available`),
-          fetch(`${API_BASE_URL}/api/assistants/db-agents`)
+          fetch(`${API_BASE_URL}/api/founder-console/agent/config`)
         ]);
 
         if (settingsRes.ok) {
@@ -116,21 +148,41 @@ export default function SettingsPage() {
         }
 
         if (agentRes.ok) {
-          const agents = await agentRes.json();
-          if (agents && agents.length > 0) {
-            const agent = agents[0];
-            setAgentId(agent.id);
-            setSystemPrompt(prev => ({ ...prev, value: agent.system_prompt || '', originalValue: agent.system_prompt || '' }));
-            setFirstMessage(prev => ({ ...prev, value: agent.first_message || '', originalValue: agent.first_message || '' }));
-            setMaxSeconds(prev => ({ ...prev, value: agent.max_seconds?.toString() || '', originalValue: agent.max_seconds?.toString() || '' }));
-            setVoiceId(prev => ({ ...prev, value: agent.voice || '', originalValue: agent.voice || '' }));
+          const config = await agentRes.json();
+          if (config?.agentId && config?.vapi) {
+            setAgentId(config.agentId);
+            const vapi = config.vapi;
+            const maxDuration = vapi.maxCallDuration ?? AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS;
+            
+            setSystemPrompt(prev => ({
+              ...prev,
+              value: vapi.systemPrompt || '',
+              originalValue: vapi.systemPrompt || ''
+            }));
+            setFirstMessage(prev => ({
+              ...prev,
+              value: vapi.firstMessage || '',
+              originalValue: vapi.firstMessage || ''
+            }));
+            setMaxSeconds(prev => ({
+              ...prev,
+              value: maxDuration.toString(),
+              originalValue: maxDuration.toString()
+            }));
+            setVoiceId(prev => ({
+              ...prev,
+              value: vapi.voice || '',
+              originalValue: vapi.voice || ''
+            }));
+          } else {
+            console.warn('[Settings] Agent config incomplete or missing', { hasAgentId: !!config?.agentId, hasVapi: !!config?.vapi });
           }
         } else {
-          console.error('[Settings] Failed to fetch agents:', agentRes.status);
+          console.error('[Settings] Failed to fetch agent config:', { status: agentRes.status });
         }
       } catch (error) {
-        console.error('[Settings] Failed to load settings:', error);
-        setLoadError('Failed to load settings. Please refresh the page.');
+        console.error('[Settings] Failed to load settings:', { error: error instanceof Error ? error.message : String(error) });
+        setLoadError(ERROR_MESSAGES.FAILED_TO_LOAD);
       } finally {
         setLoading(false);
       }
@@ -194,7 +246,7 @@ export default function SettingsPage() {
     if (globalSaving) return;
     
     if (!value || !value.trim()) {
-      setState(prev => ({ ...prev, error: 'Value cannot be empty' }));
+      setState(prev => ({ ...prev, error: ERROR_MESSAGES.EMPTY_VALUE }));
       return;
     }
 
@@ -205,17 +257,21 @@ export default function SettingsPage() {
       if (validate && fieldName === 'vapi_api_key') {
         const isValid = await validateVapiKey(value);
         if (!isValid) {
-          setState(prev => ({ ...prev, saving: false, error: 'Invalid API key - connection failed' }));
+          setState(prev => ({ ...prev, saving: false, error: ERROR_MESSAGES.INVALID_API_KEY }));
           setGlobalSaving(false);
           return;
         }
       }
 
+      const csrfToken = getCsrfToken();
       const data = await fetchWithRetry<{ success: boolean; error?: string }>(
         `${API_BASE_URL}/api/founder-console/settings`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken && { 'X-CSRF-Token': csrfToken })
+          },
           body: JSON.stringify({ [fieldName]: value })
         }
       );
@@ -227,10 +283,11 @@ export default function SettingsPage() {
 
       const timeoutId = setTimeout(() => {
         setState(prev => ({ ...prev, saved: false }));
-      }, 3000);
+      }, SAVE_SUCCESS_DISPLAY_MS);
       timeoutRefs.current.push(timeoutId);
     } catch (error: any) {
-      setState(prev => ({ ...prev, saving: false, error: error.message || 'Failed to save. Please try again.' }));
+      const errorMsg = error instanceof Error ? error.message : ERROR_MESSAGES.FAILED_TO_SAVE;
+      setState(prev => ({ ...prev, saving: false, error: errorMsg }));
     } finally {
       setGlobalSaving(false);
     }
@@ -244,34 +301,43 @@ export default function SettingsPage() {
     if (globalSaving) return;
     
     if (!agentId) {
-      setState(prev => ({ ...prev, error: 'Agent not loaded. Please refresh the page.' }));
+      setState(prev => ({ ...prev, error: ERROR_MESSAGES.AGENT_NOT_LOADED }));
       return;
     }
 
-    if (!value || (fieldName === 'max_seconds' && (isNaN(parseInt(value)) || parseInt(value) < 60))) {
-      setState(prev => ({ ...prev, error: 'Invalid value. Max seconds must be 60 or more.' }));
+    if (!value) {
+      setState(prev => ({ ...prev, error: ERROR_MESSAGES.EMPTY_VALUE }));
       return;
+    }
+
+    if (fieldName === 'max_seconds') {
+      const seconds = parseInt(value);
+      if (isNaN(seconds) || seconds < AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS || seconds > AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS) {
+        setState(prev => ({ ...prev, error: ERROR_MESSAGES.INVALID_DURATION }));
+        return;
+      }
     }
 
     setState(prev => ({ ...prev, saving: true, error: null, saved: false }));
     setGlobalSaving(true);
 
     try {
-      const updates: any = {};
-      if (fieldName === 'system_prompt') updates.systemPrompt = value;
-      if (fieldName === 'first_message') updates.firstMessage = value;
-      if (fieldName === 'max_seconds') updates.maxSeconds = parseInt(value) || 300;
-      if (fieldName === 'voice') updates.voice = value;
+      const payload: Record<string, any> = {};
+      if (fieldName === 'system_prompt') payload.systemPrompt = value;
+      if (fieldName === 'first_message') payload.firstMessage = value;
+      if (fieldName === 'max_seconds') payload.maxDurationSeconds = parseInt(value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS;
+      if (fieldName === 'voice') payload.voiceId = value;
 
-      const data = await fetchWithRetry<{ success: boolean; status: string; error?: string }>(
-        `${API_BASE_URL}/api/assistants/auto-sync`,
+      const csrfToken = getCsrfToken();
+      const data = await fetchWithRetry<{ success: boolean; agentId?: string; assistantId?: string; error?: string }>(
+        `${API_BASE_URL}/api/founder-console/agent/behavior`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agentId: agentId,
-            updates
-          })
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken && { 'X-CSRF-Token': csrfToken })
+          },
+          body: JSON.stringify(payload)
         }
       );
 
@@ -279,16 +345,29 @@ export default function SettingsPage() {
 
       const timeoutId = setTimeout(() => {
         setState(prev => ({ ...prev, saved: false }));
-      }, 3000);
+      }, SAVE_SUCCESS_DISPLAY_MS);
       timeoutRefs.current.push(timeoutId);
     } catch (error: any) {
-      setState(prev => ({ ...prev, saving: false, error: error.message || 'Failed to save. Please try again.' }));
+      const errorMsg = error instanceof Error ? error.message : ERROR_MESSAGES.FAILED_TO_SAVE;
+      setState(prev => ({ ...prev, saving: false, error: errorMsg }));
     } finally {
       setGlobalSaving(false);
     }
   }
 
   const hasChanges = (field: FieldState) => field.value !== field.originalValue;
+
+  const getSaveButtonClasses = (field: FieldState, globalSaving: boolean): string => {
+    if (field.saved) return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+    if (hasChanges(field) && !globalSaving) return 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-90';
+    return 'bg-slate-700 text-slate-400 cursor-not-allowed';
+  };
+
+  const getSaveButtonText = (field: FieldState, globalSaving: boolean): string => {
+    if (field.saving || globalSaving) return 'Saving...';
+    if (field.saved) return 'Saved';
+    return 'Save';
+  };
 
   const renderSaveButton = (
     field: FieldState,
@@ -298,13 +377,7 @@ export default function SettingsPage() {
     <button
       onClick={onSave}
       disabled={field.saving || globalSaving || disabled || !hasChanges(field)}
-      className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap ${
-        field.saved
-          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-          : hasChanges(field) && !globalSaving
-          ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-90'
-          : 'bg-slate-700 text-slate-400 cursor-not-allowed'
-      }`}
+      className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap ${getSaveButtonClasses(field, globalSaving)}`}
     >
       {field.saving || globalSaving ? (
         <Loader2 className="w-4 h-4 animate-spin" />
@@ -313,7 +386,7 @@ export default function SettingsPage() {
       ) : (
         <Save className="w-4 h-4" />
       )}
-      {field.saving || globalSaving ? 'Saving...' : field.saved ? 'Saved' : 'Save'}
+      {getSaveButtonText(field, globalSaving)}
     </button>
   );
 
@@ -545,7 +618,7 @@ export default function SettingsPage() {
               </div>
               {renderError(voiceId.error)}
               {!vapiConfigured && (
-                <p className="text-xs text-amber-400 mt-2">Configure Vapi API key first to enable voice selection</p>
+                <p className="text-xs text-amber-400 mt-2">{ERROR_MESSAGES.VAPI_NOT_CONFIGURED}</p>
               )}
             </div>
 
