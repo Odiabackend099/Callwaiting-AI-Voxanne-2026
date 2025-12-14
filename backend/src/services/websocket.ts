@@ -29,6 +29,7 @@ export interface UsageMetrics {
 // Event types that match the frontend WSEvent type
 export type WSEventType = (
   | { type: 'call_status'; vapiCallId: string; trackingId: string; userId: string; status: 'connecting' | 'ringing' | 'in_progress' | 'ended' | 'failed' }
+  | { type: 'transcript'; vapiCallId: string; trackingId: string; userId: string; speaker: 'agent' | 'customer'; text: string; is_final: boolean; confidence: number; frontendSpeaker?: 'agent' | 'user'; ts: number }
   | { type: 'transcript_delta'; vapiCallId: string; trackingId: string; userId: string; speaker: 'agent' | 'customer'; text: string; ts: number }
   | { type: 'call_ended'; vapiCallId: string; trackingId: string; userId: string; durationSeconds?: number; reason?: string }
   | { type: 'metrics_update'; metrics: UsageMetrics }

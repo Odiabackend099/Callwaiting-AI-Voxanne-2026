@@ -462,18 +462,21 @@ async function handleTranscript(event: any) {
       }
 
       // Broadcast transcript to connected voice session clients (real-time display)
-      // Map speaker: 'agent'/'customer' from webhook → 'agent'/'user' for frontend
+      // Send as 'transcript' event type with speaker mapping for frontend
       const frontendSpeaker = speaker === 'agent' ? 'agent' : 'user';
       
+      // Send directly to connected clients via wsBroadcast
+      // Note: wsBroadcast will forward to all connected WebSocket clients
       wsBroadcast({
         type: 'transcript',
         vapiCallId: call.id,
         trackingId: callTracking.id,
         userId: callTracking?.metadata?.userId,
-        speaker: frontendSpeaker,
+        speaker: speaker,  // Keep as 'agent'/'customer' for broadcast, frontend will handle mapping
         text: cleanTranscript,
         is_final: true,
         confidence: 0.95,
+        frontendSpeaker: frontendSpeaker,  // Include mapped speaker for frontend
         ts: Date.now()
       });
       
