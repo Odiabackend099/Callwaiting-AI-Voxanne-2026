@@ -102,3 +102,49 @@
  GET /dashboard 200 in 51ms (compile: 9ms, proxy.ts: 15ms, render: 27ms)
  GET /callwaiting%20ai%20logo.png 404 in 128ms (compile: 36ms, render: 92ms)
  ✓ Compiled in 3.3s
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/server/app/dashboard/page/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/server/app/dashboard/page/build-manifest.json'
+}
+ ○ Compiling /_error ...
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/static/development/_buildManifest.js.tmp.sw2qw6c0vmq'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/static/development/_buildManifest.js.tmp.sw2qw6c0vmq'
+}
+Error: ENOENT: no such file or directory, open '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/server/app/dashboard/page/build-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/server/app/dashboard/page/build-manifest.json'
+}
+ ⨯ Error: Cannot find module '../chunks/ssr/[turbopack]_runtime.js'
+Require stack:
+- /Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/server/pages/_document.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/server/require.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/server/load-components.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/build/utils.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/build/swc/options.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/build/swc/index.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/server/lib/router-server.js
+- /Users/mac/Desktop/VOXANNE  WEBSITE/node_modules/next/dist/server/lib/start-server.js
+    at Object.<anonymous> (.next/dev/server/pages/_document.js:1:7) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+Error: ENOENT: no such file or directory, open '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/routes-manifest.json'
+    at ignore-listed frames {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/mac/Desktop/VOXANNE  WEBSITE/.next/dev/routes-manifest.json'
+}
+ GET /dashboard 500 in 60s (compile: 59s, proxy.ts: 1139ms, render: 136ms)
+ GET /dashboard 500 in 60s (compile: 59s, proxy.ts: 1139ms, render: 136ms)

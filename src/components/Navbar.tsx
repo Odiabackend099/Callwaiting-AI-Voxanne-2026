@@ -93,15 +93,7 @@ export default function Navbar() {
                     >
                         <div className="flex justify-between items-center mb-12">
                             <div className="flex items-center gap-2">
-                                <div className="relative w-8 h-8">
-                                    <Image
-                                        src="/callwaiting-ai-logo.png"
-                                        alt="CallWaiting AI"
-                                        fill
-                                        sizes="32px"
-                                        className="object-contain"
-                                    />
-                                </div>
+                                <div className="w-8 h-8 bg-cover bg-center" style={{ backgroundImage: "url('/callwaiting-ai-logo.png')" }} />
                                 <span className="text-2xl font-serif font-bold text-white">CallWaiting AI</span>
                             </div>
                             <button onClick={() => setIsMobileMenuOpen(false)} className="text-zinc-500 hover:text-white">
