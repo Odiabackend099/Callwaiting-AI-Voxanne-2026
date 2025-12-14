@@ -241,7 +241,7 @@ export default function LoginPage() {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
 
                 {/* Animated Image Carousel */}
-                <div className="relative w-full max-w-2xl aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl">
+                <div className="relative w-full max-w-2xl aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl bg-slate-800">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={currentImageIndex}
@@ -249,18 +249,11 @@ export default function LoginPage() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 1, ease: "easeInOut" }}
-                            className="absolute inset-0"
-                        >
-                            <div className="relative w-full h-full">
-                                <Image
-                                    src={BRANDING_IMAGES[currentImageIndex]}
-                                    alt={`CallWaiting AI Branding ${currentImageIndex + 1}`}
-                                    fill
-                                    className="object-contain"
-                                    priority={currentImageIndex === 0}
-                                />
-                            </div>
-                        </motion.div>
+                            className="absolute inset-0 bg-cover bg-center"
+                            style={{
+                                backgroundImage: `url(${BRANDING_IMAGES[currentImageIndex]})`,
+                            }}
+                        />
                     </AnimatePresence>
 
                     {/* Carousel Indicators */}

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { Lock, ArrowRight, Loader } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Logo from '@/components/Logo';
 
 // Branding images for carousel
