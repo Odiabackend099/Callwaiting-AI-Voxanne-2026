@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .from('user_settings')
                 .select()
                 .eq('user_id', userId)
-                .single();
+                .maybeSingle();
 
             // Silently ignore:
             // - PGRST116: No rows found (user has no settings yet)

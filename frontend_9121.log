@@ -148,3 +148,4 @@ Error: ENOENT: no such file or directory, open '/Users/mac/Desktop/VOXANNE  WEBS
 }
  GET /dashboard 500 in 60s (compile: 59s, proxy.ts: 1139ms, render: 136ms)
  GET /dashboard 500 in 60s (compile: 59s, proxy.ts: 1139ms, render: 136ms)
+ ✓ Compiled in 5.4s

@@ -6,10 +6,23 @@ import { AudioPlayer } from '@/lib/audio/player';
 import { supabase } from '@/lib/supabase';
 import type { VoiceAgentState, TranscriptMessage, WebSocketEvent } from '@/types/voice';
 
+// Backend API URL - connects to local backend on port 3001
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
 interface UseVoiceAgentOptions {
     onConnected?: () => void;
     onDisconnected?: () => void;
     onError?: (error: string) => void;
+}
+
+interface WebTestResponse {
+    success: boolean;
+    vapiCallId: string;
+    trackingId: string;
+    userId: string;
+    bridgeWebsocketUrl: string;
+    requestId: string;
+    error?: string;
 }
 
 export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
@@ -25,32 +38,17 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
     const wsRef = useRef<WebSocket | null>(null);
     const recorderRef = useRef<AudioRecorder | null>(null);
     const playerRef = useRef<AudioPlayer | null>(null);
-    const sessionIdRef = useRef<string>(`session_${Date.now()}_${Math.random().toString(36).substring(7)}`);
+    const trackingIdRef = useRef<string | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
     const audioSendCountRef = useRef(0);
+    const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastAudioTimeRef = useRef<number>(0);
 
-    const MAX_RECONNECT_ATTEMPTS = 5;
+    const MAX_RECONNECT_ATTEMPTS = 3;
     const RECONNECT_DELAY = 2000;
-
-    // Get WebSocket URL
-    const getWebSocketUrl = useCallback(() => {
-        // Use secure WebSocket when talking to the hosted Voxanne backend.
-        // In dev, the frontend runs on localhost:9120 but the voice orchestrator
-        // is deployed on Render at voxanneai.onrender.com.
-
-        // If an explicit env var is provided, always prefer that.
-        const configuredHost = process.env.NEXT_PUBLIC_VOICE_BACKEND_URL;
-
-        // Default to the Render host if not overridden.
-        const host = configuredHost || 'voxanneai.onrender.com';
-
-        // Use wss for remote HTTPS host, ws for localhost/dev overrides.
-        const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-        const protocol = isLocal ? 'ws:' : 'wss:';
-
-        return `${protocol}//${host}/ws/web-client`;
-    }, []);
+    const CONNECTION_TIMEOUT_MS = 10000; // 10 second timeout for WebSocket connection
 
     // Get auth token from Supabase
     const getAuthToken = useCallback(async () => {
@@ -67,34 +65,80 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         }
     }, []);
 
-    // Connect to WebSocket
+    // Connect to WebSocket via backend web-test endpoint
     const connect = useCallback(async () => {
         try {
             setState(prev => ({ ...prev, error: null, isConnected: false }));
 
             const token = await getAuthToken();
-
-            // Build WebSocket URL with optional token
-            let wsUrl = `${getWebSocketUrl()}?sessionId=${sessionIdRef.current}`;
-            if (token) {
-                wsUrl += `&token=${token}`;
-                console.log('🔌 Connecting to WebSocket:', wsUrl.replace(token, 'TOKEN'));
-            } else {
-                console.log('🔌 Connecting to WebSocket (no auth):', wsUrl);
+            if (!token) {
+                throw new Error('Not authenticated. Please log in first.');
             }
+
+            // Step 1: Call backend to initiate web test and get WebSocket URL
+            console.log('🔌 Initiating web test via backend...');
+            const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({})
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                
+                // Handle specific error codes
+                if (response.status === 401) {
+                    throw new Error('Not authenticated. Please log in first.');
+                }
+                if (response.status === 400) {
+                    throw new Error(errorData.error || 'Agent not configured. Please configure agent settings first.');
+                }
+                
+                throw new Error(errorData.error || `Failed to start web test: ${response.status}`);
+            }
+
+            const data: WebTestResponse = await response.json();
+            
+            if (!data.success || !data.bridgeWebsocketUrl) {
+                throw new Error(data.error || 'Failed to get WebSocket URL from backend');
+            }
+
+            console.log('✅ Web test initiated:', { trackingId: data.trackingId, vapiCallId: data.vapiCallId });
+            trackingIdRef.current = data.trackingId;
+
+            // Step 2: Connect to the backend WebSocket bridge
+            const wsUrl = data.bridgeWebsocketUrl;
+            console.log('🔌 Connecting to WebSocket bridge:', wsUrl);
 
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 
+            // Set connection timeout
+            connectionTimeoutRef.current = setTimeout(() => {
+                if (ws.readyState === WebSocket.CONNECTING) {
+                    console.warn('🔌 WebSocket connection timeout');
+                    ws.close();
+                    setState(prev => ({ ...prev, error: 'Connection timeout. Please try again.' }));
+                    options.onError?.('Connection timeout');
+                }
+            }, CONNECTION_TIMEOUT_MS);
+
             ws.onopen = () => {
-                console.log('✅ WebSocket connected');
+                if (connectionTimeoutRef.current) {
+                    clearTimeout(connectionTimeoutRef.current);
+                    connectionTimeoutRef.current = null;
+                }
+                console.log('✅ WebSocket connected to bridge');
                 reconnectAttemptsRef.current = 0;
                 setState(prev => ({
                     ...prev,
                     isConnected: true,
                     session: {
-                        id: sessionIdRef.current,
-                        sessionId: sessionIdRef.current,
+                        id: data.trackingId,
+                        sessionId: data.trackingId,
                         status: 'connected',
                         startedAt: new Date(),
                         totalMessages: 0,
@@ -136,25 +180,32 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
                     switch (data.type) {
                         case 'connected':
-                            console.log('🎉 Agent ready:', data.message);
+                            console.log('Agent ready');
                             break;
 
                         case 'transcript':
-                            if (data.text && data.is_final) {
+                            // Validate transcript event has required fields
+                            if (!data.text) {
+                                console.warn('Transcript event missing text field');
+                                break;
+                            }
+                            // Process both final and interim transcripts
+                            const isFinal = data.is_final === true;
+                            if (isFinal) {
                                 setState(prev => {
-                                    // Deduplicate: Don't add if identical to last message and within 1s
+                                    // Deduplicate: Don't add if identical to last message and within 500ms
                                     const lastMsg = prev.transcripts[prev.transcripts.length - 1];
                                     const isDuplicate = lastMsg &&
                                         lastMsg.text === data.text &&
                                         lastMsg.speaker === (data.speaker || 'user') &&
-                                        (new Date().getTime() - lastMsg.timestamp.getTime() < 1000);
+                                        (new Date().getTime() - lastMsg.timestamp.getTime() < 500);
 
                                     if (isDuplicate) return prev;
 
                                     const transcript: TranscriptMessage = {
                                         id: `${Date.now()}_${Math.random()}`,
                                         speaker: data.speaker || 'user',
-                                        text: data.text || '',
+                                        text: data.text,
                                         confidence: data.confidence,
                                         isFinal: true,
                                         timestamp: new Date(),
@@ -173,25 +224,28 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                             break;
 
                         case 'response':
-                            if (data.text) {
-                                const transcript: TranscriptMessage = {
-                                    id: `${Date.now()}_${Math.random()}`,
-                                    speaker: 'agent',
-                                    text: data.text || '',
-                                    confidence: data.confidence,
-                                    isFinal: true,
-                                    timestamp: new Date(),
-                                };
-                                setState(prev => ({
-                                    ...prev,
-                                    transcripts: [...prev.transcripts, transcript],
-                                    isSpeaking: true,
-                                    session: prev.session ? {
-                                        ...prev.session,
-                                        totalMessages: prev.session.totalMessages + 1,
-                                    } : null,
-                                }));
+                            // Validate response event has required fields
+                            if (!data.text) {
+                                console.warn('Response event missing text field');
+                                break;
                             }
+                            const transcript: TranscriptMessage = {
+                                id: `${Date.now()}_${Math.random()}`,
+                                speaker: 'agent',
+                                text: data.text || '',
+                                confidence: data.confidence,
+                                isFinal: true,
+                                timestamp: new Date(),
+                            };
+                            setState(prev => ({
+                                ...prev,
+                                transcripts: [...prev.transcripts, transcript],
+                                isSpeaking: true,
+                                session: prev.session ? {
+                                    ...prev.session,
+                                    totalMessages: prev.session.totalMessages + 1,
+                                } : null,
+                            }));
                             break;
 
                         case 'audio':
@@ -271,7 +325,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             setState(prev => ({ ...prev, error: errorMessage }));
             options.onError?.(errorMessage);
         }
-    }, [getWebSocketUrl, getAuthToken, options]);
+    }, [getAuthToken, options]);
 
     // Start recording
     const startRecording = useCallback(async () => {
@@ -291,7 +345,6 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
             await recorder.start();
             recorderRef.current = recorder;
-
 
             setState(prev => ({ ...prev, isRecording: true }));
             console.log('🎤 Recording started');
@@ -313,11 +366,16 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         console.log('🎤 Recording stopped');
     }, []);
 
-    // Disconnect
-    const disconnect = useCallback(() => {
+    // Disconnect and end web test session
+    const disconnect = useCallback(async () => {
         if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
+        }
+
+        if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
         }
 
         stopRecording();
@@ -325,6 +383,27 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         if (playerRef.current) {
             playerRef.current.close();
             playerRef.current = null;
+        }
+
+        // End the web test session on backend
+        if (trackingIdRef.current) {
+            try {
+                const token = await getAuthToken();
+                if (token) {
+                    await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test/end`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ trackingId: trackingIdRef.current })
+                    });
+                    console.log('✅ Web test session ended on backend');
+                }
+            } catch (e) {
+                console.error('Failed to end web test session:', e);
+            }
+            trackingIdRef.current = null;
         }
 
         if (wsRef.current) {
@@ -342,11 +421,15 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 durationSeconds: Math.floor((new Date().getTime() - prev.session.startedAt.getTime()) / 1000),
             } : null,
         }));
-    }, [stopRecording]);
+    }, [stopRecording, getAuthToken]);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
+            // Clear any pending timeouts
+            if (speakingTimeoutRef.current) {
+                clearTimeout(speakingTimeoutRef.current);
+            }
             disconnect();
         };
     }, [disconnect]);

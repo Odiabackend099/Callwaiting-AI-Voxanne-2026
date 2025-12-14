@@ -4,13 +4,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, AlertCircle, Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceAgent } from '@/hooks/useVoiceAgent';
 
 export default function VoiceTestPage() {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const [callStarted, setCallStarted] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+    // Auth guard
+    useEffect(() => {
+        if (!authLoading && !user) {
+            router.push('/login');
+        }
+    }, [user, authLoading, router]);
 
     const {
         isConnected,

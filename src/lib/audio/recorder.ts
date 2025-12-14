@@ -12,43 +12,52 @@ export class AudioRecorder {
     private ws: WebSocket;
     private isRecording = false;
     private chunkCount = 0;
+    private onError?: (error: string) => void;
 
-    constructor(websocket: WebSocket) {
+    constructor(websocket: WebSocket, onError?: (error: string) => void) {
         this.ws = websocket;
+        this.onError = onError;
     }
 
     async start(): Promise<void> {
-        console.log('🎤 Starting audio capture...');
-
         try {
-            // Request microphone access
+            // Request microphone access with error handling
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                    sampleRate: 16000  // Request 16kHz for Flux
+                    sampleRate: 16000
                 }
+            }).catch(error => {
+                const errorMsg = error.name === 'NotAllowedError' 
+                    ? 'Microphone permission denied. Please allow microphone access.'
+                    : error.name === 'NotFoundError'
+                    ? 'No microphone found. Please check your device.'
+                    : `Microphone error: ${error.message}`;
+                this.onError?.(errorMsg);
+                throw new Error(errorMsg);
             });
 
-            // Create AudioContext at 16kHz (CRITICAL for Flux)
+            // Create AudioContext at 16kHz
             this.audioContext = new AudioContext({ sampleRate: 16000 });
-
-            console.log(`✅ Audio Context: ${this.audioContext.sampleRate}Hz`);
 
             // Create source from microphone
             this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-            // Create processor node (4096 samples = 256ms at 16kHz)
-            this.processorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
+            // Create processor node (2048 samples = 128ms at 16kHz for lower latency)
+            this.processorNode = this.audioContext.createScriptProcessor(2048, 1, 1);
 
-            // CRITICAL: Connect processor to destination (required for onaudioprocess to fire)
+            // Connect processor to destination (required for onaudioprocess to fire)
             this.processorNode.connect(this.audioContext.destination);
 
             // Process audio frames
             this.processorNode.onaudioprocess = (event) => {
                 if (!this.isRecording) return;
-                if (this.ws.readyState !== WebSocket.OPEN) return;
+                if (this.ws.readyState !== WebSocket.OPEN) {
+                    this.isRecording = false;
+                    return;
+                }
 
                 const inputBuffer = event.inputBuffer;
                 const float32Data = inputBuffer.getChannelData(0);
@@ -57,8 +66,13 @@ export class AudioRecorder {
                 const pcm16 = this.float32ToInt16(float32Data);
 
                 // Send to server
-                this.ws.send(pcm16.buffer);
-                this.chunkCount++;
+                try {
+                    this.ws.send(pcm16.buffer);
+                    this.chunkCount++;
+                } catch (error) {
+                    console.error('Failed to send audio chunk:', error);
+                    this.isRecording = false;
+                }
             };
 
             // Connect: mic -> processor -> destination
@@ -66,10 +80,10 @@ export class AudioRecorder {
 
             this.isRecording = true;
             this.chunkCount = 0;
-            console.log('✅ Recording started (16kHz PCM16)');
 
         } catch (error) {
-            console.error('❌ Failed to start recording:', error);
+            const errorMsg = error instanceof Error ? error.message : 'Failed to start recording';
+            this.onError?.(errorMsg);
             throw error;
         }
     }
