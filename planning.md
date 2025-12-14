@@ -63,12 +63,38 @@ Building production-grade voice orchestration for CallWaiting AI's Voxanne agent
 
 ---
 
-## Phase 4: TTS Voice Configuration ✅
+## Phase 4: TTS# Dashboard Implementation Plan
 
-### Approved Settings
-- **Model**: aura-2-thalia-en
-- **Encoding**: mulaw (for Twilio)
-- **Sample Rate**: 8000 Hz
+## Phase 1: Project Scan & Cleanup 
+- [x] Scan entire project for duplicate/old files
+- [x] Identify old dashboard files
+- [x] Delete duplicate test-voice redirect page (commit: 2f455da)
+- [x] Verify no other duplicates exist
+
+## Phase 2: Implement Comprehensive Dashboard
+- [ ] Replace dashboard/page.tsx with VoxanneDashboard component
+- [ ] Integrate real-time metrics (calls, bookings, revenue)
+- [ ] Add recent calls section with call details
+- [ ] Add upcoming bookings section
+- [ ] Add weekly performance chart
+- [ ] Add Safe Mode status banner
+- [ ] Ensure proper TypeScript types and interfaces
+
+## Phase 3: Maintain Voice Chat & Settings
+- [ ] Keep dashboard/voice-test/page.tsx (working voice chat UI)
+- [ ] Keep dashboard/settings/page.tsx (agent configuration)
+- [ ] Ensure proper navigation between pages
+- [ ] Verify auth guards on all pages
+- [ ] Add navigation back to main dashboard from voice-test and settings
+
+## Phase 4: Code Quality & Testing
+- [ ] Remove code duplication
+- [ ] Verify no console errors
+- [ ] Test complete auth flow
+- [ ] Test dashboard navigation
+- [ ] Test voice chat functionality
+- [ ] Test settings save/load
+- [ ] Verify responsive design on mobile/tablet/desktop
 
 ---
 
