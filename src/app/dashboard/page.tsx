@@ -6,19 +6,13 @@ import { Activity, CheckCircle, AlertCircle, Phone, Calendar, DollarSign, Zap, C
 import { useAuth } from '@/contexts/AuthContext';
 import { AuroraBackground } from '@/components/AuroraBackground';
 import { GlassCard } from '@/components/GlassCard';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 export default function VoxanneDashboard() {
     const router = useRouter();
     const { user, loading } = useAuth();
     const [selectedPeriod, setSelectedPeriod] = useState('7d');
     const containerRef = useRef<HTMLDivElement>(null);
-    const { scrollYProgress } = useScroll({ container: containerRef });
-
-    // Parallax transforms
-    const headerY = useTransform(scrollYProgress, [0, 0.2], [0, -20]);
-    const metricsY = useTransform(scrollYProgress, [0, 0.2], [0, -10]);
-    const contentY = useTransform(scrollYProgress, [0, 0.2], [0, 0]);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -108,7 +102,6 @@ export default function VoxanneDashboard() {
                 >
                     {/* Header */}
                     <motion.header
-                        style={{ y: headerY }}
                         variants={itemVariants}
                         className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 gap-6"
                     >
@@ -175,7 +168,6 @@ export default function VoxanneDashboard() {
 
                     {/* Key Metrics Grid */}
                     <motion.div
-                        style={{ y: metricsY }}
                         variants={containerVariants}
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12"
                     >
@@ -290,7 +282,6 @@ export default function VoxanneDashboard() {
 
                     {/* Main Content Grid */}
                     <motion.div
-                        style={{ y: contentY }}
                         variants={containerVariants}
                         className="grid grid-cols-1 lg:grid-cols-3 gap-8"
                     >
