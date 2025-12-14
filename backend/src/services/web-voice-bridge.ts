@@ -214,8 +214,24 @@ function handleVapiMessage(data: WebSocket.Data, session: WebVoiceSession): void
   // Try to parse as JSON control message (transcript, status, etc.)
   if (Buffer.isBuffer(data)) {
     const maybeJson = data.toString('utf8');
+    
+    // Log non-audio messages
+    if (maybeJson.length < 500) {
+      console.log('[WebVoiceBridge] Vapi buffer message', {
+        trackingId: session.trackingId,
+        length: data.byteLength,
+        preview: maybeJson.substring(0, 150)
+      });
+    }
+    
     try {
       const message = JSON.parse(maybeJson) as VapiTranscriptMessage;
+      console.log('[WebVoiceBridge] Parsed Vapi JSON', {
+        trackingId: session.trackingId,
+        type: message.type,
+        hasText: !!message.text,
+        role: message.role
+      });
       handleVapiTranscriptMessage(message, session);
       return;
     } catch {
@@ -225,8 +241,20 @@ function handleVapiMessage(data: WebSocket.Data, session: WebVoiceSession): void
   }
 
   if (typeof data === 'string') {
+    console.log('[WebVoiceBridge] Vapi string message', {
+      trackingId: session.trackingId,
+      length: data.length,
+      preview: data.substring(0, 150)
+    });
+    
     try {
       const message = JSON.parse(data) as VapiTranscriptMessage;
+      console.log('[WebVoiceBridge] Parsed Vapi JSON from string', {
+        trackingId: session.trackingId,
+        type: message.type,
+        hasText: !!message.text,
+        role: message.role
+      });
       handleVapiTranscriptMessage(message, session);
     } catch {
       // Non-JSON text: ignore or log at debug level

@@ -184,15 +184,29 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                             break;
 
                         case 'transcript':
+                            console.log('📝 [TRANSCRIPT] Received transcript event', {
+                                speaker: data.speaker,
+                                textLength: data.text?.length,
+                                isFinal: data.is_final,
+                                confidence: data.confidence,
+                                rawData: data
+                            });
+                            
                             // Validate transcript event has required fields
                             if (!data.text) {
-                                console.warn('Transcript event missing text field');
+                                console.warn('❌ [TRANSCRIPT] Event missing text field', { data });
                                 break;
                             }
                             // Process both final and interim transcripts (VAD - Voice Activity Detection)
                             const isFinal = data.is_final === true;
                             const speaker = data.speaker || 'user';
                             const transcriptText: string = data.text || '';
+                            
+                            console.log('✅ [TRANSCRIPT] Processing transcript', {
+                                speaker,
+                                isFinal,
+                                textPreview: transcriptText.substring(0, 50)
+                            });
                             
                             setState(prev => {
                                 const lastMsg = prev.transcripts[prev.transcripts.length - 1];
