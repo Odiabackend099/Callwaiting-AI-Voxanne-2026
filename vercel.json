@@ -1,6 +1,8 @@
 {
+    "name": "voxanne-dashboard",
     "installCommand": "npm install --legacy-peer-deps",
-    "buildCommand": "next build --webpack",
+    "buildCommand": "next build",
     "framework": "nextjs",
-    "outputDirectory": ".next"
+    "outputDirectory": ".next",
+    "domains": ["callwaitingai.dev", "www.callwaitingai.dev"]
 }
