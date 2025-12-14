@@ -12,7 +12,7 @@ load_dotenv()
 SAMPLE_RATE = 16000
 TTS_MODEL = "aura-2-thalia-en"
 TEST_TEXT = (
-    "Hello, this is Roxanne. I am currently performing a system check to ensure "
+    "Hello, this is Voxanne. I am currently performing a system check to ensure "
     "my voice synthesis is operating at peak performance. This audio sample should "
     "last approximately ten seconds, allowing us to verify playback clarity and volume levels "
     "before we begin our real-time conversation."
@@ -42,7 +42,7 @@ async def generate_and_play():
             print(f"❌ API Error: {response.status_code} - {response.text}")
             return
 
-        filename = "roxanne_test.raw"
+        filename = "voxanne_test.raw"
         with open(filename, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:

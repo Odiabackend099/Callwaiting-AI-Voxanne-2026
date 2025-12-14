@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 
 export default function RevenueLeak() {
@@ -11,8 +11,17 @@ export default function RevenueLeak() {
         offset: ["start end", "end start"],
     });
 
-    const y = useTransform(scrollYProgress, [0, 1], [100, -100]);
     const opacity = useTransform(scrollYProgress, [0, 0.2, 0.9, 1], [0, 1, 1, 0]);
+
+    // Live counter logic
+    const [lostRevenue, setLostRevenue] = useState(847);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setLostRevenue(prev => prev + Math.floor(Math.random() * 50) + 10);
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <section ref={containerRef} className="relative py-24 md:py-32 bg-[#050505] text-white overflow-hidden">
@@ -24,29 +33,27 @@ export default function RevenueLeak() {
                         className="order-2 md:order-1 relative"
                     >
                         <div className="relative aspect-[4/5] w-full max-w-md mx-auto md:mr-auto rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-                            {/* Using one of the provided assets for "Revenue Leak" contexts */}
                             <Image
                                 src="/clinic-interior.png"
-                                alt="Luxury Plastic Surgery Clinic Interior"
+                                alt="Empty Clinic Reception"
                                 fill
-                                className="object-cover"
+                                className="object-cover grayscale hover:grayscale-0 transition-all duration-700"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                            <div className="absolute bottom-0 left-0 p-6">
-                                <p className="text-red-400 font-bold tracking-wider uppercase mb-2">Critical Alert</p>
-                                <h3 className="text-2xl font-bold">Unanswered Calls = Lost Revenue</h3>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+                            <div className="absolute bottom-0 left-0 p-8 w-full">
+                                <p className="text-red-500 font-bold tracking-widest uppercase mb-2 text-sm flex items-center gap-2">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                    </span>
+                                    Live Loss Tracker
+                                </p>
+                                <p className="text-white text-xs mb-1 uppercase tracking-wider opacity-60">Revenue Lost While You Watch This Page</p>
+                                <div className="text-5xl font-mono font-bold text-white tracking-tight tabular-nums">
+                                    £{lostRevenue.toLocaleString()}
+                                </div>
                             </div>
                         </div>
-
-                        {/* Floating stats card */}
-                        <motion.div
-                            style={{ y }}
-                            className="absolute -right-4 top-1/2 -translate-y-1/2 bg-zinc-900/90 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-xl max-w-xs"
-                        >
-                            <p className="text-zinc-400 text-sm mb-1 uppercase tracking-wider">Missed Opportunity</p>
-                            <p className="text-4xl font-bold text-white mb-2">$10,400</p>
-                            <p className="text-xs text-zinc-500">Average weekly loss for clinics missing 15% of calls.</p>
-                        </motion.div>
                     </motion.div>
 
                     <div className="order-1 md:order-2">
@@ -55,9 +62,12 @@ export default function RevenueLeak() {
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
-                            className="text-4xl md:text-6xl font-bold mb-8 leading-tight"
+                            className="text-4xl md:text-5xl lg:text-6xl font-bold mb-8 leading-tight"
                         >
-                            The <span className="text-red-500">Silent</span> Revenue Drain.
+                            THE SILENT <br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-600">
+                                REVENUE MASSACRE
+                            </span>
                         </motion.h2>
 
                         <motion.div
@@ -65,30 +75,33 @@ export default function RevenueLeak() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8, delay: 0.2 }}
-                            className="space-y-6 text-lg text-zinc-400 font-light"
+                            className="space-y-6 text-lg text-slate-400 font-light"
                         >
-                            <p>
-                                Every time your front desk is busy, on a break, or the clinic is closed, you are losing high-value patients to competitors who pick up the phone.
+                            <p className="text-xl text-white font-medium border-l-4 border-red-500 pl-4">
+                                Right now, while you&apos;re reading this:
                             </p>
-                            <p>
-                                <strong className="text-white font-semibold">The $10K Holiday Phone Tax</strong> is real. During peak seasons, call volume spikes, and missed calls skyrocket. Can you afford to ghost your future patients?
-                            </p>
-                        </motion.div>
+                            <ul className="space-y-4">
+                                <li className="flex items-start gap-3">
+                                    <span className="text-red-500 text-xl font-bold">❌</span>
+                                    <span>3 BBL inquiries went to voicemail <span className="text-red-400 font-bold">(£25,500 lost)</span></span>
+                                </li>
+                                <li className="flex items-start gap-3">
+                                    <span className="text-red-500 text-xl font-bold">❌</span>
+                                    <span>2 Botox appointments called your competitor <span className="text-red-400 font-bold">(£1,400 lost)</span></span>
+                                </li>
+                                <li className="flex items-start gap-3">
+                                    <span className="text-red-500 text-xl font-bold">❌</span>
+                                    <span>1 rhinoplasty consult gave up after 4 rings <span className="text-red-400 font-bold">(£8,500 lost)</span></span>
+                                </li>
+                            </ul>
 
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8, delay: 0.4 }}
-                            className="mt-10 grid grid-cols-2 gap-6"
-                        >
-                            <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                                <p className="text-3xl font-bold text-white mb-1">62%</p>
-                                <p className="text-sm text-zinc-500">Calls go to voicemail in typical clinics</p>
-                            </div>
-                            <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                                <p className="text-3xl font-bold text-white mb-1">0%</p>
-                                <p className="text-sm text-zinc-500">Leave a voicemail. They just call the next clinic.</p>
+                            <div className="pt-6 border-t border-white/10 mt-6">
+                                <p className="text-base">
+                                    Your front desk isn&apos;t lazy. They&apos;re human. Humans take lunch breaks. Humans go home at 6 PM.
+                                </p>
+                                <p className="text-xl mt-2 text-white font-semibold">
+                                    Your revenue doesn&apos;t.
+                                </p>
                             </div>
                         </motion.div>
                     </div>

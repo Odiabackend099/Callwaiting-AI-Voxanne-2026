@@ -73,7 +73,7 @@ Open `http://localhost:3001/dashboard`
 2. **Test Voice** (`/dashboard/voice-test`)
    - Click "Start Voice Call"
    - Grant microphone access
-   - Speak to Roxanne
+   - Speak to Voxanne
    - View real-time transcript
 
 ## 📝 Notes

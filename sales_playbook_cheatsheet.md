@@ -1,4 +1,4 @@
-# ROXANNE SALES PLAYBOOK
+# VOXANNE SALES PLAYBOOK
 ## Quick Reference Guide for Monitoring & Training
 
 ---
@@ -29,7 +29,7 @@
 ## 💬 CONVERSATION STAGES
 
 ### Stage 1: GREETING (10 seconds)
-✅ **Good:** "Hi! This is Roxanne from CallWaiting AI. How can I help you today?"  
+✅ **Good:** "Hi! This is Voxanne from CallWaiting AI. How can I help you today?"  
 ❌ **Bad:** "Welcome to our automated system. Press 1 for..."
 
 ### Stage 2: DISCOVERY (60-90 seconds)
@@ -54,7 +54,7 @@
 ---
 
 ### Objection: "Already Have Receptionist"
-**Response:** *"That's great! Roxanne handles overflow and after-hours so your team can focus on in-person patients. Think of her as backup, not a replacement."*
+**Response:** *"That's great! Voxanne handles overflow and after-hours so your team can focus on in-person patients. Think of her as backup, not a replacement."*
 
 ---
 
@@ -64,12 +64,12 @@
 ---
 
 ### Objection: "Not Sure if AI Can Handle Medical"
-**Response:** *"Great question. Roxanne is built for medical practices. HIPAA compliant, routes urgent cases to humans immediately. She's not replacing doctors - she's freeing them up."*
+**Response:** *"Great question. Voxanne is built for medical practices. HIPAA compliant, routes urgent cases to humans immediately. She's not replacing doctors - she's freeing them up."*
 
 ---
 
 ### Objection: "Can I Try It First?"
-**Response:** *"We don't offer free trials, but I can book a live demo where you hear Roxanne in action. If it's not a fit, no pressure. Fair?"*
+**Response:** *"We don't offer free trials, but I can book a live demo where you hear Voxanne in action. If it's not a fit, no pressure. Fair?"*
 
 ---
 
@@ -190,31 +190,31 @@
 ## 📞 SAMPLE PERFECT CALL (3 Minutes)
 
 **[0:00] Greeting**  
-*Roxanne:* "Hi! This is Roxanne from CallWaiting AI. How can I help you today?"
+*Voxanne:* "Hi! This is Voxanne from CallWaiting AI. How can I help you today?"
 
 **[0:10] Discovery**  
 *Prospect:* "I saw your website. Do you really answer 24/7?"  
-*Roxanne:* "We do! Tell me - are you a clinic or law firm?"  
+*Voxanne:* "We do! Tell me - are you a clinic or law firm?"  
 *Prospect:* "Plastic surgery clinic in Lagos."  
-*Roxanne:* "Perfect. How do you handle calls when your line's busy?"  
+*Voxanne:* "Perfect. How do you handle calls when your line's busy?"  
 *Prospect:* "Voicemail. We call back later."  
-*Roxanne:* "Got it. About how many calls do you miss weekly?"  
+*Voxanne:* "Got it. About how many calls do you miss weekly?"  
 *Prospect:* "Maybe... 10?"
 
 **[1:20] Implication**  
-*Roxanne:* "Okay. If each is a potential patient worth £500, that's £5,000 in lost revenue weekly. Roxanne handles all of that instantly. Would you like to see a demo?"
+*Voxanne:* "Okay. If each is a potential patient worth £500, that's £5,000 in lost revenue weekly. Voxanne handles all of that instantly. Would you like to see a demo?"
 
 **[2:00] Objection**  
 *Prospect:* "Maybe. What's the cost?"  
-*Roxanne:* "We have three tiers. For a clinic your size, Growth is popular at £289 monthly. That includes voice cloning and CRM. If we book just 2 extra patients monthly, it pays for itself. Want me to send a breakdown?"
+*Voxanne:* "We have three tiers. For a clinic your size, Growth is popular at £289 monthly. That includes voice cloning and CRM. If we book just 2 extra patients monthly, it pays for itself. Want me to send a breakdown?"
 
 **[2:30] Close**  
 *Prospect:* "Okay, sure."  
-*Roxanne:* "Great! What's your WhatsApp? I'll send it now, and we can schedule a demo for Monday. Does 2 PM work?"
+*Voxanne:* "Great! What's your WhatsApp? I'll send it now, and we can schedule a demo for Monday. Does 2 PM work?"
 
 **[3:00] End**  
 *Prospect:* "Sounds good."  
-*Roxanne:* "Perfect! Check your WhatsApp. Talk Monday!"
+*Voxanne:* "Perfect! Check your WhatsApp. Talk Monday!"
 
 ---
 
@@ -236,7 +236,7 @@
 
 ## 🎓 TRAINING NOTES
 
-### If Roxanne Struggles With...
+### If Voxanne Struggles With...
 **Price Objections** → Add more ROI examples  
 **Technical Questions** → Expand feature descriptions  
 **Competitor Comparisons** → Add competitive advantages  
@@ -255,6 +255,6 @@
 
 ---
 
-**Remember: Roxanne is YOUR sales rep. Monitor, train, optimize. Every call is a learning opportunity.**
+**Remember: Voxanne is YOUR sales rep. Monitor, train, optimize. Every call is a learning opportunity.**
 
 🚀 **Good luck closing deals!**

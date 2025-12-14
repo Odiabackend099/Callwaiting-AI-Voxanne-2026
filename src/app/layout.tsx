@@ -16,12 +16,13 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "CallWaiting AI | The #1 AI Receptionist for Clinics & Spas",
-  description: "Stop missing calls. CallWaiting AI answers, qualifies, and books appointments 24/7. The top-rated AI receptionist that pays for itself in 30 days. Available in US, UK, Canada, Nigeria, and Europe.",
+  title: "Voxanne by CallWaiting AI | The #1 AI Receptionist for Clinics & Spas",
+  description: "Voxanne is the AI voice receptionist from CallWaiting AI. Stop missing calls—Voxanne answers, qualifies, and books appointments 24/7 for clinics and med spas.",
   keywords: [
     "AI receptionist",
     "CallWaiting AI",
-    "Roxanne",
+    "Voxanne",
+    "Voxanne AI",
     "medical answering service",
     "virtual receptionist",
     "clinic automation",

@@ -73,7 +73,7 @@ export default function Footer() {
 
                 <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
                     <p className="text-zinc-500">© 2025 CallWaiting AI. All rights reserved.</p>
-                    <p className="text-slate-400 text-sm">Built exclusively for Plastic Surgeons, Dermatologists, and Med Spas</p>
+                    <p className="text-slate-400 text-sm">Built exclusively for Aesthetic Clinics, Plastic Surgeons, and Med Spas</p>
                 </div>
             </div>
         </footer>

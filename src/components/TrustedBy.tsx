@@ -6,7 +6,7 @@ export default function TrustedBy() {
     return (
         <section className="py-12 border-y border-white/5 bg-black/40 backdrop-blur-sm overflow-hidden relative z-10">
             <div className="container mx-auto px-6">
-                <p className="text-center text-xs font-bold text-zinc-500 mb-8 uppercase tracking-[0.2em]">Trusted by Top Plastic Surgeons & Med Spas</p>
+                <p className="text-center text-xs font-bold text-zinc-500 mb-8 uppercase tracking-[0.2em]">Trusted by Top Aesthetic Clinics, Plastic Surgeons & Med Spas</p>
 
                 <div className="relative flex overflow-x-hidden group">
                     <div className="animate-marquee flex gap-16 whitespace-nowrap py-4">
@@ -34,7 +34,7 @@ export default function TrustedBy() {
                     </div>
                 </div>
                 <div className="mt-10 text-center">
-                    <p className="text-zinc-300 italic font-medium text-lg">&quot;Since installing Roxanne, our after-hours consult bookings increased by 40%. She paid for herself in the first week.&quot;</p>
+                    <p className="text-zinc-300 italic font-medium text-lg">&quot;Since installing Voxanne, our after-hours consult bookings increased by 40%. She paid for herself in the first week.&quot;</p>
                     <p className="text-zinc-500 text-sm mt-3 font-semibold">– Dr. Sarah J., Board Certified Plastic Surgeon</p>
                 </div>
 

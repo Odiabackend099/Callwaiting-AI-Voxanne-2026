@@ -31,7 +31,7 @@ export default function MedSpaPage() {
         {
             icon: PhoneCall,
             title: "Weekend Catch-Up",
-            description: "While you're closed Sunday, Roxanne books your Monday solid. Captures the high volume of weekend inquiries."
+            description: "While you're closed Sunday, Voxanne books your Monday solid. Captures the high volume of weekend inquiries."
         },
         {
             icon: Gem,
@@ -58,7 +58,7 @@ export default function MedSpaPage() {
                     }
                     subtitle={
                         <>
-                            Stop losing weekend revenue to voicemail. Roxanne answers instantly, explains your memberships, <br />
+                            Stop losing weekend revenue to voicemail. Voxanne answers instantly, explains your memberships, <br />
                             and fills your injectors' schedules while you sleep.
                         </>
                     }
@@ -88,7 +88,7 @@ export default function MedSpaPage() {
                                 </div>
                             </div>
                             <p className="mt-8 text-lg text-slate-300 italic">
-                                &quot;Our injectors used to spend hours calling people back. Now they just come in and inject. Roxanne fills the books automatically.&quot;
+                                &quot;Our injectors used to spend hours calling people back. Now they just come in and inject. Voxanne fills the books automatically.&quot;
                             </p>
                             <p className="mt-4 text-slate-500 font-medium">- Sarah Vance, Owner of Glow Aesthetics</p>
                         </div>

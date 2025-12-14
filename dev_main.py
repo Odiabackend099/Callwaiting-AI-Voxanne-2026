@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ROXANNE DEV SERVER - Local Development with Feature Flags
+VOXANNE DEV SERVER - Local Development with Feature Flags
 ==========================================================
 Use this for local testing. Production uses main.py unchanged.
 
@@ -36,10 +36,10 @@ ENABLE_HUMANIZER = os.getenv("ENABLE_HUMANIZER", "false").lower() == "true"
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-logger = logging.getLogger("roxanne-dev")
+logger = logging.getLogger("voxanne-dev")
 
 logger.info("=" * 60)
-logger.info("  ROXANNE DEV SERVER - LOCAL TESTING")
+logger.info("  VOXANNE DEV SERVER - LOCAL TESTING")
 logger.info("=" * 60)
 logger.info(f"  ORCHESTRATOR_MODE   = {ORCHESTRATOR_MODE}")
 logger.info(f"  ENDPOINT_MS         = {ENDPOINT_MS}")
@@ -53,7 +53,7 @@ logger.info("=" * 60)
 
 if ORCHESTRATOR_MODE == "v2":
     # V2 mode: use new ConversationManager-based orchestration
-    from roxanne_v2 import app
+    from voxanne_v2 import app
     logger.info("Using ORCHESTRATOR_MODE=v2 (ConversationManager)")
 else:
     # Stable mode: use existing main.py

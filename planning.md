@@ -1,7 +1,7 @@
-# Roxanne Voice Orchestration - Production Implementation Plan
+# Voxanne Voice Orchestration - Production Implementation Plan
 
 ## Overview
-Building production-grade voice orchestration for CallWaiting AI's Roxanne agent with:
+Building production-grade voice orchestration for CallWaiting AI's Voxanne agent with:
 - State Machine (IDLE → LISTENING → PROCESSING → SPEAKING → INTERRUPTED)
 - Barge-In Detection with immediate TTS kill
 - Sub-500ms voice-to-voice latency
@@ -87,14 +87,14 @@ Building production-grade voice orchestration for CallWaiting AI's Roxanne agent
 
 ### Acceptance Criteria
 - [ ] Caller hears greeting within 1 second of connection
-- [ ] Roxanne responds within 500ms of user finishing speech
-- [ ] Interrupting Roxanne stops her immediately
+- [ ] Voxanne responds within 500ms of user finishing speech
+- [ ] Interrupting Voxanne stops her immediately
 - [ ] Conversation feels natural and responsive
 
 ---
 
 ## Files Created
-1. `roxanne_voice_orchestration.py` - Main orchestration engine
+1. `voxanne_voice_orchestration.py` - Main orchestration engine
 2. `planning.md` - This file
 
 ## Dependencies

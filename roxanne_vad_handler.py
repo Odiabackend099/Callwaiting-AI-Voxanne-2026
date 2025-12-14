@@ -1,5 +1,5 @@
 """
-Roxanne AI - Advanced Voice Activity Detection & Echo Cancellation
+Voxanne AI - Advanced Voice Activity Detection & Echo Cancellation
 Implements Silero VAD with real-time echo cancellation for robust barge-in detection
 """
 

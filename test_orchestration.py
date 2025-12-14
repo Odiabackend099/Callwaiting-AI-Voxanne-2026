@@ -11,13 +11,13 @@ import numpy as np
 from unittest.mock import Mock, AsyncMock, patch
 from collections import deque
 
-from roxanne_enhanced_orchestration import (
+from voxanne_enhanced_orchestration import (
     EnhancedVoiceOrchestrator, 
     ConversationContext, 
     ConversationState,
     ConversationMetrics
 )
-from roxanne_vad_handler import AdvancedVADHandler, VAD_CONFIG
+from voxanne_vad_handler import AdvancedVADHandler, VAD_CONFIG
 
 
 class TestVoiceOrchestration:

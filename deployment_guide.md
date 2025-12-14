@@ -51,7 +51,7 @@ DEEPGRAM_API_KEY=your_deepgram_api_key
 GROQ_API_KEY=your_groq_api_key
 
 # Database Configuration
-DATABASE_URL=postgresql://user:password@localhost:5432/roxanne
+DATABASE_URL=postgresql://user:password@localhost:5432/voxanne
 REDIS_URL=redis://localhost:6379
 
 # Application Settings
@@ -69,7 +69,7 @@ docker-compose up -d
 docker-compose ps
 
 # View logs
-docker-compose logs -f roxanne-voice-orchestrator
+docker-compose logs -f voxanne-voice-orchestrator
 ```
 
 ### 4. Verify Deployment
@@ -114,7 +114,7 @@ sudo apt-get install certbot
 sudo certbot certonly --standalone -d your-domain.com
 
 # Update nginx configuration
-sudo nano /etc/nginx/sites-available/roxanne
+sudo nano /etc/nginx/sites-available/voxanne
 ```
 
 #### 2. Firewall Configuration
@@ -158,7 +158,7 @@ sysctl -p
 ```yaml
 # docker-compose.yml optimizations
 services:
-  roxanne-voice-orchestrator:
+  voxanne-voice-orchestrator:
     deploy:
       resources:
         limits:
@@ -207,7 +207,7 @@ rule_files:
   - "alert_rules.yml"
 
 scrape_configs:
-  - job_name: 'roxanne-voice'
+  - job_name: 'voxanne-voice'
     static_configs:
       - targets: ['localhost:8000']
     scrape_interval: 5s
@@ -255,8 +255,8 @@ Import the following dashboards:
 # docker-compose scale
 version: '3.8'
 services:
-  roxanne-voice-orchestrator:
-    image: callwaiting/roxanne:latest
+  voxanne-voice-orchestrator:
+    image: callwaiting/voxanne:latest
     deploy:
       replicas: 3
       update_config:
@@ -271,11 +271,11 @@ services:
 #### 2. Load Balancing
 ```nginx
 # nginx.conf upstream configuration
-upstream roxanne_backend {
+upstream voxanne_backend {
     least_conn;
-    server roxanne1:8000 weight=3 max_fails=3 fail_timeout=30s;
-    server roxanne2:8000 weight=3 max_fails=3 fail_timeout=30s;
-    server roxanne3:8000 weight=3 max_fails=3 fail_timeout=30s;
+    server voxanne1:8000 weight=3 max_fails=3 fail_timeout=30s;
+    server voxanne2:8000 weight=3 max_fails=3 fail_timeout=30s;
+    server voxanne3:8000 weight=3 max_fails=3 fail_timeout=30s;
     
     keepalive 32;
 }
@@ -285,7 +285,7 @@ server {
     server_name your-domain.com;
     
     location /ws {
-        proxy_pass http://roxanne_backend;
+        proxy_pass http://voxanne_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -323,27 +323,27 @@ CREATE INDEX idx_metrics_call_id ON call_metrics(call_id);
 # Automated daily backups
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-pg_dump -h localhost -U postgres roxanne > /backup/roxanne_$DATE.sql
-gzip /backup/roxanne_$DATE.sql
+pg_dump -h localhost -U postgres voxanne > /backup/voxanne_$DATE.sql
+gzip /backup/voxanne_$DATE.sql
 
 # Upload to S3
-aws s3 cp /backup/roxanne_$DATE.sql.gz s3://your-backup-bucket/
+aws s3 cp /backup/voxanne_$DATE.sql.gz s3://your-backup-bucket/
 ```
 
 #### 2. Configuration Backup
 ```bash
 # Backup configuration files
-tar -czf /backup/roxanne-config-$(date +%Y%m%d).tar.gz \
+tar -czf /backup/voxanne-config-$(date +%Y%m%d).tar.gz \
   /opt/callwaiting/config \
   /opt/callwaiting/ssl \
-  /etc/nginx/sites-available/roxanne
+  /etc/nginx/sites-available/voxanne
 ```
 
 #### 3. Recovery Procedures
 ```bash
 # Database recovery
-gunzip /backup/roxanne_latest.sql.gz
-psql -h localhost -U postgres -d roxanne < /backup/roxanne_latest.sql
+gunzip /backup/voxanne_latest.sql.gz
+psql -h localhost -U postgres -d voxanne < /backup/voxanne_latest.sql
 
 # Service recovery
 docker-compose down
@@ -355,16 +355,16 @@ docker-compose up -d
 #### 1. Zero-Downtime Updates
 ```bash
 # Rolling update process
-docker-compose up -d --no-deps --scale roxanne-voice-orchestrator=4 roxanne-voice-orchestrator
-docker-compose up -d --no-deps --scale roxanne-voice-orchestrator=3 roxanne-voice-orchestrator
+docker-compose up -d --no-deps --scale voxanne-voice-orchestrator=4 voxanne-voice-orchestrator
+docker-compose up -d --no-deps --scale voxanne-voice-orchestrator=3 voxanne-voice-orchestrator
 ```
 
 #### 2. Log Rotation
 ```bash
 # Configure logrotate
-sudo nano /etc/logrotate.d/roxanne
+sudo nano /etc/logrotate.d/voxanne
 
-/var/log/roxanne/*.log {
+/var/log/voxanne/*.log {
     daily
     rotate 30
     compress
@@ -388,7 +388,7 @@ DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | cut -d'%' -f1)
 curl -f http://localhost:8000/health || echo "Health check failed"
 
 # Log metrics
-echo "$(date): CPU:${CPU_USAGE}% MEM:${MEMORY_USAGE}% DISK:${DISK_USAGE}%" >> /var/log/roxanne/performance.log
+echo "$(date): CPU:${CPU_USAGE}% MEM:${MEMORY_USAGE}% DISK:${DISK_USAGE}%" >> /var/log/voxanne/performance.log
 ```
 
 ## Troubleshooting
@@ -398,7 +398,7 @@ echo "$(date): CPU:${CPU_USAGE}% MEM:${MEMORY_USAGE}% DISK:${DISK_USAGE}%" >> /v
 #### 1. High Latency
 ```bash
 # Check system resources
-top -p $(pgrep -f roxanne)
+top -p $(pgrep -f voxanne)
 iostat -x 1
 
 # Check network latency
@@ -406,7 +406,7 @@ ping -c 10 api.deepgram.com
 ping -c 10 api.groq.com
 
 # Check application logs
-docker-compose logs --tail=100 roxanne-voice-orchestrator
+docker-compose logs --tail=100 voxanne-voice-orchestrator
 ```
 
 #### 2. WebSocket Connection Issues
@@ -422,7 +422,7 @@ websocat ws://localhost:8000/ws
 #### 3. Memory Leaks
 ```bash
 # Monitor memory usage
-watch -n 1 'ps aux | grep roxanne | grep -v grep'
+watch -n 1 'ps aux | grep voxanne | grep -v grep'
 
 # Check for memory leaks
 valgrind --tool=memcheck --leak-check=full python app.py

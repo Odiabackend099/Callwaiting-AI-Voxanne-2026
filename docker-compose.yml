@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  roxanne-voice:
+  voxanne-voice:
     build: .
-    container_name: roxanne-voice-orchestrator
+    container_name: voxanne-voice-orchestrator
     ports:
       - "8000:8000"
     environment:
@@ -37,4 +37,4 @@ services:
 
 networks:
   default:
-    name: roxanne-network
+    name: voxanne-network

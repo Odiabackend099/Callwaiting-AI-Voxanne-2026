@@ -1,8 +1,8 @@
-# 🚀 FINAL IMPLEMENTATION: MAYA-LEVEL ROXANNE
+# 🚀 FINAL IMPLEMENTATION: MAYA-LEVEL VOXANNE
 
 ## Overview
 
-You're building Roxanne to achieve **Sesame AI's Maya standard**:
+You're building Voxanne to achieve **Sesame AI's Maya standard**:
 - Natural conversation on any topic
 - Emotional intelligence
 - Internet-aware (can search and verify)
@@ -15,8 +15,8 @@ You're building Roxanne to achieve **Sesame AI's Maya standard**:
 ### STEP 1: Use Existing Files
 
 You already have these files uploaded:
-1. ✅ `roxanne_sales_agent_code.js` - Sales agent class
-2. ✅ `roxanne_sales_system_prompt.md` - System prompt
+1. ✅ `voxanne_sales_agent_code.js` - Sales agent class
+2. ✅ `voxanne_sales_system_prompt.md` - System prompt
 3. ✅ `sales_playbook_cheatsheet.md` - Training playbook
 4. ✅ `sales_agent_implementation.md` - Implementation guide
 5. ✅ `server_websocket.js` - WebSocket server
@@ -25,7 +25,7 @@ You already have these files uploaded:
 
 ### STEP 2: Update System Prompt (Maya-Level)
 
-**Replace the system prompt in `roxanne_sales_agent_code.js`** with the new Maya-level prompt I just created.
+**Replace the system prompt in `voxanne_sales_agent_code.js`** with the new Maya-level prompt I just created.
 
 **Find this function:**
 ```javascript
@@ -49,7 +49,7 @@ generateSalesSystemPrompt() {
     minute: '2-digit' 
   });
 
-  return `You are Roxanne, the world-class AI Sales Agent for CallWaiting AI at the Maya (Sesame AI) standard.
+  return `You are Voxanne, the world-class AI Sales Agent for CallWaiting AI at the Maya (Sesame AI) standard.
 
 TODAY IS: ${currentDate}
 CURRENT TIME: ${currentTime}
@@ -63,7 +63,7 @@ CURRENT TIME: ${currentTime}
 
 ### STEP 3: Add Search Tool Capability
 
-**To enable internet awareness, add this to `roxanne_sales_agent_code.js`:**
+**To enable internet awareness, add this to `voxanne_sales_agent_code.js`:**
 
 ```javascript
 // Add after the humanizeText function
@@ -136,7 +136,7 @@ async handleUserMessage(transcript) {
     const searchQuery = this.detectSearchIntent(response);
     
     if (searchQuery) {
-      console.log(`🔍 Roxanne wants to search: "${searchQuery}"`);
+      console.log(`🔍 Voxanne wants to search: "${searchQuery}"`);
       
       // Perform search
       const results = await this.searchWeb(searchQuery);
@@ -219,12 +219,12 @@ npm install ws groq-sdk dotenv node-fetch
 **Ensure `server.js` matches the pattern from `server_websocket.js`:**
 
 ```javascript
-import { RoxanneSalesAgent } from './roxanne_sales_agent_code.js';
+import { VoxanneSalesAgent } from './voxanne_sales_agent_code.js';
 
 wss.on('connection', async (ws, req) => {
   console.log('✅ Sales lead connected (Maya-level)');
   
-  const agent = new RoxanneSalesAgent({
+  const agent = new VoxanneSalesAgent({
     onAudio: (chunk) => {
       if (ws.readyState === ws.OPEN) {
         ws.send(chunk);
@@ -288,16 +288,16 @@ wss.on('connection', async (ws, req) => {
 
 **You:** "What about Vapi? I heard they're good."  
 **Expected:** 
-1. Roxanne pauses: *"Let me look that up real quick..."*
+1. Voxanne pauses: *"Let me look that up real quick..."*
 2. Searches: `[SEARCH: Vapi AI receptionist pricing medical 2025]`
-3. Responds: *"Okay, so Vapi is $399/month with a 12-month contract. Roxanne is $289 with no contract, plus we focus purely on medical practices. Vapi is generic. Want to see how we compare?"*
+3. Responds: *"Okay, so Vapi is $399/month with a 12-month contract. Voxanne is $289 with no contract, plus we focus purely on medical practices. Vapi is generic. Want to see how we compare?"*
 
 ---
 
 **Test Scenario 4: Complex Objection**
 
 **You:** "I'm not sure AI can handle the nuances of plastic surgery consultations."  
-**Expected:** *"I hear you - that's a fair concern. Let me ask: if Roxanne could handle 80% of calls (pricing, scheduling, FAQs) and route the other 20% (complex medical questions) to your team, would that be valuable? You'd save time and never miss a lead."*
+**Expected:** *"I hear you - that's a fair concern. Let me ask: if Voxanne could handle 80% of calls (pricing, scheduling, FAQs) and route the other 20% (complex medical questions) to your team, would that be valuable? You'd save time and never miss a lead."*
 
 ---
 
@@ -310,7 +310,7 @@ wss.on('connection', async (ws, req) => {
 
 ## 🎯 SUCCESS CRITERIA
 
-**Roxanne is at Maya-level when:**
+**Voxanne is at Maya-level when:**
 
 ✅ She handles ANY topic gracefully  
 ✅ She reads emotional tone and adapts  
@@ -417,7 +417,7 @@ Before going live:
 
 ## 🎬 YOU'RE READY!
 
-**Roxanne is now at Maya (Sesame AI) level.**
+**Voxanne is now at Maya (Sesame AI) level.**
 
 She can:
 - Talk about anything naturally

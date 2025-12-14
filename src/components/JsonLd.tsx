@@ -1,4 +1,5 @@
 export default function JsonLd() {
+
     const schema = {
         "@context": "https://schema.org",
         "@type": "Organization",
@@ -36,7 +37,24 @@ export default function JsonLd() {
         ],
         "sameAs": [
             "https://www.linkedin.com/company/callwaitingai"
-        ]
+        ],
+        "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "AI Receptionist Plans",
+            "itemListElement": [
+                {
+                    "@type": "Offer",
+                    "itemOffered": {
+                        "@type": "SoftwareApplication",
+                        "name": "Voxanne",
+                        "alternateName": "Voxanne AI Receptionist",
+                        "applicationCategory": "BusinessApplication",
+                        "operatingSystem": "Web",
+                        "description": "Voxanne is the AI voice receptionist from CallWaiting AI that answers calls, qualifies patients, and books appointments 24/7 for clinics and med spas."
+                    }
+                }
+            ]
+        }
     };
 
     return (

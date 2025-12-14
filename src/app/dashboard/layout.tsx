@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Roxanne AI - Voice Agent Dashboard",
-    description: "Manage and test your Roxanne AI voice agent",
+    title: "Voxanne AI - Voice Agent Dashboard",
+    description: "Manage and test your Voxanne AI voice agent",
 };
 
 export default function DashboardLayout({

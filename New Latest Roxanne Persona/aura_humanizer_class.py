@@ -1,5 +1,5 @@
 """
-CallWaiting AI - Roxanne Aura Humanizer (Production-Ready)
+CallWaiting AI - Voxanne Aura Humanizer (Production-Ready)
 Transforms robotic LLM output → Human-sounding Deepgram Aura-2 speech
 
 ✅ Battle-tested formatting rules (80% naturalness improvement)
@@ -9,7 +9,7 @@ Transforms robotic LLM output → Human-sounding Deepgram Aura-2 speech
 ✅ Prosody-optimized punctuation
 
 Usage:
-    humanizer = RoxanneAuraHumanizer(deepgram_key, groq_key)
+    humanizer = VoxanneAuraHumanizer(deepgram_key, groq_key)
     audio_stream = await humanizer.generate_and_speak(user_input, patient_name="Sarah")
 """
 
@@ -22,7 +22,7 @@ from datetime import datetime
 from groq import Groq
 
 
-class RoxanneAuraHumanizer:
+class VoxanneAuraHumanizer:
     """
     Production-grade text humanizer for Deepgram Aura-2 TTS
     Guarantees natural prosody through strategic formatting
@@ -36,11 +36,11 @@ class RoxanneAuraHumanizer:
         self.dg_key = deepgram_key
         self.groq = Groq(api_key=groq_key)
         
-        # Pricing lookup for natural speech
+        # Pricing lookup for natural speech (lower bound for ranges where needed)
         self.pricing = {
-            "essentials": {"setup": 499, "monthly": 169},
-            "growth": {"setup": 949, "monthly": 289},
-            "premium": {"setup": 2499, "monthly": 499}
+            "essentials": {"setup": 2000, "monthly": 500},
+            "growth": {"setup": 4000, "monthly": 1200},
+            "premium": {"setup": 8000, "monthly": 2500},  # Premium ranges up to 3500
         }
     
     def get_system_prompt(self) -> str:
@@ -51,7 +51,7 @@ class RoxanneAuraHumanizer:
         current_date = now.strftime("%A, %B %d, %Y")
         current_time = now.strftime("%I:%M %p")
         
-        return f"""You are Roxanne, elite AI Sales Agent for CallWaiting AI Ltd.
+        return f"""You are Voxanne, elite AI Sales Agent for CallWaiting AI Ltd.
 
 TODAY IS: {current_date}
 CURRENT TIME: {current_time}
@@ -109,12 +109,12 @@ COMPANY INFO:
 - Technology: "Odiadev AI Voice Technology" (never mention Deepgram/Groq)
 
 PRICING (say as words):
-- Essentials: four ninety-nine setup, one sixty-nine monthly
-- Growth: nine forty-nine setup, two eighty-nine monthly (MOST POPULAR)
-- Premium: twenty-four ninety-nine setup, four ninety-nine monthly
+- Essentials: two thousand dollars setup, five hundred dollars monthly
+- Growth: four thousand dollars setup, one thousand two hundred dollars monthly (MOST POPULAR)
+- Premium: eight thousand dollars setup, between two thousand five hundred and three thousand five hundred dollars monthly
 
 SALES METHOD (BANT + SPIN):
-- Budget: Can they afford one sixty-nine to four ninety-nine monthly?
+- Budget: Can they afford five hundred to two thousand five hundred monthly?
 - Authority: Are they the decision-maker?
 - Need: Do they miss calls or lose leads?
 - Timeline: When do they need it?
@@ -127,7 +127,7 @@ DISCOVERY QUESTIONS:
 
 OBJECTION HANDLING:
 - "Too expensive" → "What's a new patient worth? If we book just two extra monthly, Growth pays for itself."
-- "Already have receptionist" → "Roxanne handles overflow and after-hours. Think backup, not replacement."
+- "Already have receptionist" → "Voxanne handles overflow and after-hours. Think backup, not replacement."
 - "Need to discuss" → "Can I send you a demo video to share?"
 
 BOUNDARIES:
@@ -343,7 +343,7 @@ Remember: Write like you're reading aloud naturally. Every comma, contraction, a
         if not sentence.strip():
             return
         
-        print(f"🗣️  Roxanne: {sentence}")
+        print(f"🗣️  Voxanne: {sentence}")
         
         payload = {
             "model": self.AURA_MODEL,
@@ -442,9 +442,9 @@ async def test_humanizer():
         print("❌ Please set DEEPGRAM_API_KEY and GROQ_API_KEY environment variables")
         return
     
-    humanizer = RoxanneAuraHumanizer(dg_key, groq_key)
+    humanizer = VoxanneAuraHumanizer(dg_key, groq_key)
     
-    print("🚀 Roxanne Aura Humanizer Test")
+    print("🚀 Voxanne Aura Humanizer Test")
     print("=" * 50)
     
     # Test cases
@@ -460,7 +460,7 @@ async def test_humanizer():
         
         # Generate and print response (no audio in test mode)
         response = await humanizer.generate_response(user_input, patient_name)
-        print(f"🤖 Roxanne (humanized): {response}")
+        print(f"🤖 Voxanne (humanized): {response}")
         print("-" * 50)
 
 

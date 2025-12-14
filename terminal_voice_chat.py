@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CallWaiting AI - Roxanne Terminal Voice Chat
+CallWaiting AI - Voxanne Terminal Voice Chat
 ✅ Uses REST API (no SDK conflicts)
 ✅ Aura-2 Thalia voice
 ✅ Groq Llama-3.3-70B for real responses
@@ -38,16 +38,16 @@ TTS_ENCODING = "linear16"
 TTS_SAMPLE_RATE = 16000
 
 # =============================================================================
-# ROXANNE MAYA-LEVEL SYSTEM PROMPT
+# VOXANNE MAYA-LEVEL SYSTEM PROMPT
 # =============================================================================
 from datetime import datetime
 
-def get_roxanne_prompt():
+def get_voxanne_prompt():
     now = datetime.now()
     current_date = now.strftime("%A, %B %d, %Y")
     current_time = now.strftime("%I:%M %p")
     
-    return f"""You are **Roxanne**, the world-class AI Sales Agent for CallWaiting AI. You operate at the Maya (Sesame AI) standard.
+    return f"""You are **Voxanne**, the world-class AI Sales Agent for CallWaiting AI. You operate at the Maya (Sesame AI) standard.
 
 ## DYNAMIC CONTEXT
 Today is: {current_date}
@@ -99,7 +99,7 @@ If prospect sounds:
 - Excited: Match energy. "I love your enthusiasm! Let's get you set up."
 - Skeptical: Provide proof. "Let me show you how Dr. Chen recovered $120K."
 - Confused: Simplify. "Let me explain in plain English."
-- Rushed: Get to point. "Quick version: Roxanne answers 24/7. Can I send a demo?"
+- Rushed: Get to point. "Quick version: Voxanne answers 24/7. Can I send a demo?"
 
 ## SALES FRAMEWORK (BANT)
 - Budget: Can they afford $169-$499/month?
@@ -120,13 +120,13 @@ If prospect sounds:
 → "I get it. What's a new patient worth? If we book 2-3 extra monthly, Growth at two eighty-nine pays for itself."
 
 "Already have receptionist":
-→ "Great! Roxanne isn't a replacement - she's backup. Handles overflow, after-hours, weekends."
+→ "Great! Voxanne isn't a replacement - she's backup. Handles overflow, after-hours, weekends."
 
 "Need to discuss with partner":
 → "Smart move. Can I send you a demo video to share?"
 
 "Not sure AI can handle medical calls":
-→ "Roxanne is built for medical practices. HIPAA compliant, routes emergencies to humans."
+→ "Voxanne is built for medical practices. HIPAA compliant, routes emergencies to humans."
 
 ## NATURAL SPEECH (Avoid Robot Voice)
 - Phone numbers: "0 7 4, 2 4, 0 3 8, 2 5 0" (with pauses)
@@ -156,10 +156,10 @@ Every conversation circles back to:
 
 Remember: You're not just an AI. You're the best sales rep CallWaiting AI has ever had."""
 
-ROXANNE_SYSTEM_PROMPT = get_roxanne_prompt()
+VOXANNE_SYSTEM_PROMPT = get_voxanne_prompt()
 
 
-class RoxanneTerminalChat:
+class VoxanneTerminalChat:
     def __init__(self):
         self.dg_key = os.getenv("DEEPGRAM_API_KEY")
         self.groq_key = os.getenv("GROQ_API_KEY")
@@ -174,7 +174,7 @@ class RoxanneTerminalChat:
         
         # Conversation history
         self.messages = [
-            {"role": "system", "content": ROXANNE_SYSTEM_PROMPT}
+            {"role": "system", "content": VOXANNE_SYSTEM_PROMPT}
         ]
         
         # Async objects (initialized in start)
@@ -193,7 +193,7 @@ class RoxanneTerminalChat:
             "Content-Type": "application/json"
         })
         
-        print("🚀 Roxanne Terminal Voice Chat Initialized")
+        print("🚀 Voxanne Terminal Voice Chat Initialized")
         print(f"   TTS Voice: {TTS_MODEL}")
         print(f"   LLM: Groq Llama-3.3-70B")
 
@@ -204,13 +204,13 @@ class RoxanneTerminalChat:
         self.playback_queue = asyncio.Queue()
         self.interruption_event = asyncio.Event()
 
-        print("\n✨ Roxanne AI Sales Agent")
+        print("\n✨ Voxanne AI Sales Agent")
         print("   - Barge-in Enabled (Speak to interrupt)")
         print("   - Press Ctrl+C to exit\n")
 
         # Initial Greeting
-        greeting = "Hi! This is Roxanne from CallWaiting A.I. How can I help you today?"
-        print(f"👩🏼‍⚕️ Roxanne: {greeting}")
+        greeting = "Hi! This is Voxanne from CallWaiting A.I. How can I help you today?"
+        print(f"👩🏼‍⚕️ Voxanne: {greeting}")
         await self.synthesize_and_enqueue(greeting)
         
         # Start Tasks
@@ -320,7 +320,7 @@ class RoxanneTerminalChat:
             # Wait for user input
             text = await self.input_queue.get()
             
-            # Skip if it's Roxanne's own voice (echo detection)
+            # Skip if it's Voxanne's own voice (echo detection)
             if self.is_speaking:
                 continue
             
@@ -332,7 +332,7 @@ class RoxanneTerminalChat:
             
             if any(kw in text.lower() for kw in ["exit", "quit", "goodbye", "bye"]):
                 farewell = "Thank you for calling! Have a wonderful day."
-                print(f"👩🏼‍⚕️ Roxanne: {farewell}")
+                print(f"👩🏼‍⚕️ Voxanne: {farewell}")
                 await self.synthesize_and_enqueue(farewell)
                 await asyncio.sleep(2)
                 sys.exit(0)
@@ -341,7 +341,7 @@ class RoxanneTerminalChat:
             self.messages.append({"role": "user", "content": text})
             
             # Get LLM response with streaming
-            print("👩🏼‍⚕️ Roxanne: ", end="", flush=True)
+            print("👩🏼‍⚕️ Voxanne: ", end="", flush=True)
             
             try:
                 response_text = ""
@@ -463,5 +463,5 @@ class RoxanneTerminalChat:
                     self.is_speaking = False
 
 if __name__ == "__main__":
-    chat = RoxanneTerminalChat()
+    chat = VoxanneTerminalChat()
     asyncio.run(chat.start())

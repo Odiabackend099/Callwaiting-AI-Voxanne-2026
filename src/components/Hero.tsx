@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { ArrowRight, Phone, Play, Pause } from "lucide-react";
 import OutboundDemo from "./OutboundDemo";
-import HeroAudioPlayer from "./HeroAudioPlayer";
+import { useState, useRef } from "react";
+import { SafetyDisclaimer } from "./SafetyDisclaimer";
 
 interface HeroProps {
     onBookDemo?: () => void;
@@ -14,85 +16,137 @@ interface HeroProps {
 
 export default function Hero({
     onBookDemo,
-    title = <>Stop <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-800">Bleeding Revenue.</span></>,
-    subtitle = <>Roxanne answers every missed call, qualifies BBL & Rhinoplasty leads instantly, and books patients directly into your EMR.<br /><span className="text-white font-medium">She doesn&apos;t just save you money—she actively drives revenue and delivers exceptional ROI.</span></>,
-    badgeText = "The #1 AI Receptionist for Clinics & Spas",
-    ctaText = "Book Your Strategy Call"
+    title,
+    subtitle,
+    badgeText = "#1 AI Receptionist for Aesthetic Clinics, Med Spas & Plastic Surgeons",
+    ctaText = "Book a Demo"
 }: HeroProps) {
+    const [isPlaying, setIsPlaying] = useState(false);
+    const audioRef = useRef<HTMLAudioElement>(null);
+
+    const toggleAudio = () => {
+        if (audioRef.current) {
+            if (isPlaying) {
+                audioRef.current.pause();
+            } else {
+                audioRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        }
+    };
+
     return (
-        <section className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-black text-white pt-32 pb-20">
-            {/* Background Ambience */}
+        <section className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-black text-white pt-24 pb-20">
+            {/* Subtle Background */}
             <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-900/20 rounded-full blur-[120px] animate-pulse-glow" />
-                <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/20 rounded-full blur-[120px] animate-pulse-glow [animation-delay:1s]" />
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-r from-red-900/20 via-transparent to-purple-900/20 rounded-full blur-[100px]" />
             </div>
 
             <div className="container relative z-10 px-4 md:px-6 flex flex-col items-center text-center max-w-5xl mx-auto">
+
+                {/* Badge - Urgent */}
                 <motion.div
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="mb-8"
+                    transition={{ duration: 0.5 }}
+                    className="mb-6"
                 >
-                    <span className="inline-block py-1.5 px-4 rounded-full bg-white/10 border border-white/20 text-sm font-light tracking-wider uppercase backdrop-blur-md">
-                        {badgeText}
-                    </span>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20">
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
+                        <span className="text-xs uppercase tracking-widest text-red-400 font-bold">
+                            {badgeText}
+                        </span>
+                    </div>
                 </motion.div>
 
+                {/* Main Headline - Reptilian Brain Target */}
                 <motion.h1
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-                    className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 leading-tight"
+                    transition={{ duration: 0.6, delay: 0.1 }}
+                    className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6 leading-[1.05]"
                 >
-                    {title}
+                    {title || (
+                        <>
+                            Every Missed Call <br className="hidden md:block" />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">
+                                Is a Patient Who Chose
+                            </span>
+                            <br />
+                            <span className="text-red-500">Your Competitor.</span>
+                        </>
+                    )}
                 </motion.h1>
 
+                {/* Safety Disclaimer - Immediately Visible */}
+                <SafetyDisclaimer />
+
+                {/* Subheadline - Pain + Solution */}
                 <motion.p
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-                    className="text-lg md:text-2xl text-slate-400 max-w-3xl mb-12 font-light leading-relaxed"
+                    transition={{ duration: 0.6, delay: 0.3 }}
+                    className="text-lg md:text-xl text-slate-400 max-w-2xl mb-10 leading-relaxed"
                 >
-                    {subtitle}
+                    {subtitle || (
+                        <>
+                            Voxanne captures every lead, 24/7. Your competition already installed her.
+                            She&apos;s <strong className="text-white font-semibold">safe</strong>, compliant, and books revenue for your aesthetic practice while you sleep.
+                        </>
+                    )}
                 </motion.p>
 
+                {/* PRIMARY CTA - The Demo Call */}
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-                    className="flex flex-col items-center gap-12 w-full"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.4 }}
+                    className="w-full max-w-xl mb-8"
                 >
-                    <div className="flex flex-col sm:flex-row gap-6 w-full justify-center">
-                        <button
-                            onClick={onBookDemo}
-                            className="px-10 py-5 bg-white text-black rounded-full text-xl font-bold hover:bg-slate-200 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)] transform hover:-translate-y-1"
-                        >
-                            {ctaText}
-                        </button>
-                    </div>
-
-                    <div className="w-full max-w-3xl flex flex-col items-center gap-10">
-                        {/* Passive Audio Experience */}
-                        <HeroAudioPlayer />
-
-                        {/* Active Divider */}
-                        <div className="flex items-center gap-4 w-full opacity-40 max-w-md">
-                            <div className="h-[1px] bg-white/20 flex-1" />
-                            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold">Live Interactive Demo</span>
-                            <div className="h-[1px] bg-white/20 flex-1" />
-                        </div>
-
-                        {/* Active Call Experience */}
-                        <div className="w-full max-w-md relative">
-                            <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-3xl blur-xl -z-10" />
-                            <p className="text-center text-sm text-slate-400 mb-4 uppercase tracking-widest font-medium">
-                                Enter your number to get a call now:
-                            </p>
-                            <OutboundDemo />
-                        </div>
-                    </div>
+                    <p className="text-white font-medium mb-4 flex items-center justify-center gap-2 text-sm uppercase tracking-wide opacity-80">
+                        <Phone className="w-4 h-4 text-cyan-400" />
+                        Hear Voxanne Now - Call in 10 Seconds
+                    </p>
+                    <OutboundDemo />
                 </motion.div>
+
+                {/* Secondary CTA - Visible Button */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.6, delay: 0.5 }}
+                    className="flex flex-col sm:flex-row items-center gap-6 mb-12"
+                >
+                    <button
+                        onClick={onBookDemo}
+                        className="group px-8 py-4 bg-white text-black rounded-full font-bold text-lg hover:bg-slate-200 transition-all duration-300 flex items-center gap-2 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]"
+                    >
+                        {ctaText}
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                    <span className="text-slate-500 text-sm">No credit card required • Set up in 15 mins</span>
+                </motion.div>
+
+                {/* Audio Demo Link */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.6, delay: 0.6 }}
+                    className="flex items-center gap-3 text-slate-500 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
+                    onClick={() => {
+                        const proofSection = document.getElementById('proof-section');
+                        if (proofSection) proofSection.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                >
+                    <span className="flex items-center gap-2">
+                        <Play className="w-3 h-3 fill-current" />
+                        Listen to difficult caller recording
+                    </span>
+                </motion.div>
+
             </div>
         </section>
     );

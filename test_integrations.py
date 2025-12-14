@@ -1,7 +1,7 @@
 import asyncio
 import os
 import logging
-from roxanne_enhanced_orchestration import EnhancedVoiceOrchestrator, ConversationContext
+from voxanne_enhanced_orchestration import EnhancedVoiceOrchestrator, ConversationContext
 from dotenv import load_dotenv
 
 # Configure logging

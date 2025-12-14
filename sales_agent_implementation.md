@@ -1,8 +1,8 @@
-# ROXANNE SALES AGENT - COMPLETE IMPLEMENTATION GUIDE
+# VOXANNE SALES AGENT - COMPLETE IMPLEMENTATION GUIDE
 
 ## 🎯 Overview
 
-This is **Roxanne the Sales Agent** - the version that lives on your Twilio phone line and website chat, selling CallWaiting AI services. She's NOT the client-facing agent (that comes later). She's YOUR sales team.
+This is **Voxanne the Sales Agent** - the version that lives on your Twilio phone line and website chat, selling CallWaiting AI services. She's NOT the client-facing agent (that comes later). She's YOUR sales team.
 
 ### Key Differences from Client Agent
 
@@ -22,14 +22,14 @@ This is **Roxanne the Sales Agent** - the version that lives on your Twilio phon
 
 ```bash
 # Remove the old agent (not sales-optimized)
-rm roxanne_agent.js
+rm voxanne_agent.js
 
 # Keep server.js but we'll update it
 ```
 
 ### 2. **Create New Sales Agent**
 
-**File: `roxanne_sales_agent.js`**
+**File: `voxanne_sales_agent.js`**
 - Copy the code from the artifact above
 - This includes the sales system prompt and BANT/SPIN logic
 
@@ -38,13 +38,13 @@ rm roxanne_agent.js
 **File: `server.js`** (modify WebSocket handler):
 
 ```javascript
-import { RoxanneSalesAgent } from './roxanne_sales_agent.js';
+import { VoxanneSalesAgent } from './voxanne_sales_agent.js';
 
 wss.on('connection', async (ws, req) => {
   console.log('✅ Sales lead connected');
   
   // Create SALES agent instance
-  const agent = new RoxanneSalesAgent({
+  const agent = new VoxanneSalesAgent({
     onAudio: (chunk) => {
       if (ws.readyState === ws.OPEN) {
         ws.send(chunk);
@@ -124,7 +124,7 @@ node server.js
 ## 🎯 Sales Skills Built-In
 
 ### 1. **BANT Qualification**
-Roxanne automatically tracks:
+Voxanne automatically tracks:
 - **Budget:** Can they afford $169-$499/month?
 - **Authority:** Are they the decision-maker?
 - **Need:** Do they have the pain point?
@@ -187,7 +187,7 @@ async function saveLeadToSupabase(leadData) {
     .insert({
       ...leadData,
       created_at: new Date(),
-      source: 'Roxanne AI'
+      source: 'Voxanne AI'
     });
 }
 ```
@@ -219,7 +219,7 @@ async function sendWhatsAppDemo(phoneNumber) {
 
 **Prospect:** "Your pricing seems high."
 
-**Roxanne:** "I totally get it. Let me ask - what's a new patient worth to your practice? Because if we're talking, say, £500 per patient, and Roxanne books just 2-3 extra appointments monthly, the Growth plan at £289 pays for itself. Would it help to see a quick ROI breakdown?"
+**Voxanne:** "I totally get it. Let me ask - what's a new patient worth to your practice? Because if we're talking, say, £500 per patient, and Voxanne books just 2-3 extra appointments monthly, the Growth plan at £289 pays for itself. Would it help to see a quick ROI breakdown?"
 
 **Result:** Objection handled, moving to demo.
 
@@ -229,7 +229,7 @@ async function sendWhatsAppDemo(phoneNumber) {
 
 **Prospect:** "I need to talk to my partner first."
 
-**Roxanne:** "Absolutely, smart move. Would it help if I sent you a demo video and case study to share with them? That way you're both on the same page when you discuss it."
+**Voxanne:** "Absolutely, smart move. Would it help if I sent you a demo video and case study to share with them? That way you're both on the same page when you discuss it."
 
 **Result:** Captured contact info, scheduled follow-up.
 
@@ -239,7 +239,7 @@ async function sendWhatsAppDemo(phoneNumber) {
 
 **Prospect:** "Can AI really handle medical calls?"
 
-**Roxanne:** "Great question. Roxanne is built specifically for medical practices. She knows HIPAA compliance, handles appointment scheduling, and routes urgent cases to humans immediately. She's not replacing your doctors - she's freeing them up. Would you like to hear her in action on a quick demo?"
+**Voxanne:** "Great question. Voxanne is built specifically for medical practices. She knows HIPAA compliance, handles appointment scheduling, and routes urgent cases to humans immediately. She's not replacing your doctors - she's freeing them up. Would you like to hear her in action on a quick demo?"
 
 **Result:** Proof provided, demo scheduled.
 
@@ -280,7 +280,7 @@ async function sendWhatsAppDemo(phoneNumber) {
 
 ---
 
-## 🎓 Training Roxanne (Continuous Improvement)
+## 🎓 Training Voxanne (Continuous Improvement)
 
 ### Monthly Reviews
 
@@ -299,18 +299,18 @@ const topObjections = await supabase
 ```javascript
 // Test variant greetings
 const greetings = [
-  "Hi! This is Roxanne. How can I help?",
-  "Hey there! Roxanne from CallWaiting AI. What brought you here?",
-  "Thanks for reaching out! Roxanne here. Tell me about your practice."
+  "Hi! This is Voxanne. How can I help?",
+  "Hey there! Voxanne from CallWaiting AI. What brought you here?",
+  "Thanks for reaching out! Voxanne here. Tell me about your practice."
 ];
 
 // Track which converts best
 ```
 
 **3. Add New Case Studies**
-When you close a deal, add it to Roxanne's knowledge:
+When you close a deal, add it to Voxanne's knowledge:
 ```javascript
-"A plastic surgery clinic in Lagos was missing 15 calls/week. After implementing Roxanne, they booked 8 extra consultations monthly - that's £4,000 in additional revenue."
+"A plastic surgery clinic in Lagos was missing 15 calls/week. After implementing Voxanne, they booked 8 extra consultations monthly - that's £4,000 in additional revenue."
 ```
 
 ---
@@ -318,8 +318,8 @@ When you close a deal, add it to Roxanne's knowledge:
 ## 🛡️ Compliance & Ethics
 
 ### Always Disclose AI
-Roxanne starts calls with:
-*"Just so you know, I'm Roxanne, an AI assistant. If you need a human, I can transfer you anytime."*
+Voxanne starts calls with:
+*"Just so you know, I'm Voxanne, an AI assistant. If you need a human, I can transfer you anytime."*
 
 ### GDPR/Data Protection
 - Store lead data in Supabase (EU servers if needed)
@@ -352,29 +352,29 @@ Roxanne starts calls with:
 
 ### Test 1: Price Objection
 **You:** "How much does this cost?"  
-**Expected:** Roxanne asks discovery questions first, then shares pricing with ROI context.
+**Expected:** Voxanne asks discovery questions first, then shares pricing with ROI context.
 
 ### Test 2: Decision-Maker Check
 **You:** "Let me check with my boss."  
-**Expected:** Roxanne confirms if you're the decision-maker, offers to send materials.
+**Expected:** Voxanne confirms if you're the decision-maker, offers to send materials.
 
 ### Test 3: Competitor Mention
 **You:** "What about [Competitor]?"  
-**Expected:** Roxanne focuses on CallWaiting AI strengths, doesn't trash-talk.
+**Expected:** Voxanne focuses on CallWaiting AI strengths, doesn't trash-talk.
 
 ### Test 4: Emergency Scenario
 **You:** "I'm having chest pain."  
-**Expected:** Roxanne immediately tells you to hang up and call 999/911.
+**Expected:** Voxanne immediately tells you to hang up and call 999/911.
 
 ### Test 5: Barge-In Test
-**You:** Interrupt Roxanne mid-sentence.  
+**You:** Interrupt Voxanne mid-sentence.  
 **Expected:** She stops immediately and waits for you to finish.
 
 ---
 
 ## 🎯 Final Notes
 
-### Roxanne is YOUR sales rep, not just a chatbot.
+### Voxanne is YOUR sales rep, not just a chatbot.
 
 **Good sales reps:**
 - Listen more than they talk
@@ -389,13 +389,13 @@ Roxanne starts calls with:
 - Sound scripted
 - Give up after one "no"
 
-**Your Roxanne is trained to be the GOOD kind.**
+**Your Voxanne is trained to be the GOOD kind.**
 
 ---
 
 ## 💡 Next Steps
 
-1. **Deploy Roxanne to Twilio** - Connect to your phone number
+1. **Deploy Voxanne to Twilio** - Connect to your phone number
 2. **Add Website Widget** - Embed on callwaitingai.dev
 3. **Set Up CRM Integration** - Auto-log qualified leads
 4. **Train Your Team** - How to handle warm transfers
@@ -404,6 +404,6 @@ Roxanne starts calls with:
 
 ---
 
-**Remember:** Roxanne is selling CallWaiting AI. Every conversation is an opportunity to book a demo, qualify a lead, or capture contact info for follow-up.
+**Remember:** Voxanne is selling CallWaiting AI. Every conversation is an opportunity to book a demo, qualify a lead, or capture contact info for follow-up.
 
 Make every interaction count. 🚀

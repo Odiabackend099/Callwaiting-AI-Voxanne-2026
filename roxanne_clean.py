@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ROXANNE VOICE AGENT - CLEAN IMPLEMENTATION
+VOXANNE VOICE AGENT - CLEAN IMPLEMENTATION
 ==========================================
 Simple, reliable voice agent for Twilio calls
 """
@@ -26,7 +26,7 @@ load_dotenv()
 
 # Simple logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-logger = logging.getLogger("roxanne")
+logger = logging.getLogger("voxanne")
 
 # Environment
 DEEPGRAM_KEY = os.getenv("DEEPGRAM_API_KEY")
@@ -55,14 +55,14 @@ class Call:
             self.messages = [{"role": "system", "content": self.get_system_prompt()}]
     
     def get_system_prompt(self):
-        return """You are Roxanne, elite AI Sales Agent for CallWaiting AI.
+        return """You are Voxanne, elite AI Sales Agent for CallWaiting AI.
 Keep responses BRIEF (1-3 sentences) - this is a phone call.
 Be warm, consultative, steer toward booking demos.
 Company: AI Voice Receptionists for medical practices.
 Pricing: Essentials $169/mo, Growth $289/mo, Premium $499/mo."""
 
 
-class RoxanneAgent:
+class VoxanneAgent:
     def __init__(self, websocket: WebSocket, stream_sid: str, call_sid: str):
         self.ws = websocket
         self.call = Call(call_sid, stream_sid)
@@ -78,7 +78,7 @@ class RoxanneAgent:
         await self._connect_deepgram()
         
         # Send greeting
-        await self._speak("Hi! This is Roxanne from CallWaiting A.I. How can I help you today?")
+        await self._speak("Hi! This is Voxanne from CallWaiting A.I. How can I help you today?")
         
         # Start listening
         self.tasks = [
@@ -175,7 +175,7 @@ class RoxanneAgent:
             reply = response.choices[0].message.content
             self.call.messages.append({"role": "assistant", "content": reply})
             
-            logger.info(f"🤖 Roxanne: {reply}")
+            logger.info(f"🤖 Voxanne: {reply}")
             await self._speak(reply)
             
         except Exception as e:
@@ -248,11 +248,11 @@ class RoxanneAgent:
 
 
 # FastAPI app
-app = FastAPI(title="Roxanne Clean")
+app = FastAPI(title="Voxanne Clean")
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "agent": "roxanne"}
+    return {"status": "ok", "agent": "voxanne"}
 
 @app.get("/health")
 async def health():
@@ -296,7 +296,7 @@ async def websocket_handler(ws: WebSocket):
                 stream_sid = data.get("streamSid")
                 call_sid = data.get("start", {}).get("callSid", "unknown")
                 
-                agent = RoxanneAgent(ws, stream_sid, call_sid)
+                agent = VoxanneAgent(ws, stream_sid, call_sid)
                 await agent.start()
                 
             elif event == "media" and agent:
@@ -315,7 +315,7 @@ async def websocket_handler(ws: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     
-    print("🚀 Starting Roxanne Clean Agent")
+    print("🚀 Starting Voxanne Clean Agent")
     print(f"📡 Deepgram: {'✅' if DEEPGRAM_KEY else '❌'}")
     print(f"🤖 Groq: {'✅' if GROQ_KEY else '❌'}")
     

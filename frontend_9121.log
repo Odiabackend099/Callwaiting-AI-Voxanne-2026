@@ -1,0 +1,31 @@
+   ▲ Next.js 16.0.7 (Turbopack)
+   - Local:         http://localhost:9121
+   - Network:       http://192.168.1.198:9121
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+ ✓ Ready in 7.4s
+ ○ Compiling / ...
+ GET / 200 in 12.3s (compile: 9.7s, proxy.ts: 1601ms, render: 924ms)
+   Reload env: .env.local
+ ✓ Compiled in 2.5s
+ GET / 200 in 2.4s (compile: 1682ms, proxy.ts: 526ms, render: 143ms)
+ GET /callwaiting%20ai%20logo.png 404 in 2.0s (compile: 1683ms, render: 358ms)
+ ⚠ Fast Refresh had to perform a full reload when ./src/contexts/AuthContext.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 575ms
+ GET / 200 in 1884ms (compile: 576ms, proxy.ts: 37ms, render: 1271ms)
+ ⚠ Fast Refresh had to perform a full reload when ./src/contexts/AuthContext.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 973ms (compile: 222ms, proxy.ts: 14ms, render: 737ms)
+ ✓ Compiled in 0ms
+ GET / 200 in 1484ms (compile: 355ms, proxy.ts: 18ms, render: 1112ms)
+ GET / 200 in 490ms (compile: 60ms, proxy.ts: 33ms, render: 397ms)
+ ⚠ Fast Refresh had to perform a full reload when ./src/contexts/AuthContext.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 223ms
+ GET / 200 in 1487ms (compile: 623ms, proxy.ts: 102ms, render: 762ms)
+ ⚠ Fast Refresh had to perform a full reload when ./src/contexts/AuthContext.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 2.4s
+ GET / 200 in 2.1s (compile: 779ms, proxy.ts: 27ms, render: 1286ms)
+ ✓ Compiled in 9.3s
+ ✓ Compiled in 4.2s
+ ✓ Compiled in 3.2s

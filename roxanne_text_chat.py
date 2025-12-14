@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Roxanne Text Chat - Fast Testing Without Audio Latency
-Type to chat with Roxanne, responses are instant
+Voxanne Text Chat - Fast Testing Without Audio Latency
+Type to chat with Voxanne, responses are instant
 """
 
 import os
@@ -13,12 +13,12 @@ from groq import Groq
 
 load_dotenv()
 
-def get_roxanne_prompt():
+def get_voxanne_prompt():
     now = datetime.now()
     current_date = now.strftime("%A, %B %d, %Y")
     current_time = now.strftime("%I:%M %p")
     
-    return f"""You are **Roxanne**, the world-class AI Sales Agent for CallWaiting AI.
+    return f"""You are **Voxanne**, the world-class AI Sales Agent for CallWaiting AI.
 
 ## DYNAMIC CONTEXT
 Today is: {current_date}
@@ -54,16 +54,16 @@ def main():
         sys.exit(1)
     
     client = Groq(api_key=groq_key)
-    messages = [{"role": "system", "content": get_roxanne_prompt()}]
+    messages = [{"role": "system", "content": get_voxanne_prompt()}]
     
     print("\n" + "="*60)
-    print("🎤 ROXANNE TEXT CHAT - Fast Testing Mode")
+    print("🎤 VOXANNE TEXT CHAT - Fast Testing Mode")
     print("="*60)
     print("Type your message and press Enter. Type 'quit' to exit.\n")
     
     # Initial greeting
-    greeting = "Hi! This is Roxanne from CallWaiting A.I. How can I help you today?"
-    print(f"👩🏼‍⚕️ Roxanne: {greeting}\n")
+    greeting = "Hi! This is Voxanne from CallWaiting A.I. How can I help you today?"
+    print(f"👩🏼‍⚕️ Voxanne: {greeting}\n")
     messages.append({"role": "assistant", "content": greeting})
     
     while True:
@@ -72,13 +72,13 @@ def main():
             if not user_input:
                 continue
             if user_input.lower() in ["quit", "exit", "bye"]:
-                print("👩🏼‍⚕️ Roxanne: Thank you for calling! Have a wonderful day. 👋")
+                print("👩🏼‍⚕️ Voxanne: Thank you for calling! Have a wonderful day. 👋")
                 break
             
             messages.append({"role": "user", "content": user_input})
             
             # Stream response
-            print("👩🏼‍⚕️ Roxanne: ", end="", flush=True)
+            print("👩🏼‍⚕️ Voxanne: ", end="", flush=True)
             start = time.time()
             
             stream = client.chat.completions.create(

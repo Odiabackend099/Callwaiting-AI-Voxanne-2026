@@ -1,0 +1,38 @@
+INFO:     Started server process [43837]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+============================================================
+  ROXANNE V2 - ConversationManager Architecture
+============================================================
+  📡 Deepgram: ✅
+  🤖 Groq: ✅
+  🌐 Port: 8001
+  ⚡ Endpointing: 150ms
+  🚨 Barge-in V2: True
+  🎭 Humanizer: True
+============================================================
+INFO:     127.0.0.1:57522 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57533 - "GET /metrics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59091 - "GET /health HTTP/1.1" 200 OK
+INFO:     105.113.28.185:0 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49822 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64904 - "WebSocket /ws/web-client?sessionId=session_1765293735686_8s2nv&token=eyJhbGciOiJIUzI1NiIsImtpZCI6Imx1dWpUNTJlOTEzRlBkQjAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2xianltbG9keHByenFndHlxdGNxLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhNDhkMGQwYS0xYmE0LTQzYjgtYjJjMi0wNjYyYWYyYTdhNDgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY1Mjk1NzAwLCJpYXQiOjE3NjUyOTIxMDAsImVtYWlsIjoiY2FsbHdhaXRpbmdhaUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6Imdvb2dsZSIsInByb3ZpZGVycyI6WyJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pNdmpLU2syY21BV2l3SjNSMTBGQVBwdHJFUTlOaDI5Q3ZWVXZTd3BQTU0tb0U9czk2LWMiLCJlbWFpbCI6ImNhbGx3YWl0aW5nYWlAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6ImNhbGx3YWl0aW5nYWkiLCJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJuYW1lIjoiY2FsbHdhaXRpbmdhaSIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pNdmpLU2syY21BV2l3SjNSMTBGQVBwdHJFUTlOaDI5Q3ZWVXZTd3BQTU0tb0U9czk2LWMiLCJwcm92aWRlcl9pZCI6IjEwNzE2MDY1NTE4ODkxNzAzNTgyNyIsInN1YiI6IjEwNzE2MDY1NTE4ODkxNzAzNTgyNyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzY1MTI2NjQwfV0sInNlc3Npb25faWQiOiIzOWEwZGQ2OC1lNzBjLTRiMzYtYjY1Ni01MGE2MDQ0NjVkYzkiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4q1jAlLpPdZX-VDvZqx_1bYMH7dMvnRVQFXBSSk_js0" [accepted]
+2025-12-09 16:22:22,803 [INFO] 🌐 Web client connected
+INFO:     connection open
+2025-12-09 16:22:23,022 [INFO] 🎤 Connecting to Deepgram STT... (key: c0f60c39...)
+2025-12-09 16:22:24,657 [INFO] 🎤 Deepgram connected for web client
+2025-12-09 16:22:24,657 [INFO] 🌐 Web client agent started
+2025-12-09 16:22:28,432 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-09 16:22:40,601 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-09 16:22:55,253 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-09 16:23:14,349 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-09 16:23:33,830 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2025-12-09 16:23:49,704 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     connection closed
+2025-12-09 16:23:59,997 [INFO] 🌐 Web client agent stopped
+2025-12-09 16:23:59,997 [INFO] 🌐 Web client disconnected
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [43837]

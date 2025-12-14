@@ -29,7 +29,7 @@ def print_info(msg):
 # Load environment
 load_dotenv()
 
-print_header("🎯 FINAL VERIFICATION - ROXANNE VOICE AGENT")
+print_header("🎯 FINAL VERIFICATION - VOXANNE VOICE AGENT")
 
 # 1. Check Ngrok
 print_info("\n1. Checking Ngrok tunnel...")
@@ -84,7 +84,7 @@ print(f"\n{Colors.BOLD}📞 CALL NOW TO TEST:{Colors.RESET}")
 print(f"{Colors.GREEN}{Colors.BOLD}   +1 252 645 3035{Colors.RESET}\n")
 
 print_info("Expected behavior:")
-print_info("  1. Roxanne answers with a greeting")
+print_info("  1. Voxanne answers with a greeting")
 print_info("  2. She listens to your speech")
 print_info("  3. She responds intelligently")
 print_info("  4. Natural conversation flows")

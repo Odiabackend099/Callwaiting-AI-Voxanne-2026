@@ -15,9 +15,13 @@ export default function CampaignShowcase() {
     const targetRef = useRef(null);
     const { scrollYProgress } = useScroll({
         target: targetRef,
+        offset: ["start start", "end end"],
     });
 
-    const x = useTransform(scrollYProgress, [0, 1], ["1%", "-50%"]);
+    // Calculate proper scroll distance: start from left edge, scroll to show all images
+    // 4 images × 600px + 3 gaps × 32px = 2496px total width
+    // We want to scroll from showing first image to showing last image fully
+    const x = useTransform(scrollYProgress, [0, 1], ["5%", "-75%"]);
 
     return (
         <section ref={targetRef} className="relative h-[300vh] bg-zinc-950">
@@ -32,11 +36,11 @@ export default function CampaignShowcase() {
                         Designed for <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">High-End Clinics</span>
                     </motion.h2>
                     <p className="text-center text-zinc-500 mt-4 max-w-2xl mx-auto">
-                        Your brand is premium. Your receptionist should be too. Roxanne delivers a white-glove experience that matches your aesthetic.
+                        Your brand is premium. Your receptionist should be too. Voxanne delivers a white-glove experience that matches your aesthetic.
                     </p>
                 </div>
 
-                <motion.div style={{ x }} className="flex gap-8 px-12 will-change-transform">
+                <motion.div style={{ x }} className="flex gap-8 pl-12 pr-[50vw] will-change-transform">
                     {CAMPAIGNS.map((camp) => (
                         <div
                             key={camp.id}

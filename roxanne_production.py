@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ROXANNE VOICE AGENT - PRODUCTION READY
+VOXANNE VOICE AGENT - PRODUCTION READY
 ======================================
 Battle-tested implementation for Twilio + Deepgram + Groq
 
@@ -11,7 +11,7 @@ Endpoints:
 - POST /status          -> Twilio status callbacks
 - WS   /ws              -> Media stream WebSocket
 
-Voice: aura-2-thalia-en (Official Roxanne)
+Voice: aura-2-thalia-en (Official Voxanne)
 LLM: Groq Llama-3.3-70B
 STT: Deepgram Nova-2 (Streaming)
 """
@@ -43,7 +43,7 @@ logging.basicConfig(
     level=logging.DEBUG,  # Enable debug logs
     format='%(asctime)s [%(levelname)s] %(message)s'
 )
-logger = logging.getLogger("roxanne")
+logger = logging.getLogger("voxanne")
 
 # =============================================================================
 # CONFIGURATION
@@ -54,7 +54,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "")
 PORT = int(os.getenv("PORT", "3000"))
 
-# TTS Settings (Official Roxanne Voice)
+# TTS Settings (Official Voxanne Voice)
 TTS_MODEL = "aura-2-thalia-en"
 TTS_ENCODING = "mulaw"
 TTS_SAMPLE_RATE = 8000
@@ -87,12 +87,12 @@ class CallContext:
     messages: list = field(default_factory=list)
 
 # =============================================================================
-# ROXANNE PERSONA
+# VOXANNE PERSONA
 # =============================================================================
 
 def get_system_prompt():
     now = datetime.now()
-    return f"""You are Roxanne, elite AI Sales Agent for CallWaiting AI.
+    return f"""You are Voxanne, elite AI Sales Agent for CallWaiting AI.
 
 TODAY: {now.strftime("%A, %B %d, %Y")} | TIME: {now.strftime("%I:%M %p")} GMT
 
@@ -119,7 +119,7 @@ You're the best sales rep CallWaiting AI has ever had."""
 # VOICE ORCHESTRATOR
 # =============================================================================
 
-class RoxanneOrchestrator:
+class VoxanneOrchestrator:
     def __init__(self, ws: WebSocket, stream_sid: str, call_sid: str):
         self.ws = ws
         self.ctx = CallContext(call_sid=call_sid, stream_sid=stream_sid)
@@ -158,14 +158,14 @@ class RoxanneOrchestrator:
             except Exception as e2:
                 logger.error(f"❌ Deepgram connection failed: {e2}")
                 # Send greeting anyway via TTS only
-                await self._speak("Hi! This is Roxanne from CallWaiting A.I. How can I help you today?")
+                await self._speak("Hi! This is Voxanne from CallWaiting A.I. How can I help you today?")
                 return
 
         # Start state
         self.ctx.state = State.LISTENING
         
         # Send greeting
-        await self._speak("Hi! This is Roxanne from CallWaiting A.I. How can I help you today?")
+        await self._speak("Hi! This is Voxanne from CallWaiting A.I. How can I help you today?")
         
         # Background tasks
         self.tasks = [
@@ -339,7 +339,7 @@ class RoxanneOrchestrator:
         self.ctx.is_speaking = True
         self.ctx.cancel_tts = False
         
-        logger.info(f"🔊 Roxanne: {text[:50]}...")
+        logger.info(f"🔊 Voxanne: {text[:50]}...")
         
         try:
             url = f"https://api.deepgram.com/v1/speak?model={TTS_MODEL}&encoding={TTS_ENCODING}&sample_rate={TTS_SAMPLE_RATE}"
@@ -390,7 +390,7 @@ class RoxanneOrchestrator:
 # FASTAPI APP
 # =============================================================================
 
-app = FastAPI(title="Roxanne Voice Agent")
+app = FastAPI(title="Voxanne Voice Agent")
 
 # CORS
 app.add_middleware(
@@ -406,11 +406,11 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "agent": "roxanne", "version": "1.0"}
+    return {"status": "ok", "agent": "voxanne", "version": "1.0"}
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "agent": "roxanne"}
+    return {"status": "healthy", "agent": "voxanne"}
 
 # -----------------------------------------------------------------------------
 # TWILIO ENDPOINTS
@@ -455,7 +455,7 @@ async def websocket_handler(ws: WebSocket):
     await ws.accept()
     logger.info("🔌 WebSocket connected")
     
-    orchestrator: Optional[RoxanneOrchestrator] = None
+    orchestrator: Optional[VoxanneOrchestrator] = None
     
     try:
         while True:
@@ -469,7 +469,7 @@ async def websocket_handler(ws: WebSocket):
             elif event == "start":
                 stream_sid = data.get("streamSid")
                 call_sid = data.get("start", {}).get("callSid", "unknown")
-                orchestrator = RoxanneOrchestrator(ws, stream_sid, call_sid)
+                orchestrator = VoxanneOrchestrator(ws, stream_sid, call_sid)
                 await orchestrator.start()
                 
             elif event == "media" and orchestrator:
@@ -494,7 +494,7 @@ if __name__ == "__main__":
     
     print("""
 ╔══════════════════════════════════════════════════════════════╗
-║  ROXANNE VOICE AGENT - PRODUCTION                            ║
+║  VOXANNE VOICE AGENT - PRODUCTION                            ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                  ║
 ║    GET  /              -> Health check                       ║
@@ -505,7 +505,7 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════════════════════╝
 """)
     
-    logger.info(f"🚀 Starting Roxanne on port {PORT}")
+    logger.info(f"🚀 Starting Voxanne on port {PORT}")
     logger.info(f"📡 Deepgram: {'✅' if DEEPGRAM_API_KEY else '❌'}")
     logger.info(f"🤖 Groq: {'✅' if GROQ_API_KEY else '❌'}")
     logger.info(f"🎤 Voice: {TTS_MODEL}")

@@ -7,7 +7,7 @@ const steps = [
     {
         number: "01",
         title: "15-Minute Setup Call",
-        description: "We configure Roxanne for your clinic. No technical knowledge required.",
+        description: "We configure Voxanne for your clinic. No technical knowledge required.",
         icon: Settings,
         details: [
             "Share your FAQ document and pricing",
@@ -20,7 +20,7 @@ const steps = [
     {
         number: "02",
         title: "48-Hour Training",
-        description: "Roxanne learns your procedures, pricing, and practice personality.",
+        description: "Voxanne learns your procedures, pricing, and practice personality.",
         icon: Zap,
         details: [
             "Pre-trained on 500+ medical procedures",

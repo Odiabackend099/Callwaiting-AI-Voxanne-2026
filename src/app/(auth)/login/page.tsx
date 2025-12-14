@@ -231,10 +231,10 @@ export default function LoginPage() {
 
                     <div className="mt-8 text-center">
                         <p className="text-slate-500 text-sm">
-                            New to CallWaiting AI?{' '}
-                            <Link href="/sign-up" className="text-white hover:text-purple-300 font-semibold transition-colors">
-                                Start Free Trial
-                            </Link>
+                            Not a member yet?{' '}
+                            <a href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer" className="text-white hover:text-purple-300 font-semibold transition-colors">
+                                Book a Demo
+                            </a>
                         </p>
                     </div>
                 </div>

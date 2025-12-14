@@ -16,7 +16,7 @@ export async function getUserSettings(userId: string) {
         .limit(1);
 
     if (error) {
-        console.error('Supabase error:', error);
+        console.error('Supabase error:', JSON.stringify(error, null, 2));
         throw error;
     }
 

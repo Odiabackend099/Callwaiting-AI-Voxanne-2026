@@ -1,0 +1,127 @@
+{
+  "agent_name": "Ruthie",
+  "company": "CallWaitingAI",
+  "domain": "callwaitingai.dev",
+  "niche": "UK Cosmetic Surgery Clinics",
+  
+  "listen": {
+    "model": "nova-2-general",
+    "language": "en",
+    "punctuate": true,
+    "profanity_filter": false,
+    "interim_results": true,
+    "endpointing": {
+      "enabled": true,
+      "threshold_ms": 500
+    },
+    "smart_format": true
+  },
+  
+  "speak": {
+    "model": "aura-asteria-en",
+    "encoding": "linear16",
+    "sample_rate": 24000
+  },
+  
+  "think": {
+    "provider": {
+      "type": "groq",
+      "api_key": "YOUR_GROQ_API_KEY"
+    },
+    "model": "llama-3.3-70b-versatile",
+    "temperature": 0.5,
+    "max_tokens": 80,
+    "instructions": "You are Ruthie, a 28-year-old AI patient coordinator for CallWaitingAI. You handle incoming calls for cosmetic surgery clinics, aesthetic practices, and medical spas.\n\nROLE:\n- You answer calls on behalf of cosmetic clinics.\n- Your goals (in order):\n  1) Warmly greet the caller and understand what procedure they're interested in.\n  2) Answer their questions about the clinic's services.\n  3) Book them in for a consultation.\n  4) Collect their contact details.\n\nVOICE & STYLE (CRITICAL):\n- Warm, friendly, and reassuring – like a helpful clinic coordinator.\n- Neutral English; professional but not stiff.\n- Use short, simple sentences and everyday language.\n- NEVER speak more than 2 sentences per turn.\n- Aim for 15–35 words per reply; if you catch yourself going longer, stop.\n- Do not lecture or monologue. Answer, then ask one clear next question.\n- Sound empathetic – many callers are nervous about cosmetic procedures.\n\nTURN-TAKING RULES (CRITICAL):\n- Speak briefly, then stop and listen. Do NOT keep talking.\n- Ask only ONE question per turn.\n- If the caller starts talking while you are speaking, stop immediately and listen.\n- If the caller gives a long answer, acknowledge in 1 short sentence, then ask a focused follow-up.\n\nGREETING:\n- \"Hi, thank you for calling [Clinic Name]. This is Ruthie, how can I help you today?\"\n\nCOMMON SCENARIOS:\n\n1) BBL/Liposuction Inquiry:\n- Acknowledge their interest warmly.\n- Give brief price range if asked (e.g., \"BBL typically ranges from £5,500 to £8,500 depending on your goals\").\n- Explain that a consultation will give them an exact quote and personalised plan.\n- Offer to book them in.\n\n2) Nervous First-Timer:\n- Be extra reassuring: \"That's completely normal – most of our patients feel the same way at first.\"\n- Emphasise no pressure: \"A consultation is just a chance to ask questions and see if it's right for you.\"\n- Keep tone gentle and unhurried.\n\n3) Finance Questions:\n- \"Yes, we offer flexible finance options. Many patients pay around £150-200 per month.\"\n- \"Our patient coordinator can go through all the options during your consultation.\"\n\n4) Pricing Questions:\n- Give ranges, not exact figures.\n- Always recommend a consultation for an accurate quote.\n\n5) Availability/Booking:\n- Check calendar availability.\n- Offer 2-3 specific time slots.\n- Collect: name, phone number, email, procedure of interest.\n- Confirm the booking clearly.\n\nWHAT NOT TO DO:\n- Never give medical advice.\n- Never guarantee results or outcomes.\n- Never pressure the caller.\n- Never speak for more than 2 sentences without pausing.\n- Never say \"As an AI\" unless directly asked.\n\nIF YOU DON'T KNOW:\n- \"I don't want to give you the wrong information on that. Can I have someone from the clinic call you back with the details?\"\n\nCALL ENDING SIGNALS:\n- Detect: \"That's all\", \"Thanks\", \"Bye\", \"I have to go\"\n- Give a short, warm closing: \"Lovely speaking with you. We'll see you at your consultation. Take care!\"\n- Do NOT keep asking if they need anything else.\n\nFUNCTION HANDLING:\n- When booking is confirmed, speak the confirmation naturally.\n- When creating a lead silently, do NOT mention it – just continue the conversation.\n- When searching for information, use it naturally without saying you searched.",
+    
+    "functions": [
+      {
+        "name": "book_consultation",
+        "description": "Book a consultation appointment for the caller",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "caller_name": {
+              "type": "string",
+              "description": "Full name of the caller"
+            },
+            "phone_number": {
+              "type": "string",
+              "description": "Caller's phone number"
+            },
+            "email": {
+              "type": "string",
+              "description": "Caller's email address"
+            },
+            "procedure_interest": {
+              "type": "string",
+              "description": "What procedure they are interested in"
+            },
+            "preferred_date": {
+              "type": "string",
+              "description": "Preferred consultation date"
+            },
+            "preferred_time": {
+              "type": "string",
+              "description": "Preferred consultation time"
+            },
+            "notes": {
+              "type": "string",
+              "description": "Any additional notes about the caller"
+            }
+          },
+          "required": ["caller_name", "phone_number", "procedure_interest"]
+        }
+      },
+      {
+        "name": "check_availability",
+        "description": "Check calendar availability for consultations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "description": "Date to check availability for"
+            }
+          }
+        }
+      },
+      {
+        "name": "create_lead",
+        "description": "Silently create a lead record for follow-up",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "caller_name": {
+              "type": "string"
+            },
+            "phone_number": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "procedure_interest": {
+              "type": "string"
+            },
+            "call_summary": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "transfer_to_human",
+        "description": "Transfer call to a human staff member",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "description": "Why the caller needs to speak to a human"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,11 +1,11 @@
-# Roxanne Aura Humanizer - Twilio Integration Guide
+# Voxanne Aura Humanizer - Twilio Integration Guide
 ## Production Deployment for CallWaiting AI
 
 ---
 
 ## 🎯 Overview
 
-This guide integrates the **RoxanneAuraHumanizer** with your existing Twilio Media Stream orchestration layer (`roxanne_orchestration.py`). The goal: replace robotic responses with human-like conversational quality using Deepgram Aura-2 optimization.
+This guide integrates the **VoxanneAuraHumanizer** with your existing Twilio Media Stream orchestration layer (`voxanne_orchestration.py`). The goal: replace robotic responses with human-like conversational quality using Deepgram Aura-2 optimization.
 
 ---
 
@@ -28,9 +28,9 @@ TWILIO_AUTH_TOKEN=your_twilio_token
 ### 3. File Structure
 ```
 callwaiting-ai/
-├── roxanne_orchestration.py       # Your existing orchestration
-├── roxanne_aura_humanizer.py      # NEW: Humanizer class
-├── test_roxanne_naturalness.py    # NEW: Testing suite
+├── voxanne_orchestration.py       # Your existing orchestration
+├── voxanne_aura_humanizer.py      # NEW: Humanizer class
+├── test_voxanne_naturalness.py    # NEW: Testing suite
 ├── server.py                       # FastAPI server (updated)
 ├── .env                            # API keys
 └── README.md
@@ -42,13 +42,13 @@ callwaiting-ai/
 
 ### Step 1: Update Your Orchestration Layer
 
-**File: `roxanne_orchestration.py`**
+**File: `voxanne_orchestration.py`**
 
 Replace the `_llm_processor` method with humanized response generation:
 
 ```python
 # ADD THIS IMPORT AT TOP
-from roxanne_aura_humanizer import RoxanneAuraHumanizer
+from voxanne_aura_humanizer import VoxanneAuraHumanizer
 
 class TwilioMediaHandler:
     """Orchestration layer with Aura humanization"""
@@ -60,7 +60,7 @@ class TwilioMediaHandler:
         self.active_calls: dict[str, ConversationContext] = {}
         
         # NEW: Initialize humanizer
-        self.humanizer = RoxanneAuraHumanizer(
+        self.humanizer = VoxanneAuraHumanizer(
             deepgram_key=deepgram_api_key,
             groq_key=groq_api_key
         )
@@ -149,7 +149,7 @@ class TwilioMediaHandler:
 
 ### Step 2: Update TTS Sender for Humanized Audio
 
-**File: `roxanne_orchestration.py`** (continued)
+**File: `voxanne_orchestration.py`** (continued)
 
 Replace the `_tts_sender` to use the humanizer's sentence streaming:
 
@@ -227,7 +227,7 @@ import asyncio
 import logging
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import Response
-from roxanne_orchestration import TwilioMediaHandler
+from voxanne_orchestration import TwilioMediaHandler
 import os
 from dotenv import load_dotenv
 
@@ -242,7 +242,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
-app = FastAPI(title="CallWaiting AI - Roxanne Voice Agent")
+app = FastAPI(title="CallWaiting AI - Voxanne Voice Agent")
 
 # Initialize handler (singleton)
 handler = TwilioMediaHandler(
@@ -254,7 +254,7 @@ handler = TwilioMediaHandler(
 async def root():
     """Health check endpoint"""
     return {
-        "service": "CallWaiting AI - Roxanne",
+        "service": "CallWaiting AI - Voxanne",
         "status": "operational",
         "version": "3.0-aura-humanized"
     }
@@ -268,7 +268,7 @@ async def twiml_endpoint():
     twiml = """<?xml version="1.0" encoding="UTF-8"?>
     <Response>
         <Say voice="Polly.Joanna">
-            Connecting you to Roxanne, your AI assistant.
+            Connecting you to Voxanne, your AI assistant.
         </Say>
         <Connect>
             <Stream url="wss://your-domain.com/ws/media-stream" />
@@ -296,7 +296,7 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     
-    print("🚀 Starting Roxanne Voice Agent Server...")
+    print("🚀 Starting Voxanne Voice Agent Server...")
     print("   - Aura-2 Humanization: ENABLED")
     print("   - Sub-500ms Latency: ACTIVE")
     print("   - Barge-In Detection: ACTIVE")
@@ -318,12 +318,12 @@ if __name__ == "__main__":
 
 ```bash
 # Test humanization only
-python test_roxanne_naturalness.py
+python test_voxanne_naturalness.py
 ```
 
 **Expected Output:**
 ```
-🧪 ROXANNE NATURALNESS TESTING SUITE
+🧪 VOXANNE NATURALNESS TESTING SUITE
 ════════════════════════════════════════════════════════════════════════════════
 
 Test 1/6: BBL Inquiry
@@ -331,7 +331,7 @@ Test 1/6: BBL Inquiry
 
 👤 Patient (Sarah): Do you do BBL?
 
-🤖 Roxanne: Absolutely, Sarah! We specialize in Brazilian Butt Lift. Cost runs eight thousand to twelve thousand dollars. Recovery is about two weeks. Want me to check Tuesday availability?
+🤖 Voxanne: Absolutely, Sarah! We specialize in Brazilian Butt Lift. Cost runs eight thousand to twelve thousand dollars. Recovery is about two weeks. Want me to check Tuesday availability?
 
 📊 Validation Results:
   ✓ PASS | Short Sentences: All sentences under 12 words ✓
@@ -354,7 +354,7 @@ python server.py
 
 **Expected Output:**
 ```
-🚀 Starting Roxanne Voice Agent Server...
+🚀 Starting Voxanne Voice Agent Server...
    - Aura-2 Humanization: ENABLED
    - Sub-500ms Latency: ACTIVE
    - Barge-In Detection: ACTIVE
@@ -393,7 +393,7 @@ ngrok http 8000
 **Step 3: Make Test Call**
 ```bash
 # Call your Twilio number
-# Expected: Hear Roxanne's humanized voice
+# Expected: Hear Voxanne's humanized voice
 ```
 
 ---
@@ -402,7 +402,7 @@ ngrok http 8000
 
 ```bash
 # In terminal running server.py
-tail -f logs/roxanne.log
+tail -f logs/voxanne.log
 
 # Expected output during call:
 📞 Call started: CA1234567890abcdef
@@ -410,7 +410,7 @@ tail -f logs/roxanne.log
 👂 Final: "Do you do BBL?"
 🧠 LLM processing: Do you do BBL?...
 ⚡ LLM TTFT: 142ms
-🗣️ Roxanne: Absolutely! We specialize in Brazilian Butt Lift.
+🗣️ Voxanne: Absolutely! We specialize in Brazilian Butt Lift.
 📊 TTS TTFB: 198ms
 ✅ TTS playback finished
 ```
@@ -603,8 +603,8 @@ def sanitize_input(text: str) -> str:
 # Export metrics to Prometheus
 from prometheus_client import Counter, Histogram
 
-calls_total = Counter('roxanne_calls_total', 'Total calls handled')
-latency_histogram = Histogram('roxanne_latency_seconds', 'Call latency')
+calls_total = Counter('voxanne_calls_total', 'Total calls handled')
+latency_histogram = Histogram('voxanne_latency_seconds', 'Call latency')
 
 # In your handler
 calls_total.inc()
@@ -633,8 +633,8 @@ CMD ["python", "server.py"]
 
 ```bash
 # Build and run
-docker build -t roxanne-voice-agent .
-docker run -p 8000:8000 --env-file .env roxanne-voice-agent
+docker build -t voxanne-voice-agent .
+docker run -p 8000:8000 --env-file .env voxanne-voice-agent
 ```
 
 ---
@@ -643,10 +643,10 @@ docker run -p 8000:8000 --env-file .env roxanne-voice-agent
 ```yaml
 # task-definition.json
 {
-  "family": "roxanne-voice-agent",
+  "family": "voxanne-voice-agent",
   "containerDefinitions": [{
-    "name": "roxanne",
-    "image": "your-ecr-repo/roxanne:latest",
+    "name": "voxanne",
+    "image": "your-ecr-repo/voxanne:latest",
     "portMappings": [{"containerPort": 8000}],
     "environment": [
       {"name": "DEEPGRAM_API_KEY", "value": "{{resolve:secretsmanager:deepgram-key}}"},
@@ -664,27 +664,27 @@ docker run -p 8000:8000 --env-file .env roxanne-voice-agent
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: roxanne-voice-agent
+  name: voxanne-voice-agent
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: roxanne
+      app: voxanne
   template:
     metadata:
       labels:
-        app: roxanne
+        app: voxanne
     spec:
       containers:
-      - name: roxanne
-        image: your-registry/roxanne:latest
+      - name: voxanne
+        image: your-registry/voxanne:latest
         ports:
         - containerPort: 8000
         env:
         - name: DEEPGRAM_API_KEY
           valueFrom:
             secretKeyRef:
-              name: roxanne-secrets
+              name: voxanne-secrets
               key: deepgram-key
 ```
 
@@ -738,7 +738,7 @@ Your integration is successful when:
 
 **Ready to deploy?** Run the test suite first:
 ```bash
-python test_roxanne_naturalness.py
+python test_voxanne_naturalness.py
 ```
 
 🚀 **Good luck with your deployment!**

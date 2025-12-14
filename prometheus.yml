@@ -16,9 +16,9 @@ alerting:
 
 scrape_configs:
   # Main application metrics
-  - job_name: 'roxanne-voice-orchestrator'
+  - job_name: 'voxanne-voice-orchestrator'
     static_configs:
-      - targets: ['roxanne-voice-orchestrator:8000']
+      - targets: ['voxanne-voice-orchestrator:8000']
     metrics_path: '/metrics'
     scrape_interval: 10s
     scrape_timeout: 5s

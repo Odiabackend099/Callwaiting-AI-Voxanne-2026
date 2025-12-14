@@ -1,5 +1,5 @@
 """
-CallWaiting AI - Roxanne Voice Orchestration Layer
+CallWaiting AI - Voxanne Voice Orchestration Layer
 Core Event Loop for STT → LLM → TTS Pipeline
 Targets: Sub-500ms latency, Barge-In Handling, Graceful Interruption
 
@@ -242,7 +242,7 @@ class TwilioMediaHandler:
                 
                 self.logger.info(f"🧠 LLM processing: {ctx.user_transcript[:50]}...")
                 
-                system_prompt = """You are Roxanne, AI receptionist for a premium cosmetic surgery clinic.
+                system_prompt = """You are Voxanne, AI receptionist for a premium cosmetic surgery clinic.
                 Warm, professional tone. Knowledge of BBL, facelifts, injectables, med spa services.
                 Keep responses <6 sentences for voice interaction.
                 Ask clarifying questions if patient intent unclear."""
@@ -468,7 +468,7 @@ async def create_app():
         """Twilio webhook: returns TwiML with Media Stream connection"""
         twiml = """<?xml version="1.0" encoding="UTF-8"?>
         <Response>
-            <Say>Hello! This is Roxanne, your cosmetic clinic assistant.</Say>
+            <Say>Hello! This is Voxanne, your cosmetic clinic assistant.</Say>
             <Connect>
                 <Stream url="wss://your-domain.com/ws" />
             </Connect>
@@ -487,4 +487,4 @@ async def create_app():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     # Run with: uvicorn app:create_app --host 0.0.0.0 --port 8000
-    print("🚀 Roxanne Voice Orchestration Layer Ready")
+    print("🚀 Voxanne Voice Orchestration Layer Ready")

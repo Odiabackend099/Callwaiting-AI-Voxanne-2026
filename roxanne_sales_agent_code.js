@@ -1,5 +1,5 @@
 // ============================================
-// ROXANNE SALES AGENT V2.0
+// VOXANNE SALES AGENT V2.0
 // Elite AI Sales Agent with 2025 Best Practices
 // ============================================
 
@@ -19,7 +19,7 @@ const States = {
 // ============================================
 // SALES AGENT CLASS
 // ============================================
-export class RoxanneSalesAgent {
+export class VoxanneSalesAgent {
   constructor(options = {}) {
     this.state = States.IDLE;
     this.conversationHistory = [];
@@ -75,7 +75,7 @@ export class RoxanneSalesAgent {
       minute: '2-digit' 
     });
 
-    return `You are Roxanne, the elite AI Sales Agent for CallWaiting AI.
+    return `You are Voxanne, the elite AI Sales Agent for CallWaiting AI.
 
 TODAY IS: ${currentDate}
 CURRENT TIME: ${currentTime}
@@ -128,7 +128,7 @@ Use **BANT + SPIN** framework:
 ## CONVERSATION STRUCTURE
 ### Stage 1: GREETING
 - Warm, professional, brief
-- *"Hi! This is Roxanne from CallWaiting AI. How can I help you today?"*
+- *"Hi! This is Voxanne from CallWaiting AI. How can I help you today?"*
 - Use filler words naturally: "Got it...", "Okay...", "Let me see..."
 
 ### Stage 2: DISCOVERY (Ask Smart Questions)
@@ -139,11 +139,11 @@ Use **BANT + SPIN** framework:
 ### Stage 3: OBJECTION HANDLING
 **"Too expensive"** → *"What's a new patient worth to you? If we book just 2-3 extra appointments monthly, it pays for itself."*
 
-**"Already have receptionist"** → *"Great! Roxanne handles overflow and after-hours so your team can focus on in-person patients."*
+**"Already have receptionist"** → *"Great! Voxanne handles overflow and after-hours so your team can focus on in-person patients."*
 
 **"Need to discuss with partner"** → *"Absolutely. Can I send you a demo video to share with them?"*
 
-**"Not sure if AI can handle medical"** → *"Roxanne is built specifically for medical practices. HIPAA compliant, routes urgent cases to humans immediately."*
+**"Not sure if AI can handle medical"** → *"Voxanne is built specifically for medical practices. HIPAA compliant, routes urgent cases to humans immediately."*
 
 ### Stage 4: CLOSING
 - **Assumptive Close:** "Should we schedule your onboarding for next week?"
@@ -191,7 +191,7 @@ Use: **Clarify → Validate → Reframe**
 - "Would you like me to follow up next week?"
 
 ## COMPLIANCE
-Always disclose: *"Just so you know, I'm Roxanne, an AI assistant. If you need a human, I can transfer you anytime."*
+Always disclose: *"Just so you know, I'm Voxanne, an AI assistant. If you need a human, I can transfer you anytime."*
 
 ## CONVERSATIONAL RULES
 1. **BREVITY:** Keep responses under 2 sentences during discovery
@@ -497,7 +497,7 @@ Remember: You're consultative, not pushy. Goal-driven, not robotic. Warm, not co
   // SALES GREETING
   // ========================================
   async speakSalesGreeting() {
-    const greeting = "Hi! This is Roxanne from CallWaiting AI. Thanks for reaching out! How can I help you today?";
+    const greeting = "Hi! This is Voxanne from CallWaiting AI. Thanks for reaching out! How can I help you today?";
     
     this.isAISpeaking = true;
     await this.transitionTo(States.SPEAKING);
@@ -537,4 +537,4 @@ Remember: You're consultative, not pushy. Goal-driven, not robotic. Warm, not co
   }
 }
 
-export default RoxanneSalesAgent;
+export default VoxanneSalesAgent;

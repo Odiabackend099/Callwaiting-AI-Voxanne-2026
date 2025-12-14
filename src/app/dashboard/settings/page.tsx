@@ -126,7 +126,7 @@ export default function SettingsPage() {
                         Voice Agent Settings
                     </h1>
                     <p className="text-slate-400">
-                        Configure your Roxanne AI voice agent
+                        Configure your Voxanne AI voice agent
                     </p>
                 </div>
 
@@ -174,12 +174,12 @@ export default function SettingsPage() {
                         <textarea
                             value={systemPrompt}
                             onChange={(e) => setSystemPrompt(e.target.value)}
-                            placeholder="You are Roxanne, a helpful AI receptionist for [Business Name]. You assist with..."
+                            placeholder="You are Voxanne, a helpful AI receptionist for [Business Name]. You assist with..."
                             rows={6}
                             className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
                         />
                         <p className="text-xs text-slate-500 mt-1">
-                            Define how Roxanne should behave and respond to customers
+                            Define how Voxanne should behave and respond to customers
                         </p>
                     </div>
 

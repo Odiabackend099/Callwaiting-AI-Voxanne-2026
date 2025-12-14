@@ -4,7 +4,7 @@ import { ArrowLeft, TrendingUp, Users, DollarSign } from "lucide-react";
 
 export const metadata: Metadata = {
     title: "Case Studies - CallWaiting AI",
-    description: "Real results from medical practices using Roxanne AI receptionist",
+    description: "Real results from medical practices using Voxanne AI receptionist",
 };
 
 const caseStudies = [
@@ -18,7 +18,7 @@ const caseStudies = [
             revenue: "$180K",
             callsAnswered: "100%"
         },
-        quote: "Roxanne paid for herself in the first month. We're now capturing every single after-hours BBL inquiry.",
+        quote: "Voxanne paid for herself in the first month. We're now capturing every single after-hours BBL inquiry.",
         doctor: "Dr. Sarah Chen",
         image: "/case-studies/beverly-hills.jpg"
     },
@@ -32,7 +32,7 @@ const caseStudies = [
             revenue: "£95K",
             callsAnswered: "24/7"
         },
-        quote: "The British accent was crucial for our clientele. Roxanne sounds more professional than our previous receptionist.",
+        quote: "The British accent was crucial for our clientele. Voxanne sounds more professional than our previous receptionist.",
         doctor: "Dr. James Morrison",
         image: "/case-studies/harley-street.jpg"
     },
@@ -69,7 +69,7 @@ export default function CaseStudiesPage() {
                         Real Results from Real Practices
                     </h1>
                     <p className="text-xl text-slate-400">
-                        See how medical practices are using Roxanne to capture more leads and increase revenue.
+                        See how medical practices are using Voxanne to capture more leads and increase revenue.
                     </p>
                 </div>
             </section>
@@ -146,7 +146,7 @@ export default function CaseStudiesPage() {
                         Ready to See Similar Results?
                     </h3>
                     <p className="text-slate-400 mb-8">
-                        Book a demo and see how Roxanne can transform your practice.
+                        Book a demo and see how Voxanne can transform your practice.
                     </p>
                     <button className="px-8 py-4 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-lg hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
                         Book Your Demo Call

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Roxanne Voice Orchestration v2.0 - CallWaiting AI
+Voxanne Voice Orchestration v2.0 - CallWaiting AI
 State Machine + Barge-In + Sub-500ms Latency
 """
 
@@ -32,7 +32,7 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "")
 
-# Official Roxanne Voice Settings
+# Official Voxanne Voice Settings
 TTS_MODEL = "aura-2-thalia-en"  # Approved voice
 TTS_ENCODING_TWILIO = "mulaw"   # Required for Twilio (8kHz)
 TTS_ENCODING_LOCAL = "linear16" # For local testing (16kHz)
@@ -63,17 +63,17 @@ class CallContext:
     cancel_llm: bool = False
 
 # =============================================================================
-# ROXANNE MAYA-LEVEL SYSTEM PROMPT
+# VOXANNE MAYA-LEVEL SYSTEM PROMPT
 # =============================================================================
 
 from datetime import datetime
 
-def get_roxanne_prompt():
+def get_voxanne_prompt():
     now = datetime.now()
     current_date = now.strftime("%A, %B %d, %Y")
     current_time = now.strftime("%I:%M %p")
     
-    return f"""You are **Roxanne**, the world-class AI Sales Agent for CallWaiting AI. You operate at the Maya (Sesame AI) standard.
+    return f"""You are **Voxanne**, the world-class AI Sales Agent for CallWaiting AI. You operate at the Maya (Sesame AI) standard.
 
 ## DYNAMIC CONTEXT
 Today is: {current_date}
@@ -125,7 +125,7 @@ If prospect sounds:
 - Excited: Match energy. "I love your enthusiasm! Let's get you set up."
 - Skeptical: Provide proof. "Let me show you how Dr. Chen recovered $120K."
 - Confused: Simplify. "Let me explain in plain English."
-- Rushed: Get to point. "Quick version: Roxanne answers 24/7. Can I send a demo?"
+- Rushed: Get to point. "Quick version: Voxanne answers 24/7. Can I send a demo?"
 
 ## SALES FRAMEWORK (BANT)
 - Budget: Can they afford $169-$499/month?
@@ -146,13 +146,13 @@ If prospect sounds:
 → "I get it. What's a new patient worth? If we book 2-3 extra monthly, Growth at two eighty-nine pays for itself."
 
 "Already have receptionist":
-→ "Great! Roxanne isn't a replacement - she's backup. Handles overflow, after-hours, weekends."
+→ "Great! Voxanne isn't a replacement - she's backup. Handles overflow, after-hours, weekends."
 
 "Need to discuss with partner":
 → "Smart move. Can I send you a demo video to share?"
 
 "Not sure AI can handle medical calls":
-→ "Roxanne is built for medical practices. HIPAA compliant, routes emergencies to humans."
+→ "Voxanne is built for medical practices. HIPAA compliant, routes emergencies to humans."
 
 ## NATURAL SPEECH (Avoid Robot Voice)
 - Phone numbers: "0 7 4, 2 4, 0 3 8, 2 5 0" (with pauses)
@@ -182,21 +182,21 @@ Every conversation circles back to:
 
 Remember: You're not just an AI. You're the best sales rep CallWaiting AI has ever had."""
 
-class RoxanneOrchestrator:
+class VoxanneOrchestrator:
     def __init__(self, twilio_ws: WebSocket, stream_sid: str, call_sid: str):
         self.twilio_ws = twilio_ws
         self.ctx = CallContext(call_sid=call_sid, stream_sid=stream_sid)
         self.groq_client = AsyncGroq(api_key=GROQ_API_KEY)
         self.deepgram_ws = None
         self.tasks = []
-        # Initialize with Maya-level Roxanne persona
-        self.ctx.messages = [{"role": "system", "content": get_roxanne_prompt()}]
+        # Initialize with Maya-level Voxanne persona
+        self.ctx.messages = [{"role": "system", "content": get_voxanne_prompt()}]
     
     async def start(self):
         logger.info(f"🚀 Starting orchestrator: {self.ctx.call_sid}")
         await self._connect_deepgram()
         await self._transition_to(ConversationState.LISTENING)
-        await self._speak("Hi! This is Roxanne from CallWaiting A.I. How can I help you today?")
+        await self._speak("Hi! This is Voxanne from CallWaiting A.I. How can I help you today?")
         self.tasks = [
             asyncio.create_task(self._vad_monitor()),
             asyncio.create_task(self._stt_receiver()),
@@ -315,7 +315,7 @@ class RoxanneOrchestrator:
             await self._transition_to(ConversationState.LISTENING)
     
     async def _speak(self, text: str):
-        """Convert text to speech using Deepgram Aura-2-Thalia (Official Roxanne Voice)"""
+        """Convert text to speech using Deepgram Aura-2-Thalia (Official Voxanne Voice)"""
         if not text or self.ctx.cancel_tts:
             return
         if self.ctx.state != ConversationState.SPEAKING:
@@ -375,11 +375,11 @@ class RoxanneOrchestrator:
         await self.twilio_ws.send_text(json.dumps({"event": "clear", "streamSid": self.ctx.stream_sid}))
         logger.info("🧹 Cleared Twilio audio")
 
-app = FastAPI(title="Roxanne Voice Orchestration v2.0")
+app = FastAPI(title="Voxanne Voice Orchestration v2.0")
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "agent": "roxanne", "version": "2.0"}
+    return {"status": "healthy", "agent": "voxanne", "version": "2.0"}
 
 @app.get("/status")
 async def status_get():
@@ -419,7 +419,7 @@ async def ws_endpoint(websocket: WebSocket):
             if event == "start":
                 stream_sid = data.get("streamSid")
                 call_sid = data.get("start", {}).get("callSid", "unknown")
-                orchestrator = RoxanneOrchestrator(websocket, stream_sid, call_sid)
+                orchestrator = VoxanneOrchestrator(websocket, stream_sid, call_sid)
                 await orchestrator.start()
             elif event == "media" and orchestrator:
                 await orchestrator.send_audio_to_stt(data["media"]["payload"])
@@ -433,7 +433,7 @@ async def ws_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("🚀 Roxanne Voice Orchestration v2.0")
+    logger.info("🚀 Voxanne Voice Orchestration v2.0")
     logger.info(f"✅ Deepgram: {'Set' if DEEPGRAM_API_KEY else 'Missing'}")
     logger.info(f"✅ Groq: {'Set' if GROQ_API_KEY else 'Missing'}")
     logger.info(f"🎤 Voice: {TTS_MODEL}")

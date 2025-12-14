@@ -24,14 +24,14 @@ export default function CTA({ onBookDemo }: { onBookDemo?: () => void }) {
                     transition={{ delay: 0.2 }}
                 >
                     <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-                        Stop losing £50K+ annually to unanswered calls. Deploy Roxanne today and capture every lead, 24/7.
+                        Stop losing £50K+ annually to unanswered calls. Deploy Voxanne today and capture every lead, 24/7.
                     </p>
 
                     <button
                         onClick={onBookDemo}
                         className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300 shadow-[0_0_40px_rgba(255,255,255,0.3)]"
                     >
-                        Start Free Trial
+                        Book Demo Now
                     </button>
                 </motion.div>
             </div>

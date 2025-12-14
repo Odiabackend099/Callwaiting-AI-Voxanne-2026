@@ -17,7 +17,7 @@ HEADERS = {
 OUTPUT_DIR = "public/audio/demos"
 
 # ElevenLabs Voices
-ROXANNE_VOICE = "EXAVITQu4vr4xnSDxMaL"  # Sarah (Professional)
+VOXANNE_VOICE = "EXAVITQu4vr4xnSDxMaL"  # Sarah (Professional)
 CLIENT_JESSICA = "cgSgspJ2msm6clMCkdW9"  # Jessica (Trendy/Young)
 CLIENT_LAURA = "FGY2WhTYpPnrIDTdsKH5"    # Laura (Anxious/Emotional)
 
@@ -26,23 +26,23 @@ dialogs = [
         "filename": "bbl-inquiry-pricing.mp3",
         "script": [
             {"voice": CLIENT_JESSICA, "text": "Hi... I've been looking at Dr. Chen's work for months on Instagram. I'm dying for a BBL, but honestly... I'm really scared about the price. Is it super expensive?"},
-            {"voice": ROXANNE_VOICE, "text": "I completely understand. It is a big investment in yourself, and it's smart to ask. We believe in being totally transparent. Dr. Chen's all-inclusive packages start at eight thousand, five hundred pounds."},
+            {"voice": VOXANNE_VOICE, "text": "I completely understand. It is a big investment in yourself, and it's smart to ask. We believe in being totally transparent. Dr. Chen's all-inclusive packages start at eight thousand, five hundred pounds."},
             {"voice": CLIENT_JESSICA, "text": "Oh! That's... actually better than I thought. But does that include the aftercare? I've heard horror stories about hidden fees."},
-            {"voice": ROXANNE_VOICE, "text": "No horror stories here, I promise. That includes anesthesia, your post-op garment, and all your follow-ups. We want you to focus on healing, not bills. I have a consultation opening this Thursday at 2 PM. Want to come meet him?"}
+            {"voice": VOXANNE_VOICE, "text": "No horror stories here, I promise. That includes anesthesia, your post-op garment, and all your follow-ups. We want you to focus on healing, not bills. I have a consultation opening this Thursday at 2 PM. Want to come meet him?"}
         ]
     },
     {
         "filename": "after-hours-triage.mp3",
         "script": [
             {"voice": CLIENT_LAURA, "text": "Hello? Is this the nurse line? My leg is... it's really red and hot, and I'm three days post-op. I'm kind of freaking out."},
-            {"voice": ROXANNE_VOICE, "text": "I hear you, and you did the right thing calling. I'm flagging this strictly as a priority. Redness and heat on day three means we need to check you immediately. I am patching you directly to Nurse Sarah on the emergency line. Do not hang up."}
+            {"voice": VOXANNE_VOICE, "text": "I hear you, and you did the right thing calling. I'm flagging this strictly as a priority. Redness and heat on day three means we need to check you immediately. I am patching you directly to Nurse Sarah on the emergency line. Do not hang up."}
         ]
     },
     {
         "filename": "instagram-lead-conversion.mp3",
         "script": [
             {"voice": CLIENT_JESSICA, "text": "Hey! I slid into your DMs about the lunch break Botox? Does it seriously only take 15 minutes? I have like... zero free time."},
-            {"voice": ROXANNE_VOICE, "text": "It really does! It's our 'Glow and Go' special. You come in, get refreshed, and you're back out before your coffee gets cold. We have a spot this Thursday at 2 PM. Shall I put your name down?"}
+            {"voice": VOXANNE_VOICE, "text": "It really does! It's our 'Glow and Go' special. You come in, get refreshed, and you're back out before your coffee gets cold. We have a spot this Thursday at 2 PM. Shall I put your name down?"}
         ]
     }
 ]

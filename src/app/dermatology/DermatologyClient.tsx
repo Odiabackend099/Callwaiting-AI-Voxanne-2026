@@ -58,11 +58,11 @@ export default function DermatologyPage() {
                     }
                     subtitle={
                         <>
-                            Roxanne handles the chaos of high-volume dermatology calls. She triages medical vs. cosmetic, <br />
+                            Voxanne handles the chaos of high-volume dermatology calls. She triages medical vs. cosmetic, <br />
                             handling 100+ calls a day without burnout.
                         </>
                     }
-                    ctaText="See Roxanne in Action"
+                    ctaText="See Voxanne in Action"
                 />
 
                 <MedicalAudioDemos />

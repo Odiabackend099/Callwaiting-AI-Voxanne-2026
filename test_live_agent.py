@@ -184,7 +184,7 @@ async def test_agent_text_mode():
         from dotenv import load_dotenv
         load_dotenv()
         
-        from roxanne_enhanced_orchestration import EnhancedVoiceOrchestrator
+        from voxanne_enhanced_orchestration import EnhancedVoiceOrchestrator
         
         deepgram_key = os.getenv("DEEPGRAM_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")

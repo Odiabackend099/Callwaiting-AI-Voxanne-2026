@@ -35,7 +35,7 @@ import aiohttp
 import websockets
 from groq import AsyncGroq
 
-logger = logging.getLogger("roxanne.manager")
+logger = logging.getLogger("voxanne.manager")
 
 
 class ConversationState(Enum):
@@ -224,6 +224,34 @@ class ConversationManager:
             logger.info(f"📊 Session complete | barge_ins={self.ctx.metrics.barge_in_count}")
         
         logger.info("✅ Conversation stopped")
+    
+    def get_session_metrics(self) -> dict:
+        """
+        Get session metrics for observability (Stage 6).
+        Returns a dict suitable for storage/logging.
+        """
+        if not self.ctx:
+            return None
+        
+        # Count turns (user messages in history)
+        turn_count = sum(1 for m in self.ctx.messages if m.get("role") == "user")
+        
+        # Calculate average turn latency if we have metrics
+        metrics = self.ctx.metrics
+        avg_latency = 0
+        if metrics.turn_end_ms and metrics.turn_start_ms:
+            avg_latency = metrics.turn_end_ms - metrics.turn_start_ms
+        
+        return {
+            "call_sid": self.ctx.call_sid,
+            "stream_sid": self.ctx.stream_sid,
+            "turn_count": turn_count,
+            "barge_in_count": metrics.barge_in_count,
+            "avg_turn_latency_ms": round(avg_latency, 1),
+            "endpoint_ms": self.endpoint_ms,
+            "barge_in_v2_enabled": self.enable_barge_in_v2,
+            "humanizer_enabled": self.enable_humanizer,
+        }
     
     # =========================================================================
     # STATE MANAGEMENT
@@ -657,7 +685,7 @@ class ConversationManager:
                     logger.error(f"TTS error: {resp.status}")
                     return
                 
-                async for audio_chunk in resp.content.iter_chunked(640):  # 40ms chunks
+                async for audio_chunk in resp.content.iter_chunked(160):  # 20ms chunks (Twilio standard)
                     if self.ctx.state == ConversationState.INTERRUPTED:
                         logger.info("TTS stream interrupted")
                         break
@@ -674,9 +702,111 @@ class ConversationManager:
             logger.error(f"TTS error: {e}")
     
     def _humanize_text(self, text: str) -> str:
-        """Apply humanization rules for natural TTS (placeholder for Stage 5)."""
-        # TODO: Implement full humanizer in Stage 5
-        return text
+        """
+        Apply humanization rules for natural TTS output.
+        
+        Stage 5: Makes LLM output sound more natural when spoken:
+        - Expands common abbreviations
+        - Adds natural pauses
+        - Removes robotic phrases
+        - Normalizes numbers for speech
+        """
+        import re
+        
+        if not text:
+            return text
+        
+        result = text
+        
+        # 1. Remove robotic/overused phrases
+        robotic_phrases = [
+            (r"\bI'd be happy to\b", "I can"),
+            (r"\bI'm so glad you\b", "Great that you"),
+            (r"\bThank you for sharing\b", "Got it"),
+            (r"\bThat's a great question\b", "Good question"),
+            (r"\bAbsolutely!\b", "Yes,"),
+            (r"\bI understand your concern\b", "I hear you"),
+            (r"\bI appreciate you\b", "Thanks for"),
+        ]
+        for pattern, replacement in robotic_phrases:
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+        
+        # 2. Expand common abbreviations for TTS
+        abbreviations = [
+            (r"Dr\.", "Doctor"),
+            (r"Mr\.", "Mister"),
+            (r"Mrs\.", "Missus"),
+            (r"Ms\.", "Miss"),
+            (r"St\.", "Street"),
+            (r"Ave\.", "Avenue"),
+            (r"etc\.", "etcetera"),
+            (r"e\.g\.", "for example"),
+            (r"i\.e\.", "that is"),
+            (r"vs\.", "versus"),
+        ]
+        for pattern, replacement in abbreviations:
+            result = re.sub(pattern, replacement, result)
+        
+        # Also handle word abbreviations
+        result = re.sub(r"\bappt\b", "appointment", result, flags=re.IGNORECASE)
+        result = re.sub(r"\bmins\b", "minutes", result)
+        result = re.sub(r"\bmin\b", "minute", result)
+        result = re.sub(r"\bhrs\b", "hours", result)
+        result = re.sub(r"\bhr\b", "hour", result)
+        
+        # 3. Time formatting for speech (BEFORE number conversion)
+        # "2:30" -> "two thirty"
+        number_words = {
+            '0': 'zero', '1': 'one', '2': 'two', '3': 'three', '4': 'four',
+            '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine',
+            '10': 'ten', '11': 'eleven', '12': 'twelve', '15': 'fifteen',
+            '20': 'twenty', '30': 'thirty', '45': 'forty-five',
+        }
+        
+        def time_to_words(match):
+            hour = int(match.group(1))
+            minute = match.group(2)
+            hour_word = number_words.get(str(hour), str(hour))
+            if minute == '00':
+                return f"{hour_word} o'clock"
+            elif minute == '30':
+                return f"{hour_word} thirty"
+            elif minute == '15':
+                return f"{hour_word} fifteen"
+            elif minute == '45':
+                return f"{hour_word} forty-five"
+            else:
+                return match.group(0)  # Keep original if complex
+        
+        result = re.sub(r'\b(\d{1,2}):(\d{2})\b', time_to_words, result)
+        
+        # 4. Normalize standalone numbers for speech (AFTER time formatting)
+        for digit, word in number_words.items():
+            # Only replace standalone numbers, not parts of larger numbers
+            result = re.sub(rf'\b{digit}\b', word, result)
+        
+        # 5. Add natural pauses (convert long sentences)
+        # If sentence is very long, add a pause comma
+        words = result.split()
+        if len(words) > 15:
+            # Find a good break point around the middle
+            mid = len(words) // 2
+            # Look for conjunctions or natural break points
+            break_words = ['and', 'but', 'so', 'because', 'which', 'that', 'when', 'if']
+            for i in range(mid - 3, mid + 4):
+                if 0 <= i < len(words) and words[i].lower() in break_words:
+                    # Add comma before the break word if not already there
+                    if not words[i-1].endswith(','):
+                        words[i-1] = words[i-1] + ','
+                    break
+        result = ' '.join(words)
+        
+        # 6. Clean up any double spaces or punctuation issues
+        result = re.sub(r'\s+', ' ', result)
+        result = re.sub(r'\s+([.,!?])', r'\1', result)
+        result = re.sub(r',+', ',', result)
+        
+        return result.strip()
     
     # =========================================================================
     # TWILIO AUDIO OUTPUT

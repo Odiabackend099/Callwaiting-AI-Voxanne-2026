@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Roxanne Voice Agent - Clean Implementation
+Voxanne Voice Agent - Clean Implementation
 Twilio Media Stream → Deepgram STT → Groq LLM → Deepgram TTS → Twilio
 """
 
@@ -30,8 +30,8 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "")
 # Initialize Groq client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# System prompt for Roxanne
-SYSTEM_PROMPT = """You are Roxanne, a professional and friendly AI sales assistant for CallWaiting AI. 
+# System prompt for Voxanne
+SYSTEM_PROMPT = """You are Voxanne, a professional and friendly AI sales assistant for CallWaiting AI. 
 Keep responses brief and conversational (1-2 sentences max).
 Be helpful, warm, and professional. Focus on understanding the caller's needs."""
 
@@ -39,7 +39,7 @@ app = FastAPI()
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "agent": "roxanne"}
+    return {"status": "healthy", "agent": "voxanne"}
 
 @app.post("/twilio/incoming")
 async def twilio_incoming(request: Request):
@@ -95,7 +95,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await send_tts_to_twilio(
                 websocket, 
                 stream_sid,
-                "Hello! This is Roxanne from CallWaiting AI. How can I help you today?"
+                "Hello! This is Voxanne from CallWaiting AI. How can I help you today?"
             )
             
             # Start handling conversation
@@ -135,7 +135,7 @@ async def handle_conversation(websocket: WebSocket, stream_sid: str, call_sid: s
                         
                         # Get LLM response
                         response = await get_llm_response(transcript)
-                        logger.info(f"🤖 Roxanne: {response}")
+                        logger.info(f"🤖 Voxanne: {response}")
                         
                         # Send TTS response
                         await send_tts_to_twilio(websocket, stream_sid, response)
@@ -240,7 +240,7 @@ async def send_tts_to_twilio(websocket: WebSocket, stream_sid: str, text: str):
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info("🚀 Starting Roxanne Voice Agent")
+    logger.info("🚀 Starting Voxanne Voice Agent")
     logger.info(f"📡 Deepgram API Key: {'✅ Set' if DEEPGRAM_API_KEY else '❌ Missing'}")
     logger.info(f"🤖 Groq API Key: {'✅ Set' if GROQ_API_KEY else '❌ Missing'}")
     

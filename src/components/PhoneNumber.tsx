@@ -13,7 +13,7 @@ const PHONE_NUMBER = '+12526453035';
 
 /**
  * PhoneNumberWidget Component
- * Displays the Roxanne AI phone number with click-to-dial functionality
+ * Displays the Voxanne AI phone number with click-to-dial functionality
  *
  * Variants:
  * - 'button': Minimal call button
@@ -42,7 +42,7 @@ export function PhoneNumberWidget({
       <button
         onClick={handleDialClick}
         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-semibold"
-        aria-label="Call Roxanne AI"
+        aria-label="Call Voxanne"
       >
         <Phone size={18} />
         Call Now
@@ -98,7 +98,7 @@ export function PhoneNumberWidget({
               {PHONE_NUMBER}
             </p>
             <p className="text-xs opacity-75 mt-1">
-              Instant AI Demo • Speak to Roxanne
+              Instant AI Demo • Speak to Voxanne
             </p>
           </div>
         </div>
@@ -130,7 +130,7 @@ export function PhoneNumberWidget({
 
       <div className="mt-4 pt-4 border-t border-white border-opacity-20">
         <p className="text-xs opacity-75">
-          ✨ Powered by Roxanne AI • Deepgram Flux • Groq LLama 3.3-70B
+          ✨ Powered by Voxanne • Deepgram Flux • Groq LLama 3.3-70B
         </p>
       </div>
     </div>
@@ -207,7 +207,7 @@ export function PhoneNumberButton({
       className={`flex items-center justify-center gap-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-semibold shadow-md ${
         sizeClasses[size]
       } ${fullWidth ? 'w-full' : ''}`}
-      aria-label="Call Roxanne AI"
+      aria-label="Call Voxanne"
     >
       <Phone size={20} />
       Call {PHONE_NUMBER}
@@ -224,7 +224,7 @@ export function PhoneNumberLink() {
     <a
       href={`tel:${PHONE_NUMBER}`}
       className="text-blue-600 hover:text-blue-800 underline font-mono font-semibold transition-colors duration-200"
-      aria-label="Call Roxanne AI"
+      aria-label="Call Voxanne"
     >
       {PHONE_NUMBER}
     </a>
@@ -239,9 +239,9 @@ export function usePhoneNumber() {
   return {
     phoneNumber: PHONE_NUMBER,
     dialUrl: `tel:${PHONE_NUMBER}`,
-    displayName: 'Roxanne AI',
+    displayName: 'Voxanne',
     availableTime: '24/7',
-    getDisplayText: () => `Call ${PHONE_NUMBER} to speak with Roxanne AI`,
+    getDisplayText: () => `Call ${PHONE_NUMBER} to speak with Voxanne`,
     copyToClipboard: async () => {
       await navigator.clipboard.writeText(PHONE_NUMBER);
     }

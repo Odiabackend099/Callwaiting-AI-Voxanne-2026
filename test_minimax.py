@@ -16,7 +16,7 @@ def test_minimax():
     # Using a standard voice ID I suspect might work, if fails we will inspect response
     payload = {
         "voice_id": "female-yujie", 
-        "text": "Hello, this is a test of the Minimax voice generation for Roxanne AI.",
+        "text": "Hello, this is a test of the Minimax voice generation for Voxanne AI.",
         "model": "speech-01"
     }
     

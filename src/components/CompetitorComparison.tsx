@@ -5,26 +5,26 @@ import { Check, X, Zap } from "lucide-react";
 
 interface ComparisonRow {
     feature: string;
-    roxanne: boolean | string;
+    voxanne: boolean | string;
     generic: boolean | string;
     highlight?: boolean;
 }
 
 const comparisonData: ComparisonRow[] = [
-    { feature: "Medical-Specific Training", roxanne: true, generic: false, highlight: true },
-    { feature: "HIPAA Compliance", roxanne: true, generic: "Varies" },
-    { feature: "EMR/EHR Integration", roxanne: true, generic: false, highlight: true },
-    { feature: "Procedure Knowledge (BBL, Rhinoplasty, etc.)", roxanne: "500+ procedures", generic: "Basic only" },
-    { feature: "UK + US Support", roxanne: true, generic: "US only" },
-    { feature: "British English Voice", roxanne: true, generic: false, highlight: true },
-    { feature: "Emergency Escalation Protocol", roxanne: true, generic: "Basic" },
-    { feature: "Price Objection Handling", roxanne: "Trained", generic: "Generic" },
-    { feature: "After-Hours Triage", roxanne: true, generic: false },
-    { feature: "Instagram/WhatsApp Integration", roxanne: true, generic: false },
-    { feature: "Setup Time", roxanne: "48 hours", generic: "1-2 weeks" },
-    { feature: "Monthly Cost", roxanne: "From £299", generic: "From £500" },
-    { feature: "Contract Length", roxanne: "Month-to-month", generic: "12 months" },
-    { feature: "Money-Back Guarantee", roxanne: "30 days", generic: "None" }
+    { feature: "Medical-Specific Training", voxanne: true, generic: false, highlight: true },
+    { feature: "HIPAA Compliance", voxanne: true, generic: "Varies" },
+    { feature: "EMR/EHR Integration", voxanne: true, generic: false, highlight: true },
+    { feature: "Procedure Knowledge (BBL, Rhinoplasty, etc.)", voxanne: "500+ procedures", generic: "Basic only" },
+    { feature: "UK + US Support", voxanne: true, generic: "US only" },
+    { feature: "British English Voice", voxanne: true, generic: false, highlight: true },
+    { feature: "Emergency Escalation Protocol", voxanne: true, generic: "Basic" },
+    { feature: "Price Objection Handling", voxanne: "Trained", generic: "Generic" },
+    { feature: "After-Hours Triage", voxanne: true, generic: false },
+    { feature: "Instagram/WhatsApp Integration", voxanne: true, generic: false },
+    { feature: "Setup Time", voxanne: "48 hours", generic: "1-2 weeks" },
+    { feature: "Monthly Cost", voxanne: "From £299", generic: "From £500" },
+    { feature: "Contract Length", voxanne: "Month-to-month", generic: "12 months" },
+    { feature: "Money-Back Guarantee", voxanne: "30 days", generic: "None" }
 ];
 
 export default function CompetitorComparison() {
@@ -42,7 +42,7 @@ export default function CompetitorComparison() {
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-medium mb-6"
                     >
                         <Zap className="w-4 h-4" />
-                        <span>Why Roxanne Wins</span>
+                        <span>Why Voxanne Wins</span>
                     </motion.div>
 
                     <motion.h2
@@ -51,7 +51,7 @@ export default function CompetitorComparison() {
                         transition={{ delay: 0.1 }}
                         className="text-3xl md:text-5xl font-bold text-white mb-6"
                     >
-                        Roxanne vs. Generic AI Receptionists
+                        Voxanne vs. Generic AI Receptionists
                     </motion.h2>
 
                     <motion.p
@@ -78,7 +78,7 @@ export default function CompetitorComparison() {
                             <div className="text-center">
                                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-sm">
                                     <Check className="w-4 h-4" />
-                                    Roxanne
+                                    Voxanne
                                 </div>
                             </div>
                             <div className="text-center text-slate-400 font-medium">Generic AI</div>
@@ -109,10 +109,10 @@ export default function CompetitorComparison() {
                                         )}
                                     </div>
 
-                                    {/* Roxanne Column */}
+                                    {/* Voxanne Column */}
                                     <div className="flex items-center justify-center">
-                                        {typeof row.roxanne === 'boolean' ? (
-                                            row.roxanne ? (
+                                        {typeof row.voxanne === 'boolean' ? (
+                                            row.voxanne ? (
                                                 <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
                                                     <Check className="w-5 h-5 text-green-400" strokeWidth={3} />
                                                 </div>
@@ -122,7 +122,7 @@ export default function CompetitorComparison() {
                                                 </div>
                                             )
                                         ) : (
-                                            <span className="text-green-400 font-semibold text-sm">{row.roxanne}</span>
+                                            <span className="text-green-400 font-semibold text-sm">{row.voxanne}</span>
                                         )}
                                     </div>
 

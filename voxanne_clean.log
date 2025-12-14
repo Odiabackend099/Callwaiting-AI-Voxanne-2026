@@ -1,0 +1,8 @@
+INFO:     Will watch for changes in these directories: ['/Users/mac/Desktop/VOXANNE  WEBSITE']
+INFO:     Uvicorn running on http://0.0.0.0:9121 (Press CTRL+C to quit)
+INFO:     Started reloader process [16690] using WatchFiles
+INFO:     Started server process [16737]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:52205 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53045 - "GET /health HTTP/1.1" 200 OK

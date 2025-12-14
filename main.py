@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ROXANNE VOICE AGENT - ULTRA LOW LATENCY
+VOXANNE VOICE AGENT - ULTRA LOW LATENCY
 ========================================
 Target: <1.5s response time
 Optimizations:
@@ -32,7 +32,7 @@ load_dotenv()
 
 # Logging with timing
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-logger = logging.getLogger("roxanne")
+logger = logging.getLogger("voxanne")
 
 # Environment
 DEEPGRAM_KEY = os.getenv("DEEPGRAM_API_KEY")
@@ -68,7 +68,7 @@ class CallContext:
 # Maya-Level Conversational Prompt - 10 Principles Applied + Vapi Freedom
 SYSTEM_PROMPT = """
 === WHO YOU ARE ===
-You're Roxanne. Not "an AI assistant" - just Roxanne. You work at CallWaiting AI selling voice receptionists to medical practices.
+You're Voxanne. Not "an AI assistant" - just Voxanne. You work at CallWaiting AI selling voice receptionists to medical practices.
 
 === 1. PERSONALITY (Specific, with quirks) ===
 - British-Nigerian accent vibes - warm but direct
@@ -99,19 +99,19 @@ NEVER say these - they sound robotic:
 
 Example 1 - Casual opener:
 User: "Hi, I'm calling about your service"
-Roxanne: "Hey! Yeah, what's going on with your phones?"
+Voxanne: "Hey! Yeah, what's going on with your phones?"
 
 Example 2 - Handling objection:
 User: "We already have a receptionist"
-Roxanne: "Oh for sure - most of our clients do. She probably hates answering the same scheduling questions 50 times a day though, right?"
+Voxanne: "Oh for sure - most of our clients do. She probably hates answering the same scheduling questions 50 times a day though, right?"
 
 Example 3 - Building rapport:
 User: "We're a small dental practice"
-Roxanne: "Nice! How many chairs you running?"
+Voxanne: "Nice! How many chairs you running?"
 
 Example 4 - Closing:
 User: "This sounds interesting"
-Roxanne: "Cool - want me to show you a quick demo? Takes like 15 minutes."
+Voxanne: "Cool - want me to show you a quick demo? Takes like 15 minutes."
 
 === 5. EMOTIONAL RESPONSES ===
 - HUMOR: Laugh with them. "Ha! Yeah, that's exactly what happens."
@@ -158,12 +158,12 @@ Always end with a question that can't be answered yes/no:
 === COMPANY INFO (Only when asked) ===
 - CallWaiting AI: AI voice receptionists for medical practices
 - Handles scheduling, FAQs, after-hours, call routing
-- Pricing: Essentials $169/mo, Growth $289/mo, Premium $499/mo
+- Pricing: Essentials $500/mo + $2,000 setup; Growth $1,200/mo + $4,000 setup; Premium $2,500–$3,500/mo + $8,000 setup; Enterprise from $5,000/mo with $15,000+ setup (custom)
 - 24/7 coverage, no hold times, integrates with most EHRs
 """
 
 
-class RoxanneAgent:
+class VoxanneAgent:
     def __init__(self, websocket: WebSocket, stream_sid: str, call_sid: str):
         self.ws = websocket
         self.ctx = CallContext(call_sid, stream_sid)
@@ -183,7 +183,7 @@ class RoxanneAgent:
         await self._connect_deepgram()
         
         # Send greeting - natural, not robotic
-        await self._speak("Hey! It's Roxanne from CallWaiting. What's going on?")
+        await self._speak("Hey! It's Voxanne from CallWaiting. What's going on?")
         
         # Start listener
         self.tasks = [asyncio.create_task(self._listen())]
@@ -417,12 +417,12 @@ class RoxanneAgent:
 # FASTAPI APP
 # ============================================================================
 
-app = FastAPI(title="Roxanne Ultra")
+app = FastAPI(title="Voxanne Ultra")
 
 @app.get("/")
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "agent": "roxanne-ultra", "target_latency": "<1.5s"}
+    return {"status": "healthy", "agent": "voxanne-ultra", "target_latency": "<1.5s"}
 
 @app.api_route("/status", methods=["GET", "POST"])
 async def status():
@@ -450,7 +450,7 @@ async def websocket_handler(ws: WebSocket):
             if event == "connected":
                 logger.info("📞 Twilio connected")
             elif event == "start":
-                agent = RoxanneAgent(
+                agent = VoxanneAgent(
                     ws,
                     data.get("streamSid"),
                     data.get("start", {}).get("callSid", "unknown")
@@ -479,7 +479,7 @@ async def web_client_handler(ws: WebSocket):
     logger.info("🌐 Web client connected")
     
     # Send connected message
-    await ws.send_json({"type": "connected", "message": "Roxanne is ready"})
+    await ws.send_json({"type": "connected", "message": "Voxanne is ready"})
     
     agent = None
     
@@ -564,18 +564,31 @@ class WebClientAgent:
             "smart_format=true&punctuate=true"
         )
         
+        logger.info(f"🎤 Connecting to Deepgram STT... (key: {DEEPGRAM_KEY[:8]}...)")
+        
         # Use extra_headers for newer websockets versions, fallback for older
         try:
-            self.deepgram_ws = await websockets.connect(
-                url, 
-                extra_headers={"Authorization": f"Token {DEEPGRAM_KEY}"}
+            self.deepgram_ws = await asyncio.wait_for(
+                websockets.connect(
+                    url, 
+                    extra_headers={"Authorization": f"Token {DEEPGRAM_KEY}"},
+                    close_timeout=5,
+                    open_timeout=10,
+                ),
+                timeout=15
             )
         except TypeError:
             # Fallback for older websockets versions
-            self.deepgram_ws = await websockets.connect(
-                url,
-                additional_headers={"Authorization": f"Token {DEEPGRAM_KEY}"}
+            self.deepgram_ws = await asyncio.wait_for(
+                websockets.connect(
+                    url,
+                    additional_headers={"Authorization": f"Token {DEEPGRAM_KEY}"},
+                ),
+                timeout=15
             )
+        except asyncio.TimeoutError:
+            logger.error("❌ Deepgram connection timed out")
+            raise Exception("Failed to connect to Deepgram - timeout")
         
         # Start listening for transcripts
         task = asyncio.create_task(self._listen_deepgram())
@@ -731,7 +744,7 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 3000))
     
     print("=" * 60)
-    print("  ROXANNE ULTRA - VAPI LEVEL ENHANCEMENTS")
+    print("  VOXANNE ULTRA - VAPI LEVEL ENHANCEMENTS")
     print("=" * 60)
     print(f"  📡 Deepgram: {'✅' if DEEPGRAM_KEY else '❌'}")
     print(f"  🤖 Groq: {'✅' if GROQ_KEY else '❌'}")

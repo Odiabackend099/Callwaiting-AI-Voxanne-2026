@@ -35,6 +35,7 @@ export default function Navbar() {
                                 src="/callwaiting-ai-logo.png"
                                 alt="CallWaiting AI"
                                 fill
+                                sizes="56px"
                                 className="object-contain"
                                 priority
                             />
@@ -71,12 +72,14 @@ export default function Navbar() {
                                 >
                                     Login
                                 </Link>
-                                <Link
-                                    href="/sign-up"
+                                <a
+                                    href="https://calendly.com/callwaitingai/demo"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="px-5 py-2.5 rounded-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-bold hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
                                 >
-                                    Sign Up
-                                </Link>
+                                    Book Demo
+                                </a>
                             </>
                         )}
                     </div>
@@ -107,6 +110,7 @@ export default function Navbar() {
                                         src="/callwaiting-ai-logo.png"
                                         alt="CallWaiting AI"
                                         fill
+                                        sizes="32px"
                                         className="object-contain"
                                     />
                                 </div>
@@ -135,7 +139,7 @@ export default function Navbar() {
                             ) : (
                                 <>
                                     <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>Login</Link>
-                                    <Link href="/sign-up" onClick={() => setIsMobileMenuOpen(false)} className="text-cyan-400">Sign Up</Link>
+                                    <a href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer" onClick={() => setIsMobileMenuOpen(false)} className="text-cyan-400">Book Demo</a>
                                 </>
                             )}
                         </div>

@@ -1,0 +1,14 @@
+User-Agent: *
+Allow: /
+Disallow: /private/
+
+User-Agent: GPTBot
+Allow: /
+
+User-Agent: CCBot
+Allow: /
+
+User-Agent: Google-Extended
+Allow: /
+
+Sitemap: https://callwaitingai.dev/sitemap.xml

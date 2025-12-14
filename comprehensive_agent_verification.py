@@ -92,12 +92,12 @@ class AgentVerification:
         
         try:
             # Read the orchestration file to get persona info
-            with open("roxanne_enhanced_orchestration.py", "r") as f:
+            with open("voxanne_enhanced_orchestration.py", "r") as f:
                 content = f.read()
                 
             # Check for key persona elements
             persona_checks = {
-                "Agent Name": "Roxanne" in content or "roxanne" in content.lower(),
+                "Agent Name": "Voxanne" in content or "voxanne" in content.lower(),
                 "Sales Focus": "sales" in content.lower(),
                 "Groq LLM": "groq" in content.lower() and "llama" in content.lower(),
                 "Deepgram STT": "deepgram" in content.lower() and "nova" in content.lower(),
@@ -117,8 +117,8 @@ class AgentVerification:
             
             # Try to read persona files
             persona_files = [
-                "roxanne_sales_system_prompt.md",
-                "roxanne_sales_system_prompt (1).md",
+                "voxanne_sales_system_prompt.md",
+                "voxanne_sales_system_prompt (1).md",
                 "ROXAN PERASONA"
             ]
             
@@ -219,7 +219,7 @@ class AgentVerification:
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": "You are Roxanne, a professional sales AI assistant."},
+                    {"role": "system", "content": "You are Voxanne, a professional sales AI assistant."},
                     {"role": "user", "content": "What is your name and what do you do?"}
                 ],
                 max_tokens=100,
@@ -273,7 +273,7 @@ class AgentVerification:
                     print_success("Successfully connected to Deepgram TTS WebSocket")
                     
                     # Send test text (JSON format with type and text)
-                    test_text = "Hello, this is Roxanne."
+                    test_text = "Hello, this is Voxanne."
                     await ws.send(json.dumps({"type": "Speak", "text": test_text}))
                     print_success(f"Sent test text: '{test_text}'")
                     

@@ -52,7 +52,7 @@ export default function Features({ customFeatures }: FeaturesProps) {
                         More Than Just Answering.
                     </motion.h2>
                     <p className="text-zinc-400 max-w-2xl mx-auto">
-                        Roxanne is a highly trained intake specialist that converts high-value leads into patients.
+                        Voxanne is a highly trained intake specialist that converts high-value leads into patients.
                     </p>
                 </div>
 

@@ -10,11 +10,11 @@ HEADERS = {
 }
 OUTPUT_DIR = "public/audio/demos"
 
-# Roxanne's Voice: Aura Thalia (As requested)
+# Voxanne's Voice: Aura Thalia (As requested)
 VOICE_MODEL = "aura-asteria-en" # Fallback/Reference
 # We will use the specific URL params for Thalia
 
-# One-Way Scripts (Roxanne's responses only)
+# One-Way Scripts (Voxanne's responses only)
 scripts = [
     {
         "filename": "bbl-inquiry-pricing.wav",
@@ -47,7 +47,7 @@ def generate_audio(text, filename):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    print("🚀 Generating One-Way Roxanne Samples with Deepgram Aura...")
+    print("🚀 Generating One-Way Voxanne Samples with Deepgram Aura...")
     
     for item in scripts:
         generate_audio(item["text"], item["filename"])

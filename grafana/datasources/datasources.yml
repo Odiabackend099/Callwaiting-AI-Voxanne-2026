@@ -12,7 +12,7 @@ datasources:
     type: postgres
     access: proxy
     url: postgres:5432
-    database: roxanne
+    database: voxanne
     user: postgres
     password: password
     editable: true

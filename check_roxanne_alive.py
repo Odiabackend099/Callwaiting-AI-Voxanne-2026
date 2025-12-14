@@ -34,13 +34,13 @@ if len(sys.argv) > 1:
 
 if not your_number:
     print("❌ Please provide a test phone number (verified caller ID if trial account).")
-    print("Usage: python3 check_roxanne_alive.py <YOUR_PHONE_NUMBER>")
+    print("Usage: python3 check_voxanne_alive.py <YOUR_PHONE_NUMBER>")
     sys.exit(1)
 
 client = Client(account_sid, auth_token)
 
 def check_agent_alive():
-    """Call Twilio number, verify Roxanne answers"""
+    """Call Twilio number, verify Voxanne answers"""
     print(f"📞 Calling {your_number} from {twilio_number}...")
     
     twiml_url = f"{public_url}/twiml" if public_url else "http://demo.twilio.com/docs/voice.xml"
@@ -80,10 +80,10 @@ def check_agent_alive():
             print(f"   Status: {call.status}", end="\r")
             
             if call.status in ["in-progress", "completed"]:
-                print(f"\n✅ Roxanne ALIVE (Status: {call.status})")
+                print(f"\n✅ Voxanne ALIVE (Status: {call.status})")
                 return True
             if call.status in ["busy", "failed", "no-answer", "canceled"]:
-                print(f"\n❌ Roxanne DEAD (Status: {call.status})")
+                print(f"\n❌ Voxanne DEAD (Status: {call.status})")
                 return False
                 
         print("\n⚠️ Timeout waiting for answer.")

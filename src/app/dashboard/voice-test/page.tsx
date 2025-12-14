@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, AlertCircle, Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
@@ -10,6 +10,7 @@ export default function VoiceTestPage() {
     const router = useRouter();
     const [callStarted, setCallStarted] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
+    const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     const {
         isConnected,
@@ -36,6 +37,13 @@ export default function VoiceTestPage() {
             setIsConnecting(false);
         },
     });
+
+    // Auto-scroll to latest transcript
+    useEffect(() => {
+        if (transcriptEndRef.current) {
+            transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [transcripts]);
 
     const handleStartCall = async () => {
         try {
@@ -67,9 +75,9 @@ export default function VoiceTestPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+        <div className="min-h-screen bg-black">
             {/* Header */}
-            <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-white/5">
+            <header className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10">
                 <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
                     <button
                         onClick={() => router.push('/dashboard')}
@@ -80,12 +88,12 @@ export default function VoiceTestPage() {
                     </button>
                     
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                            <span className="text-white text-sm font-bold">R</span>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                            <span className="text-white text-sm font-bold">V</span>
                         </div>
                         <div>
-                            <h1 className="text-white font-semibold">Roxanne AI</h1>
-                            <p className="text-xs text-slate-400">Voice Assistant</p>
+                            <h1 className="text-white font-semibold">Voxanne</h1>
+                            <p className="text-xs text-slate-400">AI Voice Assistant</p>
                         </div>
                     </div>
                     
@@ -127,8 +135,8 @@ export default function VoiceTestPage() {
                                     callStarted && isSpeaking ? 'animate-pulse' : ''
                                 }`}
                             >
-                                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 flex items-center justify-center shadow-2xl shadow-purple-500/30">
-                                    <span className="text-white text-5xl font-bold">R</span>
+                                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-cyan-500/20">
+                                    <span className="text-white text-5xl font-bold">V</span>
                                 </div>
                                 {callStarted && (
                                     <motion.div
@@ -150,16 +158,16 @@ export default function VoiceTestPage() {
                             <h2 className="text-2xl font-bold text-white mb-3">
                                 {callStarted 
                                     ? isSpeaking 
-                                        ? "Roxanne is speaking..." 
+                                        ? "Voxanne is speaking..." 
                                         : isRecording 
                                             ? "Listening..." 
                                             : "Connected"
-                                    : "Talk to Roxanne"
+                                    : "Talk to Voxanne"
                                 }
                             </h2>
                             <p className="text-slate-400 max-w-md">
                                 {callStarted 
-                                    ? "Speak naturally. Roxanne will respond in real-time."
+                                    ? "Speak naturally. Voxanne will respond in real-time."
                                     : "Experience our AI voice receptionist. Click below to start a conversation."
                                 }
                             </p>
@@ -202,15 +210,15 @@ export default function VoiceTestPage() {
                                     <div
                                         className={`max-w-[80%] rounded-2xl px-5 py-3 ${
                                             msg.speaker === 'agent'
-                                                ? 'bg-gradient-to-br from-violet-600/80 to-purple-600/80 text-white'
+                                                ? 'bg-gradient-to-br from-cyan-600/80 to-blue-600/80 text-white'
                                                 : 'bg-white/10 text-white border border-white/10'
                                         }`}
                                     >
                                         <p className="text-sm leading-relaxed">{msg.text}</p>
                                         <p className={`text-xs mt-1 ${
-                                            msg.speaker === 'agent' ? 'text-violet-200' : 'text-slate-500'
+                                            msg.speaker === 'agent' ? 'text-cyan-200' : 'text-slate-500'
                                         }`}>
-                                            {msg.speaker === 'agent' ? 'Roxanne' : 'You'}
+                                            {msg.speaker === 'agent' ? 'Voxanne' : 'You'}
                                         </p>
                                     </div>
                                 </motion.div>
@@ -223,23 +231,26 @@ export default function VoiceTestPage() {
                                     animate={{ opacity: 1 }}
                                     className="flex justify-start"
                                 >
-                                    <div className="bg-violet-600/50 rounded-2xl px-5 py-3 flex items-center gap-2">
+                                    <div className="bg-cyan-600/50 rounded-2xl px-5 py-3 flex items-center gap-2">
                                         <div className="flex gap-1">
                                             <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                             <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                             <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                                         </div>
-                                        <span className="text-violet-200 text-sm">Roxanne is speaking...</span>
+                                        <span className="text-cyan-200 text-sm">Voxanne is speaking...</span>
                                     </div>
                                 </motion.div>
                             )}
+                            
+                            {/* Auto-scroll anchor */}
+                            <div ref={transcriptEndRef} />
                         </div>
                     )}
                 </div>
             </main>
 
             {/* Bottom Controls */}
-            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent pt-10 pb-8 px-4">
+            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/95 to-transparent pt-10 pb-8 px-4">
                 <div className="max-w-md mx-auto">
                     {!callStarted ? (
                         /* Start Button */
@@ -251,7 +262,7 @@ export default function VoiceTestPage() {
                             <button
                                 onClick={handleStartCall}
                                 disabled={isConnecting}
-                                className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-full font-semibold text-lg shadow-2xl shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 bg-white text-black rounded-full font-semibold text-lg shadow-2xl shadow-white/20 hover:bg-slate-100 hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                             >
                                 {isConnecting ? (
                                     <>
@@ -266,10 +277,10 @@ export default function VoiceTestPage() {
                                 )}
                                 
                                 {/* Glow effect */}
-                                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 blur-xl opacity-50 group-hover:opacity-75 transition-opacity -z-10" />
+                                <div className="absolute inset-0 rounded-full bg-white blur-xl opacity-30 group-hover:opacity-50 transition-opacity -z-10" />
                             </button>
                             <p className="mt-4 text-slate-500 text-sm">
-                                Click to start talking with Roxanne
+                                Click to start talking with Voxanne
                             </p>
                         </motion.div>
                     ) : (

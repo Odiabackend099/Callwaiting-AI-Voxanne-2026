@@ -35,15 +35,15 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
     // Get WebSocket URL
     const getWebSocketUrl = useCallback(() => {
-        // Use secure WebSocket when talking to the hosted Roxanne backend.
+        // Use secure WebSocket when talking to the hosted Voxanne backend.
         // In dev, the frontend runs on localhost:9120 but the voice orchestrator
-        // is deployed on Render at roxanneai.onrender.com.
+        // is deployed on Render at voxanneai.onrender.com.
 
         // If an explicit env var is provided, always prefer that.
         const configuredHost = process.env.NEXT_PUBLIC_VOICE_BACKEND_URL;
 
         // Default to the Render host if not overridden.
-        const host = configuredHost || 'roxanneai.onrender.com';
+        const host = configuredHost || 'voxanneai.onrender.com';
 
         // Use wss for remote HTTPS host, ws for localhost/dev overrides.
         const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
