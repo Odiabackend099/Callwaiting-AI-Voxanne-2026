@@ -8,17 +8,26 @@ export class AudioPlayer {
     private ctx: AudioContext;
     private playQueue: Array<{ when: number }> = [];
     private isPlaying = false;
+    private gainNode: GainNode | null = null;
 
     // Jitter buffer to smooth out network irregularities
     private jitterBuffer: ArrayBuffer[] = [];
-    private readonly JITTER_BUFFER_SIZE = 3; // Hold 3 packets (60ms @ 20ms/packet)
+    private readonly JITTER_BUFFER_SIZE = 2; // Reduced from 3 to lower latency
     private bufferDraining = false;
 
-    constructor(sampleRate: number = 24000) {
-        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
-            sampleRate,
-        });
-        console.log(`✅ Audio Player: ${this.ctx.sampleRate}Hz`);
+    // Source sample rate from Vapi (16kHz PCM16)
+    private readonly SOURCE_SAMPLE_RATE = 16000;
+
+    constructor() {
+        // Let browser choose optimal output sample rate
+        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Create gain node to prevent clipping and reduce crackling
+        this.gainNode = this.ctx.createGain();
+        this.gainNode.gain.value = 0.85; // Slight reduction to prevent clipping
+        this.gainNode.connect(this.ctx.destination);
+        
+        console.log(`✅ Audio Player: output ${this.ctx.sampleRate}Hz, source ${this.SOURCE_SAMPLE_RATE}Hz`);
     }
 
     async playChunk(audioData: ArrayBuffer): Promise<void> {
@@ -60,28 +69,32 @@ export class AudioPlayer {
 
     private async playBufferedChunk(audioData: ArrayBuffer): Promise<void> {
         try {
-            // Convert PCM16 to Float32
+            // Convert PCM16 to Float32 with soft clipping to reduce crackling
             const pcm16 = new Int16Array(audioData);
             const float32Data = new Float32Array(pcm16.length);
 
             for (let i = 0; i < pcm16.length; i++) {
-                float32Data[i] = pcm16[i] / 32768.0;
+                // Normalize to [-1, 1] range
+                let sample = pcm16[i] / 32768.0;
+                // Apply soft clipping to reduce harsh peaks
+                if (sample > 0.95) sample = 0.95 + (sample - 0.95) * 0.1;
+                if (sample < -0.95) sample = -0.95 + (sample + 0.95) * 0.1;
+                float32Data[i] = sample;
             }
 
             // Create buffer at SOURCE sample rate (16kHz)
             // Browser handles resampling to output rate automatically
-            const sourceSampleRate = 16000;
             const buffer = this.ctx.createBuffer(
                 1,
                 float32Data.length,
-                sourceSampleRate
+                this.SOURCE_SAMPLE_RATE
             );
             buffer.getChannelData(0).set(float32Data);
 
-            // Create source node
+            // Create source node and connect through gain node
             const source = this.ctx.createBufferSource();
             source.buffer = buffer;
-            source.connect(this.ctx.destination);
+            source.connect(this.gainNode || this.ctx.destination);
 
             // CRITICAL: Gapless scheduling
             // Calculate when this buffer should start to avoid gaps/overlaps

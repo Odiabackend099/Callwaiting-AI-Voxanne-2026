@@ -245,17 +245,31 @@ function handleVapiTranscriptMessage(
   const text = (message.text ?? message.content ?? message.message ?? '').trim();
   if (!text) return;
 
-  // Normalize speaker: Vapi uses 'assistant', we use 'agent'
-  const speaker: 'agent' | 'customer' =
-    message.role === 'assistant' ? 'agent' : 'customer';
+  // Normalize speaker: Vapi uses 'assistant', frontend expects 'user'/'agent'
+  const speaker: 'agent' | 'user' =
+    message.role === 'assistant' ? 'agent' : 'user';
 
-  // Broadcast transcript_delta to main WS
+  // Send transcript event directly to client WebSocket (real-time)
+  if (session.clientWebSocket?.readyState === WebSocket.OPEN) {
+    session.clientWebSocket.send(JSON.stringify({
+      type: 'transcript',
+      speaker,
+      text,
+      is_final: true,
+      confidence: 0.95,
+      ts: Date.now()
+    }));
+  }
+
+  // Also broadcast transcript_delta to main WS for other listeners
+  // Map 'user' back to 'customer' for database storage compatibility
+  const dbSpeaker: 'agent' | 'customer' = speaker === 'agent' ? 'agent' : 'customer';
   wsBroadcast({
     type: 'transcript_delta',
     vapiCallId: session.vapiCallId,
     trackingId: session.trackingId,
     userId: session.userId,
-    speaker,
+    speaker: dbSpeaker,
     text,
     ts: Date.now()
   });
@@ -265,7 +279,7 @@ function handleVapiTranscriptMessage(
     try {
       await supabase.from('call_transcripts').insert({
         call_id: session.trackingId,
-        speaker,
+        speaker: dbSpeaker,
         text,
         timestamp: new Date().toISOString()
       });
