@@ -47,22 +47,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Initialize auth state
     useEffect(() => {
+        let isMounted = true;
+
         const initializeAuth = async () => {
             try {
-                // Get current session
-                const { data } = await supabase.auth.getSession();
+                // Get current session with timeout
+                const sessionPromise = supabase.auth.getSession();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Auth initialization timeout')), 5000)
+                );
+
+                const { data } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+
+                if (!isMounted) return;
+
                 setSession(data.session);
                 setUser(data.session?.user ?? null);
 
+                // Fetch settings in background (non-blocking)
                 if (data.session?.user) {
-                    await fetchUserSettings(data.session.user.id);
+                    fetchUserSettings(data.session.user.id).catch(err => {
+                        if (isMounted && process.env.NODE_ENV !== 'production') {
+                            console.error('Settings fetch failed:', err);
+                        }
+                    });
                 }
             } catch (err) {
-                if (process.env.NODE_ENV !== 'production') {
-                    console.error('Auth init error:', err);
+                if (isMounted) {
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.error('Auth init error:', err);
+                    }
                 }
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
 
@@ -71,22 +90,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Listen for auth changes
         const { data } = supabase.auth.onAuthStateChange(
             async (event, session) => {
+                if (!isMounted) return;
+
                 setSession(session);
                 setUser(session?.user ?? null);
 
-                if (session?.user) {
-                    await fetchUserSettings(session.user.id);
-                } else {
+                // Only fetch settings on specific events to avoid N+1 queries
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                    if (session?.user) {
+                        fetchUserSettings(session.user.id).catch(err => {
+                            if (isMounted && process.env.NODE_ENV !== 'production') {
+                                console.error('Settings fetch failed:', err);
+                            }
+                        });
+                    }
+                } else if (event === 'SIGNED_OUT') {
                     setUserSettings(null);
-                }
-
-                if (event === 'SIGNED_OUT') {
                     router.push('/login');
                 }
             }
         );
 
         return () => {
+            isMounted = false;
             data?.subscription.unsubscribe();
         };
     }, [supabase, router]);
