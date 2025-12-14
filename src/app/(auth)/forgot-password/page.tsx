@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { Mail, ArrowLeft, Loader, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

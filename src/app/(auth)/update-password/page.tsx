@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { Lock, ArrowRight, Loader } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -215,16 +214,11 @@ export default function UpdatePasswordPage() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 1, ease: "easeInOut" }}
-                            className="absolute inset-0"
-                        >
-                            <Image
-                                src={BRANDING_IMAGES[currentImageIndex]}
-                                alt={`CallWaiting AI Branding ${currentImageIndex + 1}`}
-                                fill
-                                className="object-contain"
-                                priority={currentImageIndex === 0}
-                            />
-                        </motion.div>
+                            className="absolute inset-0 bg-cover bg-center"
+                            style={{
+                                backgroundImage: `url(${BRANDING_IMAGES[currentImageIndex]})`,
+                            }}
+                        />
                     </AnimatePresence>
 
                     {/* Carousel Indicators */}
