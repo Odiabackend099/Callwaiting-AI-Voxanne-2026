@@ -5,12 +5,16 @@ __pycache__/
 *.pyc
 .DS_Store
 venv/
+.venv/
+.pytest_cache/
+.python-version
 node_modules/
 .next/
 dist/
 build/
 *.node
-.vercel
+
+.vercel/
 
 *.log
 *.db
@@ -21,6 +25,10 @@ build/
 
 ngrok
 ngrok*
+
+backend/.env
+backend/.env.*
+!backend/.env.example
 
 coverage/
 .turbo/
