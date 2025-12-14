@@ -32,9 +32,9 @@ export class AudioPlayer {
 
     async playChunk(audioData: ArrayBuffer): Promise<void> {
         try {
-            // Guard against odd-length buffers
+            // Guard against odd-length buffers (PCM16 requires even byte count)
+            // This is expected from some Vapi streams - silently fix without spamming console
             if (audioData.byteLength % 2 !== 0) {
-                console.warn('Odd-length PCM frame, dropping last byte');
                 audioData = audioData.slice(0, audioData.byteLength - 1);
             }
 

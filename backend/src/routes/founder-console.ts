@@ -1463,21 +1463,14 @@ router.post(
         return;
       }
 
-      // Check if Vapi connection is validated
-      const vapiValidatedAt = vapiIntegration?.config?.validated_at;
-      if (!vapiValidatedAt) {
-        res.status(400).json({ 
-          error: 'Vapi connection is not valid. Please click Save Connection with a valid Vapi secret key first.',
-          requestId 
-        });
-        return;
-      }
-
-      // Get the raw key and sanitize it
+      // Get the stored Vapi API key (no need to validate on every update)
       let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
       
       if (!vapiApiKey) {
-        res.status(400).json({ error: 'Vapi not configured. Save Connection first.', requestId });
+        res.status(400).json({ 
+          error: 'Vapi API key not configured. Please save your Vapi API key in Settings first.',
+          requestId 
+        });
         return;
       }
 

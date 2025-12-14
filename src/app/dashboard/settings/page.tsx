@@ -205,10 +205,23 @@ export default function SettingsPage() {
     try {
       const response = await fetch(url, options);
       if (!response.ok) {
+        // Try to get error message from response body
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            throw new Error(errorData.error);
+          }
+        } catch {
+          // Fall back to status code
+        }
         throw new Error(`HTTP ${response.status}`);
       }
       return await response.json();
     } catch (error) {
+      // Don't retry 400 errors (validation failures)
+      if (error instanceof Error && error.message.includes('Vapi')) {
+        throw error;
+      }
       if (attempt < RETRY_CONFIG.maxAttempts - 1) {
         const delay = RETRY_CONFIG.delays[attempt];
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -268,6 +281,7 @@ export default function SettingsPage() {
         `${API_BASE_URL}/api/founder-console/settings`,
         {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
             ...(csrfToken && { 'X-CSRF-Token': csrfToken })
@@ -333,6 +347,7 @@ export default function SettingsPage() {
         `${API_BASE_URL}/api/founder-console/agent/behavior`,
         {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
             ...(csrfToken && { 'X-CSRF-Token': csrfToken })
