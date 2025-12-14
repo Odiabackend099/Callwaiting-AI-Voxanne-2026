@@ -101,3 +101,4 @@
  GET /callwaiting%20ai%20logo.png 404 in 107ms (compile: 26ms, render: 81ms)
  GET /dashboard 200 in 51ms (compile: 9ms, proxy.ts: 15ms, render: 27ms)
  GET /callwaiting%20ai%20logo.png 404 in 128ms (compile: 36ms, render: 92ms)
+ ✓ Compiled in 3.3s
