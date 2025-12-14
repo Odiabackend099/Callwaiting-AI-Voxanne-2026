@@ -205,7 +205,7 @@ export default function VoiceTestPage() {
                             )}
                         </motion.div>
                     ) : (
-                        /* Transcript Messages */
+                        /* Transcript Messages with VAD Support */
                         <div className="space-y-4 py-4">
                             {transcripts.map((msg, index) => (
                                 <motion.div
@@ -220,15 +220,21 @@ export default function VoiceTestPage() {
                                         className={`max-w-[80%] rounded-2xl px-5 py-3 ${
                                             msg.speaker === 'agent'
                                                 ? 'bg-gradient-to-br from-cyan-600/80 to-blue-600/80 text-white'
-                                                : 'bg-white/10 text-white border border-white/10'
+                                                : msg.isFinal
+                                                ? 'bg-white/10 text-white border border-white/10'
+                                                : 'bg-white/5 text-white/70 border border-white/5 italic'
                                         }`}
                                     >
                                         <p className="text-sm leading-relaxed">{msg.text}</p>
-                                        <p className={`text-xs mt-1 ${
+                                        <div className={`text-xs mt-1 flex items-center justify-between gap-2 ${
                                             msg.speaker === 'agent' ? 'text-cyan-200' : 'text-slate-500'
                                         }`}>
-                                            {msg.speaker === 'agent' ? 'Voxanne' : 'You'}
-                                        </p>
+                                            <span>{msg.speaker === 'agent' ? 'Voxanne' : 'You'}</span>
+                                            {!msg.isFinal && <span className="text-xs text-slate-600">transcribing...</span>}
+                                            {msg.confidence && msg.confidence < 0.9 && (
+                                                <span className="text-xs opacity-70">{Math.round(msg.confidence * 100)}%</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </motion.div>
                             ))}

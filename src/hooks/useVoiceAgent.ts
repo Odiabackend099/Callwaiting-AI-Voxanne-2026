@@ -189,23 +189,45 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                                 console.warn('Transcript event missing text field');
                                 break;
                             }
-                            // Process both final and interim transcripts
+                            // Process both final and interim transcripts (VAD - Voice Activity Detection)
                             const isFinal = data.is_final === true;
-                            if (isFinal) {
-                                setState(prev => {
+                            const speaker = data.speaker || 'user';
+                            const transcriptText: string = data.text || '';
+                            
+                            setState(prev => {
+                                const lastMsg = prev.transcripts[prev.transcripts.length - 1];
+                                
+                                if (isFinal) {
                                     // Deduplicate: Don't add if identical to last message and within 500ms
-                                    const lastMsg = prev.transcripts[prev.transcripts.length - 1];
                                     const isDuplicate = lastMsg &&
-                                        lastMsg.text === data.text &&
-                                        lastMsg.speaker === (data.speaker || 'user') &&
+                                        lastMsg.text === transcriptText &&
+                                        lastMsg.speaker === speaker &&
                                         (new Date().getTime() - lastMsg.timestamp.getTime() < 500);
 
                                     if (isDuplicate) return prev;
 
+                                    // Convert interim to final if same speaker
+                                    if (lastMsg && lastMsg.speaker === speaker && !lastMsg.isFinal && lastMsg.text === transcriptText) {
+                                        const updatedTranscripts = [...prev.transcripts];
+                                        updatedTranscripts[updatedTranscripts.length - 1] = {
+                                            ...lastMsg,
+                                            isFinal: true,
+                                            confidence: data.confidence,
+                                        };
+                                        return {
+                                            ...prev,
+                                            transcripts: updatedTranscripts,
+                                            session: prev.session ? {
+                                                ...prev.session,
+                                                totalMessages: prev.session.totalMessages + 1,
+                                            } : null,
+                                        };
+                                    }
+
                                     const transcript: TranscriptMessage = {
                                         id: `${Date.now()}_${Math.random()}`,
-                                        speaker: data.speaker || 'user',
-                                        text: data.text,
+                                        speaker: speaker,
+                                        text: transcriptText,
                                         confidence: data.confidence,
                                         isFinal: true,
                                         timestamp: new Date(),
@@ -219,8 +241,40 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                                             totalMessages: prev.session.totalMessages + 1,
                                         } : null,
                                     };
-                                });
-                            }
+                                } else {
+                                    // Interim transcript (VAD in progress)
+                                    // Update existing interim if same speaker, otherwise add new
+                                    if (lastMsg && lastMsg.speaker === speaker && !lastMsg.isFinal) {
+                                        // Update interim transcript in place
+                                        const updatedTranscripts = [...prev.transcripts];
+                                        updatedTranscripts[updatedTranscripts.length - 1] = {
+                                            ...lastMsg,
+                                            text: transcriptText,
+                                            confidence: data.confidence,
+                                            timestamp: new Date(),
+                                        };
+                                        return {
+                                            ...prev,
+                                            transcripts: updatedTranscripts,
+                                        };
+                                    }
+
+                                    // New interim transcript
+                                    const interimTranscript: TranscriptMessage = {
+                                        id: `interim_${Date.now()}_${Math.random()}`,
+                                        speaker: speaker as 'user' | 'agent',
+                                        text: transcriptText,
+                                        confidence: data.confidence,
+                                        isFinal: false,
+                                        timestamp: new Date(),
+                                    };
+
+                                    return {
+                                        ...prev,
+                                        transcripts: [...prev.transcripts, interimTranscript],
+                                    };
+                                }
+                            });
                             break;
 
                         case 'response':
