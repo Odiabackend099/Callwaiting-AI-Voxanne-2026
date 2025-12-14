@@ -46,6 +46,7 @@ export class AudioRecorder {
             this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
             // Create processor node (2048 samples = 128ms at 16kHz for lower latency)
+            // ScriptProcessorNode is deprecated but still functional; AudioWorklet is preferred for new code
             this.processorNode = this.audioContext.createScriptProcessor(2048, 1, 1);
 
             // Connect processor to destination (required for onaudioprocess to fire)
@@ -70,7 +71,7 @@ export class AudioRecorder {
                     this.ws.send(pcm16.buffer);
                     this.chunkCount++;
                 } catch (error) {
-                    console.error('Failed to send audio chunk:', error);
+                    console.error('[AudioRecorder] Failed to send audio chunk:', error);
                     this.isRecording = false;
                 }
             };
@@ -80,6 +81,7 @@ export class AudioRecorder {
 
             this.isRecording = true;
             this.chunkCount = 0;
+            console.log('[AudioRecorder] Recording started at 16kHz');
 
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to start recording';
