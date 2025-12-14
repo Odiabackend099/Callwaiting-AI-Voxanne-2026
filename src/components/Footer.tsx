@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Mail, MapPin, Phone } from 'lucide-react';
+import Logo from "./Logo";
 
 export default function Footer() {
     return (
@@ -9,15 +10,8 @@ export default function Footer() {
                 <div className="grid md:grid-cols-4 gap-12 mb-12">
                     {/* Company Info */}
                     <div className="md:col-span-2">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="relative w-12 h-12">
-                                <Image
-                                    src="/callwaiting-ai-logo.png"
-                                    alt="CallWaiting AI"
-                                    fill
-                                    className="object-contain"
-                                />
-                            </div>
+                        <div className="mb-6 flex items-center gap-3">
+                            <Logo size="lg" showText={true} href="/" />
                             <span className="text-white font-serif text-3xl font-bold">CallWaiting AI</span>
                         </div>
                         <p className="text-zinc-500 mb-6 leading-relaxed">
