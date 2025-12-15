@@ -2193,14 +2193,57 @@ router.post(
         return;
       }
 
-      // Sync agent to pick up latest changes
+      // Sync agent to pick up latest changes (also sets webhook URL programmatically)
       const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
 
       // Get Vapi phone number ID (the caller ID for outbound calls)
-      const phoneNumberId = vapiIntegration?.config?.vapi_phone_number_id || process.env.VAPI_PHONE_NUMBER_ID;
+      // First check stored config, then env var, then auto-fetch from Vapi
+      let phoneNumberId = vapiIntegration?.config?.vapi_phone_number_id || process.env.VAPI_PHONE_NUMBER_ID;
+      
+      // If no phone number ID stored, auto-fetch from Vapi account
+      if (!phoneNumberId) {
+        try {
+          logger.info('No phone number ID stored, fetching from Vapi account', { requestId });
+          const vapiClient = new VapiClient(vapiApiKey);
+          const phoneNumbers = await vapiClient.listPhoneNumbers();
+          
+          if (phoneNumbers && phoneNumbers.length > 0) {
+            // Use the first available phone number
+            phoneNumberId = phoneNumbers[0].id;
+            logger.info('Auto-fetched phone number from Vapi', { 
+              phoneNumberId, 
+              totalNumbers: phoneNumbers.length,
+              requestId 
+            });
+            
+            // Store it for future use
+            const { data: existingConfig } = await supabase
+              .from('integrations')
+              .select('config')
+              .eq('provider', INTEGRATION_PROVIDERS.VAPI)
+              .eq('org_id', orgId)
+              .maybeSingle();
+            
+            await supabase
+              .from('integrations')
+              .upsert({
+                org_id: orgId,
+                provider: INTEGRATION_PROVIDERS.VAPI,
+                config: { ...(existingConfig?.config || {}), vapi_phone_number_id: phoneNumberId },
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'org_id,provider' });
+          }
+        } catch (fetchError: any) {
+          logger.error('Failed to auto-fetch phone numbers from Vapi', { 
+            error: fetchError?.message, 
+            requestId 
+          });
+        }
+      }
+      
       if (!phoneNumberId) {
         res.status(400).json({ 
-          error: 'Vapi phone number not configured. Add your Vapi phone number ID in Agent Settings.', 
+          error: 'No phone number found in your Vapi account. Import a Twilio number or create a Vapi number first.', 
           requestId 
         });
         return;
