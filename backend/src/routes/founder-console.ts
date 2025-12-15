@@ -2100,6 +2100,229 @@ router.post(
 );
 
 /**
+ * POST /api/founder-console/agent/web-test-outbound
+ * Initiate an outbound test call to a phone number using Vapi.
+ * 
+ * Request: { phoneNumber: string }
+ * Response: { success, vapiCallId, trackingId, userId, bridgeWebsocketUrl, requestId }
+ */
+router.post(
+  '/agent/web-test-outbound',
+  callRateLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const requestId = req.requestId || generateRequestId();
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Not authenticated', requestId });
+        return;
+      }
+
+      const { phoneNumber } = req.body;
+      if (!phoneNumber || typeof phoneNumber !== 'string') {
+        res.status(400).json({ error: 'phoneNumber required and must be a string', requestId });
+        return;
+      }
+
+      // Validate phone number format (basic check)
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      if (cleanPhone.length < 10) {
+        res.status(400).json({ error: 'Invalid phone number format', requestId });
+        return;
+      }
+
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (!org?.id) {
+        res.status(500).json({ error: 'Internal server error', requestId });
+        return;
+      }
+
+      const orgId = org.id;
+
+      const { data: vapiIntegration } = await supabase
+        .from('integrations')
+        .select('config')
+        .eq('provider', INTEGRATION_PROVIDERS.VAPI)
+        .eq('org_id', orgId)
+        .maybeSingle();
+
+      const vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
+
+      if (!vapiApiKey) {
+        res.status(400).json({ error: 'Vapi connection not configured', requestId });
+        return;
+      }
+
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('id, system_prompt, first_message, voice, language, max_call_duration')
+        .eq('role', AGENT_ROLES.OUTBOUND)
+        .eq('org_id', orgId)
+        .maybeSingle();
+
+      if (!agent?.id) {
+        res.status(400).json({ error: 'Agent not configured. Save Agent Behavior first.', requestId });
+        return;
+      }
+
+      // Validate agent has all required behavior fields
+      if (!agent.system_prompt || !agent.first_message || !agent.voice || !agent.language || !agent.max_call_duration) {
+        const missingFields = [
+          !agent.system_prompt && 'System Prompt',
+          !agent.first_message && 'First Message',
+          !agent.voice && 'Voice',
+          !agent.language && 'Language',
+          !agent.max_call_duration && 'Max Call Duration'
+        ].filter(Boolean);
+        
+        res.status(400).json({
+          error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
+          requestId
+        });
+        return;
+      }
+
+      // Sync agent to pick up latest changes
+      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+
+      // Create call_tracking row for outbound test
+      const { data: trackingRow, error: trackingInsertError } = await supabase
+        .from('call_tracking')
+        .insert({
+          org_id: orgId,
+          lead_id: null,
+          agent_id: agent.id,
+          phone: phoneNumber,
+          vapi_call_id: `pending-${requestId}`,
+          called_at: new Date().toISOString(),
+          call_outcome: CallOutcome.QUEUED,
+          metadata: { userId, is_test_call: true, channel: 'outbound', testPhoneNumber: phoneNumber }
+        })
+        .select('id')
+        .single();
+
+      if (trackingInsertError || !trackingRow?.id) {
+        if (trackingInsertError) {
+          logger.exception('Failed to insert call tracking for outbound test', trackingInsertError as Error);
+        }
+        res.status(500).json({ error: 'Internal server error', requestId });
+        return;
+      }
+
+      const trackingId = trackingRow.id;
+
+      // Create Vapi outbound call
+      const vapiClient = new VapiClient(vapiApiKey);
+      let call;
+      try {
+        call = await vapiClient.createOutboundCall({
+          assistantId,
+          phoneNumber,
+          audioFormat: {
+            format: 'pcm_s16le',
+            container: 'raw',
+            sampleRate: 16000
+          }
+        });
+      } catch (vapiError: any) {
+        // Clean up orphaned tracking row on Vapi failure
+        await supabase.from('call_tracking').delete().eq('id', trackingId);
+        
+        logger.exception('Failed to create Vapi outbound call', vapiError);
+        res.status(500).json({ error: 'Failed to initiate outbound call. Check phone number and Vapi configuration.', requestId });
+        return;
+      }
+
+      const vapiCallId = call?.id;
+      const vapiTransportUrl = call?.transport?.websocketCallUrl;
+
+      if (!vapiCallId || !vapiTransportUrl) {
+        // Clean up orphaned tracking row
+        await supabase.from('call_tracking').delete().eq('id', trackingId);
+        
+        logger.error('Vapi outbound call missing id or transport url', { call });
+        res.status(500).json({ error: 'Internal server error', requestId });
+        return;
+      }
+
+      // Update call_tracking with actual vapiCallId
+      const { error: updateError } = await supabase
+        .from('call_tracking')
+        .update({ vapi_call_id: vapiCallId })
+        .eq('id', trackingId);
+
+      if (updateError) {
+        // Clean up on update failure
+        await supabase.from('call_tracking').delete().eq('id', trackingId);
+        
+        logger.exception('Failed to update call tracking for outbound test', updateError);
+        res.status(500).json({ error: 'Internal server error', requestId });
+        return;
+      }
+
+      // Create backend WebSocket bridge session
+      try {
+        await createWebVoiceSession(vapiCallId, trackingId, userId, vapiTransportUrl);
+      } catch (bridgeError: any) {
+        // Clean up on bridge creation failure
+        await supabase.from('call_tracking').delete().eq('id', trackingId);
+        
+        logger.exception('Failed to create WebSocket bridge for outbound test', bridgeError);
+        res.status(500).json({ error: 'Internal server error', requestId });
+        return;
+      }
+
+      // Broadcast initial call_status
+      wsBroadcast({
+        type: 'call_status',
+        vapiCallId,
+        trackingId,
+        userId,
+        status: 'connecting'
+      });
+
+      // Return backend bridge URL (NOT Vapi's internal URL)
+      const requestHost = req.get('host') || '';
+      const isLocalHost = /^localhost(?::\d+)?$/i.test(requestHost) || /^127\.0\.0\.1(?::\d+)?$/.test(requestHost);
+      const localWsBase = `ws://localhost:${process.env.PORT || 3000}`;
+
+      const baseUrl =
+        (isLocalHost ? localWsBase : undefined) ||
+        (process.env.BASE_URL ? process.env.BASE_URL.replace(/^http/, 'ws') : undefined) ||
+        `${req.protocol}://${requestHost}`.replace(/^http/, 'ws');
+
+      const bridgeWebsocketUrl = `${baseUrl}/api/web-voice/${trackingId}?userId=${encodeURIComponent(userId)}`;
+
+      logger.info('Outbound test session created', {
+        trackingId,
+        userId,
+        phoneNumber,
+        baseUrl,
+        bridgeWebsocketUrl,
+        requestId
+      });
+
+      res.status(200).json({
+        success: true,
+        vapiCallId,
+        trackingId,
+        userId,
+        bridgeWebsocketUrl,
+        requestId
+      });
+    } catch (error: any) {
+      logger.exception('Failed to initiate outbound test', error);
+      res.status(500).json({ error: 'Internal server error', requestId });
+    }
+  }
+);
+
+/**
  * GET /api/founder-console/metrics/usage
  * Get call usage metrics and estimated costs
  */

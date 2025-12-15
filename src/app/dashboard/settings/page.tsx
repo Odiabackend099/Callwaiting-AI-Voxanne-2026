@@ -586,18 +586,56 @@ export default function SettingsPage() {
                                     Web Test
                                 </button>
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         if (!outboundNumber.trim()) {
                                             alert('Please enter a phone number for live call test');
                                             return;
                                         }
-                                        // TODO: Implement live call test with outbound number
-                                        console.log('Live call test to:', outboundNumber);
+                                        
+                                        setGlobalSaving(true);
+                                        try {
+                                            const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test-outbound`, {
+                                                method: 'POST',
+                                                credentials: 'include',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ phoneNumber: outboundNumber })
+                                            });
+
+                                            if (!response.ok) {
+                                                const error = await response.json().catch(() => ({}));
+                                                throw new Error(error.error || 'Failed to initiate outbound call');
+                                            }
+
+                                            const data = await response.json();
+                                            console.log('Outbound call initiated:', data);
+                                            
+                                            // Store tracking ID for the call
+                                            if (data.trackingId) {
+                                                // TODO: Connect to WebSocket bridge for real-time updates
+                                                alert(`Outbound call initiated to ${outboundNumber}. Call ID: ${data.trackingId}`);
+                                            }
+                                        } catch (err) {
+                                            const errorMsg = err instanceof Error ? err.message : 'Failed to initiate outbound call';
+                                            alert(`Error: ${errorMsg}`);
+                                            console.error('Outbound call error:', err);
+                                        } finally {
+                                            setGlobalSaving(false);
+                                        }
                                     }}
-                                    className="flex-1 px-6 py-3 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+                                    disabled={globalSaving || !outboundNumber.trim()}
+                                    className="flex-1 px-6 py-3 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
-                                    <Phone className="w-5 h-5" />
-                                    Live Call Test
+                                    {globalSaving ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Calling...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Phone className="w-5 h-5" />
+                                            Live Call Test
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
