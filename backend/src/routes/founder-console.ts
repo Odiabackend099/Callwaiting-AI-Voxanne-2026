@@ -2196,6 +2196,16 @@ router.post(
       // Sync agent to pick up latest changes
       const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
 
+      // Get Vapi phone number ID (the caller ID for outbound calls)
+      const phoneNumberId = vapiIntegration?.config?.vapi_phone_number_id || process.env.VAPI_PHONE_NUMBER_ID;
+      if (!phoneNumberId) {
+        res.status(400).json({ 
+          error: 'Vapi phone number not configured. Add your Vapi phone number ID in Agent Settings.', 
+          requestId 
+        });
+        return;
+      }
+
       // Create call_tracking row for outbound test
       const { data: trackingRow, error: trackingInsertError } = await supabase
         .from('call_tracking')
@@ -2203,11 +2213,11 @@ router.post(
           org_id: orgId,
           lead_id: null,
           agent_id: agent.id,
-          phone: phoneNumber,
+          phone: cleanPhone,
           vapi_call_id: `pending-${requestId}`,
           called_at: new Date().toISOString(),
           call_outcome: CallOutcome.QUEUED,
-          metadata: { userId, is_test_call: true, channel: 'outbound', testPhoneNumber: phoneNumber }
+          metadata: { userId, is_test_call: true, channel: 'outbound', testPhoneNumber: cleanPhone }
         })
         .select('id')
         .single();
@@ -2222,17 +2232,16 @@ router.post(
 
       const trackingId = trackingRow.id;
 
-      // Create Vapi outbound call
+      // Create Vapi outbound call with CORRECT parameters
+      // Phone calls use webhooks for transcription (not WebSocket bridge)
       const vapiClient = new VapiClient(vapiApiKey);
       let call;
       try {
         call = await vapiClient.createOutboundCall({
           assistantId,
-          phoneNumber,
-          audioFormat: {
-            format: 'pcm_s16le',
-            container: 'raw',
-            sampleRate: 16000
+          phoneNumberId,  // Vapi phone number ID (caller ID)
+          customer: {
+            number: cleanPhone  // Phone number to call
           }
         });
       } catch (vapiError: any) {
@@ -2240,18 +2249,21 @@ router.post(
         await supabase.from('call_tracking').delete().eq('id', trackingId);
         
         logger.exception('Failed to create Vapi outbound call', vapiError);
-        res.status(500).json({ error: 'Failed to initiate outbound call. Check phone number and Vapi configuration.', requestId });
+        const errorMsg = vapiError?.response?.data?.message || vapiError?.message || 'Unknown error';
+        res.status(500).json({ 
+          error: `Failed to initiate outbound call: ${errorMsg}`, 
+          requestId 
+        });
         return;
       }
 
       const vapiCallId = call?.id;
-      const vapiTransportUrl = call?.transport?.websocketCallUrl;
 
-      if (!vapiCallId || !vapiTransportUrl) {
+      if (!vapiCallId) {
         // Clean up orphaned tracking row
         await supabase.from('call_tracking').delete().eq('id', trackingId);
         
-        logger.error('Vapi outbound call missing id or transport url', { call });
+        logger.error('Vapi outbound call missing id', { call });
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
       }
@@ -2271,17 +2283,9 @@ router.post(
         return;
       }
 
-      // Create backend WebSocket bridge session
-      try {
-        await createWebVoiceSession(vapiCallId, trackingId, userId, vapiTransportUrl);
-      } catch (bridgeError: any) {
-        // Clean up on bridge creation failure
-        await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
-        logger.exception('Failed to create WebSocket bridge for outbound test', bridgeError);
-        res.status(500).json({ error: 'Internal server error', requestId });
-        return;
-      }
+      // NOTE: No WebSocket bridge for phone calls - transcription comes via Vapi webhooks
+      // The webhook handler (webhooks.ts) broadcasts transcripts to /ws/live-calls
+      // Frontend connects to /ws/live-calls and filters by trackingId
 
       // Broadcast initial call_status
       wsBroadcast({
@@ -2292,24 +2296,13 @@ router.post(
         status: 'connecting'
       });
 
-      // Return backend bridge URL (NOT Vapi's internal URL)
-      const requestHost = req.get('host') || '';
-      const isLocalHost = /^localhost(?::\d+)?$/i.test(requestHost) || /^127\.0\.0\.1(?::\d+)?$/.test(requestHost);
-      const localWsBase = `ws://localhost:${process.env.PORT || 3000}`;
-
-      const baseUrl =
-        (isLocalHost ? localWsBase : undefined) ||
-        (process.env.BASE_URL ? process.env.BASE_URL.replace(/^http/, 'ws') : undefined) ||
-        `${req.protocol}://${requestHost}`.replace(/^http/, 'ws');
-
-      const bridgeWebsocketUrl = `${baseUrl}/api/web-voice/${trackingId}?userId=${encodeURIComponent(userId)}`;
-
-      logger.info('Outbound test session created', {
+      // For phone calls, frontend connects to main WebSocket /ws/live-calls
+      // and filters by trackingId to receive transcripts from Vapi webhooks
+      logger.info('Outbound test call initiated', {
         trackingId,
+        vapiCallId,
         userId,
-        phoneNumber,
-        baseUrl,
-        bridgeWebsocketUrl,
+        phoneNumber: cleanPhone.slice(-4), // Log only last 4 digits for privacy
         requestId
       });
 
@@ -2318,7 +2311,8 @@ router.post(
         vapiCallId,
         trackingId,
         userId,
-        bridgeWebsocketUrl,
+        // No bridgeWebsocketUrl - phone calls use webhooks, not WebSocket bridge
+        // Frontend should connect to /ws/live-calls and filter by trackingId
         requestId
       });
     } catch (error: any) {
