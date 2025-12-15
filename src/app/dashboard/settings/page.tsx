@@ -75,7 +75,7 @@ function LeftSidebar() {
 }
 
 // Right Voice Test Panel
-function VoiceTestPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boolean; onClose: () => void; outboundTrackingId?: string }) {
     const {
         isConnected,
         isRecording,
@@ -89,9 +89,91 @@ function VoiceTestPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
     const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
     const [callInitiating, setCallInitiating] = useState(false);
+    const [outboundTranscripts, setOutboundTranscripts] = useState<any[]>([]);
+    const [outboundConnected, setOutboundConnected] = useState(false);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const wsRef = useRef<WebSocket | null>(null);
 
-    // Sync Transcripts
+    // Connect to outbound call WebSocket bridge
+    useEffect(() => {
+        if (!isOpen || !outboundTrackingId) {
+            if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+            return;
+        }
+
+        const connectWebSocket = () => {
+            try {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/api/web-voice/${outboundTrackingId}?userId=${encodeURIComponent(localStorage.getItem('userId') || '')}`;
+                
+                const ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+
+                ws.onopen = () => {
+                    console.log('[OutboundCall] WebSocket connected for tracking:', outboundTrackingId);
+                    setOutboundConnected(true);
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'transcript') {
+                            const speaker = data.speaker === 'agent' ? 'agent' : 'user';
+                            const newTranscript = {
+                                id: `${Date.now()}_${Math.random()}`,
+                                speaker,
+                                text: data.text,
+                                isFinal: data.is_final === true,
+                                confidence: data.confidence || 0.95,
+                                timestamp: new Date()
+                            };
+
+                            setOutboundTranscripts(prev => {
+                                const updated = [...prev, newTranscript];
+                                return updated.slice(-100); // Keep last 100 messages
+                            });
+                        } else if (data.type === 'call_status') {
+                            console.log('[OutboundCall] Call status:', data.status);
+                        } else if (data.type === 'call_ended') {
+                            console.log('[OutboundCall] Call ended');
+                            setOutboundConnected(false);
+                        }
+                    } catch (err) {
+                        console.error('[OutboundCall] Failed to parse message:', err);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('[OutboundCall] WebSocket error:', error);
+                    setOutboundConnected(false);
+                };
+
+                ws.onclose = () => {
+                    console.log('[OutboundCall] WebSocket closed');
+                    setOutboundConnected(false);
+                    wsRef.current = null;
+                };
+            } catch (err) {
+                console.error('[OutboundCall] Failed to connect WebSocket:', err);
+                setOutboundConnected(false);
+            }
+        };
+
+        connectWebSocket();
+
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+        };
+    }, [isOpen, outboundTrackingId]);
+
+    // Sync Transcripts (web test)
     useEffect(() => {
         if (transcripts && transcripts.length > 0) {
             setDisplayTranscripts(
@@ -110,7 +192,7 @@ function VoiceTestPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     // Auto-scroll
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [displayTranscripts]);
+    }, [displayTranscripts, outboundTranscripts]);
 
     const handleToggleCall = async () => {
         if (isConnected) {
@@ -164,24 +246,22 @@ function VoiceTestPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                 {/* Status Indicator */}
                 <div className="px-6 pt-4">
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-full border w-fit ${
-                        isConnected
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                            : 'bg-gray-100 border-gray-200 text-gray-600'
+                        outboundTrackingId ? (outboundConnected ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700') : (isConnected ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-100 border-gray-200 text-gray-600')
                     }`}>
-                        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
-                        <span className="text-xs font-bold uppercase">{isConnected ? 'Live' : 'Offline'}</span>
+                        <div className={`w-2 h-2 rounded-full ${outboundTrackingId ? (outboundConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500 animate-pulse') : (isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400')}`} />
+                        <span className="text-xs font-bold uppercase">{outboundTrackingId ? (outboundConnected ? 'Live Call' : 'Connecting...') : (isConnected ? 'Live' : 'Offline')}</span>
                     </div>
                 </div>
 
                 {/* Transcription Area */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-gray-50">
-                    {displayTranscripts.length === 0 ? (
+                    {(outboundTrackingId ? outboundTranscripts : displayTranscripts).length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
                             <Volume2 className="w-8 h-8" />
                             <p className="text-sm">Start a call to see transcription...</p>
                         </div>
                     ) : (
-                        displayTranscripts.map((t: any) => (
+                        (outboundTrackingId ? outboundTranscripts : displayTranscripts).map((t: any) => (
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -210,42 +290,58 @@ function VoiceTestPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
                 {/* Controls */}
                 <div className="p-6 border-t border-gray-200 bg-white space-y-4">
-                    {voiceError && (
+                    {(voiceError || (outboundTrackingId && !outboundConnected && outboundTranscripts.length === 0)) && (
                         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                            {voiceError}
+                            {voiceError || 'Connecting to outbound call...'}
                         </div>
                     )}
 
-                    <button
-                        onClick={handleToggleCall}
-                        disabled={callInitiating}
-                        className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-all font-semibold text-white ${
-                            isConnected
-                                ? 'bg-red-500 hover:bg-red-600'
-                                : 'bg-emerald-500 hover:bg-emerald-600'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                        {callInitiating ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                Connecting...
-                            </>
-                        ) : isConnected ? (
-                            <>
-                                <Phone className="w-5 h-5" />
-                                End Call
-                            </>
-                        ) : (
-                            <>
-                                <Mic className="w-5 h-5" />
-                                Start Call
-                            </>
-                        )}
-                    </button>
+                    {outboundTrackingId ? (
+                        <button
+                            onClick={() => {
+                                if (wsRef.current) {
+                                    wsRef.current.close();
+                                    wsRef.current = null;
+                                }
+                                onClose();
+                            }}
+                            className="w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-all font-semibold text-white bg-red-500 hover:bg-red-600"
+                        >
+                            <Phone className="w-5 h-5" />
+                            End Call
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleToggleCall}
+                            disabled={callInitiating}
+                            className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-all font-semibold text-white ${
+                                isConnected
+                                    ? 'bg-red-500 hover:bg-red-600'
+                                    : 'bg-emerald-500 hover:bg-emerald-600'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            {callInitiating ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Connecting...
+                                </>
+                            ) : isConnected ? (
+                                <>
+                                    <Phone className="w-5 h-5" />
+                                    End Call
+                                </>
+                            ) : (
+                                <>
+                                    <Mic className="w-5 h-5" />
+                                    Start Call
+                                </>
+                            )}
+                        </button>
+                    )}
 
                     <p className="text-center text-xs text-gray-600 font-mono">
-                        {isConnected ? 'SESSION ACTIVE' : callInitiating ? 'CONNECTING...' : 'READY'}
+                        {outboundTrackingId ? (outboundConnected ? 'OUTBOUND CALL ACTIVE' : 'CONNECTING TO OUTBOUND CALL...') : (isConnected ? 'SESSION ACTIVE' : callInitiating ? 'CONNECTING...' : 'READY')}
                     </p>
                 </div>
             </motion.div>
@@ -259,6 +355,7 @@ export default function SettingsPage() {
     const { user, loading: authLoading } = useAuth();
     const [activeTab, setActiveTab] = useState('api-keys');
     const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+    const [outboundTrackingId, setOutboundTrackingId] = useState<string | undefined>(undefined);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [globalSaving, setGlobalSaving] = useState(false);
@@ -278,10 +375,12 @@ export default function SettingsPage() {
     const [outboundNumber, setOutboundNumber] = useState('');
     const [voices, setVoices] = useState<any[]>([]);
 
-    // Auth Guard
+    // Auth Guard & Store User ID
     useEffect(() => {
         if (!authLoading && !user) {
             router.push('/login');
+        } else if (user?.id) {
+            localStorage.setItem('userId', user.id);
         }
     }, [user, authLoading, router]);
 
@@ -609,10 +708,10 @@ export default function SettingsPage() {
                                             const data = await response.json();
                                             console.log('Outbound call initiated:', data);
                                             
-                                            // Store tracking ID for the call
+                                            // Store tracking ID and open voice panel for real-time transcription
                                             if (data.trackingId) {
-                                                // TODO: Connect to WebSocket bridge for real-time updates
-                                                alert(`Outbound call initiated to ${outboundNumber}. Call ID: ${data.trackingId}`);
+                                                setOutboundTrackingId(data.trackingId);
+                                                setVoicePanelOpen(true);
                                             }
                                         } catch (err) {
                                             const errorMsg = err instanceof Error ? err.message : 'Failed to initiate outbound call';
@@ -644,7 +743,14 @@ export default function SettingsPage() {
             </div>
 
             {/* Right Voice Test Panel */}
-            <VoiceTestPanel isOpen={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
+            <VoiceTestPanel 
+                isOpen={voicePanelOpen} 
+                onClose={() => {
+                    setVoicePanelOpen(false);
+                    setOutboundTrackingId(undefined);
+                }} 
+                outboundTrackingId={outboundTrackingId}
+            />
         </div>
     );
 }
