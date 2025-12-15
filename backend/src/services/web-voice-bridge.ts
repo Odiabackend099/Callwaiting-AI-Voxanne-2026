@@ -264,6 +264,7 @@ function handleVapiMessage(data: WebSocket.Data, session: WebVoiceSession): void
 
 /**
  * Handle transcript messages from Vapi
+ * GUARANTEED FIX: Normalize speaker to 'agent'|'customer' for all outputs
  */
 function handleVapiTranscriptMessage(
   message: VapiTranscriptMessage,
@@ -273,41 +274,57 @@ function handleVapiTranscriptMessage(
   const text = (message.text ?? message.content ?? message.message ?? '').trim();
   if (!text) return;
 
-  // Normalize speaker: Vapi uses 'assistant', frontend expects 'user'/'agent'
-  const speaker: 'agent' | 'user' =
-    message.role === 'assistant' ? 'agent' : 'user';
+  // Normalize speaker: Vapi uses 'assistant'/'user', we use 'agent'/'customer'
+  const speaker: 'agent' | 'customer' =
+    message.role === 'assistant' ? 'agent' : 'customer';
+
+  const timestamp = Date.now();
+  const transcriptPayload = {
+    type: 'transcript',
+    speaker,
+    text,
+    is_final: true,
+    confidence: 0.95,
+    ts: timestamp
+  };
+
+  console.log('[WebVoiceBridge] Broadcasting transcript', {
+    trackingId: session.trackingId,
+    speaker,
+    textLength: text.length,
+    timestamp
+  });
 
   // Send transcript event directly to client WebSocket (real-time)
   if (session.clientWebSocket?.readyState === WebSocket.OPEN) {
-    session.clientWebSocket.send(JSON.stringify({
-      type: 'transcript',
-      speaker,
-      text,
-      is_final: true,
-      confidence: 0.95,
-      ts: Date.now()
-    }));
+    try {
+      session.clientWebSocket.send(JSON.stringify(transcriptPayload));
+    } catch (err) {
+      console.error('[WebVoiceBridge] Failed to send transcript to client', {
+        trackingId: session.trackingId,
+        error: (err as Error).message
+      });
+    }
   }
 
-  // Also broadcast transcript_delta to main WS for other listeners
-  // Map 'user' back to 'customer' for database storage compatibility
-  const dbSpeaker: 'agent' | 'customer' = speaker === 'agent' ? 'agent' : 'customer';
+  // Broadcast transcript to main WS for other listeners (same format)
   wsBroadcast({
-    type: 'transcript_delta',
+    type: 'transcript',
     vapiCallId: session.vapiCallId,
     trackingId: session.trackingId,
     userId: session.userId,
-    speaker: dbSpeaker,
+    speaker,
     text,
-    ts: Date.now()
-  });
+    is_final: true,
+    ts: timestamp
+  } as any);
 
   // Insert into call_transcripts (fire and forget)
   (async () => {
     try {
       await supabase.from('call_transcripts').insert({
         call_id: session.trackingId,
-        speaker: dbSpeaker,
+        speaker,
         text,
         timestamp: new Date().toISOString()
       });

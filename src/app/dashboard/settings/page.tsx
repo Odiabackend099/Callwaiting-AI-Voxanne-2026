@@ -275,6 +275,7 @@ export default function SettingsPage() {
     const [voiceId, setVoiceId] = useState({ value: '', originalValue: '', saving: false, saved: false, error: null as string | null });
     const [language, setLanguage] = useState({ value: 'en-US', originalValue: 'en-US', saving: false, saved: false, error: null as string | null });
     const [maxSeconds, setMaxSeconds] = useState({ value: '300', originalValue: '300', saving: false, saved: false, error: null as string | null });
+    const [outboundNumber, setOutboundNumber] = useState('');
     const [voices, setVoices] = useState<any[]>([]);
 
     // Auth Guard
@@ -544,6 +545,20 @@ export default function SettingsPage() {
                                 />
                             </div>
 
+                            {/* Outbound Call Configuration */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-3">Live Call Test (Outbound)</label>
+                                <p className="text-xs text-gray-600 mb-4">Test the agent by calling a phone number</p>
+                                <input
+                                    type="tel"
+                                    value={outboundNumber}
+                                    onChange={(e) => setOutboundNumber(e.target.value)}
+                                    placeholder="+1 (555) 123-4567"
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none mb-4"
+                                />
+                                <p className="text-xs text-gray-500">Enter the phone number to call for testing</p>
+                            </div>
+
                             {/* Action Buttons */}
                             <div className="flex gap-4">
                                 <button
@@ -568,7 +583,21 @@ export default function SettingsPage() {
                                     className="flex-1 px-6 py-3 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-semibold transition-colors flex items-center justify-center gap-2"
                                 >
                                     <Mic className="w-5 h-5" />
-                                    Test Agent
+                                    Web Test
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (!outboundNumber.trim()) {
+                                            alert('Please enter a phone number for live call test');
+                                            return;
+                                        }
+                                        // TODO: Implement live call test with outbound number
+                                        console.log('Live call test to:', outboundNumber);
+                                    }}
+                                    className="flex-1 px-6 py-3 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Phone className="w-5 h-5" />
+                                    Live Call Test
                                 </button>
                             </div>
                         </div>
