@@ -265,6 +265,7 @@ function handleVapiMessage(data: WebSocket.Data, session: WebVoiceSession): void
 /**
  * Handle transcript messages from Vapi
  * GUARANTEED FIX: Normalize speaker to 'agent'|'customer' for all outputs
+ * CRITICAL FIX #3: Use actual Vapi confidence scores
  */
 function handleVapiTranscriptMessage(
   message: VapiTranscriptMessage,
@@ -278,13 +279,16 @@ function handleVapiTranscriptMessage(
   const speaker: 'agent' | 'customer' =
     message.role === 'assistant' ? 'agent' : 'customer';
 
+  // CRITICAL FIX #3: Use actual Vapi confidence, fallback to 0.95
+  const confidence = (message as any).confidence ?? 0.95;
+
   const timestamp = Date.now();
   const transcriptPayload = {
     type: 'transcript',
     speaker,
     text,
     is_final: true,
-    confidence: 0.95,
+    confidence,
     ts: timestamp
   };
 

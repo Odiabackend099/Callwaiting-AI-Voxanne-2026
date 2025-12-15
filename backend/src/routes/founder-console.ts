@@ -2124,10 +2124,15 @@ router.post(
         return;
       }
 
-      // Validate phone number format (basic check)
-      const cleanPhone = phoneNumber.replace(/\D/g, '');
-      if (cleanPhone.length < 10) {
-        res.status(400).json({ error: 'Invalid phone number format', requestId });
+      // CRITICAL FIX #5: E.164 phone number validation
+      // E.164 format: + followed by 1-15 digits, starting with country code
+      const cleanPhone = phoneNumber.replace(/[\s\-\(\)]/g, ''); // Remove formatting
+      const e164Regex = /^\+?[1-9]\d{6,14}$/; // E.164: 7-15 digits, no leading zero
+      if (!e164Regex.test(cleanPhone)) {
+        res.status(400).json({ 
+          error: 'Invalid phone number. Use E.164 format: +1234567890 (include country code)', 
+          requestId 
+        });
         return;
       }
 
@@ -2170,13 +2175,14 @@ router.post(
         return;
       }
 
-      // Validate agent has all required behavior fields
-      if (!agent.system_prompt || !agent.first_message || !agent.voice || !agent.language || !agent.max_call_duration) {
+      // CRITICAL FIX #6: Validate agent fields are non-empty (not just truthy)
+      if (!agent.system_prompt?.trim() || !agent.first_message?.trim() || 
+          !agent.voice?.trim() || !agent.language?.trim() || !agent.max_call_duration) {
         const missingFields = [
-          !agent.system_prompt && 'System Prompt',
-          !agent.first_message && 'First Message',
-          !agent.voice && 'Voice',
-          !agent.language && 'Language',
+          !agent.system_prompt?.trim() && 'System Prompt (cannot be empty)',
+          !agent.first_message?.trim() && 'First Message (cannot be empty)',
+          !agent.voice?.trim() && 'Voice (must be selected)',
+          !agent.language?.trim() && 'Language (must be selected)',
           !agent.max_call_duration && 'Max Call Duration'
         ].filter(Boolean);
         

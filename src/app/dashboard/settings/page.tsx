@@ -95,6 +95,7 @@ function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boole
     const wsRef = useRef<WebSocket | null>(null);
 
     // Connect to outbound call WebSocket bridge
+    // CRITICAL FIXES: #1 timeout, #2 userId validation, #4 binary handling, #7 cleanup, #8 unique IDs
     useEffect(() => {
         if (!isOpen || !outboundTrackingId) {
             if (wsRef.current) {
@@ -104,60 +105,113 @@ function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boole
             return;
         }
 
+        // CRITICAL FIX #2: Validate user ID before connecting
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            console.error('[OutboundCall] User ID not available, cannot connect');
+            setOutboundConnected(false);
+            return;
+        }
+
+        let connectionTimeout: NodeJS.Timeout | null = null;
+        let transcriptCounter = 0; // For unique IDs
+
         const connectWebSocket = () => {
             try {
                 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${wsProtocol}//${window.location.host}/api/web-voice/${outboundTrackingId}?userId=${encodeURIComponent(localStorage.getItem('userId') || '')}`;
+                const wsUrl = `${wsProtocol}//${window.location.host}/api/web-voice/${outboundTrackingId}?userId=${encodeURIComponent(userId)}`;
                 
                 const ws = new WebSocket(wsUrl);
                 wsRef.current = ws;
 
+                // CRITICAL FIX #1: Connection timeout (5 seconds)
+                connectionTimeout = setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        console.error('[OutboundCall] WebSocket connection timeout');
+                        ws.close();
+                        setOutboundConnected(false);
+                    }
+                }, 5000);
+
                 ws.onopen = () => {
+                    if (connectionTimeout) clearTimeout(connectionTimeout);
                     console.log('[OutboundCall] WebSocket connected for tracking:', outboundTrackingId);
                     setOutboundConnected(true);
                 };
 
                 ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        
-                        if (data.type === 'transcript') {
-                            const speaker = data.speaker === 'agent' ? 'agent' : 'user';
-                            const newTranscript = {
-                                id: `${Date.now()}_${Math.random()}`,
-                                speaker,
-                                text: data.text,
-                                isFinal: data.is_final === true,
-                                confidence: data.confidence || 0.95,
-                                timestamp: new Date()
-                            };
+                    // CRITICAL FIX #4: Handle binary audio frames gracefully
+                    if (typeof event.data !== 'string') {
+                        // Binary audio frame, ignore
+                        return;
+                    }
 
-                            setOutboundTranscripts(prev => {
-                                const updated = [...prev, newTranscript];
-                                return updated.slice(-100); // Keep last 100 messages
-                            });
-                        } else if (data.type === 'call_status') {
-                            console.log('[OutboundCall] Call status:', data.status);
-                        } else if (data.type === 'call_ended') {
-                            console.log('[OutboundCall] Call ended');
-                            setOutboundConnected(false);
-                        }
-                    } catch (err) {
-                        console.error('[OutboundCall] Failed to parse message:', err);
+                    let data;
+                    try {
+                        data = JSON.parse(event.data);
+                    } catch {
+                        // Non-JSON string, ignore
+                        return;
+                    }
+                        
+                    if (data.type === 'transcript') {
+                        const speaker = data.speaker === 'agent' ? 'agent' : 'user';
+                        // CRITICAL FIX #8: Unique transcript IDs
+                        transcriptCounter++;
+                        const newTranscript = {
+                            id: `${outboundTrackingId}_${Date.now()}_${transcriptCounter}`,
+                            speaker,
+                            text: data.text,
+                            isFinal: data.is_final === true,
+                            confidence: data.confidence || 0.95,
+                            timestamp: new Date()
+                        };
+
+                        setOutboundTranscripts(prev => {
+                            // Deduplicate: check if same text from same speaker in last 500ms
+                            const lastMsg = prev[prev.length - 1];
+                            if (lastMsg && 
+                                lastMsg.text === newTranscript.text && 
+                                lastMsg.speaker === newTranscript.speaker &&
+                                (newTranscript.timestamp.getTime() - lastMsg.timestamp.getTime() < 500)) {
+                                return prev; // Duplicate, skip
+                            }
+                            const updated = [...prev, newTranscript];
+                            return updated.slice(-100); // Keep last 100 messages
+                        });
+                    } else if (data.type === 'call_status') {
+                        console.log('[OutboundCall] Call status:', data.status);
+                    } else if (data.type === 'call_ended') {
+                        console.log('[OutboundCall] Call ended');
+                        setOutboundConnected(false);
                     }
                 };
 
                 ws.onerror = (error) => {
+                    if (connectionTimeout) clearTimeout(connectionTimeout);
                     console.error('[OutboundCall] WebSocket error:', error);
                     setOutboundConnected(false);
                 };
 
+                // CRITICAL FIX #7: Cleanup and notify backend on close
                 ws.onclose = () => {
+                    if (connectionTimeout) clearTimeout(connectionTimeout);
                     console.log('[OutboundCall] WebSocket closed');
                     setOutboundConnected(false);
                     wsRef.current = null;
+                    
+                    // Notify backend to end call
+                    if (outboundTrackingId) {
+                        fetch(`${API_BASE_URL}/api/founder-console/agent/web-test/end`, {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ trackingId: outboundTrackingId })
+                        }).catch(err => console.error('[OutboundCall] Failed to end call on backend:', err));
+                    }
                 };
             } catch (err) {
+                if (connectionTimeout) clearTimeout(connectionTimeout);
                 console.error('[OutboundCall] Failed to connect WebSocket:', err);
                 setOutboundConnected(false);
             }
@@ -166,6 +220,7 @@ function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boole
         connectWebSocket();
 
         return () => {
+            if (connectionTimeout) clearTimeout(connectionTimeout);
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;
