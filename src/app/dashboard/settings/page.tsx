@@ -76,6 +76,7 @@ function LeftSidebar() {
 
 // Right Voice Test Panel
 function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boolean; onClose: () => void; outboundTrackingId?: string }) {
+    const { session } = useAuth();
     const {
         isConnected,
         isRecording,
@@ -106,10 +107,9 @@ function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boole
             return;
         }
 
-        // Validate user ID before connecting
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            console.error('[LiveCall] User ID not available, cannot connect');
+        const token = session?.access_token;
+        if (!token) {
+            console.error('[LiveCall] No auth token available, cannot subscribe');
             setOutboundConnected(false);
             return;
         }
@@ -137,11 +137,11 @@ function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boole
 
                 ws.onopen = () => {
                     if (connectionTimeout) clearTimeout(connectionTimeout);
-                    console.log('[LiveCall] WebSocket connected, subscribing to userId:', userId);
+                    console.log('[LiveCall] WebSocket connected, subscribing');
                     setOutboundConnected(true);
                     
-                    // Subscribe to receive events for this user
-                    ws.send(JSON.stringify({ type: 'subscribe', userId }));
+                    // Subscribe to receive events for this user (backend derives userId from token)
+                    ws.send(JSON.stringify({ type: 'subscribe', token }));
                 };
 
                 ws.onmessage = (event) => {
@@ -220,7 +220,7 @@ function VoiceTestPanel({ isOpen, onClose, outboundTrackingId }: { isOpen: boole
                 wsRef.current = null;
             }
         };
-    }, [isOpen, outboundTrackingId]);
+    }, [isOpen, outboundTrackingId, session?.access_token]);
 
     // Sync Transcripts (web test)
     useEffect(() => {

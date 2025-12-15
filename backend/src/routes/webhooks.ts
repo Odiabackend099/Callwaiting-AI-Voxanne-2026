@@ -50,13 +50,33 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
   }
 
   try {
+    // Reject replayed webhooks using a timestamp skew window
+    // Accept both seconds and milliseconds epoch formats.
+    const tsNum = Number(timestamp);
+    if (!Number.isFinite(tsNum)) {
+      console.error('[Webhook] Invalid timestamp header');
+      return false;
+    }
+
+    const tsMs = tsNum > 1e12 ? tsNum : tsNum * 1000;
+    const nowMs = Date.now();
+    const maxSkewMs = 5 * 60 * 1000; // 5 minutes
+    if (Math.abs(nowMs - tsMs) > maxSkewMs) {
+      console.error('[Webhook] Timestamp outside allowed skew window');
+      return false;
+    }
+
     const payload = JSON.stringify(req.body);
     const hash = crypto
       .createHmac('sha256', secret)
       .update(`${timestamp}.${payload}`)
       .digest('hex');
 
-    return hash === signature;
+    // Timing-safe comparison
+    const a = Buffer.from(hash, 'utf8');
+    const b = Buffer.from(signature, 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
   } catch (error: any) {
     console.error('[Webhook] Error verifying signature:', error.message);
     return false;

@@ -413,7 +413,11 @@ export class VapiClient {
   async listPhoneNumbers() {
     try {
       const response = await this.client.get('/phone-number');
-      return response.data;
+      const payload: any = response.data;
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (Array.isArray(payload?.items)) return payload.items;
+      return [];
     } catch (error) {
       console.error('[VapiClient] Failed to list phone numbers:', error);
       throw error;

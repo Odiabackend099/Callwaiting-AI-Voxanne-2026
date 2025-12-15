@@ -5,7 +5,8 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import { attachClientWebSocket, getSession } from './web-voice-bridge';
+import { attachClientWebSocket } from './web-voice-bridge';
+import { supabase } from './supabase-client';
 
 // Metrics data structure
 export interface UsageMetrics {
@@ -82,11 +83,41 @@ export function initWebSocket(server: Server): WebSocketServer {
         console.log('[WebSocket] Received message:', data);
         
         // Handle subscribe message to set userId
-        if (data.type === 'subscribe' && data.userId) {
+        if (data.type === 'subscribe') {
           const client = clients.get(ws);
-          if (client) {
+          if (!client) return;
+
+          const isDev = (process.env.NODE_ENV || 'development') === 'development';
+          const token = typeof data.token === 'string' ? data.token : undefined;
+
+          // In production, never trust a client-provided userId.
+          if (!isDev && !token) {
+            ws.close(1008, 'Unauthorized');
+            return;
+          }
+
+          if (token) {
+            supabase.auth
+              .getUser(token)
+              .then(({ data: authData, error }) => {
+                if (error || !authData?.user?.id) {
+                  ws.close(1008, 'Unauthorized');
+                  return;
+                }
+
+                client.userId = authData.user.id;
+                console.log('[WebSocket] Client authenticated and subscribed', { userId: client.userId });
+              })
+              .catch(() => {
+                ws.close(1008, 'Unauthorized');
+              });
+          } else if (isDev && typeof data.userId === 'string' && data.userId) {
+            // Dev-only fallback for local testing
             client.userId = data.userId;
-            console.log(`[WebSocket] Client subscribed with userId: ${data.userId}`);
+            console.log('[WebSocket] Dev-mode subscription accepted', { userId: client.userId });
+          } else {
+            ws.close(1008, 'Unauthorized');
+            return;
           }
         }
         

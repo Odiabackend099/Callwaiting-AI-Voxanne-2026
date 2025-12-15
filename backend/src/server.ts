@@ -15,6 +15,7 @@ import founderConsoleSettingsRouter from './routes/founder-console-settings';
 import { initLogger, requestLogger, log } from './services/logger';
 import { WebSocketServer } from 'ws';
 import { attachClientWebSocket } from './services/web-voice-bridge';
+import { initWebSocket } from './services/websocket';
 import webTestDiagnosticsRouter from './routes/web-test-diagnostics';
 
 // Initialize logger
@@ -94,9 +95,8 @@ const server = createServer(app);
 const webTestWss = new WebSocketServer({ noServer: true });
 console.log('[WebSocket] Server initialized for /api/web-voice/*');
 
-// WebSocket server for live calls (noServer for manual upgrade handling)
-const liveCallsWss = new WebSocketServer({ noServer: true });
-console.log('[WebSocket] Server initialized for /ws/live-calls');
+// WebSocket server for live calls (shared service used by wsBroadcast)
+initWebSocket(server);
 
 // Manual upgrade handling to support path prefixes (ws library path option is exact match only)
 server.on('upgrade', (request, socket, head) => {
@@ -107,21 +107,8 @@ server.on('upgrade', (request, socket, head) => {
       webTestWss.emit('connection', ws, request);
     });
   } else if (pathname.startsWith('/ws/live-calls')) {
-    // Origin validation for live calls
-    const origin = request.headers.origin;
-    const allowedOrigins = (process.env.WS_ALLOWED_ORIGINS || 'http://localhost:3002,http://127.0.0.1:3002').split(',');
-    const isAllowed = !origin || allowedOrigins.some(allowed => origin === allowed.trim());
-
-    if (!isAllowed) {
-      console.warn(`[WebSocket] Connection rejected from unauthorized origin: ${origin}`);
-      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
-    liveCallsWss.handleUpgrade(request, socket, head, (ws) => {
-      liveCallsWss.emit('connection', ws, request);
-    });
+    // Let the shared WebSocket service (initWebSocket) handle upgrades for /ws/live-calls
+    return;
   } else {
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
     socket.destroy();
@@ -159,30 +146,6 @@ webTestWss.on('connection', (ws, req) => {
     console.error('[WebVoice] Connection handler error', err);
     ws.close(1011, 'Internal error');
   }
-});
-
-// Handle live calls WebSocket connections
-liveCallsWss.on('connection', (ws, req) => {
-  console.log('[LiveCalls] Client connected');
-  
-  ws.on('message', (message: Buffer) => {
-    try {
-      const data = JSON.parse(message.toString());
-      if (data.type === 'ping') {
-        ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
-      }
-    } catch (e) {
-      console.error('[LiveCalls] Failed to parse message:', e);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log('[LiveCalls] Client disconnected');
-  });
-
-  ws.on('error', (error) => {
-    console.error('[LiveCalls] Client error:', error);
-  });
 });
 
 // Start listening (critical: use server.listen, not app.listen)

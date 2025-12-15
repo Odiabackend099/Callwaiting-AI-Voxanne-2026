@@ -2194,7 +2194,7 @@ router.post(
       }
 
       // Sync agent to pick up latest changes (also sets webhook URL programmatically)
-      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+      await ensureAssistantSynced(agent.id, vapiApiKey);
 
       // Get Vapi phone number ID (the caller ID for outbound calls)
       // First check stored config, then env var, then auto-fetch from Vapi
@@ -2208,8 +2208,19 @@ router.post(
           const phoneNumbers = await vapiClient.listPhoneNumbers();
           
           if (phoneNumbers && phoneNumbers.length > 0) {
-            // Use the first available phone number
-            phoneNumberId = phoneNumbers[0].id;
+            // Deterministic selection:
+            // 1) Prefer Twilio-imported number
+            // 2) Prefer a number named like an outbound/default
+            // 3) Fallback to the first
+            const preferred =
+              phoneNumbers.find((n: any) => (n?.provider || '').toLowerCase() === 'twilio') ||
+              phoneNumbers.find((n: any) => typeof n?.name === 'string' && /outbound|default/i.test(n.name)) ||
+              phoneNumbers[0];
+
+            phoneNumberId = preferred?.id;
+            if (!phoneNumberId) {
+              throw new Error('Vapi returned phone numbers but none had an id');
+            }
             logger.info('Auto-fetched phone number from Vapi', { 
               phoneNumberId, 
               totalNumbers: phoneNumbers.length,
