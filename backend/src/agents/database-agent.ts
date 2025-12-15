@@ -163,7 +163,7 @@ Show all queries and results clearly.`;
   ): { tool: string; params: Record<string, any> } | null {
     // Look for [EXECUTE_QUERY: ...] pattern
     const executeMatch = response.match(
-      /\[EXECUTE_QUERY:\s*query\s*=\s*(.+?),\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[EXECUTE_QUERY:\s*query\s*=\s*(.+?),\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (executeMatch) {
       return {
@@ -178,7 +178,7 @@ Show all queries and results clearly.`;
 
     // Look for [CHECK_SCHEMA: ...] pattern
     const schemaMatch = response.match(
-      /\[CHECK_SCHEMA:\s*table\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[CHECK_SCHEMA:\s*table\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (schemaMatch) {
       return {
@@ -192,7 +192,7 @@ Show all queries and results clearly.`;
 
     // Look for [VERIFY_DATA: ...] pattern
     const verifyMatch = response.match(
-      /\[VERIFY_DATA:\s*check_type\s*=\s*(.+?),\s*table\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[VERIFY_DATA:\s*check_type\s*=\s*(.+?),\s*table\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (verifyMatch) {
       return {
@@ -207,7 +207,7 @@ Show all queries and results clearly.`;
 
     // Look for [BATCH_OPERATION: ...] pattern
     const batchMatch = response.match(
-      /\[BATCH_OPERATION:\s*operations\s*=\s*\[(.*?)\],\s*context\s*=\s*(.+?)\]/is
+      /\[BATCH_OPERATION:\s*operations\s*=\s*\[(.*?)\],\s*context\s*=\s*(.+?)\]/i
     );
     if (batchMatch) {
       try {

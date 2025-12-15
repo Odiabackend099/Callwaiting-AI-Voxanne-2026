@@ -169,7 +169,7 @@ Show all deployment steps and results clearly.`;
   ): { tool: string; params: Record<string, any> } | null {
     // Look for [CHECK_DEPLOYMENT_STATUS: ...] pattern
     const statusMatch = response.match(
-      /\[CHECK_DEPLOYMENT_STATUS:\s*environment\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[CHECK_DEPLOYMENT_STATUS:\s*environment\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (statusMatch) {
       return {
@@ -183,7 +183,7 @@ Show all deployment steps and results clearly.`;
 
     // Look for [MANAGE_ENV_VARIABLES: ...] pattern
     const envMatch = response.match(
-      /\[MANAGE_ENV_VARIABLES:\s*action\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[MANAGE_ENV_VARIABLES:\s*action\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (envMatch) {
       return {
@@ -198,7 +198,7 @@ Show all deployment steps and results clearly.`;
 
     // Look for [DEPLOY_TO_RENDER: ...] pattern
     const deployMatch = response.match(
-      /\[DEPLOY_TO_RENDER:\s*environment\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[DEPLOY_TO_RENDER:\s*environment\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (deployMatch) {
       return {
@@ -213,7 +213,7 @@ Show all deployment steps and results clearly.`;
 
     // Look for [VERIFY_HEALTH: ...] pattern
     const healthMatch = response.match(
-      /\[VERIFY_HEALTH:\s*environment\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[VERIFY_HEALTH:\s*environment\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (healthMatch) {
       return {
@@ -228,7 +228,7 @@ Show all deployment steps and results clearly.`;
 
     // Look for [ROLLBACK_DEPLOYMENT: ...] pattern
     const rollbackMatch = response.match(
-      /\[ROLLBACK_DEPLOYMENT:\s*environment\s*=\s*(.+?),\s*reason\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[ROLLBACK_DEPLOYMENT:\s*environment\s*=\s*(.+?),\s*reason\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (rollbackMatch) {
       return {
@@ -243,7 +243,7 @@ Show all deployment steps and results clearly.`;
 
     // Look for [GENERATE_DEPLOYMENT_REPORT: ...] pattern
     const reportMatch = response.match(
-      /\[GENERATE_DEPLOYMENT_REPORT:\s*type\s*=\s*(.+?),\s*status\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[GENERATE_DEPLOYMENT_REPORT:\s*type\s*=\s*(.+?),\s*status\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (reportMatch) {
       return {

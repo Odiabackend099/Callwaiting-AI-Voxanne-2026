@@ -169,7 +169,7 @@ Show all monitoring data and insights clearly.`;
   ): { tool: string; params: Record<string, any> } | null {
     // Look for [WATCH_LIVE_CALLS: ...] pattern
     const watchMatch = response.match(
-      /\[WATCH_LIVE_CALLS:\s*context\s*=\s*(.+?)\]/is
+      /\[WATCH_LIVE_CALLS:\s*context\s*=\s*(.+?)\]/i
     );
     if (watchMatch) {
       return {
@@ -184,7 +184,7 @@ Show all monitoring data and insights clearly.`;
 
     // Look for [ANALYZE_TRANSCRIPT: ...] pattern
     const analyzeMatch = response.match(
-      /\[ANALYZE_TRANSCRIPT:\s*call_id\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[ANALYZE_TRANSCRIPT:\s*call_id\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (analyzeMatch) {
       return {
@@ -199,7 +199,7 @@ Show all monitoring data and insights clearly.`;
 
     // Look for [DETECT_ANOMALIES: ...] pattern
     const anomalyMatch = response.match(
-      /\[DETECT_ANOMALIES:\s*sensitivity\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[DETECT_ANOMALIES:\s*sensitivity\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (anomalyMatch) {
       return {
@@ -214,7 +214,7 @@ Show all monitoring data and insights clearly.`;
 
     // Look for [GET_PERFORMANCE_METRICS: ...] pattern
     const metricsMatch = response.match(
-      /\[GET_PERFORMANCE_METRICS:\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[GET_PERFORMANCE_METRICS:\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (metricsMatch) {
       return {
@@ -229,7 +229,7 @@ Show all monitoring data and insights clearly.`;
 
     // Look for [GENERATE_ALERT: ...] pattern
     const alertMatch = response.match(
-      /\[GENERATE_ALERT:\s*severity\s*=\s*(.+?),\s*title\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[GENERATE_ALERT:\s*severity\s*=\s*(.+?),\s*title\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (alertMatch) {
       return {
@@ -245,7 +245,7 @@ Show all monitoring data and insights clearly.`;
 
     // Look for [GENERATE_MONITORING_REPORT: ...] pattern
     const reportMatch = response.match(
-      /\[GENERATE_MONITORING_REPORT:\s*period\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[GENERATE_MONITORING_REPORT:\s*period\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (reportMatch) {
       return {

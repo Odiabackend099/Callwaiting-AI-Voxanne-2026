@@ -29,8 +29,8 @@ export const ChatWidget = () => {
         isSpeaking,
         transcripts,
         error: voiceAgentError,
-        connect,
-        disconnect,
+        startCall: connect,
+        stopCall: disconnect,
         startRecording,
         stopRecording,
     } = useVoiceAgent({

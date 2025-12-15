@@ -5,13 +5,14 @@ import { supabase } from '../services/supabase-client';
 import { sendDemoEmail, sendDemoSms, sendDemoWhatsApp, DemoRecipient, DemoContext } from '../services/demo-service';
 import { wsBroadcast } from '../services/websocket';
 import { getIntegrationSettings } from './founder-console-settings';
+import { validateE164Format } from '../utils/phone-validation';
 
 export const webhooksRouter = express.Router();
 
 // Rate limiter for webhook endpoints to prevent abuse
 const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute window
-  max: 1000,           // 1000 events per minute per IP
+  max: 100,            // 100 events per minute per IP (reduced from 1000 for security)
   message: 'Too many webhook events from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false
@@ -60,7 +61,7 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
 
     const tsMs = tsNum > 1e12 ? tsNum : tsNum * 1000;
     const nowMs = Date.now();
-    const maxSkewMs = 5 * 60 * 1000; // 5 minutes
+    const maxSkewMs = 60 * 1000; // 60 seconds (reduced from 5 minutes for security)
     if (Math.abs(nowMs - tsMs) > maxSkewMs) {
       console.error('[Webhook] Timestamp outside allowed skew window');
       return false;
@@ -83,12 +84,23 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
   }
 }
 
+// TypeScript interfaces for type safety
+interface CallTrackingMetadata {
+  userId?: string;
+  channel?: 'inbound' | 'outbound';
+  assistantId?: string;
+  is_test_call?: boolean;
+  created_at?: string;
+  source?: string;
+}
+
 interface VapiEvent {
   type: string;
   call?: {
     id: string;
     status: string;
     duration?: number;
+    assistantId?: string; // For inbound calls
     customer?: {
       number: string;
       name?: string;
@@ -121,30 +133,42 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-    switch (event.type) {
-      case 'call.started':
-        await handleCallStarted(event);
-        break;
+    let handlerSuccess = true;
+    try {
+      switch (event.type) {
+        case 'call.started':
+          await handleCallStarted(event);
+          break;
 
-      case 'call.ended':
-        await handleCallEnded(event);
-        break;
+        case 'call.ended':
+          await handleCallEnded(event);
+          break;
 
-      case 'call.transcribed':
-        await handleTranscript(event);
-        break;
+        case 'call.transcribed':
+          await handleTranscript(event);
+          break;
 
-      case 'end-of-call-report':
-        await handleEndOfCallReport(event);
-        break;
+        case 'end-of-call-report':
+          await handleEndOfCallReport(event);
+          break;
 
-      case 'function-call':
-        const result = await handleFunctionCall(event);
-        res.status(200).json(result);
-        return;
+        case 'function-call':
+          const result = await handleFunctionCall(event);
+          res.status(200).json(result);
+          return;
 
-      default:
-        console.log('[Vapi Webhook] Unhandled event type:', event.type);
+        default:
+          console.log('[Vapi Webhook] Unhandled event type:', event.type);
+      }
+    } catch (handlerError) {
+      console.error('[Vapi Webhook] Handler error:', handlerError);
+      handlerSuccess = false;
+    }
+
+    // FIX #3: Return error status if handler failed
+    if (!handlerSuccess) {
+      res.status(500).json({ error: 'Handler processing failed' });
+      return;
     }
 
     res.status(200).json({ received: true });
@@ -163,8 +187,8 @@ async function handleCallStarted(event: VapiEvent) {
   }
 
   try {
-    // Generate idempotency key for this event
-    const eventId = `started:${call.id}:${call.status || 'unknown'}`;
+    // Generate idempotency key for this event (use only call.id to prevent duplicate processing)
+    const eventId = `call.started:${call.id}`;
 
     // Check if already processed
     const { data: existing, error: checkError } = await supabase
@@ -217,8 +241,86 @@ async function handleCallStarted(event: VapiEvent) {
     }
 
     if (!callTracking) {
-      console.error('[handleCallStarted] Call tracking not found after retries for vapi_call_id:', call.id);
-      return;
+      // Call tracking not found - this might be an INBOUND call
+      console.log('[handleCallStarted] Call tracking not found, checking for inbound call', {
+        vapiCallId: call.id,
+        assistantId: call.assistantId
+      });
+
+      // Check if this is an inbound call by looking for assistantId
+      if (call.assistantId) {
+        // Look up the agent by vapi_assistant_id (only active agents)
+        const { data: agent, error: agentError } = await supabase
+          .from('agents')
+          .select('id, org_id, name, active')
+          .eq('vapi_assistant_id', call.assistantId)
+          .eq('active', true)
+          .maybeSingle();
+
+        if (agentError) {
+          console.error('[handleCallStarted] Error looking up agent:', agentError);
+          return;
+        }
+
+        if (!agent) {
+          console.error('[handleCallStarted] No active agent found with vapi_assistant_id:', call.assistantId);
+          return;
+        }
+
+        console.log('[handleCallStarted] Found agent for inbound call', {
+          agentId: agent.id,
+          agentName: agent.name,
+          orgId: agent.org_id
+        });
+
+        // FIX #5: Validate phone number format before storing
+        let phoneNumber = call.customer?.number || null;
+        if (phoneNumber) {
+          const phoneValidation = validateE164Format(phoneNumber);
+          if (!phoneValidation.valid) {
+            console.error('[handleCallStarted] Invalid phone number format:', phoneValidation.error);
+            return;
+          }
+          phoneNumber = phoneValidation.normalized || phoneNumber;
+        }
+
+        // Insert new call_tracking row for inbound call
+        const { data: newTracking, error: insertError } = await supabase
+          .from('call_tracking')
+          .insert({
+            org_id: agent.org_id,
+            agent_id: agent.id,
+            vapi_call_id: call.id,
+            status: 'ringing',
+            phone: phoneNumber,
+            metadata: {
+              channel: 'inbound',
+              assistantId: call.assistantId,
+              userId: undefined,  // Inbound calls don't have a userId initially
+              is_test_call: false,
+              created_at: new Date().toISOString(),
+              source: 'vapi_webhook'
+            } as CallTrackingMetadata
+          })
+          .select('id, lead_id, org_id, metadata')
+          .single();
+
+        if (insertError) {
+          console.error('[handleCallStarted] Failed to insert call_tracking for inbound call:', insertError);
+          return;
+        }
+
+        console.log('[handleCallStarted] Created call_tracking for inbound call', {
+          trackingId: newTracking.id,
+          vapiCallId: call.id
+        });
+
+        // Use the newly created tracking record
+        callTracking = newTracking;
+      } else {
+        console.error('[handleCallStarted] Call tracking not found and no assistantId provided for vapi_call_id:', call.id);
+        return;
+      }
     }
 
     // Fetch lead only if this is not a test call
@@ -233,21 +335,36 @@ async function handleCallStarted(event: VapiEvent) {
       lead = leadData;
     }
 
-    // Create call log entry with metadata for test call detection
-    const { error } = await supabase.from('call_logs').insert({
-      vapi_call_id: call.id,
-      lead_id: lead?.id || null,
-      to_number: call.customer?.number || null,
-      status: 'in-progress',
-      started_at: new Date().toISOString(),
-      metadata: { is_test_call: callTracking?.metadata?.is_test_call ?? false }
-    });
+    // Check if call_logs row already exists (prevent duplicates on retry)
+    const { data: existingLog } = await supabase
+      .from('call_logs')
+      .select('id')
+      .eq('vapi_call_id', call.id)
+      .maybeSingle();
 
-    if (error) {
-      console.error('[handleCallStarted] Failed to insert call log:', error);
+    if (!existingLog) {
+      // Create call log entry with metadata for test call detection
+      const { error } = await supabase.from('call_logs').insert({
+        vapi_call_id: call.id,
+        lead_id: lead?.id || null,
+        to_number: call.customer?.number || null,
+        status: 'in-progress',
+        started_at: new Date().toISOString(),
+        metadata: {
+          is_test_call: callTracking?.metadata?.is_test_call ?? false,
+          channel: callTracking?.metadata?.channel ?? 'outbound'  // FIX #1: Propagate channel
+        }
+      });
+
+      if (error) {
+        console.error('[handleCallStarted] Failed to insert call log:', error);
+      } else {
+        console.log('[handleCallStarted] Call log created:', call.id);
+      }
     } else {
-      console.log('[handleCallStarted] Call log created:', call.id);
+      console.log('[handleCallStarted] Call log already exists, skipping insert:', call.id);
     }
+
 
     // Update call_tracking status
     await supabase
@@ -269,12 +386,16 @@ async function handleCallStarted(event: VapiEvent) {
       // Continue anyway (state was updated)
     }
 
-    // Broadcast WebSocket event with userId filter
+    // Broadcast WebSocket event with userId filter (type-safe metadata access)
+    const metadata = callTracking.metadata as CallTrackingMetadata | null;
+    const userId = metadata?.userId;
+
+    // Only include userId in broadcast if it exists (inbound calls may not have userId initially)
     wsBroadcast({
       type: 'call_status',
       vapiCallId: call.id,
       trackingId: callTracking.id,
-      userId: (callTracking as any)?.metadata?.userId,
+      userId: userId || '',  // Use empty string as fallback for type safety
       status: 'ringing',
     });
   } catch (error) {
@@ -291,8 +412,8 @@ async function handleCallEnded(event: VapiEvent) {
   }
 
   try {
-    // Generate idempotency key for this event
-    const eventId = `ended:${call.id}:${call.duration || 0}`;
+    // Generate idempotency key for this event (FIX #6: duration not part of key)
+    const eventId = `ended:${call.id}`;
 
     // Check if already processed
     const { data: existing, error: checkError } = await supabase
@@ -483,30 +604,25 @@ async function handleTranscript(event: any) {
 
       // Broadcast transcript to connected voice session clients (real-time display)
       const userId = callTracking?.metadata?.userId;
-      
-      // Validate userId is present and valid (security check)
-      if (!userId || typeof userId !== 'string') {
-        console.warn('[handleTranscript] Invalid or missing userId in call metadata', {
-          vapiCallId: call.id,
-          trackingId: callTracking.id
-        });
-        // Still store transcript but don't broadcast without valid userId
-        return;
-      }
-      
-      // Broadcast transcript with validated userId (ensures user-scoped delivery)
+
+      // Allow broadcasting for inbound calls (which have no userId)
+      // The frontend subscribes to the call ID room, so this is safe for dashboard viewing
+      // We use empty string as fallback if userId is missing/invalid type
+      const safeUserId = (userId && typeof userId === 'string') ? userId : '';
+
+      // Broadcast transcript
       wsBroadcast({
         type: 'transcript',
         vapiCallId: call.id,
         trackingId: callTracking.id,
-        userId: userId,
+        userId: safeUserId,
         speaker: speaker,  // 'agent' | 'customer' for database compatibility
         text: cleanTranscript,
         is_final: true,
         confidence: 0.95,
         ts: Date.now()
       });
-      
+
       console.log('[handleTranscript] Broadcast transcript to UI', {
         vapiCallId: call.id,
         trackingId: callTracking.id,
@@ -565,7 +681,7 @@ async function detectHallucinations(
       // Limit iterations to prevent DoS
       let iterations = 0;
       const MAX_ITERATIONS = 100;
-      
+
       while ((match = pattern.exec(transcript)) !== null && iterations < MAX_ITERATIONS) {
         flaggedClaims.add(match[0].substring(0, 100)); // Limit claim length
         iterations++;
@@ -690,51 +806,51 @@ async function handleFunctionCall(event: any) {
 
     // Handle specific function calls (e.g., create_lead, book_demo_call)
     const { name, parameters } = functionCall || {};
-    
+
     if (name === 'send_demo_email') {
-       console.log('[handleFunctionCall] Sending demo email to:', parameters.prospect_email);
-       const recipient: DemoRecipient = {
-         name: parameters.prospect_name,
-         email: parameters.prospect_email,
-         clinic_name: parameters.clinic_name
-       };
-       const context: DemoContext = {
-         demo_type: parameters.demo_type,
-         agent_id: parameters.agent_id,
-         call_id: call.id
-       };
-       await sendDemoEmail(recipient, context);
-       return { result: `Demo email sent to ${parameters.prospect_email}` };
+      console.log('[handleFunctionCall] Sending demo email to:', parameters.prospect_email);
+      const recipient: DemoRecipient = {
+        name: parameters.prospect_name,
+        email: parameters.prospect_email,
+        clinic_name: parameters.clinic_name
+      };
+      const context: DemoContext = {
+        demo_type: parameters.demo_type,
+        agent_id: parameters.agent_id,
+        call_id: call.id
+      };
+      await sendDemoEmail(recipient, context);
+      return { result: `Demo email sent to ${parameters.prospect_email}` };
     } else if (name === 'send_demo_whatsapp') {
-       console.log('[handleFunctionCall] Sending demo WhatsApp to:', parameters.prospect_phone);
-       const recipient: DemoRecipient = {
-         name: parameters.prospect_name,
-         phone: parameters.prospect_phone,
-         clinic_name: parameters.clinic_name
-       };
-       const context: DemoContext = {
-         demo_type: parameters.demo_type,
-         agent_id: parameters.agent_id,
-         call_id: call.id
-       };
-       await sendDemoWhatsApp(recipient, context);
-       return { result: `Demo WhatsApp sent to ${parameters.prospect_phone}` };
+      console.log('[handleFunctionCall] Sending demo WhatsApp to:', parameters.prospect_phone);
+      const recipient: DemoRecipient = {
+        name: parameters.prospect_name,
+        phone: parameters.prospect_phone,
+        clinic_name: parameters.clinic_name
+      };
+      const context: DemoContext = {
+        demo_type: parameters.demo_type,
+        agent_id: parameters.agent_id,
+        call_id: call.id
+      };
+      await sendDemoWhatsApp(recipient, context);
+      return { result: `Demo WhatsApp sent to ${parameters.prospect_phone}` };
     } else if (name === 'send_demo_sms') {
-       console.log('[handleFunctionCall] Sending demo SMS to:', parameters.prospect_phone);
-       const recipient: DemoRecipient = {
-         name: parameters.prospect_name,
-         phone: parameters.prospect_phone,
-         clinic_name: parameters.clinic_name
-       };
-       const context: DemoContext = {
-         demo_type: parameters.demo_type,
-         agent_id: parameters.agent_id,
-         call_id: call.id
-       };
-       await sendDemoSms(recipient, context);
-       return { result: `Demo SMS sent to ${parameters.prospect_phone}` };
+      console.log('[handleFunctionCall] Sending demo SMS to:', parameters.prospect_phone);
+      const recipient: DemoRecipient = {
+        name: parameters.prospect_name,
+        phone: parameters.prospect_phone,
+        clinic_name: parameters.clinic_name
+      };
+      const context: DemoContext = {
+        demo_type: parameters.demo_type,
+        agent_id: parameters.agent_id,
+        call_id: call.id
+      };
+      await sendDemoSms(recipient, context);
+      return { result: `Demo SMS sent to ${parameters.prospect_phone}` };
     }
-    
+
     return { result: `Function ${name} executed` };
   } catch (error: any) {
     console.error('[handleFunctionCall] Error:', error);

@@ -35,10 +35,45 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
   try {
     const authHeader = req.headers.authorization;
 
-    // If caller provided a token, always validate it.
+    // If caller provided a token, try to validate it.
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      await requireAuth(req, res, next);
-      return;
+      const token = authHeader.substring(7).trim();
+      // Treat common "empty" token values as missing (prevents Bearer undefined/null)
+      if (token && token !== 'undefined' && token !== 'null') {
+        // In dev mode, try token auth but fall back to dev user on failure
+        const isDev = (process.env.NODE_ENV || 'development') === 'development';
+        if (isDev) {
+          // Attempt token validation, but don't block on failure in dev
+          try {
+            const { data: { user }, error } = await supabase.auth.getUser(token);
+            if (!error && user) {
+              // Token is valid, resolve org
+              let orgId: string = user.user_metadata?.org_id || 'default';
+              if (orgId === 'default') {
+                const { data: org } = await supabase
+                  .from('organizations')
+                  .select('id')
+                  .limit(1)
+                  .single();
+                if (org?.id) orgId = org.id;
+              }
+              if (orgId !== 'default') {
+                req.user = { id: user.id, email: user.email || '', orgId };
+                next();
+                return;
+              }
+            }
+            // Token invalid or org not resolved - fall through to dev fallback below
+            console.log('[AuthOrDev] Token auth failed in dev mode, falling back to dev user');
+          } catch (e) {
+            console.log('[AuthOrDev] Token validation error in dev mode, falling back to dev user');
+          }
+        } else {
+          // Production: strict token validation
+          await requireAuth(req, res, next);
+          return;
+        }
+      }
     }
 
     // No token provided.
@@ -61,6 +96,14 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
       }
     } catch {
       // Fallback to default if org fetch fails
+    }
+
+    // If we still can't find a real org, we can't let 'default' propagate
+    // to queries that expect a UUID, or it causes 500s.
+    if (orgId === 'default') {
+      console.error('[AuthOrDev] Failed to resolve a valid Org ID in dev mode.');
+      res.status(500).json({ error: 'Dev Configuration Error: No organizations found in DB. Please create an organization first.' });
+      return;
     }
 
     req.user = {
@@ -100,10 +143,29 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     // Attach user info to request
+    let orgId: string = user.user_metadata?.org_id || 'default';
+    if (orgId === 'default') {
+      try {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('id')
+          .limit(1)
+          .single();
+        if (org?.id) orgId = org.id;
+      } catch {
+        // Fallback: keep 'default' (will be rejected by downstream routes that require a real org)
+      }
+    }
+
+    if (orgId === 'default') {
+      res.status(401).json({ error: 'Organization not resolved for user' });
+      return;
+    }
+
     req.user = {
       id: user.id,
       email: user.email || '',
-      orgId: user.user_metadata?.org_id || 'default'
+      orgId
     };
 
     next();
@@ -152,10 +214,24 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
       const { data: { user }, error } = await supabase.auth.getUser(token);
 
       if (!error && user) {
+        let orgId: string = user.user_metadata?.org_id || 'default';
+        if (orgId === 'default') {
+          try {
+            const { data: org } = await supabase
+              .from('organizations')
+              .select('id')
+              .limit(1)
+              .single();
+            if (org?.id) orgId = org.id;
+          } catch {
+            // ignore
+          }
+        }
+
         req.user = {
           id: user.id,
           email: user.email || '',
-          orgId: user.user_metadata?.org_id || 'default'
+          orgId
         };
       }
     }

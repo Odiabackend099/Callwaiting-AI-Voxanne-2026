@@ -28,24 +28,30 @@ function requireVapi(res: Response): VapiClient | null {
 
 // Helper to determine voice provider from voice ID (case-insensitive)
 function determineVoiceProvider(voiceId: string): string {
-  const voiceProviderMap: { [key: string]: string } = {
-    'rohan': 'vapi',
-    'neha': 'vapi',
-    'hana': 'vapi',
-    'harry': 'vapi',
-    'elliot': 'vapi',
-    'lily': 'vapi',
-    'paige': 'vapi',
-    'cole': 'vapi',
-    'savannah': 'vapi',
-    'spencer': 'vapi',
-    'kylie': 'vapi',
-    'jennifer': 'playht',
-    'alloy': 'openai',
-    'aura-asteria-en': 'deepgram',
-    'aura-luna-en': 'deepgram'
-  };
-  return voiceProviderMap[(voiceId || '').toLowerCase()] || 'vapi';
+  const id = (voiceId || '').toLowerCase();
+  
+  // Deepgram voices start with 'aura-'
+  if (id.startsWith('aura-')) return 'deepgram';
+  
+  // OpenAI voices
+  if (['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(id)) return 'openai';
+  
+  // Vapi native voices (case-insensitive)
+  const vapiVoices = ['paige', 'rohan', 'neha', 'hana', 'harry', 'elliot', 'lily', 'cole', 'savannah', 'spencer', 'kylie'];
+  if (vapiVoices.includes(id)) return 'vapi';
+  
+  // ElevenLabs voices (most other named voices)
+  const elevenLabsVoices = [
+    'rachel', 'drew', 'clyde', 'paul', 'domi', 'dave', 'fin', 'sarah', 'antoni', 'thomas',
+    'charlie', 'george', 'emily', 'elli', 'callum', 'patrick', 'liam', 'dorothy', 'josh',
+    'arnold', 'charlotte', 'matilda', 'matthew', 'james', 'joseph', 'jeremy', 'michael',
+    'ethan', 'gigi', 'freya', 'grace', 'daniel', 'serena', 'adam', 'nicole', 'jessie',
+    'ryan', 'sam', 'glinda', 'giovanni', 'mimi'
+  ];
+  if (elevenLabsVoices.includes(id)) return 'elevenlabs';
+  
+  // Default to vapi for unknown voices
+  return 'vapi';
 }
 
 // ============================================
@@ -244,6 +250,13 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
           provider: voiceProvider,
           voiceId: voiceId
         },
+        firstMessage: agent.first_message || 'Hello! How can I help you today?',
+        transcriber: {
+          provider: 'deepgram',
+          model: 'nova-2',
+          language: agent.language || 'en'
+        },
+        maxDurationSeconds: agent.max_call_duration || 600,
         functions: localVapi.getDefaultDemoFunctions()
       });
     } else {
@@ -325,18 +338,86 @@ assistantsRouter.get('/', async (req: Request, res: Response) => {
 // List available voices
 assistantsRouter.get('/voices/available', async (req: Request, res: Response) => {
   try {
-    // Return curated list of available voices
+    // Comprehensive list of Vapi-supported voices
     const voices = [
-      { id: 'rohan', name: 'Rohan', gender: 'male', provider: 'vapi' },
-      { id: 'neha', name: 'Neha', gender: 'female', provider: 'vapi' },
-      { id: 'hana', name: 'Hana', gender: 'female', provider: 'vapi' },
-      { id: 'harry', name: 'Harry', gender: 'male', provider: 'vapi' },
-      { id: 'elliot', name: 'Elliot', gender: 'male', provider: 'vapi' },
-      { id: 'lily', name: 'Lily', gender: 'female', provider: 'vapi' },
-      { id: 'paige', name: 'Paige', gender: 'female', provider: 'vapi', isDefault: true },
-      { id: 'cole', name: 'Cole', gender: 'male', provider: 'vapi' },
-      { id: 'savannah', name: 'Savannah', gender: 'female', provider: 'vapi' },
-      { id: 'spencer', name: 'Spencer', gender: 'male', provider: 'vapi' }
+      // Vapi Native Voices (11Labs-powered, optimized for low latency)
+      { id: 'Paige', name: 'Paige', gender: 'female', provider: 'vapi', isDefault: true, description: 'Warm, professional American female' },
+      { id: 'Rohan', name: 'Rohan', gender: 'male', provider: 'vapi', description: 'Friendly American male' },
+      { id: 'Neha', name: 'Neha', gender: 'female', provider: 'vapi', description: 'Clear, articulate Indian female' },
+      { id: 'Hana', name: 'Hana', gender: 'female', provider: 'vapi', description: 'Soft, calm Asian female' },
+      { id: 'Harry', name: 'Harry', gender: 'male', provider: 'vapi', description: 'British male, professional' },
+      { id: 'Elliot', name: 'Elliot', gender: 'male', provider: 'vapi', description: 'Young American male' },
+      { id: 'Lily', name: 'Lily', gender: 'female', provider: 'vapi', description: 'Cheerful American female' },
+      { id: 'Cole', name: 'Cole', gender: 'male', provider: 'vapi', description: 'Deep, authoritative male' },
+      { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'Southern American female' },
+      { id: 'Spencer', name: 'Spencer', gender: 'male', provider: 'vapi', description: 'Casual American male' },
+      { id: 'Kylie', name: 'Kylie', gender: 'female', provider: 'vapi', description: 'Australian female' },
+      
+      // ElevenLabs Voices
+      { id: 'rachel', name: 'Rachel', gender: 'female', provider: 'elevenlabs', description: 'American female, calm' },
+      { id: 'drew', name: 'Drew', gender: 'male', provider: 'elevenlabs', description: 'American male, well-rounded' },
+      { id: 'clyde', name: 'Clyde', gender: 'male', provider: 'elevenlabs', description: 'American male, war veteran' },
+      { id: 'paul', name: 'Paul', gender: 'male', provider: 'elevenlabs', description: 'American male, ground reporter' },
+      { id: 'domi', name: 'Domi', gender: 'female', provider: 'elevenlabs', description: 'American female, strong' },
+      { id: 'dave', name: 'Dave', gender: 'male', provider: 'elevenlabs', description: 'British-Essex male, conversational' },
+      { id: 'fin', name: 'Fin', gender: 'male', provider: 'elevenlabs', description: 'Irish male, sailor' },
+      { id: 'sarah', name: 'Sarah', gender: 'female', provider: 'elevenlabs', description: 'American female, soft news' },
+      { id: 'antoni', name: 'Antoni', gender: 'male', provider: 'elevenlabs', description: 'American male, well-rounded' },
+      { id: 'thomas', name: 'Thomas', gender: 'male', provider: 'elevenlabs', description: 'American male, calm' },
+      { id: 'charlie', name: 'Charlie', gender: 'male', provider: 'elevenlabs', description: 'Australian male, casual' },
+      { id: 'george', name: 'George', gender: 'male', provider: 'elevenlabs', description: 'British male, warm' },
+      { id: 'emily', name: 'Emily', gender: 'female', provider: 'elevenlabs', description: 'American female, calm' },
+      { id: 'elli', name: 'Elli', gender: 'female', provider: 'elevenlabs', description: 'American female, emotional' },
+      { id: 'callum', name: 'Callum', gender: 'male', provider: 'elevenlabs', description: 'Transatlantic male, intense' },
+      { id: 'patrick', name: 'Patrick', gender: 'male', provider: 'elevenlabs', description: 'American male, shouty' },
+      { id: 'harry', name: 'Harry (ElevenLabs)', gender: 'male', provider: 'elevenlabs', description: 'American male, anxious' },
+      { id: 'liam', name: 'Liam', gender: 'male', provider: 'elevenlabs', description: 'American male, articulate' },
+      { id: 'dorothy', name: 'Dorothy', gender: 'female', provider: 'elevenlabs', description: 'British female, pleasant' },
+      { id: 'josh', name: 'Josh', gender: 'male', provider: 'elevenlabs', description: 'American male, deep' },
+      { id: 'arnold', name: 'Arnold', gender: 'male', provider: 'elevenlabs', description: 'American male, crisp' },
+      { id: 'charlotte', name: 'Charlotte', gender: 'female', provider: 'elevenlabs', description: 'Swedish female, seductive' },
+      { id: 'matilda', name: 'Matilda', gender: 'female', provider: 'elevenlabs', description: 'American female, warm' },
+      { id: 'matthew', name: 'Matthew', gender: 'male', provider: 'elevenlabs', description: 'British male, audiobook' },
+      { id: 'james', name: 'James', gender: 'male', provider: 'elevenlabs', description: 'Australian male, calm' },
+      { id: 'joseph', name: 'Joseph', gender: 'male', provider: 'elevenlabs', description: 'British male, articulate' },
+      { id: 'jeremy', name: 'Jeremy', gender: 'male', provider: 'elevenlabs', description: 'American-Irish male, excited' },
+      { id: 'michael', name: 'Michael', gender: 'male', provider: 'elevenlabs', description: 'American male, orotund' },
+      { id: 'ethan', name: 'Ethan', gender: 'male', provider: 'elevenlabs', description: 'American male, narrator' },
+      { id: 'gigi', name: 'Gigi', gender: 'female', provider: 'elevenlabs', description: 'American female, childish' },
+      { id: 'freya', name: 'Freya', gender: 'female', provider: 'elevenlabs', description: 'American female, expressive' },
+      { id: 'grace', name: 'Grace', gender: 'female', provider: 'elevenlabs', description: 'American-Southern female' },
+      { id: 'daniel', name: 'Daniel', gender: 'male', provider: 'elevenlabs', description: 'British male, deep news' },
+      { id: 'serena', name: 'Serena', gender: 'female', provider: 'elevenlabs', description: 'American female, pleasant' },
+      { id: 'adam', name: 'Adam', gender: 'male', provider: 'elevenlabs', description: 'American male, deep' },
+      { id: 'nicole', name: 'Nicole', gender: 'female', provider: 'elevenlabs', description: 'American female, whisper' },
+      { id: 'jessie', name: 'Jessie', gender: 'male', provider: 'elevenlabs', description: 'American male, raspy' },
+      { id: 'ryan', name: 'Ryan', gender: 'male', provider: 'elevenlabs', description: 'American male, soldier' },
+      { id: 'sam', name: 'Sam', gender: 'male', provider: 'elevenlabs', description: 'American male, raspy' },
+      { id: 'glinda', name: 'Glinda', gender: 'female', provider: 'elevenlabs', description: 'American female, witch' },
+      { id: 'giovanni', name: 'Giovanni', gender: 'male', provider: 'elevenlabs', description: 'English-Italian male, foreigner' },
+      { id: 'mimi', name: 'Mimi', gender: 'female', provider: 'elevenlabs', description: 'Swedish female, childish' },
+      
+      // OpenAI Voices
+      { id: 'alloy', name: 'Alloy', gender: 'neutral', provider: 'openai', description: 'Neutral, balanced' },
+      { id: 'echo', name: 'Echo', gender: 'male', provider: 'openai', description: 'Male, clear' },
+      { id: 'fable', name: 'Fable', gender: 'neutral', provider: 'openai', description: 'Expressive, storytelling' },
+      { id: 'onyx', name: 'Onyx', gender: 'male', provider: 'openai', description: 'Deep, authoritative' },
+      { id: 'nova', name: 'Nova', gender: 'female', provider: 'openai', description: 'Female, warm' },
+      { id: 'shimmer', name: 'Shimmer', gender: 'female', provider: 'openai', description: 'Female, soft' },
+      
+      // Deepgram Aura Voices
+      { id: 'aura-asteria-en', name: 'Asteria', gender: 'female', provider: 'deepgram', description: 'American female, professional' },
+      { id: 'aura-luna-en', name: 'Luna', gender: 'female', provider: 'deepgram', description: 'American female, warm' },
+      { id: 'aura-stella-en', name: 'Stella', gender: 'female', provider: 'deepgram', description: 'American female, calm' },
+      { id: 'aura-athena-en', name: 'Athena', gender: 'female', provider: 'deepgram', description: 'British female, professional' },
+      { id: 'aura-hera-en', name: 'Hera', gender: 'female', provider: 'deepgram', description: 'American female, mature' },
+      { id: 'aura-orion-en', name: 'Orion', gender: 'male', provider: 'deepgram', description: 'American male, professional' },
+      { id: 'aura-arcas-en', name: 'Arcas', gender: 'male', provider: 'deepgram', description: 'American male, conversational' },
+      { id: 'aura-perseus-en', name: 'Perseus', gender: 'male', provider: 'deepgram', description: 'American male, deep' },
+      { id: 'aura-angus-en', name: 'Angus', gender: 'male', provider: 'deepgram', description: 'Irish male, friendly' },
+      { id: 'aura-orpheus-en', name: 'Orpheus', gender: 'male', provider: 'deepgram', description: 'American male, warm' },
+      { id: 'aura-helios-en', name: 'Helios', gender: 'male', provider: 'deepgram', description: 'British male, professional' },
+      { id: 'aura-zeus-en', name: 'Zeus', gender: 'male', provider: 'deepgram', description: 'American male, authoritative' }
     ];
 
     res.json(voices);

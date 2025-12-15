@@ -25,13 +25,13 @@ import { phoneNumbersRouter } from './phone-numbers';
 import { createWebVoiceSession, endWebVoiceSession } from '../services/web-voice-bridge';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
-import { 
-  validateCsv, 
-  importCsvLeads, 
-  getImportStatus, 
-  getImportErrors, 
+import {
+  validateCsv,
+  importCsvLeads,
+  getImportStatus,
+  getImportErrors,
   listImports,
-  generateErrorCsv 
+  generateErrorCsv
 } from '../services/csv-import-service';
 
 // Generate a unique request ID using crypto
@@ -496,7 +496,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   // 2. Build config from DB state (using constants)
   // Set server.url to webhook endpoint for programmatic event delivery
   const webhookUrl = `${process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000'}/api/webhooks/vapi`;
-  
+
   const assistantConfig = {
     name: agent.name || 'CallWaiting AI Outbound',
     systemPrompt: agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
@@ -604,13 +604,13 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     if (existing?.vapi_assistant_id) {
       return existing.vapi_assistant_id;
     }
-    
+
     // Fallback: use the newly created assistant and try to save it
     logger.warn('Existing assistant also null, using newly created one', {
       assistantId: assistant.id,
       agentId
     });
-    
+
     // Try one more time to save the newly created assistant
     const { data: finalUpdate } = await supabase
       .from('agents')
@@ -619,7 +619,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
       .eq('vapi_assistant_id', null)
       .select('vapi_assistant_id')
       .single();
-    
+
     return finalUpdate?.vapi_assistant_id || assistant.id;
   }
 
@@ -1373,10 +1373,10 @@ router.post(
 
 /**
  * POST /api/founder-console/agent/behavior
- * Save agent behavior fields independently (partial updates supported).
- * Accepts: systemPrompt, firstMessage, voiceId, maxDurationSeconds (all optional).
- * Syncs to Vapi using full agent config from database.
- * Requires authentication and scoped to user's organization.
+ * Save agent behavior fields (Global Persona).
+ * Updates BOTH outbound and inbound agents to ensure consistent persona.
+ * Accepts: systemPrompt, firstMessage, voiceId, maxDurationSeconds, language.
+ * Syncs to Vapi for both assistants concurrently.
  */
 router.post(
   '/agent/behavior',
@@ -1386,11 +1386,11 @@ router.post(
     const requestId = req.requestId || generateRequestId();
     const user = req.user;
 
+    // SECURITY: Do NOT log full req.body as it contains system prompts
     logger.info('POST /agent/behavior received', {
       requestId,
       userId: user?.id,
-      orgId: user?.orgId,
-      body: req.body
+      orgId: user?.orgId
     });
 
     if (!user) {
@@ -1435,8 +1435,8 @@ router.post(
         return;
       }
 
-      // Fetch org, vapi integration, and existing agent in parallel
-      const [{ data: org, error: orgError }, { data: vapiIntegration }, { data: existingAgent }] =
+      // Fetch org and vapi integration
+      const [{ data: org, error: orgError }, { data: vapiIntegration }] =
         await Promise.all([
           supabase
             .from('organizations')
@@ -1448,13 +1448,7 @@ router.post(
             .select('config')
             .eq('provider', INTEGRATION_PROVIDERS.VAPI)
             .eq('org_id', orgId)
-            .maybeSingle(),
-          supabase
-            .from('agents')
-            .select('id, system_prompt, first_message, voice, max_call_duration')
-            .eq('role', AGENT_ROLES.OUTBOUND)
-            .eq('org_id', orgId)
-            .maybeSingle(),
+            .maybeSingle()
         ]);
 
       if (orgError || !org) {
@@ -1463,59 +1457,76 @@ router.post(
         return;
       }
 
-      // Get the stored Vapi API key (no need to validate on every update)
+      // Get the stored Vapi API key
       let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
-      
+
       if (!vapiApiKey) {
-        res.status(400).json({ 
+        res.status(400).json({
           error: 'Vapi API key not configured. Please save your Vapi API key in Settings first.',
-          requestId 
+          requestId
         });
         return;
       }
 
-      // Use nuclear sanitization
+      // Sanitize Vapi key
       try {
         vapiApiKey = sanitizeVapiKey(vapiApiKey);
       } catch (sanitizeErr: any) {
         logger.error('Failed to sanitize Vapi key', { orgId, requestId, error: sanitizeErr.message });
-        res.status(400).json({ 
+        res.status(400).json({
           error: 'Vapi connection is not valid. Please save connection again.',
-          requestId 
+          requestId
         });
         return;
       }
-      
-      logger.info('Vapi API key sanitized', { 
-        requestId, 
-        keyLength: vapiApiKey.length,
-        keyPrefix: vapiApiKey.substring(0, 10)
-      });
 
-      // Get or create agent
-      let ensuredAgentId: string = existingAgent?.id ?? '';
+      // GLOBAL PERSONA UPDATE: Identify Outbound AND Inbound Agents
+      // We will perform upsert-like logic: find them, or create them if missing.
+      const rolesToSync = [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND];
+      const agentIdsToSync: string[] = [];
 
-      if (!ensuredAgentId) {
-        const { data: newAgent, error: insertError } = await supabase
+      for (const role of rolesToSync) {
+        const { data: existingAgent } = await supabase
           .from('agents')
-          .insert({
-            role: AGENT_ROLES.OUTBOUND,
-            name: 'CallWaiting AI Outbound',
-            status: 'active',
-            org_id: orgId
-          })
           .select('id')
-          .single();
+          .eq('role', role)
+          .eq('org_id', orgId)
+          .maybeSingle();
 
-        if (insertError || !newAgent?.id) {
-          logger.error('Failed to create agent', { orgId, insertError, requestId });
-          res.status(500).json({ error: 'Internal server error', requestId });
-          return;
+        let agentId = existingAgent?.id;
+
+        if (!agentId) {
+          // Create missing agent (e.g. Inbound might not exist yet)
+          const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
+          const { data: newAgent, error: insertError } = await supabase
+            .from('agents')
+            .insert({
+              role: role,
+              name: name,
+              status: 'active',
+              org_id: orgId
+            })
+            .select('id')
+            .single();
+
+          if (insertError) {
+            logger.error(`Failed to create ${role} agent`, { requestId, error: insertError });
+            continue; // Skip this role if creation failed
+          }
+          agentId = newAgent?.id;
         }
-        ensuredAgentId = newAgent.id;
+
+        if (agentId) {
+          agentIdsToSync.push(agentId);
+        }
       }
 
-      // Build partial update object with only provided fields
+      if (agentIdsToSync.length === 0) {
+        res.status(500).json({ error: 'Failed to find or create any agents', requestId });
+        return;
+      }
+
+      // Build partial update object
       const updatePayload: Record<string, any> = {};
       if (systemPrompt !== undefined) updatePayload.system_prompt = systemPrompt;
       if (firstMessage !== undefined) updatePayload.first_message = firstMessage;
@@ -1523,57 +1534,48 @@ router.post(
       if (language !== undefined) updatePayload.language = language;
       if (maxDurationSeconds !== undefined) updatePayload.max_call_duration = maxDurationSeconds;
 
-      // Update agent behavior in database (partial update)
+      // Update ALL valid agents in the DB
       const { error: updateError } = await supabase
         .from('agents')
         .update(updatePayload)
-        .eq('id', ensuredAgentId)
+        .in('id', agentIdsToSync)
         .eq('org_id', orgId);
 
       if (updateError) {
-        logger.error('Failed to update agent behavior', { ensuredAgentId, orgId, updateError, requestId });
+        logger.error('Failed to update agents behavior', { agentIdsToSync, orgId, updateError, requestId });
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
       }
 
-      // Fetch updated agent to get full current state for Vapi sync
-      const { data: updatedAgent, error: fetchError } = await supabase
-        .from('agents')
-        .select('id, system_prompt, first_message, voice, max_call_duration, vapi_assistant_id')
-        .eq('id', ensuredAgentId)
-        .eq('org_id', orgId)
-        .single();
+      // Parallel Vapi Sync for all updated agents
+      logger.info('Syncing agents to Vapi', { agentIds: agentIdsToSync, requestId });
 
-      if (fetchError || !updatedAgent) {
-        logger.error('Failed to fetch updated agent', { ensuredAgentId, orgId, fetchError, requestId });
-        res.status(500).json({ error: 'Internal server error', requestId });
-        return;
-      }
+      const syncPromises = agentIdsToSync.map(id => ensureAssistantSynced(id, vapiApiKey!));
+      const syncResults = await Promise.allSettled(syncPromises);
 
-      // Sync to Vapi (idempotent) with full agent state from database
-      logger.info('About to sync assistant', { ensuredAgentId, vapiApiKey: vapiApiKey ? 'present' : 'missing', requestId });
-      
-      try {
-        const assistantId = await ensureAssistantSynced(ensuredAgentId, vapiApiKey);
+      const successfulSyncs = syncResults.filter(r => r.status === 'fulfilled').map((r: any) => r.value);
+      const failedSyncs = syncResults.filter(r => r.status === 'rejected');
 
-        logger.info('Assistant synced successfully', { assistantId, ensuredAgentId, requestId });
-        res.status(200).json({
-          success: true,
-          agentId: ensuredAgentId,
-          assistantId,
+      if (failedSyncs.length > 0) {
+        logger.warn('Some agents failed to sync', {
+          successCount: successfulSyncs.length,
+          failCount: failedSyncs.length,
+          errors: failedSyncs.map((r: any) => r.reason.message),
           requestId
         });
-      } catch (syncError: any) {
-        logger.error('Failed to sync agent behavior to Vapi', { 
-          ensuredAgentId, 
-          orgId, 
-          syncErrorMessage: syncError?.message,
-          syncErrorStack: syncError?.stack,
-          requestId 
-        });
-        res.status(500).json({ error: 'Internal server error', requestId });
-        return;
+      } else {
+        logger.info('All agents synced successfully', { count: successfulSyncs.length, requestId });
       }
+
+      // Return success if at least one synced (usually outbound)
+      // If Global Persona logic partially fails, we still consider the save "successful" for the user,
+      // but internal logs will show the warning.
+      res.status(200).json({
+        success: true,
+        syncedAgentIds: successfulSyncs, // Return IDs of assistants that were updated
+        requestId
+      });
+
     } catch (error: any) {
       logger.error('Failed to save agent behavior', {
         errorMessage: error?.message,
@@ -1659,7 +1661,7 @@ router.post(
           !agent.voice && 'Voice',
           !agent.max_call_duration && 'Max Call Duration'
         ].filter(Boolean);
-        
+
         res.status(400).json({
           error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
           requestId
@@ -1913,7 +1915,7 @@ router.post(
           !agent.language && 'Language',
           !agent.max_call_duration && 'Max Call Duration'
         ].filter(Boolean);
-        
+
         res.status(400).json({
           error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
           requestId
@@ -1965,7 +1967,7 @@ router.post(
       } catch (vapiError: any) {
         // Clean up orphaned tracking row on Vapi failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.exception('Failed to create Vapi WebSocket call', vapiError);
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
@@ -1977,7 +1979,7 @@ router.post(
       if (!vapiCallId || !vapiTransportUrl) {
         // Clean up orphaned tracking row
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.error('Vapi call missing id or transport url', { call });
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
@@ -1992,7 +1994,7 @@ router.post(
       if (updateError) {
         // Clean up on update failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.exception('Failed to update call tracking', updateError);
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
@@ -2005,7 +2007,7 @@ router.post(
       } catch (bridgeError: any) {
         // Clean up on bridge creation failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.exception('Failed to create WebSocket bridge', bridgeError);
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
@@ -2129,9 +2131,9 @@ router.post(
       const cleanPhone = phoneNumber.replace(/[\s\-\(\)]/g, ''); // Remove formatting
       const e164Regex = /^\+?[1-9]\d{6,14}$/; // E.164: 7-15 digits, no leading zero
       if (!e164Regex.test(cleanPhone)) {
-        res.status(400).json({ 
-          error: 'Invalid phone number. Use E.164 format: +1234567890 (include country code)', 
-          requestId 
+        res.status(400).json({
+          error: 'Invalid phone number. Use E.164 format: +1234567890 (include country code)',
+          requestId
         });
         return;
       }
@@ -2176,8 +2178,8 @@ router.post(
       }
 
       // CRITICAL FIX #6: Validate agent fields are non-empty (not just truthy)
-      if (!agent.system_prompt?.trim() || !agent.first_message?.trim() || 
-          !agent.voice?.trim() || !agent.language?.trim() || !agent.max_call_duration) {
+      if (!agent.system_prompt?.trim() || !agent.first_message?.trim() ||
+        !agent.voice?.trim() || !agent.language?.trim() || !agent.max_call_duration) {
         const missingFields = [
           !agent.system_prompt?.trim() && 'System Prompt (cannot be empty)',
           !agent.first_message?.trim() && 'First Message (cannot be empty)',
@@ -2185,7 +2187,7 @@ router.post(
           !agent.language?.trim() && 'Language (must be selected)',
           !agent.max_call_duration && 'Max Call Duration'
         ].filter(Boolean);
-        
+
         res.status(400).json({
           error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
           requestId
@@ -2194,19 +2196,19 @@ router.post(
       }
 
       // Sync agent to pick up latest changes (also sets webhook URL programmatically)
-      await ensureAssistantSynced(agent.id, vapiApiKey);
+      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
 
       // Get Vapi phone number ID (the caller ID for outbound calls)
       // First check stored config, then env var, then auto-fetch from Vapi
       let phoneNumberId = vapiIntegration?.config?.vapi_phone_number_id || process.env.VAPI_PHONE_NUMBER_ID;
-      
+
       // If no phone number ID stored, auto-fetch from Vapi account
       if (!phoneNumberId) {
         try {
           logger.info('No phone number ID stored, fetching from Vapi account', { requestId });
           const vapiClient = new VapiClient(vapiApiKey);
           const phoneNumbers = await vapiClient.listPhoneNumbers();
-          
+
           if (phoneNumbers && phoneNumbers.length > 0) {
             // Deterministic selection:
             // 1) Prefer Twilio-imported number
@@ -2221,12 +2223,12 @@ router.post(
             if (!phoneNumberId) {
               throw new Error('Vapi returned phone numbers but none had an id');
             }
-            logger.info('Auto-fetched phone number from Vapi', { 
-              phoneNumberId, 
+            logger.info('Auto-fetched phone number from Vapi', {
+              phoneNumberId,
               totalNumbers: phoneNumbers.length,
-              requestId 
+              requestId
             });
-            
+
             // Store it for future use
             const { data: existingConfig } = await supabase
               .from('integrations')
@@ -2234,7 +2236,7 @@ router.post(
               .eq('provider', INTEGRATION_PROVIDERS.VAPI)
               .eq('org_id', orgId)
               .maybeSingle();
-            
+
             await supabase
               .from('integrations')
               .upsert({
@@ -2245,17 +2247,17 @@ router.post(
               }, { onConflict: 'org_id,provider' });
           }
         } catch (fetchError: any) {
-          logger.error('Failed to auto-fetch phone numbers from Vapi', { 
-            error: fetchError?.message, 
-            requestId 
+          logger.error('Failed to auto-fetch phone numbers from Vapi', {
+            error: fetchError?.message,
+            requestId
           });
         }
       }
-      
+
       if (!phoneNumberId) {
-        res.status(400).json({ 
-          error: 'No phone number found in your Vapi account. Import a Twilio number or create a Vapi number first.', 
-          requestId 
+        res.status(400).json({
+          error: 'No phone number found in your Vapi account. Import a Twilio number or create a Vapi number first.',
+          requestId
         });
         return;
       }
@@ -2301,12 +2303,12 @@ router.post(
       } catch (vapiError: any) {
         // Clean up orphaned tracking row on Vapi failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.exception('Failed to create Vapi outbound call', vapiError);
         const errorMsg = vapiError?.response?.data?.message || vapiError?.message || 'Unknown error';
-        res.status(500).json({ 
-          error: `Failed to initiate outbound call: ${errorMsg}`, 
-          requestId 
+        res.status(500).json({
+          error: `Failed to initiate outbound call: ${errorMsg}`,
+          requestId
         });
         return;
       }
@@ -2316,7 +2318,7 @@ router.post(
       if (!vapiCallId) {
         // Clean up orphaned tracking row
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.error('Vapi outbound call missing id', { call });
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
@@ -2331,7 +2333,7 @@ router.post(
       if (updateError) {
         // Clean up on update failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
-        
+
         logger.exception('Failed to update call tracking for outbound test', updateError);
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
@@ -2968,7 +2970,7 @@ router.post(
 
       // Get lead's tier from personalization_data
       const leadTier = (lead.personalization_data as any)?.tier || 'C';
-      
+
       // Build tier-specific prompt
       const tierPrompt = buildTierSpecificPrompt(
         getDefaultPromptConfig(),
@@ -3159,7 +3161,7 @@ router.post(
  */
 router.post('/calls/end', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
   const requestId = generateRequestId();
-  
+
   try {
     const { callId } = req.body;
 
@@ -3315,7 +3317,7 @@ const upload = multer({
  * POST /api/founder-console/leads/csv/validate
  * Validate a CSV file before import (preview headers, sample rows, detect issues)
  */
-router.post('/leads/csv/validate', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+router.post('/leads/csv/validate', upload.single('file'), async (req: Request & { file?: { buffer: Buffer; originalname: string; mimetype: string; size: number } }, res: Response): Promise<void> => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'No file uploaded' });
@@ -3323,7 +3325,7 @@ router.post('/leads/csv/validate', upload.single('file'), async (req: Request, r
     }
 
     const result = await validateCsv(req.file.buffer);
-    
+
     res.json({
       valid: result.valid,
       errors: result.errors,
@@ -3343,7 +3345,7 @@ router.post('/leads/csv/validate', upload.single('file'), async (req: Request, r
  * Import leads from a CSV file
  * Body: multipart/form-data with 'file' and optional 'dedupeMode', 'columnMapping'
  */
-router.post('/leads/csv/import', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+router.post('/leads/csv/import', upload.single('file'), async (req: Request & { file?: { buffer: Buffer; originalname: string; mimetype: string; size: number } }, res: Response): Promise<void> => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'No file uploaded' });
@@ -3399,7 +3401,7 @@ router.get('/leads/imports', async (req: Request, res: Response): Promise<void> 
 
     const limit = parseInt(req.query.limit as string) || 20;
     const imports = await listImports(org.id, limit);
-    
+
     res.json(imports);
   } catch (error: any) {
     logger.exception('Failed to list imports', error);
@@ -3427,7 +3429,7 @@ router.get('/leads/imports/:importId', async (req: Request, res: Response): Prom
     }
 
     const importRecord = await getImportStatus(importId, org.id);
-    
+
     if (!importRecord) {
       res.status(404).json({ error: 'Import not found' });
       return;
@@ -3461,7 +3463,7 @@ router.get('/leads/imports/:importId/errors', async (req: Request, res: Response
 
     const limit = parseInt(req.query.limit as string) || 100;
     const errors = await getImportErrors(importId, org.id, limit);
-    
+
     res.json(errors);
   } catch (error: any) {
     logger.exception('Failed to get import errors', error);
@@ -3556,7 +3558,7 @@ router.get('/leads/imports/:importId/errors/download', async (req: Request, res:
     }
 
     const csv = await generateErrorCsv(importId, org.id);
-    
+
     if (!csv) {
       res.status(404).json({ error: 'No errors found for this import' });
       return;

@@ -1,80 +1,50 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, CheckCircle, AlertCircle, Phone, Calendar, DollarSign, Zap, ChevronRight, Download, Play, Settings, PhoneCall, TrendingUp, Users, Clock, Mic, LogOut, Bot } from 'lucide-react';
+import { Phone, TrendingUp, ArrowUpRight, ArrowDownRight, Clock, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { motion } from 'framer-motion';
+import { supabase } from '@/lib/supabase';
 
-// Left Sidebar Navigation
-function LeftSidebar() {
-    const router = useRouter();
-    const { user, logout } = useAuth();
+import LeftSidebar from '@/components/dashboard/LeftSidebar';
 
-    const navItems = [
-        { label: 'Dashboard', href: '/dashboard', icon: Activity },
-        { label: 'Agent Config', href: '/dashboard/settings', icon: Bot },
-    ];
+// Removed local LeftSidebar definition
 
-    return (
-        <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col">
-            {/* Logo */}
-            <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-                        <Phone className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-xl font-bold text-gray-900">Voxanne</span>
-                </div>
-            </div>
 
-            {/* Navigation Items */}
-            <nav className="flex-1 p-4 space-y-2">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = item.href === '/dashboard';
-                    return (
-                        <button
-                            key={item.href}
-                            onClick={() => router.push(item.href)}
-                            className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${
-                                isActive
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                            }`}
-                        >
-                            <Icon className="w-5 h-5" />
-                            {item.label}
-                        </button>
-                    );
-                })}
-            </nav>
+interface DashboardStats {
+    totalCalls: number;
+    inboundCalls: number;
+    outboundCalls: number;
+    completedCalls: number;
+    callsToday: number;
+    avgDuration: number;
+}
 
-            {/* User Section */}
-            <div className="p-4 border-t border-gray-200 space-y-3">
-                <div className="px-4 py-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900">{user?.email}</p>
-                    <p className="text-xs text-gray-500">Account</p>
-                </div>
-                <button
-                    onClick={() => {
-                        logout();
-                        router.push('/login');
-                    }}
-                    className="w-full px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium"
-                >
-                    <LogOut className="w-5 h-5" />
-                    Logout
-                </button>
-            </div>
-        </div>
-    );
+interface RecentCall {
+    id: string;
+    vapi_call_id: string;
+    to_number: string;
+    started_at: string;
+    duration_seconds: number | null;
+    status: string;
+    metadata: {
+        channel?: 'inbound' | 'outbound';
+    } | null;
 }
 
 export default function VoxanneDashboard() {
     const router = useRouter();
     const { user, loading } = useAuth();
-    const [selectedPeriod, setSelectedPeriod] = useState('7d');
+    const [stats, setStats] = useState<DashboardStats>({
+        totalCalls: 0,
+        inboundCalls: 0,
+        outboundCalls: 0,
+        completedCalls: 0,
+        callsToday: 0,
+        avgDuration: 0
+    });
+    const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -82,76 +52,90 @@ export default function VoxanneDashboard() {
         }
     }, [user, loading, router]);
 
-    if (loading) {
+    useEffect(() => {
+        if (user) {
+            fetchDashboardData();
+        }
+    }, [user]);
+
+    const fetchDashboardData = async () => {
+        setIsLoading(true);
+        try {
+            // Fetch all calls for stats
+            const { data: allCalls, error: callsError } = await supabase
+                .from('call_logs')
+                .select('*')
+                .order('started_at', { ascending: false });
+
+            if (callsError) {
+                console.error('Error fetching calls:', callsError);
+                return;
+            }
+
+            // Calculate stats
+            const calls = allCalls || [];
+            const today = new Date().toISOString().split('T')[0];
+            const callsToday = calls.filter(c => c.started_at?.startsWith(today));
+
+            const inbound = calls.filter(c => c.metadata?.channel === 'inbound');
+            const outbound = calls.filter(c => c.metadata?.channel === 'outbound' || !c.metadata?.channel);
+            const completed = calls.filter(c => c.status === 'completed');
+
+            const totalDuration = completed.reduce((sum, c) => sum + (c.duration_seconds || 0), 0);
+            const avgDuration = completed.length > 0 ? Math.round(totalDuration / completed.length) : 0;
+
+            setStats({
+                totalCalls: calls.length,
+                inboundCalls: inbound.length,
+                outboundCalls: outbound.length,
+                completedCalls: completed.length,
+                callsToday: callsToday.length,
+                avgDuration
+            });
+
+            // Set recent calls (last 5)
+            setRecentCalls(calls.slice(0, 5));
+
+        } catch (error) {
+            console.error('Error:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const formatDuration = (seconds: number | null) => {
+        if (!seconds) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const formatTimeAgo = (dateString: string) => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    };
+
+    if (loading || isLoading) {
         return (
             <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600">Loading...</p>
+                    <p className="text-gray-700">Loading dashboard...</p>
                 </div>
             </div>
         );
     }
 
     if (!user) return null;
-
-    const stats = {
-        totalCalls: 847,
-        answeredCalls: 831,
-        missedCalls: 16,
-        bookings: 127,
-        revenue: 45800,
-        avgResponseTime: '0.48s',
-        callsToday: 34,
-        bookingsToday: 5
-    };
-
-    const recentCalls = [
-        { id: 1, caller: 'Sarah Mitchell', time: '2 mins ago', duration: '1:24', type: 'Booking', outcome: 'Booked - BBL Consult', status: 'success', recording: true },
-        { id: 2, caller: 'James Parker', time: '8 mins ago', duration: '0:42', type: 'Pricing', outcome: 'Follow-up Scheduled', status: 'success', recording: true },
-        { id: 3, caller: 'Emma Wilson', time: '15 mins ago', duration: '2:11', type: 'Medical', outcome: 'Escalated to Nurse', status: 'escalated', recording: true },
-        { id: 4, caller: 'Michael Chen', time: '23 mins ago', duration: '1:05', type: 'Booking', outcome: 'Booked - Rhinoplasty', status: 'success', recording: true },
-        { id: 5, caller: 'Lisa Anderson', time: '31 mins ago', duration: '0:38', type: 'Info', outcome: 'General Inquiry', status: 'info', recording: true },
-    ];
-
-    const upcomingBookings = [
-        { id: 1, patient: 'Sarah Mitchell', procedure: 'BBL Consultation', date: 'Today', time: '2:00 PM', status: 'confirmed', value: 9500 },
-        { id: 2, patient: 'Michael Chen', procedure: 'Rhinoplasty Consult', date: 'Tomorrow', time: '10:30 AM', status: 'confirmed', value: 8500 },
-        { id: 3, patient: 'Emma Davis', procedure: 'Botox Treatment', date: 'Dec 16', time: '3:00 PM', status: 'pending', value: 450 },
-        { id: 4, patient: 'James Wilson', procedure: 'Breast Aug Consult', date: 'Dec 17', time: '11:00 AM', status: 'confirmed', value: 6800 },
-    ];
-
-    const performanceData = [
-        { day: 'Mon', calls: 98, bookings: 14, revenue: 6400 },
-        { day: 'Tue', calls: 112, bookings: 18, revenue: 8100 },
-        { day: 'Wed', calls: 125, bookings: 21, revenue: 9200 },
-        { day: 'Thu', calls: 134, bookings: 19, revenue: 8800 },
-        { day: 'Fri', calls: 156, bookings: 26, revenue: 11500 },
-        { day: 'Sat', calls: 145, bookings: 20, revenue: 9300 },
-        { day: 'Sun', calls: 77, bookings: 9, revenue: 4500 },
-    ];
-
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1
-            }
-        }
-    };
-
-    const itemVariants = {
-        hidden: { y: 20, opacity: 0 },
-        visible: {
-            y: 0,
-            opacity: 1,
-            transition: {
-                type: "spring",
-                stiffness: 100
-            }
-        }
-    };
 
     return (
         <div className="flex h-screen bg-white">
@@ -164,7 +148,7 @@ export default function VoxanneDashboard() {
                     {/* Header */}
                     <div className="mb-12">
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
-                        <p className="text-gray-600">Welcome back! Here's your system overview.</p>
+                        <p className="text-gray-700">Welcome back! Here&apos;s your system overview.</p>
                     </div>
 
                     {/* Key Metrics Grid */}
@@ -176,197 +160,143 @@ export default function VoxanneDashboard() {
                                     <Phone className="w-6 h-6 text-emerald-600" />
                                 </div>
                                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1">
-                                    <TrendingUp className="w-3 h-3" /> +12.5%
+                                    <TrendingUp className="w-3 h-3" /> Total
                                 </span>
                             </div>
                             <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.totalCalls}</h3>
-                            <p className="text-sm text-gray-600 font-medium mb-4">Total Calls</p>
+                            <p className="text-sm text-gray-700 font-medium mb-4">Total Calls</p>
                             <div className="pt-4 border-t border-gray-200">
                                 <div className="flex items-center justify-between text-xs font-medium">
                                     <span className="text-gray-600">Today: {stats.callsToday}</span>
-                                    <span className="text-emerald-600">98.1% answered</span>
+                                    <span className="text-emerald-600">{stats.completedCalls} completed</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Bookings */}
+                        {/* Inbound Calls */}
                         <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center">
-                                    <Calendar className="w-6 h-6 text-cyan-600" />
+                                    <ArrowDownRight className="w-6 h-6 text-cyan-600" />
                                 </div>
-                                <span className="text-xs font-bold text-cyan-600 bg-cyan-50 px-3 py-1 rounded-full flex items-center gap-1">
-                                    <TrendingUp className="w-3 h-3" /> +24%
+                                <span className="text-xs font-bold text-cyan-600 bg-cyan-50 px-3 py-1 rounded-full">
+                                    Inbound
                                 </span>
                             </div>
-                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.bookings}</h3>
-                            <p className="text-sm text-gray-600 font-medium mb-4">Appointments Booked</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.inboundCalls}</h3>
+                            <p className="text-sm text-gray-700 font-medium mb-4">Inbound Calls</p>
                             <div className="pt-4 border-t border-gray-200">
                                 <div className="flex items-center justify-between text-xs font-medium">
-                                    <span className="text-gray-600">Today: {stats.bookingsToday}</span>
-                                    <span className="text-cyan-600">15% conv. rate</span>
+                                    <span className="text-gray-600">Incoming</span>
+                                    <span className="text-cyan-600">{Math.round((stats.inboundCalls / Math.max(stats.totalCalls, 1)) * 100)}%</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Revenue */}
+                        {/* Outbound Calls */}
                         <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center">
-                                    <DollarSign className="w-6 h-6 text-purple-600" />
+                                    <ArrowUpRight className="w-6 h-6 text-purple-600" />
                                 </div>
-                                <span className="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full flex items-center gap-1">
-                                    <TrendingUp className="w-3 h-3" /> +31%
+                                <span className="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
+                                    Outbound
                                 </span>
                             </div>
-                            <h3 className="text-3xl font-bold text-gray-900 mb-1">£{(stats.revenue / 1000).toFixed(1)}k</h3>
-                            <p className="text-sm text-gray-600 font-medium mb-4">Pipeline Revenue</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.outboundCalls}</h3>
+                            <p className="text-sm text-gray-700 font-medium mb-4">Outbound Calls</p>
                             <div className="pt-4 border-t border-gray-200">
                                 <div className="flex items-center justify-between text-xs font-medium">
-                                    <span className="text-gray-600">Avg: £360/booking</span>
-                                    <span className="text-purple-600">ROI: 12,300%</span>
+                                    <span className="text-gray-600">Outgoing</span>
+                                    <span className="text-purple-600">{Math.round((stats.outboundCalls / Math.max(stats.totalCalls, 1)) * 100)}%</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Response Time */}
+                        {/* Average Duration */}
                         <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
                             <div className="flex items-start justify-between mb-4">
                                 <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
-                                    <Zap className="w-6 h-6 text-amber-600" />
+                                    <Clock className="w-6 h-6 text-amber-600" />
                                 </div>
                                 <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
-                                    Excellent
+                                    Avg
                                 </span>
                             </div>
-                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.avgResponseTime}</h3>
-                            <p className="text-sm text-gray-600 font-medium mb-4">Avg Response Time</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-1">{formatDuration(stats.avgDuration)}</h3>
+                            <p className="text-sm text-gray-700 font-medium mb-4">Avg Call Duration</p>
                             <div className="pt-4 border-t border-gray-200">
                                 <div className="flex items-center justify-between text-xs font-medium">
-                                    <span className="text-gray-600">Target: &lt;1s</span>
-                                    <span className="text-amber-600">52% faster</span>
+                                    <span className="text-gray-600">Per call</span>
+                                    <span className="text-amber-600">Completed</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Content Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Recent Calls */}
-                        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-8">
-                            <div className="flex items-center justify-between mb-8">
-                                <div>
-                                    <h3 className="text-2xl font-bold text-gray-900 mb-1">Recent Calls</h3>
-                                    <p className="text-sm text-gray-600">Live call activity and outcomes</p>
-                                </div>
-                                <button className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2 text-gray-700">
-                                    <Download className="w-4 h-4" />
-                                    Export
-                                </button>
+                    {/* Recent Calls */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-8">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-900 mb-1">Recent Calls</h3>
+                                <p className="text-sm text-gray-700">Latest call activity</p>
                             </div>
+                            <button
+                                onClick={() => router.push('/dashboard/calls')}
+                                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors text-sm font-medium"
+                            >
+                                View All
+                            </button>
+                        </div>
 
-                            <div className="space-y-4">
-                                {recentCalls.map((call, idx) => (
+                        <div className="space-y-4">
+                            {recentCalls.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Phone className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <p className="text-gray-700">No calls yet</p>
+                                    <p className="text-sm text-gray-600 mt-2">Calls will appear here once you start receiving them</p>
+                                </div>
+                            ) : (
+                                recentCalls.map((call) => (
                                     <div
                                         key={call.id}
-                                        className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all group cursor-pointer"
+                                        className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all"
                                     >
-                                        <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${call.status === 'success' ? 'bg-emerald-50' :
-                                                    call.status === 'escalated' ? 'bg-amber-50' : 'bg-cyan-50'
+                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${call.metadata?.channel === 'inbound'
+                                                    ? 'bg-cyan-50'
+                                                    : 'bg-purple-50'
                                                     }`}>
-                                                    {call.status === 'success' ? <CheckCircle className="w-6 h-6 text-emerald-600" /> :
-                                                        call.status === 'escalated' ? <AlertCircle className="w-6 h-6 text-amber-600" /> :
-                                                            <Phone className="w-6 h-6 text-cyan-600" />}
+                                                    {call.metadata?.channel === 'inbound' ? (
+                                                        <ArrowDownRight className="w-6 h-6 text-cyan-600" />
+                                                    ) : (
+                                                        <ArrowUpRight className="w-6 h-6 text-purple-600" />
+                                                    )}
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-gray-900">{call.caller}</h4>
+                                                    <h4 className="font-bold text-gray-900">{call.to_number || 'Unknown'}</h4>
                                                     <div className="flex items-center gap-2 text-xs text-gray-600 font-medium">
                                                         <Clock className="w-3 h-3" />
-                                                        {call.time} • {call.duration}
+                                                        {formatTimeAgo(call.started_at)} • {formatDuration(call.duration_seconds)}
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${call.type === 'Booking' ? 'bg-emerald-50 text-emerald-700' :
-                                                    call.type === 'Medical' ? 'bg-amber-50 text-amber-700' :
-                                                        call.type === 'Pricing' ? 'bg-cyan-50 text-cyan-700' :
-                                                            'bg-gray-100 text-gray-700'
+                                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${call.metadata?.channel === 'inbound'
+                                                    ? 'bg-cyan-50 text-cyan-700'
+                                                    : 'bg-purple-50 text-purple-700'
                                                     }`}>
-                                                    {call.type}
+                                                    {call.metadata?.channel === 'inbound' ? 'Inbound' : 'Outbound'}
                                                 </span>
-                                                {call.recording && (
-                                                    <button className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-emerald-100 hover:text-emerald-600 transition-all flex items-center justify-center group/btn">
-                                                        <Play className="w-4 h-4 fill-current group-hover/btn:scale-110 transition-transform" />
-                                                    </button>
+                                                {call.status === 'completed' && (
+                                                    <CheckCircle className="w-5 h-5 text-emerald-600" />
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between pl-16">
-                                            <p className="text-sm text-gray-700 font-medium">{call.outcome}</p>
-                                            <div className="flex items-center gap-1 text-xs text-gray-600 group-hover:text-emerald-600 transition-colors font-medium">
-                                                View Details
-                                                <ChevronRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
-                                            </div>
-                                        </div>
                                     </div>
-                                ))}
-                            </div>
-
-                            <button className="w-full mt-6 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-bold text-gray-700 flex items-center justify-center gap-2 group">
-                                View All Activities
-                                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                            </button>
-                        </div>
-
-                        {/* Upcoming Bookings & Status */}
-                        <div className="space-y-6">
-                            {/* Upcoming Bookings */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                                <div className="mb-6">
-                                    <h3 className="text-xl font-bold text-gray-900 mb-1">Upcoming</h3>
-                                    <p className="text-sm text-gray-600">Next appointments</p>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {upcomingBookings.map((booking) => (
-                                        <div key={booking.id} className="relative pl-6 pb-2 border-l border-gray-200 last:pb-0">
-                                            <div className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white ${booking.status === 'confirmed' ? 'bg-emerald-600' : 'bg-amber-600'
-                                                }`} />
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-gray-300 transition-all">
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <h4 className="font-bold text-sm text-gray-900">{booking.patient}</h4>
-                                                    <span className="text-xs font-bold text-emerald-600">£{booking.value.toLocaleString()}</span>
-                                                </div>
-                                                <p className="text-xs text-gray-600 mb-2">{booking.procedure}</p>
-                                                <div className="flex items-center gap-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg px-2 py-1 inline-block">
-                                                    <Calendar className="w-3 h-3" />
-                                                    {booking.date} • {booking.time}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Safe Mode Status Banner */}
-                            <div className="bg-gradient-to-br from-emerald-50 to-cyan-50 border border-emerald-200 rounded-2xl p-6">
-                                <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 animate-pulse">
-                                        <CheckCircle className="w-5 h-5 text-emerald-600" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold mb-1 text-emerald-900">Safe Mode™ Active</h3>
-                                        <p className="text-xs text-emerald-800 leading-relaxed mb-3">
-                                            Zero medical advice incidents • 831 calls handled safely
-                                        </p>
-                                        <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1">
-                                            View Report <ChevronRight className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

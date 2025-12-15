@@ -315,7 +315,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     const data: WebSocketEvent = JSON.parse(event.data);
 
                     // Filter out keepalive/ping if necessary
-                    if (data.type === 'ping') return;
+                    if ((data as any).type === 'ping') return;
 
                     console.log('[VoiceAgent] WebSocket message:', data.type);
 

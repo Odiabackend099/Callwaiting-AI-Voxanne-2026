@@ -28,7 +28,7 @@ const nextConfig = {
             console.warn('⚠️ NEXT_PUBLIC_BACKEND_URL is not defined used for rewrites. Fallback to localhost which will likely fail in production container.');
         }
 
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
         return [
             {
                 source: '/api/:path*',

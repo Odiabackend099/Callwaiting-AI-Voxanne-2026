@@ -167,7 +167,7 @@ Show all test steps and results clearly.`;
   ): { tool: string; params: Record<string, any> } | null {
     // Look for [RUN_TEST_SCENARIO: ...] pattern
     const testMatch = response.match(
-      /\[RUN_TEST_SCENARIO:\s*scenario\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[RUN_TEST_SCENARIO:\s*scenario\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (testMatch) {
       return {
@@ -182,7 +182,7 @@ Show all test steps and results clearly.`;
 
     // Look for [SIMULATE_WEBHOOK: ...] pattern
     const webhookMatch = response.match(
-      /\[SIMULATE_WEBHOOK:\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[SIMULATE_WEBHOOK:\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (webhookMatch) {
       return {
@@ -197,7 +197,7 @@ Show all test steps and results clearly.`;
 
     // Look for [VALIDATE_API: ...] pattern
     const apiMatch = response.match(
-      /\[VALIDATE_API:\s*endpoint\s*=\s*(.+?),\s*method\s*=\s*(.+?),\s*status\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[VALIDATE_API:\s*endpoint\s*=\s*(.+?),\s*method\s*=\s*(.+?),\s*status\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (apiMatch) {
       return {
@@ -214,7 +214,7 @@ Show all test steps and results clearly.`;
 
     // Look for [CREATE_TEST_DATA: ...] pattern
     const dataMatch = response.match(
-      /\[CREATE_TEST_DATA:\s*type\s*=\s*(.+?),\s*count\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[CREATE_TEST_DATA:\s*type\s*=\s*(.+?),\s*count\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (dataMatch) {
       return {
@@ -230,7 +230,7 @@ Show all test steps and results clearly.`;
 
     // Look for [GENERATE_REPORT: ...] pattern
     const reportMatch = response.match(
-      /\[GENERATE_REPORT:\s*test_name\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[GENERATE_REPORT:\s*test_name\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (reportMatch) {
       return {
@@ -245,7 +245,7 @@ Show all test steps and results clearly.`;
 
     // Look for [CLEANUP_TEST_DATA: ...] pattern
     const cleanupMatch = response.match(
-      /\[CLEANUP_TEST_DATA:\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/is
+      /\[CLEANUP_TEST_DATA:\s*type\s*=\s*(.+?),\s*context\s*=\s*(.+?)\]/i
     );
     if (cleanupMatch) {
       return {

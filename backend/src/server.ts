@@ -17,6 +17,7 @@ import { WebSocketServer } from 'ws';
 import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
 import webTestDiagnosticsRouter from './routes/web-test-diagnostics';
+import inboundSetupRouter from './routes/inbound-setup';
 
 // Initialize logger
 initLogger();
@@ -44,6 +45,7 @@ app.use('/api/calls', callsRouter);
 app.use('/api/assistants', assistantsRouter);
 app.use('/api/phone-numbers', phoneNumbersRouter);
 app.use('/api/integrations', integrationsRouter);
+app.use('/api/inbound', inboundSetupRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
 app.use('/', webTestDiagnosticsRouter);
