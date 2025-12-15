@@ -1,73 +1,73 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { Activity, CheckCircle, AlertCircle, Phone, Calendar, DollarSign, Zap, ChevronRight, Download, Play, Settings, PhoneCall, TrendingUp, Users, Clock, Mic, LogOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Activity, CheckCircle, AlertCircle, Phone, Calendar, DollarSign, Zap, ChevronRight, Download, Play, Settings, PhoneCall, TrendingUp, Users, Clock, Mic, LogOut, Bot } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 
-// Navigation Component
-function DashboardNav() {
+// Left Sidebar Navigation
+function LeftSidebar() {
     const router = useRouter();
-    const pathname = usePathname();
     const { user, logout } = useAuth();
 
     const navItems = [
         { label: 'Dashboard', href: '/dashboard', icon: Activity },
-        { label: 'Voice Test', href: '/dashboard/voice-test', icon: Mic },
-        { label: 'Settings', href: '/dashboard/settings', icon: Settings }
+        { label: 'Agent Config', href: '/dashboard/settings', icon: Bot },
     ];
 
     return (
-        <nav className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-7xl mx-auto px-6 py-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-2">
-                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-                                <Phone className="w-6 h-6 text-white" />
-                            </div>
-                            <span className="text-xl font-bold text-gray-900">Voxanne</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            {navItems.map((item) => {
-                                const Icon = item.icon;
-                                const isActive = pathname === item.href;
-                                return (
-                                    <button
-                                        key={item.href}
-                                        onClick={() => router.push(item.href)}
-                                        className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium ${
-                                            isActive
-                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                        {item.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+        <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col">
+            {/* Logo */}
+            <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+                        <Phone className="w-6 h-6 text-white" />
                     </div>
-                    <div className="flex items-center gap-4">
-                        <div className="text-sm">
-                            <p className="font-medium text-gray-900">{user?.email}</p>
-                            <p className="text-gray-500">Account</p>
-                        </div>
-                        <button
-                            onClick={() => {
-                                logout();
-                                router.push('/login');
-                            }}
-                            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <span className="text-xl font-bold text-gray-900">Voxanne</span>
                 </div>
             </div>
-        </nav>
+
+            {/* Navigation Items */}
+            <nav className="flex-1 p-4 space-y-2">
+                {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = item.href === '/dashboard';
+                    return (
+                        <button
+                            key={item.href}
+                            onClick={() => router.push(item.href)}
+                            className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${
+                                isActive
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Icon className="w-5 h-5" />
+                            {item.label}
+                        </button>
+                    );
+                })}
+            </nav>
+
+            {/* User Section */}
+            <div className="p-4 border-t border-gray-200 space-y-3">
+                <div className="px-4 py-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900">{user?.email}</p>
+                    <p className="text-xs text-gray-500">Account</p>
+                </div>
+                <button
+                    onClick={() => {
+                        logout();
+                        router.push('/login');
+                    }}
+                    className="w-full px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium"
+                >
+                    <LogOut className="w-5 h-5" />
+                    Logout
+                </button>
+            </div>
+        </div>
     );
 }
 
@@ -154,9 +154,12 @@ export default function VoxanneDashboard() {
     };
 
     return (
-        <>
-            <DashboardNav />
-            <div className="min-h-screen bg-white">
+        <div className="flex h-screen bg-white">
+            {/* Left Sidebar */}
+            <LeftSidebar />
+
+            {/* Main Content */}
+            <div className="flex-1 ml-64 overflow-y-auto">
                 <div className="max-w-7xl mx-auto px-6 py-8 pb-32">
                     {/* Header */}
                     <div className="mb-12">
@@ -368,6 +371,6 @@ export default function VoxanneDashboard() {
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 }

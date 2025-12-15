@@ -1,769 +1,583 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { Key, Bot, Phone, Save, Check, X, Eye, EyeOff, AlertCircle, Loader2, Mic, Activity, Settings, LogOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Key, Bot, Phone, Save, Check, X, Eye, EyeOff, AlertCircle, Loader2, Mic, LogOut, ChevronRight, Volume2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-
-// Navigation Component
-function DashboardNav() {
-    const router = useRouter();
-    const pathname = usePathname();
-    const { user, logout } = useAuth();
-
-    const navItems = [
-        { label: 'Dashboard', href: '/dashboard', icon: Activity },
-        { label: 'Voice Test', href: '/dashboard/voice-test', icon: Mic },
-        { label: 'Settings', href: '/dashboard/settings', icon: Settings }
-    ];
-
-    return (
-        <nav className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-7xl mx-auto px-6 py-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-2">
-                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-                                <Phone className="w-6 h-6 text-white" />
-                            </div>
-                            <span className="text-xl font-bold text-gray-900">Voxanne</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            {navItems.map((item) => {
-                                const Icon = item.icon;
-                                const isActive = pathname === item.href;
-                                return (
-                                    <button
-                                        key={item.href}
-                                        onClick={() => router.push(item.href)}
-                                        className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium ${
-                                            isActive
-                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                        {item.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="text-sm">
-                            <p className="font-medium text-gray-900">{user?.email}</p>
-                            <p className="text-gray-500">Account</p>
-                        </div>
-                        <button
-                            onClick={() => {
-                                logout();
-                                router.push('/login');
-                            }}
-                            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </nav>
-    );
-}
+import { motion } from 'framer-motion';
+import { useVoiceAgent } from '@/hooks/useVoiceAgent';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
+// Left Sidebar Navigation
+function LeftSidebar() {
+    const router = useRouter();
+    const { user, logout } = useAuth();
 
-// Retry configuration for network failures
-const RETRY_CONFIG = {
-  maxAttempts: 3,
-  delays: [250, 500, 1000] // ms
-};
+    const navItems = [
+        { label: 'Dashboard', href: '/dashboard', icon: Phone },
+        { label: 'Agent Config', href: '/dashboard/settings', icon: Bot },
+    ];
 
-// UI timing constants
-const SAVE_SUCCESS_DISPLAY_MS = 3000; // Show "Saved" indicator for 3 seconds
-const BATCH_SAVE_DEBOUNCE_MS = 500; // Wait 500ms before batching saves
-
-// Validation constraints
-const AGENT_CONFIG_CONSTRAINTS = {
-  MIN_DURATION_SECONDS: 60,
-  MAX_DURATION_SECONDS: 3600,
-  DEFAULT_DURATION_SECONDS: 300
-};
-
-// Error messages
-const ERROR_MESSAGES = {
-  EMPTY_VALUE: 'This field cannot be empty',
-  INVALID_DURATION: `Duration must be between ${AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS} and ${AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS} seconds`,
-  AGENT_NOT_LOADED: 'Agent configuration not loaded. Please refresh the page.',
-  INVALID_API_KEY: 'Invalid API key - connection failed',
-  FAILED_TO_SAVE: 'Failed to save. Please try again.',
-  FAILED_TO_LOAD: 'Failed to load settings. Please refresh the page.',
-  VAPI_NOT_CONFIGURED: 'Configure Vapi API key first to enable this feature'
-};
-
-interface Voice {
-  id: string;
-  name: string;
-  gender: string;
-  provider: string;
-  isDefault?: boolean;
-}
-
-interface FieldState {
-  value: string;
-  originalValue: string;
-  saving: boolean;
-  saved: boolean;
-  error: string | null;
-  visible?: boolean;
-}
-
-type TabType = 'api-keys' | 'agent-config';
-
-function maskApiKey(key: string): string {
-  if (!key || key.length < 8) return key ? '••••••••' : '';
-  return '••••••••' + key.slice(-4);
-}
-
-function getCsrfToken(): string | null {
-  if (typeof document === 'undefined') return null;
-  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  return token || null;
-}
-
-export default function SettingsPage() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-  
-  const [activeTab, setActiveTab] = useState<TabType>('api-keys');
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [voices, setVoices] = useState<Voice[]>([]);
-  const [vapiConfigured, setVapiConfigured] = useState(false);
-  const [twilioConfigured, setTwilioConfigured] = useState(false);
-  const [agentId, setAgentId] = useState<string | null>(null);
-  const [globalSaving, setGlobalSaving] = useState(false);
-  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
-
-  // Auth guard
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, authLoading, router]);
-
-  const [vapiApiKey, setVapiApiKey] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null, visible: false
-  });
-  const [vapiPublicKey, setVapiPublicKey] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null, visible: false
-  });
-  const [twilioSid, setTwilioSid] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null, visible: false
-  });
-  const [twilioToken, setTwilioToken] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null, visible: false
-  });
-  const [twilioPhone, setTwilioPhone] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null, visible: false
-  });
-
-  const [systemPrompt, setSystemPrompt] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null
-  });
-  const [firstMessage, setFirstMessage] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null
-  });
-  const [maxSeconds, setMaxSeconds] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null
-  });
-  const [voiceId, setVoiceId] = useState<FieldState>({
-    value: '', originalValue: '', saving: false, saved: false, error: null
-  });
-
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        setLoading(true);
-        setLoadError(null);
-
-        // Parallel fetching instead of sequential
-        const [settingsRes, voicesRes, agentRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/founder-console/settings`),
-          fetch(`${API_BASE_URL}/api/assistants/voices/available`),
-          fetch(`${API_BASE_URL}/api/founder-console/agent/config`)
-        ]);
-
-        if (settingsRes.ok) {
-          const data = await settingsRes.json();
-          setVapiConfigured(data.vapiConfigured);
-          setTwilioConfigured(data.twilioConfigured);
-        } else {
-          console.error('[Settings] Failed to fetch settings:', settingsRes.status);
-        }
-
-        if (voicesRes.ok) {
-          const voicesData = await voicesRes.json();
-          setVoices(voicesData);
-        } else {
-          console.error('[Settings] Failed to fetch voices:', voicesRes.status);
-        }
-
-        if (agentRes.ok) {
-          const config = await agentRes.json();
-          if (config?.agentId && config?.vapi) {
-            setAgentId(config.agentId);
-            const vapi = config.vapi;
-            const maxDuration = vapi.maxCallDuration ?? AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS;
-            
-            setSystemPrompt(prev => ({
-              ...prev,
-              value: vapi.systemPrompt || '',
-              originalValue: vapi.systemPrompt || ''
-            }));
-            setFirstMessage(prev => ({
-              ...prev,
-              value: vapi.firstMessage || '',
-              originalValue: vapi.firstMessage || ''
-            }));
-            setMaxSeconds(prev => ({
-              ...prev,
-              value: maxDuration.toString(),
-              originalValue: maxDuration.toString()
-            }));
-            setVoiceId(prev => ({
-              ...prev,
-              value: vapi.voice || '',
-              originalValue: vapi.voice || ''
-            }));
-          } else {
-            console.warn('[Settings] Agent config incomplete or missing', { hasAgentId: !!config?.agentId, hasVapi: !!config?.vapi });
-          }
-        } else {
-          console.error('[Settings] Failed to fetch agent config:', { status: agentRes.status });
-        }
-      } catch (error) {
-        console.error('[Settings] Failed to load settings:', { error: error instanceof Error ? error.message : String(error) });
-        setLoadError(ERROR_MESSAGES.FAILED_TO_LOAD);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (user) {
-      loadSettings();
-    }
-
-    return () => {
-      timeoutRefs.current.forEach(clearTimeout);
-    };
-  }, [user]);
-
-  async function fetchWithRetry<T>(
-    url: string,
-    options: RequestInit = {},
-    attempt = 0
-  ): Promise<T> {
-    try {
-      const response = await fetch(url, options);
-      if (!response.ok) {
-        // Try to get error message from response body
-        try {
-          const errorData = await response.json();
-          if (errorData.error) {
-            throw new Error(errorData.error);
-          }
-        } catch {
-          // Fall back to status code
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      // Don't retry 400 errors (validation failures)
-      if (error instanceof Error && error.message.includes('Vapi')) {
-        throw error;
-      }
-      if (attempt < RETRY_CONFIG.maxAttempts - 1) {
-        const delay = RETRY_CONFIG.delays[attempt];
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return fetchWithRetry<T>(url, options, attempt + 1);
-      }
-      throw error;
-    }
-  }
-
-  async function validateVapiKey(apiKey: string): Promise<boolean> {
-    if (!apiKey || !apiKey.trim()) {
-      return false;
-    }
-    try {
-      const data = await fetchWithRetry<{ success: boolean }>(
-        `${API_BASE_URL}/api/integrations/vapi/test`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey })
-        }
-      );
-      return data.success === true;
-    } catch {
-      return false;
-    }
-  }
-
-  async function saveApiKeyField(
-    fieldName: string,
-    value: string,
-    setState: React.Dispatch<React.SetStateAction<FieldState>>,
-    validate?: boolean
-  ) {
-    if (globalSaving) return;
-    
-    if (!value || !value.trim()) {
-      setState(prev => ({ ...prev, error: ERROR_MESSAGES.EMPTY_VALUE }));
-      return;
-    }
-
-    setState(prev => ({ ...prev, saving: true, error: null, saved: false }));
-    setGlobalSaving(true);
-
-    try {
-      if (validate && fieldName === 'vapi_api_key') {
-        const isValid = await validateVapiKey(value);
-        if (!isValid) {
-          setState(prev => ({ ...prev, saving: false, error: ERROR_MESSAGES.INVALID_API_KEY }));
-          setGlobalSaving(false);
-          return;
-        }
-      }
-
-      const csrfToken = getCsrfToken();
-      const data = await fetchWithRetry<{ success: boolean; error?: string }>(
-        `${API_BASE_URL}/api/founder-console/settings`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(csrfToken && { 'X-CSRF-Token': csrfToken })
-          },
-          body: JSON.stringify({ [fieldName]: value })
-        }
-      );
-
-      setState(prev => ({ ...prev, saving: false, saved: true, originalValue: value }));
-      
-      if (fieldName === 'vapi_api_key') setVapiConfigured(!!value);
-      if (fieldName === 'twilio_account_sid') setTwilioConfigured(!!value);
-
-      const timeoutId = setTimeout(() => {
-        setState(prev => ({ ...prev, saved: false }));
-      }, SAVE_SUCCESS_DISPLAY_MS);
-      timeoutRefs.current.push(timeoutId);
-    } catch (error: any) {
-      const errorMsg = error instanceof Error ? error.message : ERROR_MESSAGES.FAILED_TO_SAVE;
-      setState(prev => ({ ...prev, saving: false, error: errorMsg }));
-    } finally {
-      setGlobalSaving(false);
-    }
-  }
-
-  async function saveAgentField(
-    fieldName: string,
-    value: string,
-    setState: React.Dispatch<React.SetStateAction<FieldState>>
-  ) {
-    if (globalSaving) return;
-    
-    if (!agentId) {
-      setState(prev => ({ ...prev, error: ERROR_MESSAGES.AGENT_NOT_LOADED }));
-      return;
-    }
-
-    if (!value) {
-      setState(prev => ({ ...prev, error: ERROR_MESSAGES.EMPTY_VALUE }));
-      return;
-    }
-
-    if (fieldName === 'max_seconds') {
-      const seconds = parseInt(value);
-      if (isNaN(seconds) || seconds < AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS || seconds > AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS) {
-        setState(prev => ({ ...prev, error: ERROR_MESSAGES.INVALID_DURATION }));
-        return;
-      }
-    }
-
-    setState(prev => ({ ...prev, saving: true, error: null, saved: false }));
-    setGlobalSaving(true);
-
-    try {
-      const payload: Record<string, any> = {};
-      if (fieldName === 'system_prompt') payload.systemPrompt = value;
-      if (fieldName === 'first_message') payload.firstMessage = value;
-      if (fieldName === 'max_seconds') payload.maxDurationSeconds = parseInt(value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS;
-      if (fieldName === 'voice') payload.voiceId = value;
-
-      const csrfToken = getCsrfToken();
-      const data = await fetchWithRetry<{ success: boolean; agentId?: string; assistantId?: string; error?: string }>(
-        `${API_BASE_URL}/api/founder-console/agent/behavior`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(csrfToken && { 'X-CSRF-Token': csrfToken })
-          },
-          body: JSON.stringify(payload)
-        }
-      );
-
-      setState(prev => ({ ...prev, saving: false, saved: true, originalValue: value }));
-
-      const timeoutId = setTimeout(() => {
-        setState(prev => ({ ...prev, saved: false }));
-      }, SAVE_SUCCESS_DISPLAY_MS);
-      timeoutRefs.current.push(timeoutId);
-    } catch (error: any) {
-      const errorMsg = error instanceof Error ? error.message : ERROR_MESSAGES.FAILED_TO_SAVE;
-      setState(prev => ({ ...prev, saving: false, error: errorMsg }));
-    } finally {
-      setGlobalSaving(false);
-    }
-  }
-
-  const hasChanges = (field: FieldState) => field.value !== field.originalValue;
-
-  const getSaveButtonClasses = (field: FieldState, globalSaving: boolean): string => {
-    if (field.saved) return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-    if (hasChanges(field) && !globalSaving) return 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-90';
-    return 'bg-slate-700 text-slate-400 cursor-not-allowed';
-  };
-
-  const getSaveButtonText = (field: FieldState, globalSaving: boolean): string => {
-    if (field.saving || globalSaving) return 'Saving...';
-    if (field.saved) return 'Saved';
-    return 'Save';
-  };
-
-  const renderSaveButton = (
-    field: FieldState,
-    onSave: () => void,
-    disabled?: boolean
-  ) => (
-    <button
-      onClick={onSave}
-      disabled={field.saving || globalSaving || disabled || !hasChanges(field)}
-      className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap ${getSaveButtonClasses(field, globalSaving)}`}
-    >
-      {field.saving || globalSaving ? (
-        <Loader2 className="w-4 h-4 animate-spin" />
-      ) : field.saved ? (
-        <Check className="w-4 h-4" />
-      ) : (
-        <Save className="w-4 h-4" />
-      )}
-      {getSaveButtonText(field, globalSaving)}
-    </button>
-  );
-
-  const renderError = (error: string | null) => error && (
-    <div className="mt-2 flex items-center gap-2 text-red-400 text-sm">
-      <AlertCircle className="w-4 h-4" />
-      {error}
-    </div>
-  );
-
-  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <DashboardNav />
-      <div className="min-h-screen bg-white p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
-            <p className="text-gray-600">Configure your integrations and agent</p>
-          </div>
-
-        {loadError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            {loadError}
-          </div>
-        )}
-
-        <div className="flex gap-2 mb-8 border-b border-gray-200 pb-4">
-          <button
-            onClick={() => setActiveTab('api-keys')}
-            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all font-medium ${
-              activeTab === 'api-keys'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            <Key className="w-5 h-5" />
-            API Keys
-          </button>
-          <button
-            onClick={() => setActiveTab('agent-config')}
-            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all font-medium ${
-              activeTab === 'agent-config'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            <Bot className="w-5 h-5" />
-            Agent Configuration
-          </button>
-        </div>
-
-        {activeTab === 'api-keys' && (
-          <div className="space-y-6">
-            <div className="flex gap-4 mb-6">
-              <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                vapiConfigured ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'
-              }`}>
-                {vapiConfigured ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                Vapi {vapiConfigured ? 'Connected' : 'Not Configured'}
-              </div>
-              <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                twilioConfigured ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'
-              }`}>
-                {twilioConfigured ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                Twilio {twilioConfigured ? 'Connected' : 'Not Configured'}
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Key className="w-5 h-5 text-emerald-400" />
-                Vapi API Key (Private)
-              </h3>
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
-                  <input
-                    type={vapiApiKey.visible ? 'text' : 'password'}
-                    value={vapiApiKey.value}
-                    onChange={(e) => setVapiApiKey(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                    placeholder={vapiConfigured ? maskApiKey('configured') : 'Enter Vapi API Key'}
-                    className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none pr-12"
-                  />
-                  <button
-                    onClick={() => setVapiApiKey(prev => ({ ...prev, visible: !prev.visible }))}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    {vapiApiKey.visible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+        <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col">
+            {/* Logo */}
+            <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+                        <Phone className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-xl font-bold text-gray-900">Voxanne</span>
                 </div>
-                {renderSaveButton(vapiApiKey, () => saveApiKeyField('vapi_api_key', vapiApiKey.value, setVapiApiKey, true))}
-              </div>
-              {renderError(vapiApiKey.error)}
-              <p className="text-xs text-slate-400 mt-2">Your Vapi private API key. Will be validated before saving.</p>
             </div>
 
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Key className="w-5 h-5 text-cyan-400" />
-                Vapi Public Key
-              </h3>
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
-                  <input
-                    type={vapiPublicKey.visible ? 'text' : 'password'}
-                    value={vapiPublicKey.value}
-                    onChange={(e) => setVapiPublicKey(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                    placeholder="Enter Vapi Public Key"
-                    className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none pr-12"
-                  />
-                  <button
-                    onClick={() => setVapiPublicKey(prev => ({ ...prev, visible: !prev.visible }))}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    {vapiPublicKey.visible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+            {/* Navigation Items */}
+            <nav className="flex-1 p-4 space-y-2">
+                {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = item.href === '/dashboard/settings';
+                    return (
+                        <button
+                            key={item.href}
+                            onClick={() => router.push(item.href)}
+                            className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${
+                                isActive
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Icon className="w-5 h-5" />
+                            {item.label}
+                        </button>
+                    );
+                })}
+            </nav>
+
+            {/* User Section */}
+            <div className="p-4 border-t border-gray-200 space-y-3">
+                <div className="px-4 py-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900">{user?.email}</p>
+                    <p className="text-xs text-gray-500">Account</p>
                 </div>
-                {renderSaveButton(vapiPublicKey, () => saveApiKeyField('vapi_public_key', vapiPublicKey.value, setVapiPublicKey))}
-              </div>
-              {renderError(vapiPublicKey.error)}
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Phone className="w-5 h-5 text-purple-400" />
-                Twilio Account SID
-              </h3>
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
-                  <input
-                    type={twilioSid.visible ? 'text' : 'password'}
-                    value={twilioSid.value}
-                    onChange={(e) => setTwilioSid(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                    placeholder={twilioConfigured ? maskApiKey('configured') : 'Enter Twilio Account SID'}
-                    className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none pr-12"
-                  />
-                  <button
-                    onClick={() => setTwilioSid(prev => ({ ...prev, visible: !prev.visible }))}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    {twilioSid.visible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {renderSaveButton(twilioSid, () => saveApiKeyField('twilio_account_sid', twilioSid.value, setTwilioSid))}
-              </div>
-              {renderError(twilioSid.error)}
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Key className="w-5 h-5 text-purple-400" />
-                Twilio Auth Token
-              </h3>
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
-                  <input
-                    type={twilioToken.visible ? 'text' : 'password'}
-                    value={twilioToken.value}
-                    onChange={(e) => setTwilioToken(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                    placeholder="Enter Twilio Auth Token"
-                    className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none pr-12"
-                  />
-                  <button
-                    onClick={() => setTwilioToken(prev => ({ ...prev, visible: !prev.visible }))}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    {twilioToken.visible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {renderSaveButton(twilioToken, () => saveApiKeyField('twilio_auth_token', twilioToken.value, setTwilioToken))}
-              </div>
-              {renderError(twilioToken.error)}
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Phone className="w-5 h-5 text-purple-400" />
-                Twilio Phone Number (Calling From)
-              </h3>
-              <div className="flex gap-3">
-                <input
-                  type="tel"
-                  value={twilioPhone.value}
-                  onChange={(e) => setTwilioPhone(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                  placeholder="+1234567890"
-                  className="flex-1 px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none"
-                />
-                {renderSaveButton(twilioPhone, () => saveApiKeyField('twilio_from_number', twilioPhone.value, setTwilioPhone))}
-              </div>
-              {renderError(twilioPhone.error)}
-              <p className="text-xs text-slate-400 mt-2">Must be in E.164 format (e.g., +1234567890)</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'agent-config' && (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Bot className="w-5 h-5 text-emerald-400" />
-                Voice
-              </h3>
-              <div className="flex gap-3">
-                <select
-                  value={voiceId.value}
-                  onChange={(e) => setVoiceId(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                  className="flex-1 px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none"
+                <button
+                    onClick={() => {
+                        logout();
+                        router.push('/login');
+                    }}
+                    className="w-full px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium"
                 >
-                  <option value="">Select a voice...</option>
-                  {voices.map((voice) => (
-                    <option key={voice.id} value={voice.id}>
-                      {voice.name} ({voice.gender}) {voice.isDefault ? '- Default' : ''}
-                    </option>
-                  ))}
-                </select>
-                {renderSaveButton(voiceId, () => saveAgentField('voice', voiceId.value, setVoiceId), !vapiConfigured)}
-              </div>
-              {renderError(voiceId.error)}
-              {!vapiConfigured && (
-                <p className="text-xs text-amber-400 mt-2">{ERROR_MESSAGES.VAPI_NOT_CONFIGURED}</p>
-              )}
+                    <LogOut className="w-5 h-5" />
+                    Logout
+                </button>
             </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Bot className="w-5 h-5 text-cyan-400" />
-                First Message
-              </h3>
-              <div className="space-y-3">
-                <textarea
-                  value={firstMessage.value}
-                  onChange={(e) => setFirstMessage(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                  placeholder="Hello! Thank you for calling. How can I help you today?"
-                  rows={3}
-                  className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none"
-                />
-                <div className="flex justify-end">
-                  {renderSaveButton(firstMessage, () => saveAgentField('first_message', firstMessage.value, setFirstMessage), !vapiConfigured)}
-                </div>
-              </div>
-              {renderError(firstMessage.error)}
-              <p className="text-xs text-slate-400 mt-2">What the agent says when answering a call</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Bot className="w-5 h-5 text-purple-400" />
-                System Prompt
-              </h3>
-              <div className="space-y-3">
-                <textarea
-                  value={systemPrompt.value}
-                  onChange={(e) => setSystemPrompt(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                  placeholder="You are a professional AI receptionist..."
-                  rows={10}
-                  className="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm"
-                />
-                <div className="flex justify-end">
-                  {renderSaveButton(systemPrompt, () => saveAgentField('system_prompt', systemPrompt.value, setSystemPrompt), !vapiConfigured)}
-                </div>
-              </div>
-              {renderError(systemPrompt.error)}
-              <p className="text-xs text-slate-400 mt-2">Core instructions for your AI agent. Be specific about your services and policies.</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Bot className="w-5 h-5 text-amber-400" />
-                Max Call Duration (seconds)
-              </h3>
-              <div className="flex gap-3">
-                <input
-                  type="number"
-                  value={maxSeconds.value}
-                  onChange={(e) => setMaxSeconds(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
-                  placeholder="300"
-                  min="60"
-                  max="3600"
-                  className="flex-1 px-4 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-emerald-500 outline-none"
-                />
-                {renderSaveButton(maxSeconds, () => saveAgentField('max_seconds', maxSeconds.value, setMaxSeconds), !vapiConfigured)}
-              </div>
-              {renderError(maxSeconds.error)}
-              <p className="text-xs text-slate-400 mt-2">Maximum duration for a single call (60-3600 seconds)</p>
-            </div>
-          </div>
-        )}
         </div>
-      </div>
-    </>
-  );
+    );
+}
+
+// Right Voice Test Panel
+function VoiceTestPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+    const {
+        isConnected,
+        isRecording,
+        transcripts,
+        error: voiceError,
+        startCall,
+        stopCall,
+        startRecording,
+        stopRecording
+    } = useVoiceAgent();
+
+    const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
+    const [callInitiating, setCallInitiating] = useState(false);
+    const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+    // Sync Transcripts
+    useEffect(() => {
+        if (transcripts && transcripts.length > 0) {
+            setDisplayTranscripts(
+                transcripts.map((t: any, idx: number) => ({
+                    id: `${idx}-${t.timestamp.getTime()}`,
+                    speaker: t.speaker,
+                    text: t.text,
+                    isFinal: t.isFinal,
+                    confidence: t.confidence || 0.95,
+                    timestamp: t.timestamp
+                }))
+            );
+        }
+    }, [transcripts]);
+
+    // Auto-scroll
+    useEffect(() => {
+        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [displayTranscripts]);
+
+    const handleToggleCall = async () => {
+        if (isConnected) {
+            stopRecording();
+            await stopCall();
+        } else {
+            setCallInitiating(true);
+            try {
+                await startCall();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                startRecording();
+            } catch (err) {
+                console.error('Failed to start call', err);
+            } finally {
+                setCallInitiating(false);
+            }
+        }
+    };
+
+    return (
+        <>
+            {/* Overlay */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-40"
+                    onClick={onClose}
+                />
+            )}
+
+            {/* Panel */}
+            <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: isOpen ? 0 : '100%' }}
+                transition={{ type: 'spring', damping: 20 }}
+                className="fixed right-0 top-0 h-screen w-96 bg-white border-l border-gray-200 z-50 flex flex-col shadow-xl"
+            >
+                {/* Header */}
+                <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900">Voice Test</h2>
+                        <p className="text-sm text-gray-600">Real-time transcription</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Status Indicator */}
+                <div className="px-6 pt-4">
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-full border w-fit ${
+                        isConnected
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : 'bg-gray-100 border-gray-200 text-gray-600'
+                    }`}>
+                        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                        <span className="text-xs font-bold uppercase">{isConnected ? 'Live' : 'Offline'}</span>
+                    </div>
+                </div>
+
+                {/* Transcription Area */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-gray-50">
+                    {displayTranscripts.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                            <Volume2 className="w-8 h-8" />
+                            <p className="text-sm">Start a call to see transcription...</p>
+                        </div>
+                    ) : (
+                        displayTranscripts.map((t: any) => (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                key={t.id}
+                                className={`flex ${t.speaker === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                                <div className={`max-w-[85%] rounded-lg p-3 text-sm ${
+                                    t.speaker === 'user'
+                                        ? 'bg-emerald-50 text-emerald-900 rounded-tr-none border border-emerald-200'
+                                        : 'bg-cyan-50 text-cyan-900 rounded-tl-none border border-cyan-200'
+                                }`}>
+                                    <p className="text-xs font-bold mb-1 opacity-60 uppercase">{t.speaker === 'user' ? 'You' : 'Agent'}</p>
+                                    <p className="leading-relaxed">{t.text}</p>
+                                    <div className="flex items-center justify-between mt-1 gap-2">
+                                        {!t.isFinal && <span className="text-xs opacity-60 animate-pulse">...typing</span>}
+                                        <span className="text-xs opacity-60 ml-auto">
+                                            {Math.round(t.confidence * 100)}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))
+                    )}
+                    <div ref={transcriptEndRef} />
+                </div>
+
+                {/* Controls */}
+                <div className="p-6 border-t border-gray-200 bg-white space-y-4">
+                    {voiceError && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            {voiceError}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleToggleCall}
+                        disabled={callInitiating}
+                        className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-all font-semibold text-white ${
+                            isConnected
+                                ? 'bg-red-500 hover:bg-red-600'
+                                : 'bg-emerald-500 hover:bg-emerald-600'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                        {callInitiating ? (
+                            <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                Connecting...
+                            </>
+                        ) : isConnected ? (
+                            <>
+                                <Phone className="w-5 h-5" />
+                                End Call
+                            </>
+                        ) : (
+                            <>
+                                <Mic className="w-5 h-5" />
+                                Start Call
+                            </>
+                        )}
+                    </button>
+
+                    <p className="text-center text-xs text-gray-600 font-mono">
+                        {isConnected ? 'SESSION ACTIVE' : callInitiating ? 'CONNECTING...' : 'READY'}
+                    </p>
+                </div>
+            </motion.div>
+        </>
+    );
+}
+
+// Main Settings Page
+export default function SettingsPage() {
+    const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
+    const [activeTab, setActiveTab] = useState('api-keys');
+    const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [globalSaving, setGlobalSaving] = useState(false);
+    const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
+
+    // API Key States
+    const [vapiKey, setVapiKey] = useState({ value: '', originalValue: '', saving: false, saved: false, error: null as string | null });
+    const [twilioKey, setTwilioKey] = useState({ value: '', originalValue: '', saving: false, saved: false, error: null as string | null });
+    const [vapiConfigured, setVapiConfigured] = useState(false);
+
+    // Agent Config States
+    const [systemPrompt, setSystemPrompt] = useState({ value: '', originalValue: '', saving: false, saved: false, error: null as string | null });
+    const [firstMessage, setFirstMessage] = useState({ value: '', originalValue: '', saving: false, saved: false, error: null as string | null });
+    const [voiceId, setVoiceId] = useState({ value: '', originalValue: '', saving: false, saved: false, error: null as string | null });
+    const [language, setLanguage] = useState({ value: 'en-US', originalValue: 'en-US', saving: false, saved: false, error: null as string | null });
+    const [maxSeconds, setMaxSeconds] = useState({ value: '300', originalValue: '300', saving: false, saved: false, error: null as string | null });
+    const [voices, setVoices] = useState<any[]>([]);
+
+    // Auth Guard
+    useEffect(() => {
+        if (!authLoading && !user) {
+            router.push('/login');
+        }
+    }, [user, authLoading, router]);
+
+    // Load Settings
+    useEffect(() => {
+        async function loadSettings() {
+            if (!user) return;
+            try {
+                setLoading(true);
+                const [voicesRes, agentRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/assistants/voices/available`),
+                    fetch(`${API_BASE_URL}/api/founder-console/agent/config`, { credentials: 'include' })
+                ]);
+
+                if (voicesRes.ok) {
+                    setVoices(await voicesRes.json());
+                }
+
+                if (agentRes.ok) {
+                    const config = await agentRes.json();
+                    if (config?.vapi) {
+                        setSystemPrompt(prev => ({
+                            ...prev,
+                            value: config.vapi.systemPrompt || '',
+                            originalValue: config.vapi.systemPrompt || ''
+                        }));
+                        setFirstMessage(prev => ({
+                            ...prev,
+                            value: config.vapi.firstMessage || '',
+                            originalValue: config.vapi.firstMessage || ''
+                        }));
+                        setVoiceId(prev => ({
+                            ...prev,
+                            value: config.vapi.voice || '',
+                            originalValue: config.vapi.voice || ''
+                        }));
+                        setLanguage(prev => ({
+                            ...prev,
+                            value: config.vapi.language || 'en-US',
+                            originalValue: config.vapi.language || 'en-US'
+                        }));
+                        setMaxSeconds(prev => ({
+                            ...prev,
+                            value: (config.vapi.maxCallDuration || 300).toString(),
+                            originalValue: (config.vapi.maxCallDuration || 300).toString()
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+                setLoadError('Failed to load settings. Please refresh the page.');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        if (user) {
+            loadSettings();
+        }
+
+        return () => {
+            timeoutRefs.current.forEach(clearTimeout);
+        };
+    }, [user]);
+
+    const handleSaveConfig = async () => {
+        setGlobalSaving(true);
+        try {
+            const payload = {
+                systemPrompt: systemPrompt.value,
+                firstMessage: firstMessage.value,
+                voiceId: voiceId.value,
+                language: language.value,
+                maxDurationSeconds: parseInt(maxSeconds.value)
+            };
+
+            const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/behavior`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || 'Failed to save configuration');
+            }
+
+            // Update all saved states
+            setSystemPrompt(prev => ({ ...prev, saved: true, originalValue: prev.value }));
+            setFirstMessage(prev => ({ ...prev, saved: true, originalValue: prev.value }));
+            setVoiceId(prev => ({ ...prev, saved: true, originalValue: prev.value }));
+            setLanguage(prev => ({ ...prev, saved: true, originalValue: prev.value }));
+            setMaxSeconds(prev => ({ ...prev, saved: true, originalValue: prev.value }));
+
+            // Clear saved indicators after 3 seconds
+            const timeoutId = setTimeout(() => {
+                setSystemPrompt(prev => ({ ...prev, saved: false }));
+                setFirstMessage(prev => ({ ...prev, saved: false }));
+                setVoiceId(prev => ({ ...prev, saved: false }));
+                setLanguage(prev => ({ ...prev, saved: false }));
+                setMaxSeconds(prev => ({ ...prev, saved: false }));
+            }, 3000);
+            timeoutRefs.current.push(timeoutId);
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Failed to save configuration';
+            setSystemPrompt(prev => ({ ...prev, error: errorMsg }));
+        } finally {
+            setGlobalSaving(false);
+        }
+    };
+
+    if (authLoading || loading) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-screen bg-white">
+            {/* Left Sidebar */}
+            <LeftSidebar />
+
+            {/* Main Content */}
+            <div className="flex-1 ml-64 overflow-y-auto">
+                <div className="max-w-4xl mx-auto p-8">
+                    {/* Header */}
+                    <div className="mb-8">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">Agent Configuration</h1>
+                        <p className="text-gray-600">Configure your AI agent behavior and settings</p>
+                    </div>
+
+                    {loadError && (
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
+                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                            {loadError}
+                        </div>
+                    )}
+
+                    {/* Tabs */}
+                    <div className="flex gap-2 mb-8 border-b border-gray-200 pb-4">
+                        <button
+                            onClick={() => setActiveTab('api-keys')}
+                            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all font-medium ${
+                                activeTab === 'api-keys'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Key className="w-5 h-5" />
+                            API Keys
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('agent-config')}
+                            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all font-medium ${
+                                activeTab === 'agent-config'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Bot className="w-5 h-5" />
+                            Agent Config
+                        </button>
+                    </div>
+
+                    {/* API Keys Tab */}
+                    {activeTab === 'api-keys' && (
+                        <div className="space-y-6">
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">Vapi API Key</h3>
+                                <div className="space-y-3">
+                                    <input
+                                        type="password"
+                                        value={vapiKey.value}
+                                        onChange={(e) => setVapiKey(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
+                                        placeholder="Enter your Vapi API key"
+                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none"
+                                    />
+                                    <button
+                                        className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-medium transition-colors"
+                                    >
+                                        <Save className="w-4 h-4 inline mr-2" />
+                                        Save API Key
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Agent Config Tab */}
+                    {activeTab === 'agent-config' && (
+                        <div className="space-y-6">
+                            {/* System Prompt */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-3">System Prompt</label>
+                                <textarea
+                                    value={systemPrompt.value}
+                                    onChange={(e) => setSystemPrompt(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
+                                    placeholder="Enter system prompt..."
+                                    className="w-full h-40 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* First Message */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-3">First Message</label>
+                                <textarea
+                                    value={firstMessage.value}
+                                    onChange={(e) => setFirstMessage(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
+                                    placeholder="Enter first message..."
+                                    className="w-full h-24 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Voice Selection */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-3">Voice</label>
+                                <select
+                                    value={voiceId.value}
+                                    onChange={(e) => setVoiceId(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none"
+                                >
+                                    <option value="">Select a voice...</option>
+                                    {voices.map((voice: any) => (
+                                        <option key={voice.id} value={voice.id}>
+                                            {voice.name} ({voice.gender})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Language */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-3">Language</label>
+                                <select
+                                    value={language.value}
+                                    onChange={(e) => setLanguage(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none"
+                                >
+                                    <option value="en-US">English (US)</option>
+                                    <option value="en-GB">English (UK)</option>
+                                    <option value="es-ES">Spanish (Spain)</option>
+                                    <option value="fr-FR">French</option>
+                                    <option value="de-DE">German</option>
+                                </select>
+                            </div>
+
+                            {/* Max Duration */}
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-3">Max Call Duration (seconds)</label>
+                                <input
+                                    type="number"
+                                    value={maxSeconds.value}
+                                    onChange={(e) => setMaxSeconds(prev => ({ ...prev, value: e.target.value, saved: false, error: null }))}
+                                    placeholder="300"
+                                    min="60"
+                                    max="3600"
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:border-emerald-500 outline-none"
+                                />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleSaveConfig}
+                                    disabled={globalSaving}
+                                    className="flex-1 px-6 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {globalSaving ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-5 h-5" />
+                                            Save Configuration
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setVoicePanelOpen(true)}
+                                    className="flex-1 px-6 py-3 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Mic className="w-5 h-5" />
+                                    Test Agent
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Right Voice Test Panel */}
+            <VoiceTestPanel isOpen={voicePanelOpen} onClose={() => setVoicePanelOpen(false)} />
+        </div>
+    );
 }
