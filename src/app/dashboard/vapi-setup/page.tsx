@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import { Settings, Loader2, CheckCircle2, AlertCircle, Copy, Check } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
@@ -34,7 +35,7 @@ export default function VapiSetupPage() {
         setLoading(true);
         setError(null);
         const token = await getToken();
-        
+
         const res = await fetch(`${API_BASE_URL}/api/vapi/setup/status`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
         });
@@ -103,7 +104,7 @@ export default function VapiSetupPage() {
   return (
     <div className="flex h-screen bg-gray-50">
       <LeftSidebar />
-      
+
       <main className="flex-1 overflow-auto">
         <div className="max-w-4xl mx-auto p-8">
           {/* Header */}
@@ -200,7 +201,7 @@ export default function VapiSetupPage() {
               {!status?.configured && (
                 <div className="bg-white rounded-lg shadow p-6 mb-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Configure Webhook</h2>
-                  
+
                   <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
                     <p className="text-sm text-blue-900">
                       <strong>What this does:</strong> Configures your Vapi assistant to call the Knowledge Base RAG webhook before generating responses. This enables the AI to use your uploaded documents to answer questions accurately.
@@ -252,7 +253,7 @@ export default function VapiSetupPage() {
               {/* How It Works */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">How It Works</h2>
-                
+
                 <div className="space-y-4">
                   <div className="flex gap-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-semibold">
