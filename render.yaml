@@ -1,0 +1,79 @@
+services:
+  # Backend API Service
+  - type: web
+    name: voxanne-backend
+    env: node
+    region: frankfurt  # EU data residency for GDPR compliance
+    plan: starter      # Free tier to start, upgrade to paid for production
+    
+    # Build configuration
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm run start
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy from GitHub
+    autoDeploy: true
+    branch: main
+    
+    # Environment variables (set these in Render dashboard)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      
+      - key: PORT
+        value: 3001
+      
+      - key: CORS_ORIGIN
+        sync: false  # Set manually: https://voxanne-frontend.vercel.app
+      
+      - key: BASE_URL
+        sync: false  # Will be auto-generated: https://voxanne-backend.onrender.com
+      
+      # Database
+      - key: SUPABASE_URL
+        sync: false  # Set manually
+      
+      - key: SUPABASE_SERVICE_KEY
+        sync: false  # Set manually (ROTATE BEFORE DEPLOYMENT)
+      
+      # External APIs
+      - key: OPENAI_API_KEY
+        sync: false  # Set manually
+      
+      - key: VAPI_API_KEY
+        sync: false  # Set manually (NEED REAL VALUE)
+      
+      - key: VAPI_WEBHOOK_SECRET
+        sync: false  # Set manually (from Vapi dashboard)
+      
+      # Twilio (for inbound calls)
+      - key: TWILIO_ACCOUNT_SID
+        sync: false  # Set manually
+      
+      - key: TWILIO_AUTH_TOKEN
+        sync: false  # Set manually
+      
+      # Optional: Monitoring
+      - key: SENTRY_DSN
+        sync: false  # Set after Sentry setup
+      
+      - key: LOG_LEVEL
+        value: info  # production log level
+    
+    # Scaling configuration
+    numInstances: 1  # Start with 1, scale up as needed
+    
+    # Disk configuration
+    disk:
+      name: voxanne-data
+      mountPath: /data
+      sizeGB: 1  # Minimal disk for logs
+
+# Notes:
+# 1. After deployment, get the URL from Render dashboard
+# 2. Update Vapi webhook URL to: https://voxanne-backend.onrender.com/api/webhooks/vapi
+# 3. Update frontend NEXT_PUBLIC_BACKEND_URL to Render URL
+# 4. Test /health endpoint: https://voxanne-backend.onrender.com/health
+# 5. Monitor logs in Render dashboard for first 24 hours
