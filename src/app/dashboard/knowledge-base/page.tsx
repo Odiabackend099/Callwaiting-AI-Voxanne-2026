@@ -107,7 +107,7 @@ export default function KnowledgeBasePage() {
       reader.onload = async (event) => {
         try {
           let content = event.target?.result as string;
-          
+
           // Handle different file types
           if (file.type === 'application/pdf') {
             // For PDF, we'll need backend to parse it
@@ -219,13 +219,13 @@ export default function KnowledgeBasePage() {
       }
 
       setSuccess(isUpdate ? 'Document updated!' : 'Document created!');
-      
+
       // Auto-chunk if enabled and new document
       if (autoChunk && !isUpdate && (data?.id || data?.item?.id)) {
         const docId = data?.id || data?.item?.id;
         try {
           setSuccess('Document created! Chunking and embedding...');
-          
+
           const chunkRes = await fetch(`${API_BASE_URL}/api/knowledge-base/chunk`, {
             method: 'POST',
             headers: {
@@ -249,7 +249,7 @@ export default function KnowledgeBasePage() {
           }
         } catch (err: any) {
           setError(`Chunking error: ${err?.message}`);
-          log.error('RAG chunking failed', { error: err?.message });
+          console.error('RAG chunking failed', { error: err?.message });
         }
       }
 
