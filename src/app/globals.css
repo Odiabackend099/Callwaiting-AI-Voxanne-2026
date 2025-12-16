@@ -1,6 +1,8 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* @custom-variant dark (&:where(.dark, .dark *)); */
 
 :root {
   --background: #ffffff;
@@ -12,10 +14,10 @@
   --foreground: #ffffff;
 }
 
-@theme {
+/* @theme {
   --font-sans: var(--font-lato);
   --font-serif: var(--font-playfair);
-}
+} */
 
 body {
   color: var(--foreground);
