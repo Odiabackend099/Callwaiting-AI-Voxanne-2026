@@ -1,4 +1,5 @@
 {
+    "name": "voxanne-frontend",
     "installCommand": "npm install --legacy-peer-deps",
     "buildCommand": "next build",
     "framework": "nextjs",
