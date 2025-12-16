@@ -22,7 +22,7 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  background-image: url('/ceramic-light.png');
+  /* background-image: url('/ceramic-light.png'); */
   background-size: cover;
   background-attachment: fixed;
   background-position: center;
@@ -31,12 +31,15 @@ body {
 }
 
 /* Ensure all form inputs have proper text color */
-input, textarea, select {
+input,
+textarea,
+select {
   color: #171717 !important;
   background-color: #ffffff;
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: #9ca3af !important;
 }
 
