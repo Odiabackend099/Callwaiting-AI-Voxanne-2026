@@ -64,6 +64,7 @@ export interface AssistantConfig {
   modelProvider?: string;
   modelName?: string;
   serverUrl?: string;
+  serverMessages?: string[];
   transcriber?: {
     provider: string;
     model?: string;
@@ -163,6 +164,7 @@ export class VapiClient {
       const payload: any = {
         name: config.name,
         serverUrl: config.serverUrl,
+        serverMessages: config.serverMessages, // Pass serverMessages
         model: {
           provider: config.modelProvider || 'openai',
           model: config.modelName || 'gpt-4',

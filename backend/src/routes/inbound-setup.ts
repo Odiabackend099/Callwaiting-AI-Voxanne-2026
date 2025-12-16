@@ -25,6 +25,10 @@ function validateTwilioAuthToken(token: string): boolean {
   return token.length === 32;
 }
 
+function keyLast4(key: string): string {
+  return key.slice(-4);
+}
+
 /**
  * POST /api/inbound/setup
  * Configure Twilio credentials and link to Vapi inbound assistant
@@ -124,27 +128,119 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
-    // Import Twilio number into Vapi
-    console.log('[InboundSetup] Importing Twilio number to Vapi', { requestId, phoneNumber: twilioPhoneNumber });
-    const vapiClient = new VapiClient(vapiApiKey);
-    let vapiPhoneNumber;
-    try {
-      vapiPhoneNumber = await vapiClient.importTwilioNumber({
-        twilioAccountSid,
-        twilioAuthToken,
-        phoneNumber: twilioPhoneNumber
+    const currentVapiKeyLast4 = keyLast4(vapiApiKey);
+
+    // IDP0: If this org already has an inbound mapping for this phone number, reuse it.
+    // This is key-rotation safe: we relink the existing Vapi phone number to the *current* assistant.
+    const { data: existingInboundMapping, error: existingInboundMappingError } = await supabase
+      .from('integrations')
+      .select('config')
+      .eq('org_id', orgId)
+      .eq('provider', 'twilio_inbound')
+      .maybeSingle();
+
+    if (existingInboundMappingError && existingInboundMappingError.code !== 'PGRST116') {
+      console.error('[InboundSetup] Failed to fetch existing inbound mapping', {
+        requestId,
+        error: existingInboundMappingError.message,
+        code: existingInboundMappingError.code
       });
-      console.log('[InboundSetup] ✅ Twilio number imported to Vapi', { requestId, vapiPhoneNumberId: vapiPhoneNumber.id });
-    } catch (vapiError: any) {
-      // Extract the actual Vapi error message from axios response if available
-      const vapiMessage = vapiError.response?.data?.message || vapiError.message;
-      const statusCode = vapiError.response?.status || 500;
-      console.error('[InboundSetup] ❌ Failed to import Twilio number to Vapi', { requestId, error: vapiMessage, status: statusCode });
-      res.status(statusCode >= 400 && statusCode < 500 ? 400 : 500).json({
-        error: vapiMessage,
-        requestId
-      });
+      res.status(500).json({ error: 'Failed to fetch existing inbound mapping', requestId });
       return;
+    }
+
+    const existingConfig: any = existingInboundMapping?.config || null;
+    const existingPhoneNumber = existingConfig?.phoneNumber;
+    const existingVapiPhoneNumberId = existingConfig?.vapiPhoneNumberId;
+    const existingVapiKeyLast4Used = existingConfig?.vapiApiKeyLast4Used;
+
+    // We'll only reuse mapping if it matches the same phone number.
+    const isSamePhone =
+      typeof existingPhoneNumber === 'string' &&
+      existingPhoneNumber === twilioPhoneNumber &&
+      typeof existingVapiPhoneNumberId === 'string' &&
+      existingVapiPhoneNumberId.length > 0;
+
+    // Key-rotation safety: only reuse the phoneNumberId if it belongs to the same Vapi workspace.
+    // If the key changed, this phoneNumberId may not exist in the current workspace.
+    const isSameVapiWorkspace =
+      typeof existingVapiKeyLast4Used === 'string' &&
+      existingVapiKeyLast4Used.length === 4 &&
+      existingVapiKeyLast4Used === currentVapiKeyLast4;
+
+    const shouldReuseExistingMapping = isSamePhone && isSameVapiWorkspace;
+
+    const workspaceMismatch = isSamePhone && !isSameVapiWorkspace;
+
+    const vapiClient = new VapiClient(vapiApiKey);
+    let vapiPhoneNumberId: string;
+
+    if (shouldReuseExistingMapping) {
+      vapiPhoneNumberId = existingVapiPhoneNumberId;
+      console.log('[InboundSetup] Reusing existing inbound mapping', {
+        requestId,
+        phoneNumber: twilioPhoneNumber,
+        vapiPhoneNumberId
+      });
+    } else {
+      // Import Twilio number into Vapi
+      console.log('[InboundSetup] Importing Twilio number to Vapi', { requestId, phoneNumber: twilioPhoneNumber });
+      try {
+        const vapiPhoneNumber = await vapiClient.importTwilioNumber({
+          twilioAccountSid,
+          twilioAuthToken,
+          phoneNumber: twilioPhoneNumber
+        });
+        vapiPhoneNumberId = vapiPhoneNumber.id;
+        console.log('[InboundSetup] ✅ Twilio number imported to Vapi', { requestId, vapiPhoneNumberId });
+      } catch (vapiError: any) {
+        // Extract the actual Vapi error message from axios response if available
+        const vapiMessage = vapiError.response?.data?.message || vapiError.message;
+        const statusCode = vapiError.response?.status || 500;
+
+        // Key-rotation common failure: number already imported/claimed by another Vapi workspace/org.
+        if (typeof vapiMessage === 'string' && vapiMessage.toLowerCase().includes('already in use')) {
+          // Persist last error for UI status visibility
+          await supabase
+            .from('integrations')
+            .upsert(
+              {
+                org_id: orgId,
+                provider: 'twilio_inbound',
+                config: {
+                  ...(existingConfig || {}),
+                  phoneNumber: twilioPhoneNumber,
+                  last_error: vapiMessage,
+                  last_attempted_at: new Date().toISOString(),
+                  vapiApiKeyLast4Used: currentVapiKeyLast4
+                },
+                updated_at: new Date().toISOString()
+              },
+              { onConflict: 'org_id,provider' }
+            );
+
+          res.status(400).json({
+            error:
+              'This Twilio number is already linked to another Vapi workspace. ' +
+              'If this is your number, unlink/release it in the other Vapi dashboard first, then retry. ' +
+              (workspaceMismatch
+                ? `We detected this number was previously linked using a different Vapi API key (workspace mismatch). `
+                : '') +
+              'If you previously linked it in this workspace, use that same workspace API key or reuse the existing mapping.',
+            details: vapiMessage,
+            workspaceMismatch,
+            requestId
+          });
+          return;
+        }
+
+        console.error('[InboundSetup] ❌ Failed to import Twilio number to Vapi', { requestId, error: vapiMessage, status: statusCode });
+        res.status(statusCode >= 400 && statusCode < 500 ? 400 : 500).json({
+          error: vapiMessage,
+          requestId
+        });
+        return;
+      }
     }
 
     // For now, use the existing inbound agent if present; otherwise fail with a clear message.
@@ -207,10 +303,13 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
             accountSid: twilioAccountSid,
             authToken: twilioAuthToken,
             phoneNumber: twilioPhoneNumber,
-            vapiPhoneNumberId: vapiPhoneNumber.id,
+            vapiPhoneNumberId,
             vapiAssistantId,
             status: 'active',
-            activatedAt: new Date().toISOString()
+            activatedAt: new Date().toISOString(),
+            vapiApiKeyLast4Used: currentVapiKeyLast4,
+            last_error: null,
+            last_attempted_at: new Date().toISOString()
           },
           updated_at: new Date().toISOString()
         },
@@ -226,9 +325,9 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
     console.log('[InboundSetup] ✅ Twilio credentials stored', { requestId });
 
     // Link phone number to Vapi assistant (NOT the local DB agent id)
-    console.log('[InboundSetup] Linking phone number to Vapi assistant', { requestId, vapiAssistantId, vapiPhoneNumberId: vapiPhoneNumber.id });
+    console.log('[InboundSetup] Linking phone number to Vapi assistant', { requestId, vapiAssistantId, vapiPhoneNumberId });
     try {
-      await vapiClient.updatePhoneNumber(vapiPhoneNumber.id, {
+      await vapiClient.updatePhoneNumber(vapiPhoneNumberId, {
         assistantId: vapiAssistantId
       });
       console.log('[InboundSetup] ✅ Phone number linked to agent', { requestId });
@@ -237,12 +336,12 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
       // Don't fail here - phone number is imported, just not linked yet
     }
 
-    console.log('[InboundSetup] ✅ Inbound setup complete', { requestId, agentId, vapiPhoneNumberId: vapiPhoneNumber.id });
+    console.log('[InboundSetup] ✅ Inbound setup complete', { requestId, agentId, vapiPhoneNumberId });
 
     res.status(200).json({
       success: true,
       inboundNumber: twilioPhoneNumber,
-      vapiPhoneNumberId: vapiPhoneNumber.id,
+      vapiPhoneNumberId,
       agentId,
       vapiAssistantId,
       status: 'active',
@@ -296,16 +395,36 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
-    res.status(200).json({
-      configured: true,
-      status: integration.config?.status || 'active',
-      inboundNumber: integration.config?.phoneNumber,
-      vapiPhoneNumberId: integration.config?.vapiPhoneNumberId,
-      vapiAssistantId: integration.config?.vapiAssistantId,
-      activatedAt: integration.config?.activatedAt
+    const cfg: any = integration?.config || null;
+    if (!cfg) {
+      res.json({ configured: false });
+      return;
+    }
+
+    // Compare to current key (if present) to help UI guide key-rotation cases.
+    const { data: vapiRow } = await supabase
+      .from('integrations')
+      .select('config')
+      .eq('org_id', orgId)
+      .eq('provider', 'vapi')
+      .maybeSingle();
+
+    const vapiKey = (vapiRow as any)?.config?.vapi_api_key;
+    const currentLast4 = typeof vapiKey === 'string' ? keyLast4(vapiKey) : null;
+    const storedLast4 = typeof cfg.vapiApiKeyLast4Used === 'string' ? cfg.vapiApiKeyLast4Used : null;
+    const workspaceMismatch = !!(cfg.phoneNumber && currentLast4 && storedLast4 && currentLast4 !== storedLast4);
+
+    res.json({
+      configured: cfg.status === 'active',
+      inboundNumber: cfg.phoneNumber,
+      vapiPhoneNumberId: cfg.vapiPhoneNumberId,
+      activatedAt: cfg.activatedAt,
+      workspaceMismatch,
+      lastError: cfg.last_error || null,
+      lastAttemptedAt: cfg.last_attempted_at || null
     });
   } catch (error: any) {
-    console.error('[InboundSetup] Error fetching status', { error: error.message });
+    console.error('[InboundSetup][status] error', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

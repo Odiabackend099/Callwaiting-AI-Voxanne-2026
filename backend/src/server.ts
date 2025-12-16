@@ -10,7 +10,7 @@ import { callsRouter } from './routes/calls';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
 import integrationsRouter from './routes/integrations';
-import founderConsoleRouter from './routes/founder-console';
+import founderConsoleRouter from './routes/founder-console-v2';
 import founderConsoleSettingsRouter from './routes/founder-console-settings';
 import { initLogger, requestLogger, log } from './services/logger';
 import { WebSocketServer } from 'ws';
@@ -18,6 +18,14 @@ import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
 import webTestDiagnosticsRouter from './routes/web-test-diagnostics';
 import inboundSetupRouter from './routes/inbound-setup';
+import knowledgeBaseRouter from './routes/knowledge-base';
+import { ragRouter } from './routes/knowledge-base-rag';
+import { vapiRagRouter } from './routes/vapi-rag-integration';
+import { vapiWebhookRouter } from './routes/vapi-webhook';
+import { vapiSetupRouter } from './routes/vapi-setup';
+import vapiDiscoveryRouter from './routes/vapi-discovery';
+import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
+import outboundAgentConfigRouter from './routes/outbound-agent-config';
 
 // Initialize logger
 initLogger();
@@ -42,12 +50,20 @@ app.use(requestLogger());
 // Routes
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/calls', callsRouter);
+app.use('/api/calls-dashboard', callsDashboardRouter);
 app.use('/api/assistants', assistantsRouter);
 app.use('/api/phone-numbers', phoneNumbersRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/inbound', inboundSetupRouter);
+app.use('/api/knowledge-base', knowledgeBaseRouter);
+app.use('/api/knowledge-base', ragRouter);
+app.use('/api/vapi', vapiRagRouter);
+app.use('/api/vapi', vapiWebhookRouter);
+app.use('/api/vapi', vapiSetupRouter);
+app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
+app.use('/api/founder-console/outbound-agent-config', outboundAgentConfigRouter);
 app.use('/', webTestDiagnosticsRouter);
 
 // Health check endpoint
@@ -103,15 +119,20 @@ initWebSocket(server);
 // Manual upgrade handling to support path prefixes (ws library path option is exact match only)
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url || '';
-  
+  console.log('[WebSocket] Upgrade request received', { pathname, method: request.method });
+
   if (pathname.startsWith('/api/web-voice')) {
+    console.log('[WebSocket] Handling /api/web-voice upgrade');
     webTestWss.handleUpgrade(request, socket, head, (ws) => {
+      console.log('[WebSocket] Upgrade successful, emitting connection event');
       webTestWss.emit('connection', ws, request);
     });
   } else if (pathname.startsWith('/ws/live-calls')) {
+    console.log('[WebSocket] Handling /ws/live-calls upgrade (delegated to initWebSocket)');
     // Let the shared WebSocket service (initWebSocket) handle upgrades for /ws/live-calls
     return;
   } else {
+    console.log('[WebSocket] Unknown path, sending 404', { pathname });
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
     socket.destroy();
   }
@@ -131,7 +152,17 @@ webTestWss.on('connection', (ws, req) => {
     if (!attached) {
       console.error('[WebVoice] Failed to attach to session', { trackingId, userId });
       console.error('[WebVoice] Session may have expired or been cleaned up. Closing connection.');
-      ws.close(1008, 'Session not found or unauthorized');
+      // Delay closing to allow specific error message from attachClientWebSocket to be sent
+      // Increased to 500ms to ensure browser onopen fires first
+      setTimeout(() => {
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1008, 'Session not found or unauthorized');
+          }
+        } catch (e) {
+          // ignore already closed
+        }
+      }, 500);
       return;
     }
 

@@ -83,33 +83,14 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
       return;
     }
 
-    // In dev mode, fetch the actual org ID from database
-    let orgId = process.env.DEFAULT_ORG_ID || 'default';
-    try {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
-      if (org?.id) {
-        orgId = org.id;
-      }
-    } catch {
-      // Fallback to default if org fetch fails
-    }
-
-    // If we still can't find a real org, we can't let 'default' propagate
-    // to queries that expect a UUID, or it causes 500s.
-    if (orgId === 'default') {
-      console.error('[AuthOrDev] Failed to resolve a valid Org ID in dev mode.');
-      res.status(500).json({ error: 'Dev Configuration Error: No organizations found in DB. Please create an organization first.' });
-      return;
-    }
-
+    // In dev mode, use hardcoded default org ID (matches KB uploads)
+    // This is the default org ID used throughout the system
+    const defaultOrgId = 'a0000000-0000-0000-0000-000000000001';
+    
     req.user = {
       id: process.env.DEV_USER_ID || 'dev-user',
       email: process.env.DEV_USER_EMAIL || 'dev@local',
-      orgId
+      orgId: defaultOrgId
     };
 
     next();

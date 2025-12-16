@@ -6,6 +6,8 @@ import { sendDemoEmail, sendDemoSms, sendDemoWhatsApp, DemoRecipient, DemoContex
 import { wsBroadcast } from '../services/websocket';
 import { getIntegrationSettings } from './founder-console-settings';
 import { validateE164Format } from '../utils/phone-validation';
+import { uploadCallRecording, deleteRecording } from '../services/call-recording-storage';
+import { detectCallType, getAgentConfigForCallType } from '../services/call-type-detector';
 
 export const webhooksRouter = express.Router();
 
@@ -500,13 +502,15 @@ async function handleCallEnded(event: VapiEvent) {
       }
 
       // Broadcast WebSocket event with userId filter
+      // Broadcast WebSocket event with userId filter
       wsBroadcast({
         type: 'call_ended',
         vapiCallId: call.id,
         trackingId: callTracking.id,
         userId: (callTracking as any)?.metadata?.userId,
         durationSeconds: call.duration,
-        reason: 'completed'
+        // FIX: Send actual end reason from Vapi (e.g. 'customer-busy', 'transcriber-error')
+        reason: (call as any).endedReason || call.status || 'completed'
       });
     }
   } catch (error) {
@@ -753,12 +757,63 @@ async function handleEndOfCallReport(event: VapiEvent) {
     // Get agent and org info from call log
     const { data: callLog } = await supabase
       .from('call_logs')
-      .select('agent_id, org_id, lead_id')
+      .select('agent_id, org_id, lead_id, to_number')
       .eq('vapi_call_id', call.id)
       .single();
 
-    // Update with final transcript and recording
-    const { error } = await supabase
+    if (!callLog) {
+      console.error('[handleEndOfCallReport] Call log not found:', call.id);
+      return;
+    }
+
+    // Detect call type (inbound vs outbound) based on Twilio numbers
+    const callTypeResult = await detectCallType(
+      callLog.org_id,
+      callLog.to_number,
+      call.customer?.number
+    );
+
+    const callType = callTypeResult?.callType || 'outbound';
+
+    console.log('[handleEndOfCallReport] Call type detected:', {
+      callId: call.id,
+      callType,
+      reason: callTypeResult?.reason
+    });
+
+    // Handle recording upload to Supabase Storage
+    let recordingStoragePath: string | null = null;
+    let recordingSignedUrl: string | null = null;
+
+    if (artifact?.recording) {
+      console.log('[handleEndOfCallReport] Uploading recording to storage:', call.id);
+
+      const uploadResult = await uploadCallRecording({
+        orgId: callLog.org_id,
+        callId: call.id,
+        callType: callType as 'inbound' | 'outbound',
+        recordingUrl: artifact.recording,
+        vapiCallId: call.id
+      });
+
+      if (uploadResult.success) {
+        recordingStoragePath = uploadResult.storagePath || null;
+        recordingSignedUrl = uploadResult.signedUrl || null;
+
+        console.log('[handleEndOfCallReport] Recording uploaded successfully:', {
+          callId: call.id,
+          storagePath: recordingStoragePath
+        });
+      } else {
+        console.error('[handleEndOfCallReport] Recording upload failed:', {
+          callId: call.id,
+          error: uploadResult.error
+        });
+      }
+    }
+
+    // Update call_logs with final data
+    const { error: callLogsError } = await supabase
       .from('call_logs')
       .update({
         outcome: 'completed',
@@ -768,23 +823,63 @@ async function handleEndOfCallReport(event: VapiEvent) {
       })
       .eq('vapi_call_id', call.id);
 
-    if (error) {
-      console.error('[handleEndOfCallReport] Failed to update call log:', error);
-    } else {
-      console.log('[handleEndOfCallReport] Call report saved:', call.id);
+    if (callLogsError) {
+      console.error('[handleEndOfCallReport] Failed to update call log:', callLogsError);
+    }
 
-      // Detect hallucinations in transcript
-      if (artifact?.transcript && callLog?.agent_id && callLog?.org_id) {
-        await detectHallucinations(
-          artifact.transcript,
-          callLog.agent_id,
-          callLog.org_id,
-          call.id
-        );
+    // Also update calls table with call_type and recording_storage_path
+    const { error: callsError } = await supabase
+      .from('calls')
+      .update({
+        call_type: callType,
+        recording_storage_path: recordingStoragePath,
+        status: 'completed'
+      })
+      .eq('vapi_call_id', call.id);
+
+    if (callsError) {
+      console.error('[handleEndOfCallReport] Failed to update calls table:', callsError);
+
+      // CRITICAL: If calls table update fails, clean up orphaned recording
+      if (recordingStoragePath) {
+        console.warn('[handleEndOfCallReport] Cleaning up orphaned recording due to DB error:', {
+          callId: call.id,
+          storagePath: recordingStoragePath
+        });
+
+        try {
+          await deleteRecording(recordingStoragePath);
+          console.log('[handleEndOfCallReport] Orphaned recording deleted successfully');
+        } catch (deleteError: any) {
+          console.error('[handleEndOfCallReport] Failed to delete orphaned recording:', {
+            storagePath: recordingStoragePath,
+            error: deleteError.message
+          });
+          // Log but don't throw - we already have a DB error to report
+        }
       }
 
-      // Lead/campaign follow-up automation intentionally disabled for this project.
+      // Throw error to indicate webhook processing failed
+      throw new Error(`Failed to update calls table: ${callsError.message}`);
+    } else {
+      console.log('[handleEndOfCallReport] Call report saved:', {
+        callId: call.id,
+        callType,
+        hasRecording: !!recordingStoragePath
+      });
     }
+
+    // Detect hallucinations in transcript
+    if (artifact?.transcript && callLog?.agent_id && callLog?.org_id) {
+      await detectHallucinations(
+        artifact.transcript,
+        callLog.agent_id,
+        callLog.org_id,
+        call.id
+      );
+    }
+
+    // Lead/campaign follow-up automation intentionally disabled for this project.
   } catch (error) {
     console.error('[handleEndOfCallReport] Error:', error);
   }

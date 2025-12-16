@@ -109,6 +109,54 @@ function isValidLanguage(language: string): boolean {
   return supportedLanguages.includes(language);
 }
 
+/**
+ * Helper: Get organization and Vapi configuration
+ * Eliminates code duplication across routes
+ * Returns null if any validation fails (response already sent)
+ */
+async function getOrgAndVapiConfig(
+  req: Request,
+  res: Response,
+  requestId: string
+): Promise<{ orgId: string; vapiApiKey: string; vapiIntegration: any } | null> {
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id')
+    .limit(1)
+    .single();
+
+  if (!org?.id) {
+    res.status(500).json({ error: 'Internal server error', requestId });
+    return null;
+  }
+
+  const { data: vapiIntegration } = await supabase
+    .from('integrations')
+    .select('config')
+    .eq('provider', INTEGRATION_PROVIDERS.VAPI)
+    .eq('org_id', org.id)
+    .maybeSingle();
+
+  const vapiApiKey: string | undefined =
+    vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
+
+  if (!vapiApiKey) {
+    res.status(400).json({ error: 'Vapi connection not configured', requestId });
+    return null;
+  }
+
+  logger.info('Vapi key resolved for request', {
+    requestId,
+    orgId: org.id,
+    source: vapiIntegration?.config?.vapi_api_key
+      ? 'integrations.config.vapi_api_key'
+      : 'integrations.config.vapi_secret_key',
+    keyLast4: vapiApiKey.slice(-4)
+  });
+
+  return { orgId: org.id, vapiApiKey, vapiIntegration };
+}
+
 // ========== TYPE DEFINITIONS ==========
 
 // Constants for magic strings
@@ -497,15 +545,35 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   // Set server.url to webhook endpoint for programmatic event delivery
   const webhookUrl = `${process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000'}/api/webhooks/vapi`;
 
-  const assistantConfig = {
+  const resolvedSystemPrompt = agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig());
+  const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
+  const resolvedVoiceProvider = getVoiceProvider(resolvedVoiceId);
+  const resolvedLanguage = agent.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE;
+  const resolvedFirstMessage = agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE;
+  const resolvedMaxDurationSeconds = agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION;
+
+  // NOTE: Vapi expects assistant payload shape with model/voice/transcriber.
+  // Using non-standard keys like systemPrompt/voiceId/serverUrl can cause 400 Bad Request.
+  const assistantCreatePayload = {
     name: agent.name || 'CallWaiting AI Outbound',
-    systemPrompt: agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
-    voiceId: agent.voice || DEFAULT_VOICE,
-    voiceProvider: getVoiceProvider(agent.voice || DEFAULT_VOICE),
-    language: agent.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE,
-    firstMessage: agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE,
-    maxDurationSeconds: agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,
-    serverUrl: webhookUrl
+    model: {
+      provider: VAPI_DEFAULTS.MODEL_PROVIDER,
+      model: VAPI_DEFAULTS.MODEL_NAME,
+      messages: [{ role: 'system', content: resolvedSystemPrompt }]
+    },
+    voice: {
+      provider: resolvedVoiceProvider,
+      voiceId: resolvedVoiceId
+    },
+    transcriber: {
+      provider: VAPI_DEFAULTS.TRANSCRIBER_PROVIDER,
+      model: VAPI_DEFAULTS.TRANSCRIBER_MODEL,
+      language: resolvedLanguage
+    },
+    firstMessage: resolvedFirstMessage,
+    maxDurationSeconds: resolvedMaxDurationSeconds,
+    serverUrl: webhookUrl,
+    serverMessages: ['function-call', 'hang', 'status-update', 'end-of-call-report', 'transcript']
   };
 
   // 3. Initialize Vapi client with error handling
@@ -524,34 +592,21 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
       // Update with retry
       await withRetry(() => vapiClient.updateAssistant(agent.vapi_assistant_id!, {
-        name: assistantConfig.name,
-        model: {
-          provider: VAPI_DEFAULTS.MODEL_PROVIDER,
-          model: VAPI_DEFAULTS.MODEL_NAME,
-          messages: [{
-            role: 'system',
-            content: assistantConfig.systemPrompt
-          }]
-        },
-        voice: {
-          provider: assistantConfig.voiceProvider,
-          voiceId: assistantConfig.voiceId
-        },
-        transcriber: {
-          provider: VAPI_DEFAULTS.TRANSCRIBER_PROVIDER,
-          model: VAPI_DEFAULTS.TRANSCRIBER_MODEL,
-          language: assistantConfig.language
-        },
-        firstMessage: assistantConfig.firstMessage,
-        maxDurationSeconds: assistantConfig.maxDurationSeconds,
-        serverUrl: assistantConfig.serverUrl
+        name: assistantCreatePayload.name,
+        model: assistantCreatePayload.model,
+        voice: assistantCreatePayload.voice,
+        transcriber: assistantCreatePayload.transcriber,
+        firstMessage: assistantCreatePayload.firstMessage,
+        maxDurationSeconds: assistantCreatePayload.maxDurationSeconds,
+        serverUrl: assistantCreatePayload.serverUrl,
+        serverMessages: assistantCreatePayload.serverMessages
       }));
 
       const duration = Date.now() - startTime;
       logger.info('Vapi assistant synced (updated)', {
         assistantId: agent.vapi_assistant_id,
-        voice: assistantConfig.voiceId,
-        language: assistantConfig.language,
+        voice: resolvedVoiceId,
+        language: resolvedLanguage,
         duration,
         operation: 'update'
       });
@@ -576,7 +631,17 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   }
 
   // 5. CREATE new assistant with retry
-  const assistant = await withRetry(() => vapiClient.createAssistant(assistantConfig));
+  let assistant;
+  try {
+    assistant = await withRetry(() => vapiClient.createAssistant(assistantCreatePayload as any));
+  } catch (createErr: any) {
+    const status: number | undefined = createErr?.response?.status;
+    const details = createErr?.response?.data?.message || createErr?.response?.data || createErr?.message;
+    throw new Error(
+      `Vapi assistant creation failed${status ? ` (status ${status})` : ''}: ` +
+      `${typeof details === 'string' ? details : JSON.stringify(details)}`
+    );
+  }
 
   // 6. Save assistant ID to DB with race condition protection
   const { data: updated } = await supabase
@@ -626,8 +691,8 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   const duration = Date.now() - startTime;
   logger.info('Vapi assistant synced (created)', {
     assistantId: assistant.id,
-    voice: assistantConfig.voiceId,
-    language: assistantConfig.language,
+    voice: resolvedVoiceId,
+    language: resolvedLanguage,
     duration,
     operation: 'create'
   });
@@ -1855,11 +1920,32 @@ router.post(
  * - call_tracking.id = trackingId
  * - Both IDs carried into every event and bridge session
  */
+/**
+ * POST /api/founder-console/agent/web-test
+ * 
+ * Initiates a web-based test call using the INBOUND agent.
+ * 
+ * The inbound agent is designed for:
+ * - Browser-based voice interactions via WebSocket
+ * - Real-time audio streaming (PCM 16-bit, 16kHz)
+ * - Interactive conversation testing
+ * 
+ * Agent Configuration Source:
+ * - Fetched from 'agents' table where role = 'INBOUND'
+ * - System prompt, first message, voice, language, max duration required
+ * 
+ * Response:
+ * - bridgeWebsocketUrl: URL for frontend to connect to for audio streaming
+ * - trackingId: Unique session identifier
+ * - vapiCallId: Vapi call identifier
+ */
 router.post(
   '/agent/web-test',
   callRateLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const requestId = req.requestId || generateRequestId();
+    let trackingId: string | null = null;
+
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -1867,37 +1953,15 @@ router.post(
         return;
       }
 
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
-
-      if (!org?.id) {
-        res.status(500).json({ error: 'Internal server error', requestId });
-        return;
-      }
-
-      const orgId = org.id;
-
-      const { data: vapiIntegration } = await supabase
-        .from('integrations')
-        .select('config')
-        .eq('provider', INTEGRATION_PROVIDERS.VAPI)
-        .eq('org_id', orgId)
-        .maybeSingle();
-
-      const vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
-
-      if (!vapiApiKey) {
-        res.status(400).json({ error: 'Vapi connection not configured', requestId });
-        return;
-      }
+      // Use helper to eliminate code duplication
+      const config = await getOrgAndVapiConfig(req, res, requestId);
+      if (!config) return;
+      const { orgId, vapiApiKey, vapiIntegration } = config;
 
       const { data: agent } = await supabase
         .from('agents')
         .select('id, system_prompt, first_message, voice, language, max_call_duration')
-        .eq('role', AGENT_ROLES.OUTBOUND)
+        .eq('role', AGENT_ROLES.INBOUND)
         .eq('org_id', orgId)
         .maybeSingle();
 
@@ -1953,10 +2017,10 @@ router.post(
       const trackingId = trackingRow.id;
 
       // Create Vapi WebSocket call
-      const vapiClient = new VapiClient(vapiApiKey);
+      const wsVapiClient = new VapiClient(vapiApiKey);
       let call;
       try {
-        call = await vapiClient.createWebSocketCall({
+        call = await wsVapiClient.createWebSocketCall({
           assistantId,
           audioFormat: {
             format: 'pcm_s16le',
@@ -1968,7 +2032,26 @@ router.post(
         // Clean up orphaned tracking row on Vapi failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
 
+        const status: number | undefined = vapiError?.response?.status;
+        const message: string | undefined =
+          vapiError?.response?.data?.message ||
+          vapiError?.response?.data?.error ||
+          vapiError?.message;
+
         logger.exception('Failed to create Vapi WebSocket call', vapiError);
+
+        // Surface provider failures so the frontend doesn't spin forever.
+        // Do NOT include secrets; only return Vapi's message.
+        if (status && status >= 400 && status < 500) {
+          res.status(402).json({
+            error: message || 'Vapi rejected the request',
+            requestId,
+            provider: 'vapi',
+            providerStatus: status
+          });
+          return;
+        }
+
         res.status(500).json({ error: 'Internal server error', requestId });
         return;
       }
@@ -2000,10 +2083,14 @@ router.post(
         return;
       }
 
-      // Create backend WebSocket bridge session
+      // Create backend WebSocket bridge session with timeout protection
       // This returns a Promise that resolves only when Vapi connection is open
       try {
-        await createWebVoiceSession(vapiCallId, trackingId, userId, vapiTransportUrl);
+        const bridgePromise = createWebVoiceSession(vapiCallId, trackingId, userId, vapiTransportUrl);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('WebSocket bridge timeout after 30s')), 30000)
+        );
+        await Promise.race([bridgePromise, timeoutPromise]);
       } catch (bridgeError: any) {
         // Clean up on bridge creation failure
         await supabase.from('call_tracking').delete().eq('id', trackingId);
@@ -2023,15 +2110,13 @@ router.post(
       });
 
       // Return backend bridge URL (NOT Vapi's internal URL)
-      const requestHost = req.get('host') || '';
-      const isLocalHost = /^localhost(?::\d+)?$/i.test(requestHost) || /^127\.0\.0\.1(?::\d+)?$/.test(requestHost);
-      const localWsBase = `ws://localhost:${process.env.PORT || 3000}`;
-
-      const baseUrl =
-        (isLocalHost ? localWsBase : undefined) ||
-        (process.env.BASE_URL ? process.env.BASE_URL.replace(/^http/, 'ws') : undefined) ||
-        `${req.protocol}://${requestHost}`.replace(/^http/, 'ws');
-
+      // CRITICAL FIX: Use X-Forwarded-Host if available (from reverse proxy), otherwise use Host header
+      // This ensures WebSocket URL matches the frontend's origin for same-origin policy
+      const forwardedHost = req.get('x-forwarded-host');
+      const requestHost = forwardedHost || req.get('host') || 'localhost:3001';
+      const forwardedProto = req.get('x-forwarded-proto');
+      const wsProtocol = (forwardedProto === 'https' || req.protocol === 'https') ? 'wss' : 'ws';
+      const baseUrl = `${wsProtocol}://${requestHost}`;
       const bridgeWebsocketUrl = `${baseUrl}/api/web-voice/${trackingId}?userId=${encodeURIComponent(userId)}`;
 
       logger.info('Web test session created', {
@@ -2127,9 +2212,9 @@ router.post(
       }
 
       // CRITICAL FIX #5: E.164 phone number validation
-      // E.164 format: + followed by 1-15 digits, starting with country code
+      // E.164 format: + followed by country code + number (7-15 digits total)
       const cleanPhone = phoneNumber.replace(/[\s\-\(\)]/g, ''); // Remove formatting
-      const e164Regex = /^\+?[1-9]\d{6,14}$/; // E.164: 7-15 digits, no leading zero
+      const e164Regex = /^\+[1-9]\d{6,14}$/; // E.164: must start with +, then 7-15 digits
       if (!e164Regex.test(cleanPhone)) {
         res.status(400).json({
           error: 'Invalid phone number. Use E.164 format: +1234567890 (include country code)',
@@ -2138,18 +2223,15 @@ router.post(
         return;
       }
 
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
-
-      if (!org?.id) {
-        res.status(500).json({ error: 'Internal server error', requestId });
+      // Prefer authenticated org context to avoid cross-org mismatches between UI and dev tools.
+      const orgId = req.user?.orgId;
+      if (!orgId) {
+        res.status(400).json({
+          error: 'Organization not resolved from auth context',
+          requestId
+        });
         return;
       }
-
-      const orgId = org.id;
 
       const { data: vapiIntegration } = await supabase
         .from('integrations')
@@ -2165,6 +2247,14 @@ router.post(
         return;
       }
 
+      // CRITICAL FIX: Fetch from outbound_agent_config source of truth
+      // The 'agents' table is legacy/stale for this specific new config flow
+      const { data: outboundConfig } = await supabase
+        .from('outbound_agent_config')
+        .select('*')
+        .eq('org_id', orgId)
+        .maybeSingle();
+
       const { data: agent } = await supabase
         .from('agents')
         .select('id, system_prompt, first_message, voice, language, max_call_duration')
@@ -2173,94 +2263,132 @@ router.post(
         .maybeSingle();
 
       if (!agent?.id) {
-        res.status(400).json({ error: 'Agent not configured. Save Agent Behavior first.', requestId });
+        res.status(400).json({ error: 'Agent not initialized in database. Please contact support.', requestId });
         return;
       }
 
-      // CRITICAL FIX #6: Validate agent fields are non-empty (not just truthy)
-      if (!agent.system_prompt?.trim() || !agent.first_message?.trim() ||
-        !agent.voice?.trim() || !agent.language?.trim() || !agent.max_call_duration) {
-        const missingFields = [
-          !agent.system_prompt?.trim() && 'System Prompt (cannot be empty)',
-          !agent.first_message?.trim() && 'First Message (cannot be empty)',
-          !agent.voice?.trim() && 'Voice (must be selected)',
-          !agent.language?.trim() && 'Language (must be selected)',
-          !agent.max_call_duration && 'Max Call Duration'
-        ].filter(Boolean);
+      // Use outbound_config if available (Source of Truth), otherwise fallback to agents table
+      const activeConfig = {
+        system_prompt: outboundConfig?.system_prompt || agent.system_prompt,
+        first_message: outboundConfig?.first_message || agent.first_message,
+        voice: outboundConfig?.voice_id || agent.voice,
+        language: outboundConfig?.language || agent.language,
+        max_call_duration: outboundConfig?.max_call_duration || agent.max_call_duration,
+        vapi_assistant_id: outboundConfig?.vapi_assistant_id
+      };
 
+      // CRITICAL FIX: Complete validation of all required outbound config fields
+      const missingFields = [
+        !activeConfig.system_prompt?.trim() && 'System Prompt',
+        !activeConfig.first_message?.trim() && 'First Message',
+        !activeConfig.voice?.trim() && 'Voice',
+        !activeConfig.language?.trim() && 'Language',
+        !activeConfig.max_call_duration && 'Max Call Duration'
+      ].filter(Boolean);
+
+      if (missingFields.length > 0) {
         res.status(400).json({
-          error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
+          error: `Outbound agent configuration incomplete. Missing: ${missingFields.join(', ')}. Please save the Outbound Configuration in the dashboard first.`,
           requestId
         });
         return;
       }
 
-      // Sync agent to pick up latest changes (also sets webhook URL programmatically)
-      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+      // Sync/Get Assistant
+      // If we have a vapi_assistant_id from the new config, use it directly.
+      // Otherwise, fall back to the legacy ensureAssistantSynced which might create one.
+      let assistantId = activeConfig.vapi_assistant_id;
 
-      // Get Vapi phone number ID (the caller ID for outbound calls)
-      // First check stored config, then env var, then auto-fetch from Vapi
-      let phoneNumberId = vapiIntegration?.config?.vapi_phone_number_id || process.env.VAPI_PHONE_NUMBER_ID;
-
-      // If no phone number ID stored, auto-fetch from Vapi account
-      if (!phoneNumberId) {
+      if (!assistantId) {
+        logger.warn('No vapi_assistant_id in outbound config, falling back to legacy agent sync', { orgId });
         try {
-          logger.info('No phone number ID stored, fetching from Vapi account', { requestId });
-          const vapiClient = new VapiClient(vapiApiKey);
-          const phoneNumbers = await vapiClient.listPhoneNumbers();
-
-          if (phoneNumbers && phoneNumbers.length > 0) {
-            // Deterministic selection:
-            // 1) Prefer Twilio-imported number
-            // 2) Prefer a number named like an outbound/default
-            // 3) Fallback to the first
-            const preferred =
-              phoneNumbers.find((n: any) => (n?.provider || '').toLowerCase() === 'twilio') ||
-              phoneNumbers.find((n: any) => typeof n?.name === 'string' && /outbound|default/i.test(n.name)) ||
-              phoneNumbers[0];
-
-            phoneNumberId = preferred?.id;
-            if (!phoneNumberId) {
-              throw new Error('Vapi returned phone numbers but none had an id');
-            }
-            logger.info('Auto-fetched phone number from Vapi', {
-              phoneNumberId,
-              totalNumbers: phoneNumbers.length,
-              requestId
-            });
-
-            // Store it for future use
-            const { data: existingConfig } = await supabase
-              .from('integrations')
-              .select('config')
-              .eq('provider', INTEGRATION_PROVIDERS.VAPI)
-              .eq('org_id', orgId)
-              .maybeSingle();
-
-            await supabase
-              .from('integrations')
-              .upsert({
-                org_id: orgId,
-                provider: INTEGRATION_PROVIDERS.VAPI,
-                config: { ...(existingConfig?.config || {}), vapi_phone_number_id: phoneNumberId },
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'org_id,provider' });
-          }
-        } catch (fetchError: any) {
-          logger.error('Failed to auto-fetch phone numbers from Vapi', {
-            error: fetchError?.message,
+          assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+        } catch (syncError: any) {
+          logger.error('Failed to sync assistant from legacy agents table', { error: syncError?.message });
+          res.status(500).json({
+            error: 'Failed to sync agent configuration. Please save the Outbound Configuration again.',
             requestId
+          });
+          return;
+        }
+      }
+
+      // CRITICAL FIX: Force-Update Assistant with latest Active Config
+      // This ensures we don't use stale data from the 'agents' table if ensureAssistantSynced was used,
+      // and ensures the assistant is 100% aligned with what the user sees in the UI right now.
+      if (assistantId) {
+        try {
+          const vapiClient = new VapiClient(vapiApiKey);
+          await vapiClient.updateAssistant(assistantId, {
+            name: 'Voxanne Outbound Agent (Test)',
+            model: {
+              provider: VAPI_DEFAULTS.MODEL_PROVIDER,
+              model: VAPI_DEFAULTS.MODEL_NAME,
+              messages: [{ role: 'system', content: activeConfig.system_prompt }]
+            },
+            voice: {
+              provider: getVoiceProvider(activeConfig.voice || 'Paige'),
+              voiceId: activeConfig.voice || 'Paige'
+            },
+            firstMessage: activeConfig.first_message,
+            maxDurationSeconds: activeConfig.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,
+            language: activeConfig.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE,
+            // Ensure we receive async failure reports
+            serverMessages: ['function-call', 'hangup', 'status-update', 'end-of-call-report', 'transcript']
+          });
+
+          // If we relied on a fresh sync and didn't have the ID in our new config table, patch it now
+          if (!activeConfig.vapi_assistant_id) {
+            await supabase.from('outbound_agent_config')
+              .update({ vapi_assistant_id: assistantId })
+              .eq('org_id', orgId);
+          }
+
+          logger.info('Assistant synced with current outbound config', { assistantId });
+        } catch (syncError: any) {
+          // This is a warning, not a blocker - assistant may still work with old config
+          logger.warn('Failed to update assistant with latest config, proceeding with existing state', {
+            assistantId,
+            error: syncError?.message
           });
         }
       }
 
+      // CRITICAL FIX: Deterministic Phone Number Selection
+      // Single-number policy: Outbound ALWAYS uses the inbound Twilio/Vapi mapping.
+      // This prevents conflicting imports and removes any ambiguity.
+      const { data: inboundMapping, error: inboundMappingError } = await supabase
+        .from('integrations')
+        .select('config')
+        .eq('org_id', orgId)
+        .eq('provider', 'twilio_inbound')
+        .maybeSingle();
+
+      if (inboundMappingError && inboundMappingError.code !== 'PGRST116') {
+        res.status(500).json({ error: 'Failed to load inbound number mapping', requestId });
+        return;
+      }
+
+      const inboundCfg: any = inboundMapping?.config || null;
+      const phoneNumberId: string | undefined = inboundCfg?.vapiPhoneNumberId;
+      const inboundCallerNumber: string | undefined = inboundCfg?.phoneNumber;
+
       if (!phoneNumberId) {
         res.status(400).json({
-          error: 'No phone number found in your Vapi account. Import a Twilio number or create a Vapi number first.',
+          error: 'Inbound phone number is not provisioned yet. Please complete Inbound Setup first.',
+          action: 'Go to Inbound Config and click Save & Activate Inbound.',
           requestId
         });
         return;
       }
+
+      logger.info('Outbound test resolved context (single-number)', {
+        requestId,
+        orgId,
+        assistantId: assistantId ? assistantId.slice(-6) : null,
+        inboundCallerLast4: inboundCallerNumber ? inboundCallerNumber.slice(-4) : null,
+        phoneNumberIdLast6: phoneNumberId.slice(-6)
+      });
 
       // Create call_tracking row for outbound test
       const { data: trackingRow, error: trackingInsertError } = await supabase
@@ -2290,9 +2418,10 @@ router.post(
 
       // Create Vapi outbound call with CORRECT parameters
       // Phone calls use webhooks for transcription (not WebSocket bridge)
-      const vapiClient = new VapiClient(vapiApiKey);
+      // Note: vapiClient already declared above for phone number lookup
       let call;
       try {
+        const vapiClient = new VapiClient(vapiApiKey);
         call = await vapiClient.createOutboundCall({
           assistantId,
           phoneNumberId,  // Vapi phone number ID (caller ID)
@@ -2928,8 +3057,15 @@ router.post(
         return;
       }
 
-      // Get phone number ID from env or config (with fallback to env var)
-      const phoneNumberId = vapiConfig?.vapi_phone_number_id || process.env.VAPI_PHONE_NUMBER_ID;
+      // Single-number policy: Outbound ALWAYS uses inbound mapping.
+      const { data: inboundMapping } = await supabase
+        .from('integrations')
+        .select('config')
+        .eq('org_id', orgId)
+        .eq('provider', 'twilio_inbound')
+        .maybeSingle();
+
+      const phoneNumberId = (inboundMapping as any)?.config?.vapiPhoneNumberId;
 
       logger.debug('Phone number ID check', {
         hasPhoneNumberId: !!phoneNumberId
@@ -2940,10 +3076,9 @@ router.post(
         const isDebugEnabled = process.env.NODE_ENV === 'development' && process.env.EXPOSE_DEBUG_INFO === 'true';
         res.status(400).json({
           error: 'Vapi phone number not configured',
-          action: 'Please add your Vapi phone number ID in Agent Settings or set VAPI_PHONE_NUMBER_ID environment variable',
+          action: 'Please complete Inbound Setup to provision your phone number (Inbound Config -> Save & Activate Inbound).',
           debugInfo: isDebugEnabled ? {
-            hasEnvVar: !!process.env.VAPI_PHONE_NUMBER_ID,
-            hasConfigVar: !!vapiConfig?.vapi_phone_number_id,
+            hasInboundMapping: !!(inboundMapping as any)?.config?.vapiPhoneNumberId,
             availableEnvVars: Object.keys(process.env).filter(k => k.includes('VAPI')).join(', ')
           } : undefined
         });

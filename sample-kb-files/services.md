@@ -1,0 +1,80 @@
+# Medical Aesthetics Services
+
+## Injectables
+
+### Botox (Botulinum Toxin)
+- **Purpose**: Reduces fine lines and wrinkles
+- **Areas**: Forehead, between brows, crow's feet
+- **Results**: Visible in 3-7 days, full results in 2 weeks
+- **Duration**: 3-4 months
+- **Cost**: £150-300 per area
+- **Recovery**: None, can resume normal activities immediately
+
+### Dermal Fillers
+- **Purpose**: Adds volume, smooths lines, enhances features
+- **Types**: Hyaluronic acid (HA), calcium hydroxylapatite, poly-L-lactic acid
+- **Areas**: Lips, cheeks, nasolabial folds, under eyes
+- **Results**: Immediate, improve over 2 weeks
+- **Duration**: 6-18 months depending on type
+- **Cost**: £200-600 per syringe
+- **Recovery**: Minimal, slight swelling possible
+
+### Lip Enhancement
+- **Procedure**: Dermal filler injection
+- **Results**: Fuller, more defined lips
+- **Duration**: 6-12 months
+- **Cost**: £250-400
+- **Popular requests**: Natural enhancement, defined border, increased volume
+
+## Skin Treatments
+
+### Chemical Peels
+- **Purpose**: Exfoliates skin, improves texture and tone
+- **Types**: Superficial, medium, deep
+- **Results**: Brighter, smoother skin
+- **Duration**: 1-3 sessions recommended
+- **Cost**: £100-300 per session
+- **Recovery**: 3-7 days depending on depth
+
+### Microneedling
+- **Purpose**: Stimulates collagen production
+- **Benefits**: Reduces fine lines, improves scars, tightens skin
+- **Results**: Gradual improvement over 4-6 weeks
+- **Duration**: 4-6 sessions recommended
+- **Cost**: £150-250 per session
+- **Recovery**: 24-48 hours
+
+### Laser Skin Resurfacing
+- **Purpose**: Removes damaged skin layers
+- **Benefits**: Reduces age spots, scars, improves texture
+- **Results**: Significant improvement in 2-4 weeks
+- **Duration**: 1-3 sessions
+- **Cost**: £300-800 per session
+- **Recovery**: 1-2 weeks
+
+## Consultation Process
+
+1. **Initial Assessment** (15 mins)
+   - Discuss goals and concerns
+   - Assess skin type and condition
+   - Review medical history
+
+2. **Treatment Plan** (15 mins)
+   - Recommend procedures
+   - Explain expected results
+   - Discuss timeline and cost
+
+3. **Consent & Preparation** (10 mins)
+   - Review risks and benefits
+   - Sign consent forms
+   - Prepare treatment area
+
+4. **Procedure** (30-60 mins)
+   - Perform treatment
+   - Monitor comfort
+   - Provide aftercare instructions
+
+5. **Follow-up** (as needed)
+   - Check results
+   - Recommend touch-ups
+   - Answer questions

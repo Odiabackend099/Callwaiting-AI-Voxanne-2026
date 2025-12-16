@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AudioRecorder } from '@/lib/audio/recorder';
 import { AudioPlayer } from '@/lib/audio/player';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import type { VoiceAgentState, TranscriptMessage, WebSocketEvent } from '@/types/voice';
 import { mapDbSpeakerToFrontend, type FrontendSpeaker } from '@/types/transcript';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+// Use frontend API proxy to avoid same-origin policy issues with WebSocket
+const API_BASE_URL = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : 'http://localhost:3000';
 const MAX_TRANSCRIPT_HISTORY = 100;
 const INTERIM_TRANSCRIPT_TIMEOUT_MS = 5000;
 
@@ -36,6 +37,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         error: null,
         session: null,
     });
+
+    const { user, session } = useAuth();
 
     const wsRef = useRef<WebSocket | null>(null);
     const recorderRef = useRef<AudioRecorder | null>(null);
@@ -173,21 +176,19 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         }
     }, []);
 
-    const getAuthToken = useCallback(async () => {
-        try {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (error) {
-                console.error('[VoiceAgent] Failed to get session:', error);
-                return null;
-            }
-            return session?.access_token || null;
-        } catch (e) {
-            console.error('[VoiceAgent] Error getting auth token:', e);
-            return null;
-        }
-    }, []);
+
+
 
     const isConnectingRef = useRef(false);
+    const isMountedRef = useRef(true);
+
+    // Track mount state
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     const connect = useCallback(async () => {
         // Prevent race conditions and double connections
@@ -206,20 +207,28 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 wsRef.current = null;
             }
 
-            const token = await getAuthToken();
-            if (!token) {
+            const token = session?.access_token;
+            const isDevBypass = !token && user?.id === 'dev-user';
+
+            if (!token && !isDevBypass) {
                 throw new Error('Not authenticated. Please log in first.');
             }
 
             console.log('[VoiceAgent] Initiating web test...');
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers,
                 body: JSON.stringify({})
             });
+
+            if (!isMountedRef.current) return;
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -234,6 +243,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
             const data: WebTestResponse = await response.json();
 
+            if (!isMountedRef.current) return;
+
             if (!data.success || !data.bridgeWebsocketUrl) {
                 throw new Error(data.error || 'Failed to get WebSocket URL from backend');
             }
@@ -241,7 +252,20 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             console.log('[VoiceAgent] Web test initiated:', { trackingId: data.trackingId });
             trackingIdRef.current = data.trackingId;
 
-            const wsUrl = data.bridgeWebsocketUrl;
+            let wsUrl = data.bridgeWebsocketUrl;
+
+            // In local dev, the backend WebSocket server lives on :3001.
+            // Next.js dev server on :3000 does not support WebSocket upgrades for this route.
+            try {
+                const parsed = new URL(wsUrl);
+                const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+                if (isLocal && parsed.port === '3000') {
+                    parsed.port = '3001';
+                    wsUrl = parsed.toString();
+                }
+            } catch {
+                // If URL parsing fails, keep original value.
+            }
             console.log('[VoiceAgent] Connecting to WebSocket:', wsUrl);
 
             const ws = new WebSocket(wsUrl);
@@ -251,17 +275,21 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 if (ws.readyState === WebSocket.CONNECTING) {
                     console.warn('[VoiceAgent] WebSocket connection timeout');
                     ws.close();
-                    setState(prev => ({ ...prev, error: 'Connection timeout. Please try again.' }));
-                    options.onError?.('Connection timeout');
-                    isConnectingRef.current = false;
+                    if (isMountedRef.current) {
+                        setState(prev => ({ ...prev, error: 'Connection timeout. Please try again.' }));
+                        options.onError?.('Connection timeout');
+                    }
                 }
             }, CONNECTION_TIMEOUT_MS);
 
             ws.onopen = () => {
-                isConnectingRef.current = false;
                 if (connectionTimeoutRef.current) {
                     clearTimeout(connectionTimeoutRef.current);
                     connectionTimeoutRef.current = null;
+                }
+                if (!isMountedRef.current) {
+                    ws.close();
+                    return;
                 }
                 console.log('[VoiceAgent] WebSocket connected');
                 reconnectAttemptsRef.current = 0;
@@ -381,10 +409,13 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                             break;
 
                         case 'error':
-                            console.error('[VoiceAgent] Server error:', data.error || data.message);
+                            console.error('[VoiceAgent] Server sent error:', data.error || data.message);
                             setState(prev => ({ ...prev, error: data.error || data.message || 'Unknown error' }));
                             options.onError?.(data.error || data.message || 'Unknown error');
+                            // Close socket if server reports critical error
+                            if (wsRef.current) wsRef.current.close();
                             break;
+
 
                         case 'interrupt':
                             console.log('[VoiceAgent] Agent interrupted');
@@ -422,7 +453,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 options.onDisconnected?.();
 
                 // Auto-reconnect logic
-                if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS && event.code !== 1000) {
+                if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS && event.code !== 1000 && event.code !== 1008 && isMountedRef.current) {
                     reconnectAttemptsRef.current++;
                     console.log(`[VoiceAgent] Reconnecting... (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
                     reconnectTimeoutRef.current = setTimeout(() => {
@@ -433,12 +464,14 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
         } catch (error: unknown) {
             console.error('[VoiceAgent] Failed to connect:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            setState(prev => ({ ...prev, error: errorMessage }));
-            options.onError?.(errorMessage);
+            if (isMountedRef.current) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                setState(prev => ({ ...prev, error: errorMessage }));
+                options.onError?.(errorMessage);
+            }
             isConnectingRef.current = false;
         }
-    }, [getAuthToken, options, handleTranscriptEvent, scheduleInterimTimeout]);
+    }, [user, session, options, handleTranscriptEvent, scheduleInterimTimeout]);
 
     const startRecording = useCallback(async () => {
         try {
@@ -493,14 +526,18 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
         if (trackingIdRef.current) {
             try {
-                const token = await getAuthToken();
-                if (token) {
+                const token = session?.access_token;
+                if (token || user?.id === 'dev-user') {
+                    const headers: HeadersInit = {
+                        'Content-Type': 'application/json'
+                    };
+                    if (token) {
+                        headers['Authorization'] = `Bearer ${token}`;
+                    }
+
                     await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test/end`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
+                        headers,
                         body: JSON.stringify({ trackingId: trackingIdRef.current })
                     });
                     console.log('[VoiceAgent] Web test session ended');
@@ -526,7 +563,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 durationSeconds: Math.floor((new Date().getTime() - prev.session.startedAt.getTime()) / 1000),
             } : null,
         }));
-    }, [stopRecording, getAuthToken]);
+
+    }, [stopRecording, session, user]);
 
     // Cleanup on unmount
     useEffect(() => {

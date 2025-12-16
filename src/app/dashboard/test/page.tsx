@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle, PlayCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -11,10 +11,60 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
+// E.164 phone validation
+const E164_REGEX = /^\+[1-9]\d{1,14}$/;
+
+// Config caching
+const CACHE_KEY = 'outbound_config_cache';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface InboundStatus {
+    configured: boolean;
+    inboundNumber?: string;
+    vapiPhoneNumberId?: string;
+}
+
+interface CachedConfig {
+    data: any;
+    timestamp: number;
+    missingFields?: string[];
+}
+
+function getCachedConfig(): CachedConfig | null {
+    if (typeof window === 'undefined') return null;
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+
+    try {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.timestamp > CACHE_TTL_MS) {
+            localStorage.removeItem(CACHE_KEY);
+            return null;
+        }
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function setCachedConfig(data: any, missingFields?: string[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data,
+        timestamp: Date.now(),
+        missingFields
+    }));
+}
+
 export default function TestAgentPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, loading } = useAuth();
-    const [activeTab, setActiveTab] = useState<'web' | 'phone'>('web');
+
+    // Initialize activeTab from query param if present
+    const tabParam = searchParams.get('tab');
+    const initialTab = (tabParam === 'web' || tabParam === 'phone') ? tabParam : 'web';
+    const [activeTab, setActiveTab] = useState<'web' | 'phone'>(initialTab);
 
     // --- Web Test State ---
     const {
@@ -39,7 +89,17 @@ export default function TestAgentPage() {
     const [outboundTrackingId, setOutboundTrackingId] = useState<string | null>(null);
     const [outboundConnected, setOutboundConnected] = useState(false);
     const [outboundTranscripts, setOutboundTranscripts] = useState<any[]>([]);
+    const [outboundConfigLoaded, setOutboundConfigLoaded] = useState(false);
+    const [outboundConfigLoading, setOutboundConfigLoading] = useState(false);
+    const [outboundConfigError, setOutboundConfigError] = useState<string | null>(null);
+    const [outboundConfigMissingFields, setOutboundConfigMissingFields] = useState<string[]>([]);
+    const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
+    const [wsConnectionStatus, setWsConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [phoneValidationError, setPhoneValidationError] = useState<string | null>(null);
+    const [callSummary, setCallSummary] = useState<any>(null);
     const outboundWsRef = useRef<WebSocket | null>(null);
+    const outboundTranscriptEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -94,10 +154,117 @@ export default function TestAgentPage() {
         return (await supabase.auth.getSession()).data.session?.access_token;
     };
 
-    const handleStartPhoneCall = async () => {
+    // Load outbound agent config before making phone calls
+    useEffect(() => {
+        const loadInboundStatus = async () => {
+            try {
+                const token = await getAuthToken();
+                if (!token) return;
+                const res = await fetch(`${API_BASE_URL}/api/inbound/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    setInboundStatus(null);
+                    return;
+                }
+                const data = await res.json();
+                setInboundStatus({
+                    configured: Boolean(data?.configured),
+                    inboundNumber: data?.inboundNumber,
+                    vapiPhoneNumberId: data?.vapiPhoneNumberId
+                });
+            } catch {
+                setInboundStatus(null);
+            }
+        };
+
+        const loadOutboundConfig = async () => {
+            // Check cache first
+            const cached = getCachedConfig();
+            if (cached) {
+                if (cached.missingFields && cached.missingFields.length > 0) {
+                    setOutboundConfigError('Outbound agent configuration is incomplete');
+                    setOutboundConfigMissingFields(cached.missingFields);
+                    setOutboundConfigLoaded(false);
+                } else {
+                    setOutboundConfigLoaded(true);
+                    setOutboundConfigError(null);
+                    setOutboundConfigMissingFields([]);
+                }
+                return;
+            }
+
+            setOutboundConfigLoading(true);
+            try {
+                const token = await getAuthToken();
+                const response = await fetch(`${API_BASE_URL}/api/founder-console/outbound-agent-config`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load outbound agent configuration');
+                }
+
+                const config = await response.json();
+                const missingFields = [];
+                if (!config.system_prompt) missingFields.push('System Prompt');
+
+                if (missingFields.length > 0) {
+                    setOutboundConfigError('Outbound agent configuration is incomplete');
+                    setOutboundConfigMissingFields(missingFields);
+                    setOutboundConfigLoaded(false);
+                    setCachedConfig(config, missingFields);
+                } else {
+                    setOutboundConfigLoaded(true);
+                    setOutboundConfigError(null);
+                    setOutboundConfigMissingFields([]);
+                    setCachedConfig(config);
+                }
+            } catch (err) {
+                console.error('Error loading outbound config:', err);
+                setOutboundConfigError('Failed to load outbound agent configuration');
+                setOutboundConfigLoaded(false);
+            } finally {
+                setOutboundConfigLoading(false);
+            }
+        };
+
+        if (activeTab === 'phone' && user) {
+            loadInboundStatus();
+            loadOutboundConfig();
+        }
+    }, [activeTab, user]);
+
+    const validatePhoneNumber = (phone: string): boolean => {
+        if (!phone) {
+            setPhoneValidationError('Phone number is required');
+            return false;
+        }
+        if (!E164_REGEX.test(phone)) {
+            setPhoneValidationError('Phone number must be in E.164 format (e.g., +1234567890)');
+            return false;
+        }
+        setPhoneValidationError(null);
+        return true;
+    };
+
+    const handleInitiateCall = () => {
+        if (!validatePhoneNumber(phoneNumber)) return;
+        setShowConfirmDialog(true);
+    };
+
+    const handleConfirmCall = async () => {
+        setShowConfirmDialog(false);
         if (!phoneNumber) return;
 
+        if (!outboundConfigLoaded) {
+            return;
+        }
+
         setIsCallingPhone(true);
+        setCallSummary(null);
         try {
             const token = await getAuthToken();
             const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test-outbound`, {
@@ -117,13 +284,10 @@ export default function TestAgentPage() {
             const data = await response.json();
             if (data.trackingId) {
                 setOutboundTrackingId(data.trackingId);
-                setPhoneCallId(data.callId); // Assuming backend returns callId too
+                setPhoneCallId(data.callId);
             }
-            alert('Call initiated! Your phone should ring shortly.');
-
         } catch (err) {
             console.error('Phone call failed:', err);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             alert((err as any).message || 'Failed to start phone call');
         } finally {
             setIsCallingPhone(false);
@@ -131,17 +295,30 @@ export default function TestAgentPage() {
     };
 
     const handleEndPhoneCall = async () => {
-        // Since we might not store the call SID on frontend easily for pure "end" action without more backend support,
-        // we'll mainly rely on user hanging up or us closing the tracking socket.
-        // But if we have an endpoint, we can call it.
-        // For now, we mainly clean up the UI state and websocket.
         if (outboundWsRef.current) {
             outboundWsRef.current.close();
             outboundWsRef.current = null;
         }
+
+        // Fetch call summary
+        if (outboundTrackingId) {
+            try {
+                const token = await getAuthToken();
+                const response = await fetch(`${API_BASE_URL}/api/founder-console/calls/${outboundTrackingId}/state`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const summary = await response.json();
+                    setCallSummary(summary);
+                }
+            } catch (err) {
+                console.error('Failed to fetch call summary:', err);
+            }
+        }
+
         setOutboundTrackingId(null);
         setOutboundConnected(false);
-        setOutboundTranscripts([]);
+        setWsConnectionStatus('disconnected');
     };
 
     // Connect to main WebSocket for live call transcripts
@@ -159,12 +336,8 @@ export default function TestAgentPage() {
             if (!token) return;
 
             try {
+                setWsConnectionStatus('connecting');
                 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                // Adjust if running locally vs production, usually backend URL host but here we assume same origin or configured URL
-                // If backend is on a different port/host, we need to use that.
-                // Our backend API URL is API_BASE_URL.
-                // Let's parse the host from there.
-
                 const backendUrl = new URL(API_BASE_URL);
                 const wsHost = backendUrl.host;
                 const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;
@@ -174,6 +347,7 @@ export default function TestAgentPage() {
 
                 ws.onopen = () => {
                     console.log('[LiveCall] WebSocket connected');
+                    setWsConnectionStatus('connected');
                     setOutboundConnected(true);
                     ws.send(JSON.stringify({ type: 'subscribe', token }));
                 };
@@ -195,21 +369,32 @@ export default function TestAgentPage() {
                             };
 
                             setOutboundTranscripts(prev => [...prev, newTranscript].slice(-100));
+                            // Auto-scroll
+                            setTimeout(() => {
+                                outboundTranscriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                            }, 100);
                         } else if (data.type === 'call_ended') {
-                            setOutboundConnected(false);
-                            setOutboundTrackingId(null);
+                            handleEndPhoneCall();
                         }
                     } catch (e) {
                         console.error('WebSocket message error', e);
                     }
                 };
 
+                ws.onerror = (error) => {
+                    console.error('[LiveCall] WebSocket error:', error);
+                    setWsConnectionStatus('disconnected');
+                };
+
                 ws.onclose = () => {
+                    console.log('[LiveCall] WebSocket closed');
+                    setWsConnectionStatus('disconnected');
                     setOutboundConnected(false);
                 };
 
             } catch (err) {
                 console.error('WebSocket connection failed', err);
+                setWsConnectionStatus('disconnected');
             }
         };
 
@@ -250,8 +435,8 @@ export default function TestAgentPage() {
                         <button
                             onClick={() => setActiveTab('web')}
                             className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'web'
-                                    ? 'bg-white text-gray-900 shadow-sm'
-                                    : 'text-gray-600 hover:text-gray-800'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-800'
                                 }`}
                         >
                             <Globe className="w-4 h-4" />
@@ -260,8 +445,8 @@ export default function TestAgentPage() {
                         <button
                             onClick={() => setActiveTab('phone')}
                             className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'phone'
-                                    ? 'bg-white text-gray-900 shadow-sm'
-                                    : 'text-gray-600 hover:text-gray-800'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-800'
                                 }`}
                         >
                             <Phone className="w-4 h-4" />
@@ -287,8 +472,8 @@ export default function TestAgentPage() {
                                         onClick={handleToggleWebCall}
                                         disabled={callInitiating}
                                         className={`px-6 py-2.5 rounded-lg font-semibold text-white shadow-sm transition-all flex items-center gap-2 ${isConnected
-                                                ? 'bg-red-500 hover:bg-red-600'
-                                                : 'bg-emerald-600 hover:bg-emerald-700'
+                                            ? 'bg-red-500 hover:bg-red-600'
+                                            : 'bg-emerald-600 hover:bg-emerald-700'
                                             }`}
                                     >
                                         {callInitiating ? (
@@ -325,8 +510,8 @@ export default function TestAgentPage() {
                                                     className={`flex ${t.speaker === 'user' ? 'justify-end' : 'justify-start'}`}
                                                 >
                                                     <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${t.speaker === 'user'
-                                                            ? 'bg-blue-500 text-white rounded-tr-none'
-                                                            : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                                                        ? 'bg-blue-500 text-white rounded-tr-none'
+                                                        : 'bg-gray-100 text-gray-800 rounded-tl-none'
                                                         }`}>
                                                         <p className="text-sm font-medium opacity-75 mb-1 text-xs uppercase tracking-wider">
                                                             {t.speaker === 'user' ? 'You' : 'Agent'}
@@ -355,22 +540,148 @@ export default function TestAgentPage() {
                                         </div>
                                         <h2 className="text-2xl font-bold text-gray-900 mb-2">Live Call Test</h2>
                                         <p className="text-gray-500">Enter your phone number to receive a test call from your agent.</p>
+
+                                        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-left">
+                                            <p className="text-xs text-gray-600 font-medium uppercase">Caller ID</p>
+                                            <p className="text-sm text-gray-900">
+                                                {inboundStatus?.configured && inboundStatus.inboundNumber
+                                                    ? inboundStatus.inboundNumber
+                                                    : 'Inbound not configured yet'}
+                                            </p>
+                                            <p className="text-xs text-gray-500 mt-1">Outbound calls always use your inbound number.</p>
+                                        </div>
+
+                                        {/* WebSocket Connection Status */}
+                                        {outboundTrackingId && (
+                                            <div className="mt-4 flex items-center justify-center gap-2">
+                                                <div className={`w-2 h-2 rounded-full ${wsConnectionStatus === 'connected' ? 'bg-green-500' : wsConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'}`} />
+                                                <span className="text-xs text-gray-600">
+                                                    {wsConnectionStatus === 'connected' ? 'Live transcript connected' : wsConnectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {!outboundTrackingId ? (
+                                    {/* Config Loading State */}
+                                    {outboundConfigLoading && (
+                                        <div className="text-center space-y-4">
+                                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
+                                            <p className="text-gray-600">Loading outbound configuration...</p>
+                                        </div>
+                                    )}
+
+                                    {/* Config Error State */}
+                                    {!outboundConfigLoading && outboundConfigError && !outboundTrackingId && !callSummary && (
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                                <div className="flex items-start gap-3">
+                                                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                                    <div className="flex-1">
+                                                        <p className="font-medium text-red-900">{outboundConfigError}</p>
+                                                        {outboundConfigMissingFields.length > 0 && (
+                                                            <div className="mt-2">
+                                                                <p className="text-sm text-red-700">Missing fields:</p>
+                                                                <ul className="list-disc list-inside text-sm text-red-700 mt-1">
+                                                                    {outboundConfigMissingFields.map((field, idx) => (
+                                                                        <li key={idx}>{field}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => router.push('/dashboard/outbound-agent-config')}
+                                                className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                                            >
+                                                Go to Outbound Agent Config
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Call Summary (Post-Call) */}
+                                    {callSummary && !outboundTrackingId && (
+                                        <div className="space-y-4">
+                                            <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
+                                                <h3 className="text-lg font-bold text-gray-900 mb-4">Call Summary</h3>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <p className="text-xs text-gray-600 font-medium uppercase">Status</p>
+                                                        <p className="text-sm text-gray-900 capitalize">{callSummary.status || 'Completed'}</p>
+                                                    </div>
+                                                    {callSummary.durationSeconds && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-600 font-medium uppercase">Duration</p>
+                                                            <p className="text-sm text-gray-900">{Math.floor(callSummary.durationSeconds / 60)}m {callSummary.durationSeconds % 60}s</p>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <p className="text-xs text-gray-600 font-medium uppercase">Tracking ID</p>
+                                                        <p className="text-sm text-gray-900 font-mono">{callSummary.trackingId}</p>
+                                                    </div>
+                                                    {callSummary.transcripts && callSummary.transcripts.length > 0 && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-600 font-medium uppercase mb-2">Last Transcript Lines</p>
+                                                            <div className="space-y-2">
+                                                                {callSummary.transcripts.slice(-5).map((t: any, idx: number) => (
+                                                                    <div key={idx} className="text-sm">
+                                                                        <span className={`font-bold ${t.speaker === 'agent' ? 'text-blue-600' : 'text-gray-700'}`}>
+                                                                            {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
+                                                                        </span>
+                                                                        <span className="text-gray-800">{t.text}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={() => router.push('/dashboard/calls?tab=outbound')}
+                                                    className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                                                >
+                                                    View in Calls Dashboard
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setCallSummary(null);
+                                                        setPhoneNumber('');
+                                                        setOutboundTranscripts([]);
+                                                    }}
+                                                    className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                                >
+                                                    New Test
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Call Initiation Form */}
+                                    {!outboundConfigLoading && !outboundConfigError && !outboundTrackingId && !callSummary && (
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                                                 <input
                                                     type="tel"
                                                     value={phoneNumber}
-                                                    onChange={(e) => setPhoneNumber(e.target.value)}
+                                                    onChange={(e) => {
+                                                        setPhoneNumber(e.target.value);
+                                                        setPhoneValidationError(null);
+                                                    }}
                                                     placeholder="+15551234567"
-                                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg"
+                                                    className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg ${phoneValidationError ? 'border-red-500' : 'border-gray-200'}`}
                                                 />
+                                                {phoneValidationError && (
+                                                    <p className="text-xs text-red-600 mt-1">{phoneValidationError}</p>
+                                                )}
+                                                {!phoneValidationError && (
+                                                    <p className="text-xs text-gray-500 mt-1">Must be in E.164 format (e.g., +1234567890)</p>
+                                                )}
                                             </div>
                                             <button
-                                                onClick={handleStartPhoneCall}
+                                                onClick={handleInitiateCall}
                                                 disabled={isCallingPhone || !phoneNumber}
                                                 className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                             >
@@ -387,7 +698,10 @@ export default function TestAgentPage() {
                                                 )}
                                             </button>
                                         </div>
-                                    ) : (
+                                    )}
+
+                                    {/* Active Call State */}
+                                    {outboundTrackingId && !callSummary && (
                                         <div className="text-center space-y-6">
                                             <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
                                                 <Activity className="w-12 h-12 text-emerald-500 mx-auto mb-3 animate-pulse" />
@@ -407,7 +721,7 @@ export default function TestAgentPage() {
                                                 <div className="mt-8 text-left bg-gray-50 rounded-xl p-4 max-h-64 overflow-y-auto border border-gray-200">
                                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Live Transcript</p>
                                                     <div className="space-y-3">
-                                                        {outboundTranscripts.slice(-3).map((t, i) => (
+                                                        {outboundTranscripts.map((t, i) => (
                                                             <div key={i} className="text-sm">
                                                                 <span className={`font-bold ${t.speaker === 'agent' ? 'text-blue-600' : 'text-gray-700'}`}>
                                                                     {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
@@ -415,11 +729,38 @@ export default function TestAgentPage() {
                                                                 <span className="text-gray-800">{t.text}</span>
                                                             </div>
                                                         ))}
+                                                        <div ref={outboundTranscriptEndRef} />
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Confirmation Dialog */}
+                        {showConfirmDialog && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                                <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Test Call</h3>
+                                    <p className="text-gray-600 mb-6">
+                                        Are you sure you want to place a test call to <span className="font-mono font-bold">{phoneNumber}</span>?
+                                    </p>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setShowConfirmDialog(false)}
+                                            className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleConfirmCall}
+                                            className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                                        >
+                                            Confirm Call
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}

@@ -1,40 +1,58 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Phone, Calendar, ArrowUpRight, ArrowDownRight, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
-
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
-interface CallLog {
+interface Call {
     id: string;
-    vapi_call_id: string;
-    to_number: string;
-    status: string;
-    started_at: string;
-    ended_at: string | null;
-    duration_seconds: number | null;
-    outcome: string | null;
-    metadata: {
-        channel?: 'inbound' | 'outbound';
-        is_test_call?: boolean;
-    } | null;
-    lead?: {
-        contact_name?: string;
-        name?: string;
-    } | null;
+    phone_number: string;
+    caller_name: string;
+    call_date: string;
+    duration_seconds: number;
+    status: 'completed' | 'missed' | 'transferred' | 'failed';
+    has_recording: boolean;
+    has_transcript: boolean;
+    sentiment_score?: number;
+    sentiment_label?: string;
+    call_type?: 'inbound' | 'outbound';
 }
 
-export default function CallLogsPage() {
+interface CallDetail extends Call {
+    recording_url?: string;
+    transcript: Array<{
+        speaker: 'caller' | 'voxanne';
+        text: string;
+        timestamp: number;
+        sentiment: string;
+    }>;
+    action_items: string[];
+}
+
+export default function CallsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, loading } = useAuth();
-    const [calls, setCalls] = useState<CallLog[]>([]);
+    const [calls, setCalls] = useState<Call[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCalls, setTotalCalls] = useState(0);
+    const [selectedCall, setSelectedCall] = useState<CallDetail | null>(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [filterStatus, setFilterStatus] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [analytics, setAnalytics] = useState<any>(null);
+
+    // Initialize activeTab from query param if present
+    const tabParam = searchParams.get('tab');
+    const initialTab = (tabParam === 'inbound' || tabParam === 'outbound') ? tabParam : 'inbound';
+    const [activeTab, setActiveTab] = useState<'inbound' | 'outbound'>(initialTab);
+
     const callsPerPage = 20;
 
     useEffect(() => {
@@ -43,62 +61,114 @@ export default function CallLogsPage() {
         }
     }, [user, loading, router]);
 
+    const getToken = async () => {
+        try {
+            const response = await fetch('/api/auth/token');
+            const data = await response.json();
+            return data.token;
+        } catch {
+            return null;
+        }
+    };
+
+    const fetchAnalytics = useCallback(async () => {
+        try {
+            const token = await getToken();
+            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard/analytics/summary`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAnalytics(data);
+            }
+        } catch (err) {
+            console.error('Error fetching analytics:', err);
+        }
+    }, []);
+
     const fetchCalls = useCallback(async () => {
         setIsLoading(true);
+        setError(null);
         try {
-            // Get total count
-            const { count } = await supabase
-                .from('call_logs')
-                .select('*', { count: 'exact', head: true });
+            const token = await getToken();
+            const params = new URLSearchParams({
+                page: currentPage.toString(),
+                limit: callsPerPage.toString(),
+                call_type: activeTab,
+                ...(filterStatus && { status: filterStatus }),
+                ...(searchQuery && { search: searchQuery })
+            });
 
-            setTotalCalls(count || 0);
+            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard?${params}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
 
-            // Fetch paginated calls with lead info
-            const { data, error } = await supabase
-                .from('call_logs')
-                .select(`
-                    id,
-                    vapi_call_id,
-                    to_number,
-                    status,
-                    started_at,
-                    ended_at,
-                    duration_seconds,
-                    outcome,
-                    metadata,
-                    lead:leads(contact_name, name)
-                `)
-                .order('started_at', { ascending: false })
-                .range((currentPage - 1) * callsPerPage, currentPage * callsPerPage - 1);
-
-            if (error) {
-                console.error('Error fetching calls:', error);
-            } else {
-                // Transform the data to match our interface (lead is returned as array by Supabase)
-                const transformedData = (data || []).map(call => ({
-                    ...call,
-                    lead: Array.isArray(call.lead) && call.lead.length > 0 ? call.lead[0] : null
-                }));
-                setCalls(transformedData);
+            if (!res.ok) {
+                throw new Error(`Failed to fetch calls (HTTP ${res.status})`);
             }
-        } catch (error) {
-            console.error('Error:', error);
+
+            const data = await res.json();
+            setCalls(data.calls || []);
+            setTotalCalls(data.pagination?.total || 0);
+        } catch (err: any) {
+            setError(err?.message || 'Failed to load calls');
+            console.error('Error fetching calls:', err);
         } finally {
             setIsLoading(false);
         }
-    }, [currentPage]);
+    }, [currentPage, filterStatus, searchQuery, activeTab]);
 
     useEffect(() => {
         if (user) {
             fetchCalls();
+            fetchAnalytics();
         }
-    }, [user, fetchCalls]);
+    }, [user, fetchCalls, fetchAnalytics]);
 
-    const formatDuration = (seconds: number | null) => {
-        if (!seconds) return '0:00';
+    const fetchCallDetail = async (callId: string) => {
+        try {
+            const token = await getToken();
+            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard/${callId}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to fetch call details');
+            }
+
+            const data = await res.json();
+            setSelectedCall(data);
+            setShowDetailModal(true);
+        } catch (err: any) {
+            setError(err?.message || 'Failed to load call details');
+        }
+    };
+
+    const deleteCall = async (callId: string) => {
+        if (!confirm('Are you sure you want to delete this call?')) return;
+
+        try {
+            const token = await getToken();
+            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard/${callId}`, {
+                method: 'DELETE',
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to delete call');
+            }
+
+            setCalls(calls.filter(c => c.id !== callId));
+            setError(null);
+        } catch (err: any) {
+            setError(err?.message || 'Failed to delete call');
+        }
+    };
+
+    const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${mins}m ${secs}s`;
     };
 
     const formatDateTime = (dateString: string) => {
@@ -112,42 +182,22 @@ export default function CallLogsPage() {
         });
     };
 
-    const getDirectionBadge = (metadata: CallLog['metadata']) => {
-        const channel = metadata?.channel || 'outbound';
-        const isInbound = channel === 'inbound';
-
-        return (
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${isInbound
-                ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                : 'bg-purple-50 text-purple-700 border border-purple-200'
-                }`}>
-                {isInbound ? (
-                    <ArrowDownRight className="w-3.5 h-3.5" />
-                ) : (
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                )}
-                {isInbound ? 'Inbound' : 'Outbound'}
-            </span>
-        );
+    const getSentimentColor = (label?: string) => {
+        switch (label) {
+            case 'positive': return 'text-green-600 bg-green-50';
+            case 'negative': return 'text-red-600 bg-red-50';
+            default: return 'text-gray-600 bg-gray-50';
+        }
     };
 
-    const getStatusBadge = (status: string) => {
-        const statusConfig: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-            'completed': { icon: CheckCircle, color: 'emerald', label: 'Completed' },
-            'in-progress': { icon: Clock, color: 'amber', label: 'In Progress' },
-            'failed': { icon: XCircle, color: 'red', label: 'Failed' },
-            'ringing': { icon: AlertCircle, color: 'cyan', label: 'Ringing' }
-        };
-
-        const config = statusConfig[status] || statusConfig['in-progress'];
-        const Icon = config.icon;
-
-        return (
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-${config.color}-50 text-${config.color}-700 border border-${config.color}-200`}>
-                <Icon className="w-3.5 h-3.5" />
-                {config.label}
-            </span>
-        );
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'completed': return 'bg-green-50 text-green-700 border-green-200';
+            case 'missed': return 'bg-red-50 text-red-700 border-red-200';
+            case 'transferred': return 'bg-blue-50 text-blue-700 border-blue-200';
+            case 'failed': return 'bg-orange-50 text-orange-700 border-orange-200';
+            default: return 'bg-gray-50 text-gray-700 border-gray-200';
+        }
     };
 
     const totalPages = Math.ceil(totalCalls / callsPerPage);
@@ -167,78 +217,103 @@ export default function CallLogsPage() {
 
     return (
         <div className="flex h-screen bg-white">
-            {/* Left Sidebar */}
             <LeftSidebar />
 
-            {/* Main Content */}
             <div className="flex-1 ml-64 overflow-y-auto">
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     {/* Header */}
                     <div className="mb-8">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-4xl font-bold text-gray-900 mb-2">Call Logs</h1>
-                                <p className="text-gray-600">View and analyze all call activity</p>
+                                <h1 className="text-4xl font-bold text-gray-900 mb-2">Call Recordings</h1>
+                                <p className="text-gray-600">View and analyze all call activity with transcripts and sentiment analysis</p>
                             </div>
-                            <button className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors text-sm font-medium flex items-center gap-2">
-                                <Download className="w-4 h-4" />
-                                Export CSV
-                            </button>
                         </div>
                     </div>
 
-                    {/* Stats Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-                                    <Phone className="w-5 h-5 text-emerald-600" />
-                                </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900">{totalCalls}</p>
-                                    <p className="text-xs text-gray-600 font-medium">Total Calls</p>
-                                </div>
+                    {/* Error Message */}
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                            {error}
+                        </div>
+                    )}
+
+                    {/* Analytics Summary */}
+                    {analytics && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-white border border-gray-200 rounded-xl p-4">
+                                <p className="text-2xl font-bold text-gray-900">{analytics.total_calls}</p>
+                                <p className="text-xs text-gray-600 font-medium">Total Calls</p>
+                            </div>
+                            <div className="bg-white border border-gray-200 rounded-xl p-4">
+                                <p className="text-2xl font-bold text-green-600">{analytics.completed_calls}</p>
+                                <p className="text-xs text-gray-600 font-medium">Completed</p>
+                            </div>
+                            <div className="bg-white border border-gray-200 rounded-xl p-4">
+                                <p className="text-2xl font-bold text-gray-900">{analytics.average_duration}s</p>
+                                <p className="text-xs text-gray-600 font-medium">Avg Duration</p>
+                            </div>
+                            <div className="bg-white border border-gray-200 rounded-xl p-4">
+                                <p className="text-2xl font-bold text-blue-600">{(analytics.average_sentiment * 100).toFixed(0)}%</p>
+                                <p className="text-xs text-gray-600 font-medium">Avg Sentiment</p>
                             </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-cyan-50 flex items-center justify-center">
-                                    <ArrowDownRight className="w-5 h-5 text-cyan-600" />
-                                </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {calls.filter(c => c.metadata?.channel === 'inbound').length}
-                                    </p>
-                                    <p className="text-xs text-gray-600 font-medium">Inbound</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
-                                    <ArrowUpRight className="w-5 h-5 text-purple-600" />
-                                </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {calls.filter(c => c.metadata?.channel === 'outbound').length}
-                                    </p>
-                                    <p className="text-xs text-gray-600 font-medium">Outbound</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-                                    <CheckCircle className="w-5 h-5 text-emerald-600" />
-                                </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {calls.filter(c => c.status === 'completed').length}
-                                    </p>
-                                    <p className="text-xs text-gray-600 font-medium">Completed</p>
-                                </div>
-                            </div>
-                        </div>
+                    )}
+
+                    {/* Call Type Tabs */}
+                    <div className="mb-6 flex gap-2 border-b border-gray-200">
+                        <button
+                            onClick={() => {
+                                setActiveTab('inbound');
+                                setCurrentPage(1);
+                            }}
+                            className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'inbound'
+                                ? 'border-emerald-500 text-emerald-600'
+                                : 'border-transparent text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            📥 Inbound Calls
+                        </button>
+                        <button
+                            onClick={() => {
+                                setActiveTab('outbound');
+                                setCurrentPage(1);
+                            }}
+                            className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'outbound'
+                                ? 'border-emerald-500 text-emerald-600'
+                                : 'border-transparent text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            📤 Outbound Calls
+                        </button>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="mb-6 flex gap-4">
+                        <input
+                            type="text"
+                            placeholder="Search by caller name or phone..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => {
+                                setFilterStatus(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                            <option value="">All Status</option>
+                            <option value="completed">Completed</option>
+                            <option value="missed">Missed</option>
+                            <option value="transferred">Transferred</option>
+                            <option value="failed">Failed</option>
+                        </select>
                     </div>
 
                     {/* Calls Table */}
@@ -247,24 +322,12 @@ export default function CallLogsPage() {
                             <table className="w-full">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Direction
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Date & Time
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Phone Number
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Duration
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                            Outcome
-                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Date & Time</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Caller</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Duration</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Sentiment</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -285,25 +348,16 @@ export default function CallLogsPage() {
                                         </tr>
                                     ) : (
                                         calls.map((call) => (
-                                            <tr key={call.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    {getDirectionBadge(call.metadata)}
-                                                </td>
+                                            <tr key={call.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => fetchCallDetail(call.id)}>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2 text-sm text-gray-900 font-medium">
                                                         <Calendar className="w-4 h-4 text-gray-400" />
-                                                        {formatDateTime(call.started_at)}
+                                                        {formatDateTime(call.call_date)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {call.to_number || 'Unknown'}
-                                                    </div>
-                                                    {call.lead && (
-                                                        <div className="text-xs text-gray-500">
-                                                            {call.lead.contact_name || call.lead.name}
-                                                        </div>
-                                                    )}
+                                                    <div className="text-sm font-medium text-gray-900">{call.caller_name}</div>
+                                                    <div className="text-xs text-gray-500">{call.phone_number}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2 text-sm text-gray-900 font-medium">
@@ -312,11 +366,38 @@ export default function CallLogsPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    {getStatusBadge(call.status)}
+                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(call.status)}`}>
+                                                        {call.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
+                                                        {call.status === 'missed' && <XCircle className="w-3.5 h-3.5" />}
+                                                        {call.status === 'transferred' && <AlertCircle className="w-3.5 h-3.5" />}
+                                                        {call.status.charAt(0).toUpperCase() + call.status.slice(1)}
+                                                    </span>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm text-gray-900 font-medium">
-                                                        {call.outcome || '-'}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {call.sentiment_label && (
+                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getSentimentColor(call.sentiment_label)}`}>
+                                                            {call.sentiment_label.charAt(0).toUpperCase() + call.sentiment_label.slice(1)}
+                                                            {call.sentiment_score && ` (${(call.sentiment_score * 100).toFixed(0)}%)`}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        {call.has_recording && (
+                                                            <button className="p-2 hover:bg-blue-50 rounded-lg transition-colors" title="Play recording">
+                                                                <Volume2 className="w-4 h-4 text-blue-600" />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                deleteCall(call.id);
+                                                            }}
+                                                            className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Delete call"
+                                                        >
+                                                            <Trash2 className="w-4 h-4 text-red-600" />
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -353,7 +434,6 @@ export default function CallLogsPage() {
                                             } else {
                                                 pageNum = currentPage - 2 + i;
                                             }
-
                                             return (
                                                 <button
                                                     key={pageNum}
@@ -382,6 +462,113 @@ export default function CallLogsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Call Detail Modal */}
+            {showDetailModal && selectedCall && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Modal Header */}
+                        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900">{selectedCall.caller_name}</h2>
+                                <p className="text-sm text-gray-600">{selectedCall.phone_number} • {formatDateTime(selectedCall.call_date)}</p>
+                            </div>
+                            <button
+                                onClick={() => setShowDetailModal(false)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <X className="w-6 h-6 text-gray-600" />
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="p-6 space-y-6">
+                            {/* Call Metadata */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <p className="text-xs text-gray-600 font-medium uppercase">Duration</p>
+                                    <p className="text-lg font-bold text-gray-900">{formatDuration(selectedCall.duration_seconds)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-600 font-medium uppercase">Status</p>
+                                    <p className="text-lg font-bold text-gray-900 capitalize">{selectedCall.status}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-600 font-medium uppercase">Sentiment</p>
+                                    <p className="text-lg font-bold text-gray-900 capitalize">{selectedCall.sentiment_label || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-600 font-medium uppercase">Recording</p>
+                                    <p className="text-lg font-bold text-gray-900">{selectedCall.has_recording ? '✓' : '✗'}</p>
+                                </div>
+                            </div>
+
+                            {/* Recording Player */}
+                            {selectedCall.recording_url && (
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <p className="text-sm font-bold text-gray-900 mb-3">Recording</p>
+                                    <audio controls className="w-full">
+                                        <source src={selectedCall.recording_url} type="audio/wav" />
+                                        Your browser does not support the audio element.
+                                    </audio>
+                                </div>
+                            )}
+
+                            {/* Transcript */}
+                            {selectedCall.transcript && selectedCall.transcript.length > 0 && (
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <p className="text-sm font-bold text-gray-900 mb-3">Transcript</p>
+                                    <div className="space-y-3">
+                                        {selectedCall.transcript.map((segment, idx) => (
+                                            <div key={idx} className="bg-white rounded p-3 border border-gray-200">
+                                                <div className="flex items-start gap-3">
+                                                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${segment.speaker === 'caller'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : 'bg-emerald-100 text-emerald-700'
+                                                        }`}>
+                                                        {segment.speaker === 'caller' ? 'Caller' : 'Voxanne'}
+                                                    </span>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm text-gray-900">{segment.text}</p>
+                                                        {segment.sentiment && (
+                                                            <p className="text-xs text-gray-500 mt-1">Sentiment: {segment.sentiment}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Action Items */}
+                            {selectedCall.action_items && selectedCall.action_items.length > 0 && (
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <p className="text-sm font-bold text-gray-900 mb-3">Action Items</p>
+                                    <ul className="space-y-2">
+                                        {selectedCall.action_items.map((item, idx) => (
+                                            <li key={idx} className="flex items-start gap-2 text-sm text-gray-900">
+                                                <span className="text-emerald-600 font-bold">•</span>
+                                                {item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => setShowDetailModal(false)}
+                                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

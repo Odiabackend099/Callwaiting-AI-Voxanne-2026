@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Activity, Phone, Bot, Zap, LogOut, PhoneIncoming, Key } from 'lucide-react';
+import { Activity, Phone, Bot, Zap, LogOut, PhoneIncoming, PhoneOutgoing, Key, BookOpen } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LeftSidebar() {
@@ -14,8 +14,10 @@ export default function LeftSidebar() {
         { label: 'Dashboard', href: '/dashboard', icon: Activity },
         { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
         { label: 'Agent Config', href: '/dashboard/agent', icon: Bot },
+        { label: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
         { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
         { label: 'Inbound Config', href: '/dashboard/inbound-config', icon: PhoneIncoming },
+        { label: 'Outbound Config', href: '/dashboard/outbound-agent-config', icon: PhoneOutgoing },
         { label: 'Test Agent', href: '/dashboard/test', icon: Zap },
     ];
 
@@ -46,8 +48,8 @@ export default function LeftSidebar() {
                             key={item.href}
                             onClick={() => router.push(item.href)}
                             className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${isActive
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                         >
                             <Icon className="w-5 h-5" />
