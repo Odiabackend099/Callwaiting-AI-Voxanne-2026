@@ -56,7 +56,7 @@ function setCachedConfig(data: any, missingFields?: string[]) {
     }));
 }
 
-export default function TestAgentPage() {
+const TestAgentPageContent = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
@@ -190,6 +190,7 @@ export default function TestAgentPage() {
                     setOutboundConfigLoaded(true);
                     setOutboundConfigError(null);
                     setOutboundConfigMissingFields([]);
+                    setCachedConfig(cached.data); // Cache hit, update timestamp
                 }
                 return;
             }
@@ -769,4 +770,17 @@ export default function TestAgentPage() {
             </div>
         </div>
     );
+};
+
+export default function TestAgentPage() {
+    return (
+        <React.Suspense fallback={
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            </div>
+        }>
+            <TestAgentPageContent />
+        </React.Suspense>
+    );
 }
+
