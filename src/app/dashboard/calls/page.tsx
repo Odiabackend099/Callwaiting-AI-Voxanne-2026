@@ -33,10 +33,11 @@ interface CallDetail extends Call {
     action_items: string[];
 }
 
-export default function CallsPage() {
+const CallsPageContent = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
+    // ... rest of state and logic unchanged
     const [calls, setCalls] = useState<Call[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -570,5 +571,20 @@ export default function CallsPage() {
                 </div>
             )}
         </div>
+    );
+};
+
+export default function CallsPage() {
+    return (
+        <React.Suspense fallback={
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+                    <p className="text-gray-600">Loading...</p>
+                </div>
+            </div>
+        }>
+            <CallsPageContent />
+        </React.Suspense>
     );
 }
