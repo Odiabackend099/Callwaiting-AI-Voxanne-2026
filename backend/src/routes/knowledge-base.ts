@@ -243,19 +243,31 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
       const vapiKey = await getVapiApiKeyForOrg(orgId);
       if (vapiKey) {
         // Trigger sync to both agents asynchronously (don't block response)
-        setImmediate(async () => {
+        // Use setTimeout with longer delay to ensure request processing
+        setTimeout(async () => {
           try {
             log.info('KnowledgeBase', 'Auto-syncing KB to agents after save', { orgId, docId: data.id });
             // Sync endpoint will handle attaching KB to both inbound and outbound agents
-            await fetch(`${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'}/api/knowledge-base/sync`, {
+            const authHeader = req.headers.authorization || `Bearer ${process.env.INTERNAL_API_KEY}`;
+            const response = await fetch(`${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'}/api/knowledge-base/sync`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': authHeader
+              },
               body: JSON.stringify({ orgId })
             });
+            
+            if (!response.ok) {
+              const errorText = await response.text();
+              log.error('KnowledgeBase', 'Auto-sync returned error', { orgId, docId: data.id, status: response.status, error: errorText });
+            } else {
+              log.info('KnowledgeBase', 'Auto-sync completed successfully', { orgId, docId: data.id });
+            }
           } catch (syncErr) {
             log.error('KnowledgeBase', 'Auto-sync failed after save', { orgId, docId: data.id, error: syncErr });
           }
-        });
+        }, 1000); // 1 second delay to ensure request is processed
       }
     } catch (syncErr) {
       log.warn('KnowledgeBase', 'Could not trigger auto-sync', { orgId, error: syncErr });

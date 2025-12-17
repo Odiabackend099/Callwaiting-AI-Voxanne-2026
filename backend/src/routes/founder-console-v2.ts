@@ -1705,18 +1705,20 @@ router.post(
       }
 
       // Verify voice was synced by checking agent records
-      const { data: syncedAgents } = await supabase
+      const { data: syncedAgents = [] } = await supabase
         .from('agents')
         .select('id, role, voice, vapi_assistant_id')
         .in('id', agentIdsToSync);
 
+      const agentDetails = (syncedAgents || []).map(a => ({
+        role: a.role,
+        voice: a.voice,
+        vapiAssistantId: a.vapi_assistant_id
+      }));
+
       logger.info('Agent sync verification', {
         requestId,
-        agents: syncedAgents?.map(a => ({
-          role: a.role,
-          voice: a.voice,
-          hasVapiId: Boolean(a.vapi_assistant_id)
-        }))
+        agents: agentDetails
       });
 
       res.status(200).json({
@@ -1725,11 +1727,7 @@ router.post(
         message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated.`,
         voiceSynced: successfulSyncs.length > 0,
         knowledgeBaseSynced: successfulSyncs.length > 0,
-        agentDetails: syncedAgents?.map(a => ({
-          role: a.role,
-          voice: a.voice,
-          vapiAssistantId: a.vapi_assistant_id
-        })),
+        agentDetails: agentDetails,
         requestId
       });
 
