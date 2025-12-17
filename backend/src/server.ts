@@ -178,6 +178,7 @@ server.on('upgrade', (request, socket, head) => {
     'http://127.0.0.1:3000',
     'https://voxanne-frontend-7c8wg3jiv-odia-backends-projects.vercel.app',
     'https://callwaitingai.dev',
+    'https://www.callwaitingai.dev',
     process.env.FRONTEND_URL || ''
   ].filter(Boolean);
 
