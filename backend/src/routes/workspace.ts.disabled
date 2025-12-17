@@ -1,0 +1,339 @@
+/**
+ * Workspace Management Routes
+ * Handles Vapi/Twilio workspace setup and agent auto-sync
+ * 
+ * ARCHITECTURE:
+ * - Workspace = Vapi API key + Twilio credentials (stored in integrations table)
+ * - Agent = Configuration for inbound/outbound (stored in agents table)
+ * - Knowledge Base = Business context (stored in knowledge_base table)
+ * 
+ * FLOW:
+ * 1. User saves workspace (Vapi + Twilio) → auto-syncs both agents to Vapi
+ * 2. User configures agent (voice, prompt, etc) → auto-syncs that agent to Vapi
+ * 3. User syncs KB → attaches KB to both agents
+ */
+
+import { Router, Request, Response } from 'express';
+import { supabase } from '../services/supabase-client';
+import { VapiClient } from '../services/vapi-client';
+import { log as logger } from '../services/logger';
+import { requireAuthOrDev } from '../middleware/auth';
+import twilio from 'twilio';
+import { z } from 'zod';
+import { ensureAssistantSynced } from './founder-console-v2';
+
+const workspaceRouter = Router();
+
+// Rate limiter for workspace saves
+import rateLimit from 'express-rate-limit';
+const workspaceLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 5,
+  message: 'Too many workspace save attempts. Please try again later.'
+});
+
+// Validation schema for workspace save
+const workspaceSaveSchema = z.object({
+  vapi_api_key: z.string().min(1, 'Vapi API key is required'),
+  twilio_account_sid: z.string().min(1, 'Twilio Account SID is required'),
+  twilio_auth_token: z.string().min(1, 'Twilio Auth Token is required'),
+  twilio_from_number: z.string().min(1, 'Twilio phone number is required')
+});
+
+type WorkspaceSaveRequest = z.infer<typeof workspaceSaveSchema>;
+
+/**
+ * POST /api/founder-console/workspace/save
+ * 
+ * Saves workspace credentials (Vapi + Twilio) and automatically syncs agents
+ * 
+ * FLOW:
+ * 1. Validate credentials format
+ * 2. Store in integrations table
+ * 3. Validate Vapi API key with test call
+ * 4. Validate Twilio credentials with test call
+ * 5. Auto-sync both agents to Vapi
+ * 6. Return workspace status
+ * 
+ * IDEMPOTENT: Calling multiple times with same credentials is safe
+ */
+workspaceRouter.post(
+  '/save',
+  requireAuthOrDev,
+  workspaceLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const requestId = generateRequestId();
+    const user = req.user;
+
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      // Validate request schema
+      const parsed = workspaceSaveSchema.parse(req.body);
+      const orgId = user.orgId;
+
+      const steps = {
+        credentialsStored: false,
+        vapiValidated: false,
+        twilioValidated: false,
+        agentsSynced: false
+      };
+
+      // ===== STEP 1: Store credentials in integrations table =====
+      try {
+        // Upsert Vapi integration
+        await supabase.from('integrations').upsert(
+          {
+            org_id: orgId,
+            provider: INTEGRATION_PROVIDERS.VAPI,
+            config: {
+              vapi_api_key: parsed.vapi_api_key,
+              validation_status: 'pending',
+              validated_at: null
+            },
+            connected: true,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'org_id,provider' }
+        );
+
+        // Upsert Twilio integration
+        await supabase.from('integrations').upsert(
+          {
+            org_id: orgId,
+            provider: INTEGRATION_PROVIDERS.TWILIO,
+            config: {
+              twilio_account_sid: parsed.twilio_account_sid,
+              twilio_auth_token: parsed.twilio_auth_token,
+              twilio_from_number: parsed.twilio_from_number,
+              validation_status: 'pending',
+              validated_at: null
+            },
+            connected: true,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'org_id,provider' }
+        );
+
+        steps.credentialsStored = true;
+        log.info('Workspace credentials stored', { orgId, requestId });
+      } catch (err: any) {
+        log.error('Failed to store workspace credentials', {
+          orgId,
+          requestId,
+          error: err?.message
+        });
+        res.status(500).json({
+          error: 'Failed to store workspace credentials',
+          details: err?.message,
+          steps,
+          requestId
+        });
+        return;
+      }
+
+      // ===== STEP 2: Validate Vapi API key =====
+      try {
+        const sanitizedKey = sanitizeVapiKey(parsed.vapi_api_key);
+        const vapiClient = new VapiClient(sanitizedKey);
+        await vapiClient.listAssistants();
+
+        // Update validation status
+        await supabase.from('integrations').update({
+          config: {
+            vapi_api_key: parsed.vapi_api_key,
+            validation_status: 'ok',
+            validated_at: new Date().toISOString()
+          }
+        }).eq('org_id', orgId).eq('provider', INTEGRATION_PROVIDERS.VAPI);
+
+        steps.vapiValidated = true;
+        log.info('Vapi API key validated', { orgId, requestId });
+      } catch (err: any) {
+        log.error('Vapi API key validation failed', {
+          orgId,
+          requestId,
+          error: err?.message
+        });
+
+        // Update validation status to error
+        await supabase.from('integrations').update({
+          config: {
+            validation_status: 'error',
+            last_error: err?.message || 'Vapi validation failed'
+          }
+        }).eq('org_id', orgId).eq('provider', INTEGRATION_PROVIDERS.VAPI);
+
+        res.status(400).json({
+          error: 'Vapi API key is invalid',
+          details: err?.message,
+          steps,
+          requestId
+        });
+        return;
+      }
+
+      // ===== STEP 3: Validate Twilio credentials =====
+      try {
+        const twilioClient = twilio(
+          parsed.twilio_account_sid,
+          parsed.twilio_auth_token
+        );
+        await twilioClient.api.accounts(parsed.twilio_account_sid).fetch();
+
+        // Update validation status
+        await supabase.from('integrations').update({
+          config: {
+            twilio_account_sid: parsed.twilio_account_sid,
+            twilio_auth_token: parsed.twilio_auth_token,
+            twilio_from_number: parsed.twilio_from_number,
+            validation_status: 'ok',
+            validated_at: new Date().toISOString()
+          }
+        }).eq('org_id', orgId).eq('provider', INTEGRATION_PROVIDERS.TWILIO);
+
+        steps.twilioValidated = true;
+        log.info('Twilio credentials validated', { orgId, requestId });
+      } catch (err: any) {
+        log.error('Twilio credentials validation failed', {
+          orgId,
+          requestId,
+          error: err?.message
+        });
+
+        // Update validation status to error
+        await supabase.from('integrations').update({
+          config: {
+            validation_status: 'error',
+            last_error: err?.message || 'Twilio validation failed'
+          }
+        }).eq('org_id', orgId).eq('provider', INTEGRATION_PROVIDERS.TWILIO);
+
+        res.status(400).json({
+          error: 'Twilio credentials are invalid',
+          details: err?.message,
+          steps,
+          requestId
+        });
+        return;
+      }
+
+      // ===== STEP 4: Ensure both agents exist =====
+      const agentMap: Record<string, string> = {};
+      for (const role of [AGENT_ROLES.INBOUND, AGENT_ROLES.OUTBOUND]) {
+        const { data: agent } = await supabase
+          .from('agents')
+          .select('id')
+          .eq('org_id', orgId)
+          .eq('role', role)
+          .limit(1)
+          .maybeSingle();
+
+        if (agent?.id) {
+          agentMap[role] = agent.id;
+        } else {
+          // Create agent if it doesn't exist
+          const { data: newAgent, error: createErr } = await supabase
+            .from('agents')
+            .insert({
+              org_id: orgId,
+              role: role,
+              name: role === AGENT_ROLES.INBOUND ? 'CallWaiting AI Inbound' : 'CallWaiting AI Outbound',
+              status: 'active'
+            })
+            .select('id')
+            .single();
+
+          if (!createErr && newAgent?.id) {
+            agentMap[role] = newAgent.id;
+          }
+        }
+      }
+
+      if (Object.keys(agentMap).length === 0) {
+        res.status(500).json({
+          error: 'Failed to create/find agents',
+          steps,
+          requestId
+        });
+        return;
+      }
+
+      // ===== STEP 5: Auto-sync both agents to Vapi =====
+      try {
+        const syncPromises = Object.values(agentMap).map(agentId =>
+          ensureAssistantSynced(agentId, parsed.vapi_api_key)
+        );
+
+        const syncResults = await Promise.allSettled(syncPromises);
+        const failedSyncs = syncResults.filter(r => r.status === 'rejected');
+
+        if (failedSyncs.length > 0) {
+          log.warn('Some agents failed to sync to Vapi', {
+            orgId,
+            requestId,
+            failCount: failedSyncs.length,
+            errors: failedSyncs.map((r: any) => r.reason?.message)
+          });
+          res.status(500).json({
+            error: 'Failed to sync agents to Vapi',
+            details: failedSyncs.map((r: any) => r.reason?.message).join('; '),
+            steps,
+            requestId
+          });
+          return;
+        }
+
+        steps.agentsSynced = true;
+        log.info('All agents synced to Vapi', {
+          orgId,
+          requestId,
+          agentCount: Object.keys(agentMap).length
+        });
+      } catch (err: any) {
+        log.error('Failed to sync agents to Vapi', {
+          orgId,
+          requestId,
+          error: err?.message
+        });
+        res.status(500).json({
+          error: 'Failed to sync agents to Vapi',
+          details: err?.message,
+          steps,
+          requestId
+        });
+        return;
+      }
+
+      // ===== SUCCESS: Return workspace status =====
+      res.status(200).json({
+        success: true,
+        message: 'Workspace saved and agents synced successfully',
+        steps,
+        orgId,
+        agentIds: agentMap,
+        requestId
+      });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({
+          error: 'Invalid request format',
+          details: err.errors,
+          requestId
+        });
+        return;
+      }
+
+      log.exception('Workspace save failed', err);
+      res.status(500).json({
+        error: err?.message || 'Failed to save workspace',
+        requestId
+      });
+    }
+  }
+);
+
+export { workspaceRouter };

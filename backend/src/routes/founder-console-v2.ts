@@ -1642,11 +1642,13 @@ router.post(
       const creationErrors: string[] = [];
 
       for (const role of [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND]) {
-        const { data: existingAgents, error: existingError } = await supabase
+        const { data: existingAgent, error: existingError } = await supabase
           .from('agents')
           .select('id')
           .eq('role', role)
-          .eq('org_id', orgId);
+          .eq('org_id', orgId)
+          .limit(1)
+          .maybeSingle();
 
         if (existingError) {
           const errorMsg = `Failed to fetch ${role} agent: ${existingError.message}`;
@@ -1655,11 +1657,11 @@ router.post(
           continue;
         }
 
-        let agentId = existingAgents?.[0]?.id;
+        let agentId = existingAgent?.id;
 
         if (!agentId) {
           const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
-          const { data: newAgents, error: insertError } = await supabase
+          const { data: newAgent, error: insertError } = await supabase
             .from('agents')
             .insert({
               role: role,
@@ -1667,7 +1669,8 @@ router.post(
               status: 'active',
               org_id: orgId
             })
-            .select('id');
+            .select('id')
+            .single();
 
           if (insertError) {
             const errorMsg = `Failed to create ${role} agent: ${insertError.message}`;
@@ -1676,14 +1679,14 @@ router.post(
             continue;
           }
 
-          if (!newAgents || newAgents.length === 0) {
+          if (!newAgent || !newAgent.id) {
             const errorMsg = `Failed to create ${role} agent: no ID returned from database`;
             logger.error(errorMsg, { requestId });
             creationErrors.push(errorMsg);
             continue;
           }
 
-          agentId = newAgents[0].id;
+          agentId = newAgent.id;
         }
 
         if (agentId) {
@@ -3877,3 +3880,4 @@ router.get('/leads/imports/:importId/errors/download', async (req: Request, res:
 });
 
 export default router;
+export { ensureAssistantSynced };

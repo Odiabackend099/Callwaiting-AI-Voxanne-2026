@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { sendDemoEmail, sendDemoSms, sendDemoWhatsApp, DemoRecipient, DemoContext } from '../services/demo-service';
 import { wsBroadcast } from '../services/websocket';
@@ -10,8 +11,32 @@ import { uploadCallRecording, deleteRecording } from '../services/call-recording
 import { detectCallType, getAgentConfigForCallType } from '../services/call-type-detector';
 import { getCachedIntegrationSettings } from '../services/settings-cache';
 import { computeVapiSignature } from '../utils/vapi-webhook-signature';
+import { log as logger } from '../services/logger';
 
 export const webhooksRouter = express.Router();
+
+// ===== CRITICAL FIX #5: Zod validation schema for Vapi events =====
+const VapiEventValidationSchema = z.object({
+  type: z.enum(['call.started', 'call.ended', 'call.transcribed', 'end-of-call-report', 'function-call']),
+  call: z.object({
+    id: z.string().min(1, 'call.id required'),
+    status: z.string(),
+    duration: z.number().optional(),
+    assistantId: z.string().optional(),
+    customer: z.object({
+      number: z.string().optional(),
+      name: z.string().optional()
+    }).optional(),
+    cost: z.number().optional(),
+    endedReason: z.string().optional()
+  }).optional(),
+  recordingUrl: z.string().optional(),
+  transcript: z.string().optional(),
+  artifact: z.object({
+    transcript: z.string().optional(),
+    recording: z.string().optional()
+  }).optional()
+});
 
 function redactEmail(value: unknown): string {
   const email = typeof value === 'string' ? value.trim() : '';
@@ -134,15 +159,46 @@ interface VapiEvent {
 
 webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
   try {
-    // Verify webhook signature for security
-    const isValid = await verifyVapiSignature(req);
-    if (!isValid) {
-      console.error('[Vapi Webhook] Invalid signature, rejecting webhook');
-      res.status(401).json({ error: 'Invalid webhook signature' });
+    // ===== CRITICAL FIX #9: Enforce webhook signature verification =====
+    try {
+      const isValid = await verifyVapiSignature(req);
+      if (!isValid) {
+        logger.error('Vapi Webhook', 'Invalid webhook signature', {
+          ip: req.ip,
+          timestamp: new Date().toISOString(),
+          path: req.path
+        });
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
+      }
+      logger.debug('Vapi Webhook', 'Signature verified', { ip: req.ip });
+    } catch (verifyError: any) {
+      logger.error('Vapi Webhook', 'Signature verification failed', {
+        error: verifyError.message,
+        ip: req.ip,
+        timestamp: new Date().toISOString()
+      });
+      res.status(401).json({ error: 'Webhook verification failed' });
       return;
     }
 
-    const event: VapiEvent = req.body;
+    // ===== CRITICAL FIX #5: Validate Vapi event structure with Zod =====
+    let event: VapiEvent;
+    try {
+      event = VapiEventValidationSchema.parse(req.body) as VapiEvent;
+      logger.debug('Vapi Webhook', 'Event validated', {
+        type: event.type,
+        callId: event.call?.id
+      });
+    } catch (parseError: any) {
+      logger.error('Vapi Webhook', 'Invalid event structure', {
+        error: parseError.message,
+        receivedData: JSON.stringify(req.body).substring(0, 200),
+        ip: req.ip
+      });
+      res.status(400).json({ error: 'Invalid event structure' });
+      return;
+    }
 
     console.log('[Vapi Webhook]', {
       type: event.type,
@@ -199,197 +255,44 @@ async function handleCallStarted(event: VapiEvent) {
   const { call } = event;
 
   if (!call || !call.id) {
-    console.error('[handleCallStarted] Missing call data');
-    return;
+    logger.error('handleCallStarted', 'Missing call data', {
+      vapiCallId: call?.id,
+      hasCall: Boolean(call),
+      hasCallId: Boolean(call?.id)
+    });
+    throw new Error('Missing call data');
   }
 
   try {
     // Generate idempotency key for this event (use only call.id to prevent duplicate processing)
     const eventId = `call.started:${call.id}`;
 
-    // Check if already processed
+    // ===== CRITICAL FIX #4: Strict idempotency check - fail fast =====
     const { data: existing, error: checkError } = await supabase
       .from('processed_webhook_events')
       .select('id')
       .eq('event_id', eventId)
       .maybeSingle();
 
-    if (checkError) {
-      console.error('[handleCallStarted] Error checking idempotency:', checkError);
-    } else if (existing) {
-      console.log('[handleCallStarted] Duplicate event, skipping', { eventId, vapiCallId: call.id });
-      return;
-    }
-
-    // Retry logic for race condition: webhook may arrive before call_tracking is inserted
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [250, 500, 1000]; // exponential backoff in ms
-    let callTracking = null;
-    let trackingError = null;
-
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      const result = await supabase
-        .from('call_tracking')
-        .select('id, lead_id, org_id, metadata')
-        .eq('vapi_call_id', call.id)
-        .maybeSingle();
-
-      callTracking = result.data;
-      trackingError = result.error;
-
-      if (callTracking) {
-        break; // Found it, exit retry loop
-      }
-
-      // If not found and we have retries left, wait and retry
-      if (attempt < MAX_RETRIES - 1) {
-        console.warn('[handleCallStarted] Call tracking not found, retrying', {
-          vapiCallId: call.id,
-          attempt: attempt + 1,
-          nextRetryMs: RETRY_DELAYS[attempt]
-        });
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
-      }
-    }
-
-    if (trackingError && trackingError.code !== 'PGRST116') {
-      console.error('[handleCallStarted] Error fetching call tracking:', trackingError.message);
-      return;
-    }
-
-    if (!callTracking) {
-      // Call tracking not found - this might be an INBOUND call
-      console.log('[handleCallStarted] Call tracking not found, checking for inbound call', {
+    if (checkError && checkError.code !== 'PGRST116') {
+      logger.error('handleCallStarted', 'CRITICAL: Idempotency check failed', {
         vapiCallId: call.id,
-        assistantId: call.assistantId
+        eventId,
+        errorMessage: checkError.message,
+        errorCode: checkError.code
       });
-
-      // Check if this is an inbound call by looking for assistantId
-      if (call.assistantId) {
-        // Look up the agent by vapi_assistant_id (only active agents)
-        const { data: agent, error: agentError } = await supabase
-          .from('agents')
-          .select('id, org_id, name, active')
-          .eq('vapi_assistant_id', call.assistantId)
-          .eq('active', true)
-          .maybeSingle();
-
-        if (agentError) {
-          console.error('[handleCallStarted] Error looking up agent:', agentError);
-          return;
-        }
-
-        if (!agent) {
-          console.error('[handleCallStarted] No active agent found with vapi_assistant_id:', call.assistantId);
-          return;
-        }
-
-        console.log('[handleCallStarted] Found agent for inbound call', {
-          agentId: agent.id,
-          agentName: agent.name,
-          orgId: agent.org_id
-        });
-
-        // FIX #5: Validate phone number format before storing
-        let phoneNumber = call.customer?.number || null;
-        if (phoneNumber) {
-          const phoneValidation = validateE164Format(phoneNumber);
-          if (!phoneValidation.valid) {
-            console.error('[handleCallStarted] Invalid phone number format:', phoneValidation.error);
-            return;
-          }
-          phoneNumber = phoneValidation.normalized || phoneNumber;
-        }
-
-        // Insert new call_tracking row for inbound call
-        const { data: newTracking, error: insertError } = await supabase
-          .from('call_tracking')
-          .insert({
-            org_id: agent.org_id,
-            agent_id: agent.id,
-            vapi_call_id: call.id,
-            status: 'ringing',
-            phone: phoneNumber,
-            metadata: {
-              channel: 'inbound',
-              assistantId: call.assistantId,
-              userId: undefined,  // Inbound calls don't have a userId initially
-              is_test_call: false,
-              created_at: new Date().toISOString(),
-              source: 'vapi_webhook'
-            } as CallTrackingMetadata
-          })
-          .select('id, lead_id, org_id, metadata')
-          .single();
-
-        if (insertError) {
-          console.error('[handleCallStarted] Failed to insert call_tracking for inbound call:', insertError);
-          return;
-        }
-
-        console.log('[handleCallStarted] Created call_tracking for inbound call', {
-          trackingId: newTracking.id,
-          vapiCallId: call.id
-        });
-
-        // Use the newly created tracking record
-        callTracking = newTracking;
-      } else {
-        console.error('[handleCallStarted] Call tracking not found and no assistantId provided for vapi_call_id:', call.id);
-        return;
-      }
+      throw new Error(`Idempotency check failed: ${checkError.message}`);
     }
 
-    // Fetch lead only if this is not a test call
-    let lead = null;
-    if (callTracking.lead_id) {
-      const { data: leadData } = await supabase
-        .from('leads')
-        .select('id, contact_name, name, clinic_name, company_name, org_id')
-        .eq('id', callTracking.lead_id)
-        .eq('org_id', callTracking.org_id)
-        .maybeSingle();
-      lead = leadData;
-    }
-
-    // Check if call_logs row already exists (prevent duplicates on retry)
-    const { data: existingLog } = await supabase
-      .from('call_logs')
-      .select('id')
-      .eq('vapi_call_id', call.id)
-      .maybeSingle();
-
-    if (!existingLog) {
-      // Create call log entry with metadata for test call detection
-      const { error } = await supabase.from('call_logs').insert({
-        vapi_call_id: call.id,
-        lead_id: lead?.id || null,
-        to_number: call.customer?.number || null,
-        status: 'in-progress',
-        started_at: new Date().toISOString(),
-        metadata: {
-          is_test_call: callTracking?.metadata?.is_test_call ?? false,
-          channel: callTracking?.metadata?.channel ?? 'outbound'  // FIX #1: Propagate channel
-        }
+    if (existing) {
+      logger.info('handleCallStarted', 'Duplicate event detected, skipping', {
+        vapiCallId: call.id,
+        eventId
       });
-
-      if (error) {
-        console.error('[handleCallStarted] Failed to insert call log:', error);
-      } else {
-        console.log('[handleCallStarted] Call log created:', call.id);
-      }
-    } else {
-      console.log('[handleCallStarted] Call log already exists, skipping insert:', call.id);
+      return;
     }
 
-
-    // Update call_tracking status
-    await supabase
-      .from('call_tracking')
-      .update({ status: 'ringing', started_at: new Date().toISOString() })
-      .eq('id', callTracking.id);
-
-    // Mark event as processed (idempotency)
+    // Mark as processed IMMEDIATELY (before any other operations)
     const { error: markError } = await supabase
       .from('processed_webhook_events')
       .insert({
@@ -399,24 +302,280 @@ async function handleCallStarted(event: VapiEvent) {
       });
 
     if (markError) {
-      console.warn('[handleCallStarted] Failed to mark event as processed:', markError);
-      // Continue anyway (state was updated)
+      logger.error('handleCallStarted', 'CRITICAL: Failed to mark event as processed', {
+        vapiCallId: call.id,
+        eventId,
+        errorMessage: markError.message
+      });
+      throw new Error(`Failed to mark event as processed: ${markError.message}`);
     }
 
-    // Broadcast WebSocket event with userId filter (type-safe metadata access)
-    const metadata = callTracking.metadata as CallTrackingMetadata | null;
+    logger.info('handleCallStarted', 'Event marked as processed', {
+      vapiCallId: call.id,
+      eventId
+    });
+
+    // ===== CRITICAL FIX #2: Increase retry delays for race condition =====
+    const MAX_RETRIES = 5;  // Increased from 3
+    const RETRY_DELAYS = [100, 250, 500, 1000, 2000];  // Total: 3.85 seconds
+    let existingCallTracking = null;
+    let callTrackingError = null;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const result = await supabase
+        .from('call_tracking')
+        .select('id, lead_id, org_id, metadata')
+        .eq('vapi_call_id', call.id)
+        .maybeSingle();
+
+      existingCallTracking = result.data;
+      callTrackingError = result.error;
+
+      if (existingCallTracking) {
+        logger.info('handleCallStarted', 'Found existing call_tracking', {
+          vapiCallId: call.id,
+          trackingId: existingCallTracking.id,
+          attempt: attempt + 1
+        });
+        break;
+      }
+
+      if (attempt < MAX_RETRIES - 1) {
+        // Add jitter to prevent thundering herd
+        const jitter = Math.random() * 100;
+        const delayMs = RETRY_DELAYS[attempt] + jitter;
+        
+        logger.warn('handleCallStarted', 'Call tracking not found, retrying', {
+          vapiCallId: call.id,
+          attempt: attempt + 1,
+          maxAttempts: MAX_RETRIES,
+          delayMs: Math.round(delayMs),
+          totalDelayMs: RETRY_DELAYS.slice(0, attempt + 1).reduce((a, b) => a + b, 0)
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    if (callTrackingError && callTrackingError.code !== 'PGRST116') {
+      logger.error('handleCallStarted', 'Error fetching call tracking', {
+        vapiCallId: call.id,
+        errorMessage: callTrackingError.message,
+        errorCode: callTrackingError.code
+      });
+      throw new Error(`Failed to fetch call tracking: ${callTrackingError.message}`);
+    }
+
+    // ===== CRITICAL FIX #3: Detect call type explicitly =====
+    const isInboundCall = Boolean(call.assistantId);
+    const isOutboundCall = Boolean(existingCallTracking);
+
+    logger.info('handleCallStarted', 'Call type detected', {
+      vapiCallId: call.id,
+      isInboundCall,
+      isOutboundCall,
+      hasAssistantId: Boolean(call.assistantId),
+      hasCallTracking: Boolean(existingCallTracking)
+    });
+
+    let callTracking = existingCallTracking;
+
+    if (isInboundCall) {
+      // PRIMARY PATH: Handle inbound call
+      logger.info('handleCallStarted', 'Processing inbound call', {
+        vapiCallId: call.id,
+        vapiAssistantId: call.assistantId
+      });
+
+      // ===== CRITICAL FIX #1: Agent lookup must throw errors =====
+      const { data: agent, error: agentError } = await supabase
+        .from('agents')
+        .select('id, org_id, name, active, vapi_assistant_id')
+        .eq('vapi_assistant_id', call.assistantId)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (agentError) {
+        logger.error('handleCallStarted', 'CRITICAL: Agent lookup failed', {
+          vapiCallId: call.id,
+          vapiAssistantId: call.assistantId,
+          errorMessage: agentError.message,
+          errorCode: agentError.code
+        });
+        throw new Error(`Agent lookup failed: ${agentError.message}`);
+      }
+
+      if (!agent) {
+        logger.error('handleCallStarted', 'CRITICAL: No active agent found', {
+          vapiCallId: call.id,
+          vapiAssistantId: call.assistantId,
+          searchCriteria: 'active=true AND vapi_assistant_id=' + call.assistantId
+        });
+        throw new Error(`No active agent found for vapi_assistant_id: ${call.assistantId}`);
+      }
+
+      logger.info('handleCallStarted', 'Agent found', {
+        vapiCallId: call.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        orgId: agent.org_id
+      });
+
+      // Validate phone number format before storing
+      let phoneNumber: string | null = call.customer?.number || null;
+      if (phoneNumber) {
+        const phoneValidation = validateE164Format(phoneNumber);
+        if (!phoneValidation.valid) {
+          logger.warn('handleCallStarted', 'Invalid phone number format, using as-is', {
+            vapiCallId: call.id,
+            providedNumber: phoneNumber,
+            error: phoneValidation.error
+          });
+          phoneNumber = phoneValidation.normalized || phoneNumber;
+        } else {
+          phoneNumber = phoneValidation.normalized || phoneNumber;
+        }
+      }
+
+      // Insert new call_tracking row for inbound call
+      const { data: newTracking, error: insertError } = await supabase
+        .from('call_tracking')
+        .insert({
+          org_id: agent.org_id,
+          agent_id: agent.id,
+          vapi_call_id: call.id,
+          status: 'ringing',
+          phone: phoneNumber,
+          metadata: {
+            channel: 'inbound',
+            assistantId: call.assistantId,
+            userId: undefined,
+            is_test_call: false,
+            created_at: new Date().toISOString(),
+            source: 'vapi_webhook'
+          } as CallTrackingMetadata
+        })
+        .select('id, lead_id, org_id, metadata')
+        .single();
+
+      if (insertError) {
+        logger.error('handleCallStarted', 'Failed to insert call_tracking for inbound call', {
+          vapiCallId: call.id,
+          agentId: agent.id,
+          error: insertError.message
+        });
+        throw new Error(`Failed to create call_tracking: ${insertError.message}`);
+      }
+
+      logger.info('handleCallStarted', 'Created call_tracking for inbound call', {
+        trackingId: newTracking.id,
+        vapiCallId: call.id
+      });
+
+      // Use the newly created tracking record
+      callTracking = newTracking;
+    } else if (isOutboundCall && existingCallTracking) {
+      // SECONDARY PATH: Handle outbound call
+      logger.info('handleCallStarted', 'Processing outbound call', {
+        vapiCallId: call.id,
+        trackingId: existingCallTracking.id
+      });
+    } else {
+      // ERROR PATH: Unknown call type
+      logger.error('handleCallStarted', 'CRITICAL: Cannot determine call type', {
+        vapiCallId: call.id,
+        hasAssistantId: Boolean(call.assistantId),
+        hasCallTracking: Boolean(existingCallTracking)
+      });
+      throw new Error('Cannot determine call type (inbound or outbound)');
+    }
+
+    if (!callTracking) {
+      logger.error('handleCallStarted', 'CRITICAL: No call tracking available', {
+        vapiCallId: call.id
+      });
+      throw new Error('No call tracking available');
+    }
+
+    // Fetch lead only if this is not a test call
+    let lead = null;
+    if (callTracking?.lead_id) {
+      const { data: leadData } = await supabase
+        .from('leads')
+        .select('id, contact_name, name, clinic_name, company_name, org_id')
+        .eq('id', callTracking.lead_id)
+        .eq('org_id', callTracking.org_id)
+        .maybeSingle();
+      lead = leadData;
+    }
+
+    // Create call log entry with metadata
+    const { error: logError } = await supabase.from('call_logs').upsert({
+      vapi_call_id: call.id,
+      lead_id: lead?.id || null,
+      to_number: call.customer?.number || null,
+      status: 'in-progress',
+      started_at: new Date().toISOString(),
+      metadata: {
+        is_test_call: callTracking?.metadata?.is_test_call ?? false,
+        channel: callTracking?.metadata?.channel ?? 'outbound'
+      }
+    }, { onConflict: 'vapi_call_id' });
+
+    if (logError) {
+      logger.error('handleCallStarted', 'Failed to insert call log', {
+        vapiCallId: call.id,
+        error: logError.message
+      });
+      throw new Error(`Failed to create call log: ${logError.message}`);
+    }
+
+    logger.info('handleCallStarted', 'Call log created', { vapiCallId: call.id });
+
+    // Update call_tracking status
+    const { error: updateError } = await supabase
+      .from('call_tracking')
+      .update({ status: 'ringing', started_at: new Date().toISOString() })
+      .eq('id', callTracking.id);
+
+    if (updateError) {
+      logger.error('handleCallStarted', 'Failed to update call_tracking status', {
+        vapiCallId: call.id,
+        error: updateError.message
+      });
+    }
+
+    // Broadcast WebSocket event
+    const metadata = callTracking?.metadata as CallTrackingMetadata | null;
     const userId = metadata?.userId;
 
-    // Only include userId in broadcast if it exists (inbound calls may not have userId initially)
-    wsBroadcast({
-      type: 'call_status',
+    try {
+      wsBroadcast({
+        type: 'call_status',
+        vapiCallId: call.id,
+        trackingId: callTracking.id,
+        userId: userId || '',
+        status: 'ringing'
+      });
+    } catch (broadcastError: any) {
+      logger.warn('handleCallStarted', 'WebSocket broadcast failed', {
+        vapiCallId: call.id,
+        error: broadcastError.message
+      });
+    }
+
+    logger.info('handleCallStarted', 'Call started successfully', {
       vapiCallId: call.id,
       trackingId: callTracking.id,
-      userId: userId || '',  // Use empty string as fallback for type safety
-      status: 'ringing',
+      channel: metadata?.channel
     });
-  } catch (error) {
-    console.error('[handleCallStarted] Error:', error);
+  } catch (error: any) {
+    logger.error('handleCallStarted', 'Unhandled error in webhook handler', {
+      vapiCallId: call?.id,
+      errorMessage: error?.message,
+      errorStack: error?.stack?.split('\n').slice(0, 3).join('\n')
+    });
+    throw error;
   }
 }
 
@@ -424,12 +583,16 @@ async function handleCallEnded(event: VapiEvent) {
   const { call } = event;
 
   if (!call || !call.id) {
-    console.error('[handleCallEnded] Missing call data');
+    logger.error('handleCallEnded', 'Missing call data', {
+      vapiCallId: call?.id,
+      hasCall: Boolean(call),
+      hasCallId: Boolean(call?.id)
+    });
     return;
   }
 
   try {
-    // Generate idempotency key for this event (FIX #6: duration not part of key)
+    // Generate idempotency key for this event
     const eventId = `ended:${call.id}`;
 
     // Check if already processed
@@ -439,12 +602,19 @@ async function handleCallEnded(event: VapiEvent) {
       .eq('event_id', eventId)
       .maybeSingle();
 
-    if (checkError) {
-      console.error('[handleCallEnded] Error checking idempotency:', checkError);
+    if (checkError && checkError.code !== 'PGRST116') {
+      logger.error('handleCallEnded', 'Error checking idempotency', {
+        vapiCallId: call.id,
+        error: checkError.message
+      });
     } else if (existing) {
-      console.log('[handleCallEnded] Duplicate event, skipping', { eventId, vapiCallId: call.id });
+      logger.info('handleCallEnded', 'Duplicate event, skipping', {
+        eventId,
+        vapiCallId: call.id
+      });
       return;
     }
+
     // Fetch call log to check if it's a test call
     const { data: callLog } = await supabase
       .from('call_logs')
@@ -463,9 +633,12 @@ async function handleCallEnded(event: VapiEvent) {
       .eq('vapi_call_id', call.id);
 
     if (error) {
-      console.error('[handleCallEnded] Failed to update call log:', error);
+      logger.error('handleCallEnded', 'Failed to update call log', {
+        vapiCallId: call.id,
+        error: error.message
+      });
     } else {
-      console.log('[handleCallEnded] Call log updated:', call.id);
+      logger.info('handleCallEnded', 'Call log updated', { vapiCallId: call.id });
     }
 
     // Update lead status only if this is not a test call
