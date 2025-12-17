@@ -695,8 +695,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     .update({ vapi_assistant_id: assistant.id })
     .eq('id', agentId)
     .eq('vapi_assistant_id', null) // Only update if still null
-    .select('vapi_assistant_id')
-    .single();
+    .select('vapi_assistant_id');
 
   if (updateError) {
     logger.error('Failed to save Vapi assistant ID to database', {
@@ -707,48 +706,50 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     throw new Error(`Failed to save Vapi assistant ID: ${updateError.message}`);
   }
 
-  if (!updated) {
-    logger.warn('Race condition: another request already saved assistant ID', {
+  // Check if update succeeded (at least one row updated)
+  if (updated && updated.length > 0) {
+    logger.info('Vapi assistant ID saved to database', {
       agentId,
-      newAssistantId: assistant.id
+      assistantId: assistant.id
     });
+    return assistant.id;
   }
 
-  // If another request already created an assistant, use that one
-  if (!updated) {
-    logger.warn('Race condition detected, using existing assistant', {
-      newAssistantId: assistant.id,
-      agentId
+  // Race condition: another request already saved an ID
+  logger.warn('Race condition: another request already saved assistant ID', {
+    agentId,
+    newAssistantId: assistant.id
+  });
+
+  // Fetch the existing assistant ID that was saved
+  const { data: existing, error: existingError } = await supabase
+    .from('agents')
+    .select('vapi_assistant_id')
+    .eq('id', agentId)
+    .maybeSingle();
+
+  if (existingError) {
+    logger.error('Failed to fetch existing assistant ID after race condition', {
+      agentId,
+      error: existingError.message
     });
-
-    const { data: existing } = await supabase
-      .from('agents')
-      .select('vapi_assistant_id')
-      .eq('id', agentId)
-      .single();
-
-    // If existing is still null, use the newly created one (other request also failed)
-    if (existing?.vapi_assistant_id) {
-      return existing.vapi_assistant_id;
-    }
-
-    // Fallback: use the newly created assistant and try to save it
-    logger.warn('Existing assistant also null, using newly created one', {
-      assistantId: assistant.id,
-      agentId
-    });
-
-    // Try one more time to save the newly created assistant
-    const { data: finalUpdate } = await supabase
-      .from('agents')
-      .update({ vapi_assistant_id: assistant.id })
-      .eq('id', agentId)
-      .eq('vapi_assistant_id', null)
-      .select('vapi_assistant_id')
-      .single();
-
-    return finalUpdate?.vapi_assistant_id || assistant.id;
+    // Fallback to newly created ID
+    return assistant.id;
   }
+
+  if (existing?.vapi_assistant_id) {
+    logger.info('Using existing assistant ID from race condition', {
+      agentId,
+      existingAssistantId: existing.vapi_assistant_id
+    });
+    return existing.vapi_assistant_id;
+  }
+
+  // Existing is still null - both requests failed to save, use newly created one
+  logger.warn('Existing assistant also null, using newly created one', {
+    assistantId: assistant.id,
+    agentId
+  });
 
   const duration = Date.now() - startTime;
   logger.info('Vapi assistant synced (created)', {
