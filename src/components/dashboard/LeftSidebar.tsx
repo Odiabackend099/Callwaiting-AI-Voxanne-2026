@@ -13,12 +13,10 @@ export default function LeftSidebar() {
     const navItems = [
         { label: 'Dashboard', href: '/dashboard', icon: Activity },
         { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
-        { label: 'Agent Config', href: '/dashboard/agent', icon: Bot },
+        { label: 'Agent Configuration', href: '/dashboard/agent-config', icon: Bot },
         { label: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
         { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
-        { label: 'Inbound Config', href: '/dashboard/inbound-config', icon: PhoneIncoming },
-        { label: 'Outbound Config', href: '/dashboard/outbound-agent-config', icon: PhoneOutgoing },
-        { label: 'Test Agent', href: '/dashboard/test', icon: Zap },
+        { label: 'Test Agents', href: '/dashboard/test', icon: Zap },
     ];
 
     return (
