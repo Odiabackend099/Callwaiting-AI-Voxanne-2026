@@ -238,6 +238,29 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Failed to record change history' });
     }
 
+    // Auto-sync KB to both agents after save
+    try {
+      const vapiKey = await getVapiApiKeyForOrg(orgId);
+      if (vapiKey) {
+        // Trigger sync to both agents asynchronously (don't block response)
+        setImmediate(async () => {
+          try {
+            log.info('KnowledgeBase', 'Auto-syncing KB to agents after save', { orgId, docId: data.id });
+            // Sync endpoint will handle attaching KB to both inbound and outbound agents
+            await fetch(`${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'}/api/knowledge-base/sync`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orgId })
+            });
+          } catch (syncErr) {
+            log.error('KnowledgeBase', 'Auto-sync failed after save', { orgId, docId: data.id, error: syncErr });
+          }
+        });
+      }
+    } catch (syncErr) {
+      log.warn('KnowledgeBase', 'Could not trigger auto-sync', { orgId, error: syncErr });
+    }
+
     return res.json({ item: data, id: data.id });
   } catch (e: any) {
     if (e instanceof z.ZodError) {

@@ -571,6 +571,17 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   const resolvedFirstMessage = agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE;
   const resolvedMaxDurationSeconds = agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION;
 
+  // DEBUG: Log voice resolution for troubleshooting
+  logger.info('Voice resolution for agent sync', {
+    agentId,
+    agentRole: agent.name,
+    dbVoiceId: agent.voice,
+    resolvedVoiceId,
+    resolvedVoiceProvider,
+    isValidVoice: isValidVoiceId(resolvedVoiceId),
+    language: resolvedLanguage
+  });
+
   // NOTE: Vapi expects assistant payload shape with model/voice/transcriber.
   // Using non-standard keys like systemPrompt/voiceId/serverUrl can cause 400 Bad Request.
   const assistantCreatePayload = {
@@ -1665,7 +1676,12 @@ router.post(
       }
 
       // Parallel Vapi Sync for updated agents
-      logger.info('Syncing agents to Vapi', { agentIds: agentIdsToSync, requestId });
+      logger.info('Syncing agents to Vapi', { 
+        agentIds: agentIdsToSync, 
+        requestId,
+        inboundUpdated: Boolean(inboundPayload),
+        outboundUpdated: Boolean(outboundPayload)
+      });
 
       const syncPromises = agentIdsToSync.map(id => ensureAssistantSynced(id, vapiApiKey!));
       const syncResults = await Promise.allSettled(syncPromises);
@@ -1677,12 +1693,31 @@ router.post(
         logger.warn('Some agents failed to sync to Vapi', {
           successCount: successfulSyncs.length,
           failCount: failedSyncs.length,
-          errors: failedSyncs.map((r: any) => r.reason.message),
+          errors: failedSyncs.map((r: any) => r.reason?.message || String(r.reason)),
           requestId
         });
       } else {
-        logger.info('All agents synced successfully to Vapi', { count: successfulSyncs.length, requestId });
+        logger.info('All agents synced successfully to Vapi', { 
+          count: successfulSyncs.length, 
+          requestId,
+          assistantIds: successfulSyncs
+        });
       }
+
+      // Verify voice was synced by checking agent records
+      const { data: syncedAgents } = await supabase
+        .from('agents')
+        .select('id, role, voice, vapi_assistant_id')
+        .in('id', agentIdsToSync);
+
+      logger.info('Agent sync verification', {
+        requestId,
+        agents: syncedAgents?.map(a => ({
+          role: a.role,
+          voice: a.voice,
+          hasVapiId: Boolean(a.vapi_assistant_id)
+        }))
+      });
 
       res.status(200).json({
         success: true,
@@ -1690,6 +1725,11 @@ router.post(
         message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated.`,
         voiceSynced: successfulSyncs.length > 0,
         knowledgeBaseSynced: successfulSyncs.length > 0,
+        agentDetails: syncedAgents?.map(a => ({
+          role: a.role,
+          voice: a.voice,
+          vapiAssistantId: a.vapi_assistant_id
+        })),
         requestId
       });
 
