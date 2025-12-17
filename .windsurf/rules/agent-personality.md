@@ -34,7 +34,6 @@ NEVER say "done" without proof.
 Do not refactor code that works. Do not "improve" things not related to the current task. Focus on the specific feature you're working on.
 
 ### RULE 4: ASK BEFORE BIG CHANGES
-If a fix requires:
 - Deleting >100 lines of code
 - Changing database schema
 - Modifying API contracts
