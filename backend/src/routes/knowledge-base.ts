@@ -67,7 +67,10 @@ async function vapiUploadTextFile(params: { apiKey: string; filename: string; co
 
     const res = await fetch('https://api.vapi.ai/file', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${params.apiKey}` },
+      headers: { 
+        Authorization: `Bearer ${params.apiKey}`,
+        'X-Idempotency-Key': `${params.filename}-${Buffer.byteLength(params.content, 'utf8')}`
+      },
       body: form
     });
 
@@ -129,7 +132,7 @@ async function attachToolToAssistant(params: { vapi: VapiClient; assistantId: st
   if (!model) throw new Error('Vapi assistant missing model configuration');
 
   const toolIds: string[] = Array.isArray(model.toolIds) ? model.toolIds : [];
-  const nextToolIds = toolIds.includes(params.toolId) ? toolIds : [...toolIds, params.toolId];
+  const nextToolIds = Array.from(new Set([...toolIds, params.toolId]));
 
   await params.vapi.updateAssistant(params.assistantId, { model: { ...model, toolIds: nextToolIds } });
 }
@@ -530,24 +533,26 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
 
     // Database-based rate limiting: check last sync from kb_sync_log
-    const { data: lastSyncRecord, error: lastSyncError } = await supabase
+    const { data: lastSyncRecords, error: lastSyncError } = await supabase
       .from('kb_sync_log')
       .select('created_at')
       .eq('org_id', orgId)
       .eq('status', 'success')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
     // Handle rate limit check: only rate limit if we have a successful sync record
-    if (lastSyncRecord && lastSyncRecord.created_at) {
-      const lastSyncTime = new Date(lastSyncRecord.created_at).getTime();
-      const now = Date.now();
-      const timeSinceLastSync = now - lastSyncTime;
+    if (lastSyncRecords && Array.isArray(lastSyncRecords) && lastSyncRecords.length > 0) {
+      const lastSyncRecord = lastSyncRecords[0];
+      if (lastSyncRecord?.created_at) {
+        const lastSyncTime = new Date(lastSyncRecord.created_at).getTime();
+        const now = Date.now();
+        const timeSinceLastSync = now - lastSyncTime;
 
-      if (timeSinceLastSync < SYNC_RATE_LIMIT_MS) {
-        const remainingMs = SYNC_RATE_LIMIT_MS - timeSinceLastSync;
-        return res.status(429).json({ error: `Rate limited. Try again in ${Math.ceil(remainingMs / 1000)}s.` });
+        if (timeSinceLastSync < SYNC_RATE_LIMIT_MS) {
+          const remainingMs = SYNC_RATE_LIMIT_MS - timeSinceLastSync;
+          return res.status(429).json({ error: `Rate limited. Try again in ${Math.ceil(remainingMs / 1000)}s.` });
+        }
       }
     } else if (lastSyncError && lastSyncError.code !== 'PGRST116') {
       // PGRST116 = "no rows found" which is expected on first sync
@@ -565,6 +570,28 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     const apiKey = await getVapiApiKeyForOrg(orgId);
     if (!apiKey) return res.status(500).json({ error: 'Vapi API Key not configured' });
 
+    // VALIDATE AGENTS EXIST AND HAVE VAPI IDs BEFORE FILE UPLOADS
+    const { data: agents, error: agentsError } = await supabase
+      .from('agents')
+      .select('id, role, vapi_assistant_id')
+      .eq('org_id', orgId)
+      .in('role', parsed.assistantRoles);
+
+    if (agentsError) return res.status(500).json({ error: agentsError.message });
+
+    if (!agents || agents.length === 0) {
+      return res.status(400).json({ 
+        error: 'No agents found for this organization. Please create agents in Agent Configuration first, then sync knowledge base.' 
+      });
+    }
+
+    const validAgents = agents.filter(a => a.vapi_assistant_id);
+    if (validAgents.length === 0) {
+      return res.status(400).json({ 
+        error: 'No agents have been synced to Vapi yet. Please save Agent Configuration first to create Vapi assistants.' 
+      });
+    }
+
     const { data: docs, error: docsError } = await supabase
       .from('knowledge_base')
       .select('*')
@@ -580,6 +607,16 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
       if (!d.content || !d.filename) {
         return res.status(400).json({ error: `Invalid KB document: missing content or filename for ${d.id}` });
       }
+      
+      // Validate content is valid UTF-8 and has no null bytes
+      if (typeof d.content !== 'string') {
+        return res.status(400).json({ error: `Invalid KB document: content must be text for ${d.filename}` });
+      }
+      
+      if (d.content.includes('\0')) {
+        return res.status(400).json({ error: `Invalid KB document: content contains null bytes for ${d.filename}` });
+      }
+      
       const bytes = Buffer.byteLength(d.content, 'utf8');
       if (bytes > KB_MAX_BYTES) {
         return res.status(400).json({ error: `KB doc too large: ${d.filename}. Max ${KB_MAX_BYTES} bytes.` });
@@ -597,6 +634,12 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     const metadataUpdatePromises = uploadResults.map(async (result) => {
       const doc = docMap.get(result.docId);
       if (!doc) return { success: true };
+      
+      // Validate fileId before updating metadata
+      if (!result.fileId || typeof result.fileId !== 'string') {
+        return { success: false, error: new Error(`Invalid fileId for document ${result.docId}`) };
+      }
+      
       const { error } = await supabase.from('knowledge_base').update({ metadata: { ...(doc.metadata || {}), vapi_file_id: result.fileId } }).eq('id', result.docId);
       return { success: !error, error };
     });
@@ -635,29 +678,6 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
 
     const vapi = new VapiClient(apiKey);
 
-    const { data: agents, error: agentsError } = await supabase
-      .from('agents')
-      .select('id, role, vapi_assistant_id')
-      .eq('org_id', orgId)
-      .in('role', parsed.assistantRoles);
-
-    if (agentsError) return res.status(500).json({ error: agentsError.message });
-
-    // Validate agents exist
-    if (!agents || agents.length === 0) {
-      return res.status(400).json({ 
-        error: 'No agents found for this organization. Please create agents in Agent Configuration first, then sync knowledge base.' 
-      });
-    }
-
-    // Validate at least one agent has a Vapi assistant ID
-    const validAgents = agents.filter(a => a.vapi_assistant_id);
-    if (validAgents.length === 0) {
-      return res.status(400).json({ 
-        error: 'No agents have been synced to Vapi yet. Please save Agent Configuration first to create Vapi assistants.' 
-      });
-    }
-
     // Log which agents will be updated
     log.info('KnowledgeBase', 'Attaching KB tool to agents', { 
       orgId, 
@@ -680,17 +700,24 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     );
 
     const attachmentResults = await Promise.allSettled(attachmentPromises);
+    const successfulAttachments = attachmentResults.filter(r => r.status === 'fulfilled');
     const failedAttachments = attachmentResults.filter(r => r.status === 'rejected');
+    const partialSuccess = successfulAttachments.length > 0;
     
     if (failedAttachments.length > 0) {
-      log.error('KnowledgeBase', 'Some agents failed to attach KB tool', { 
+      log.warn('KnowledgeBase', 'Partial sync failure - some agents failed to attach KB tool', { 
         orgId,
-        failedCount: failedAttachments.length,
-        totalCount: validAgents.length
+        successCount: successfulAttachments.length,
+        failCount: failedAttachments.length,
+        totalCount: validAgents.length,
+        errors: failedAttachments.map((r: any) => r.reason?.message)
       });
-      return res.status(500).json({ 
-        error: `Failed to attach knowledge base to ${failedAttachments.length} agent(s). Please try again.` 
-      });
+      
+      if (!partialSuccess) {
+        return res.status(500).json({ 
+          error: 'Failed to attach knowledge base to any agents. Please try again.' 
+        });
+      }
     }
 
     const updated = validAgents.map(a => ({ 

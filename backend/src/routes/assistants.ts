@@ -228,7 +228,9 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
 
     if (agent.vapi_assistant_id) {
       // Update existing assistant in Vapi
-      console.log('[POST /assistants/sync] Updating existing Vapi assistant:', agent.vapi_assistant_id);
+      const { createLogger } = await import('../services/logger');
+      const logger = createLogger('AssistantsSync');
+      logger.info('Updating existing Vapi assistant', { agentId, vapiAssistantId: agent.vapi_assistant_id });
 
       // Determine voice provider from agent voice configuration
       const voiceId = agent.voice || 'paige';
@@ -261,7 +263,9 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
       });
     } else {
       // Create new assistant in Vapi
-      console.log('[POST /assistants/sync] Creating new Vapi assistant:', agent.name);
+      const { createLogger } = await import('../services/logger');
+      const logger = createLogger('AssistantsSync');
+      logger.info('Creating new Vapi assistant', { agentId, agentName: agent.name });
 
       const voiceId = agent.voice || 'paige';
       const voiceProvider = determineVoiceProvider(voiceId);
@@ -281,9 +285,13 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
         .eq('id', agentId);
 
       if (updateError) {
-        console.error('[POST /assistants/sync] Failed to store Vapi ID:', updateError);
+        const { createLogger } = await import('../services/logger');
+        const logger = createLogger('AssistantsSync');
+        logger.error('Failed to store Vapi ID', { agentId, error: updateError.message });
       } else {
-        console.log('[POST /assistants/sync] Stored Vapi ID:', vapiAssistant.id);
+        const { createLogger } = await import('../services/logger');
+        const logger = createLogger('AssistantsSync');
+        logger.info('Stored Vapi ID', { agentId, vapiAssistantId: vapiAssistant.id });
       }
     }
 
@@ -294,7 +302,9 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
       message: 'Agent synced to Vapi successfully with knowledge base'
     });
   } catch (error: any) {
-    console.error('[POST /assistants/sync] Error:', error?.response?.data || error.message);
+    const { createLogger } = await import('../services/logger');
+    const logger = createLogger('AssistantsSync');
+    logger.error('Sync failed', { error: error?.message, details: error?.response?.data });
     res.status(500).json({
       error: error?.response?.data?.message || error.message || 'Failed to sync assistant'
     });
