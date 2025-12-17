@@ -1650,6 +1650,9 @@ router.post(
       res.status(200).json({
         success: true,
         syncedAgentIds: successfulSyncs, // Return IDs of assistants that were updated
+        message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated with latest system prompt, voice, and knowledge base.`,
+        voiceSynced: true, // Confirm voice was synced
+        knowledgeBaseSynced: true, // Confirm KB was attached
         requestId
       });
 

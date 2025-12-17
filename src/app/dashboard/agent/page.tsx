@@ -124,12 +124,22 @@ export default function AgentConfigPage() {
                 maxDurationSeconds: config.maxDuration
             };
 
-            await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
+            // Save agent behavior to database AND sync to Vapi with knowledge base
+            // The /api/founder-console/agent/behavior endpoint:
+            // 1. Updates both INBOUND and OUTBOUND agents in the DB
+            // 2. Calls ensureAssistantSynced for each agent (creates or updates Vapi assistant)
+            // 3. ensureAssistantSynced attaches the knowledge base via /api/assistants/sync
+            const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
                 method: 'POST',
                 body: JSON.stringify(payload),
                 timeoutMs: 30000,
                 retries: 1,
             });
+
+            // Verify sync was successful
+            if (!result?.success) {
+                throw new Error('Failed to sync agent configuration to Vapi');
+            }
 
             setOriginalConfig(config);
             setSaveSuccess(true);
