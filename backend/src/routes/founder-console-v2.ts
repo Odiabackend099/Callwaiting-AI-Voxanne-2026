@@ -442,6 +442,25 @@ async function loadOrganization(req: Request, res: Response, next: NextFunction)
       return;
     }
 
+    const orgId = req.user?.orgId;
+    if (orgId) {
+      const { data: org, error } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .eq('id', orgId)
+        .single();
+
+      if (error || !org) {
+        logger.warn('Organization not found', { requestId: req.requestId, error: error?.message });
+        req.org = undefined;
+      } else {
+        req.org = org as Organization;
+      }
+
+      next();
+      return;
+    }
+
     const { data: org, error } = await supabase
       .from('organizations')
       .select('id, name')
@@ -725,19 +744,12 @@ router.get('/me', (req: Request, res: Response): void => {
  * GET /api/founder-console/agent/config
  * Returns the global agent configuration for the founder console
  */
-router.get('/agent/config', async (req: Request, res: Response): Promise<void> => {
+router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Get the first/default organization
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('id')
-      .limit(1)
-      .single();
-
-    const orgId = org?.id;
+    const orgId = req.user?.orgId;
 
     if (!orgId) {
-      res.status(400).json({ error: 'Organization not initialized' });
+      res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
@@ -1659,31 +1671,20 @@ router.post(
  */
 router.post(
   '/agent/test-call',
+  requireAuthOrDev,
   callRateLimiter,
   validateRequest(agentTestCallSchema),
   async (req: Request, res: Response): Promise<void> => {
     const requestId = req.requestId || generateRequestId();
     try {
       const userId = req.user?.id;
-      if (!userId) {
+      const orgId = req.user?.orgId;
+      if (!userId || !orgId) {
         res.status(401).json({ error: 'Not authenticated', requestId });
         return;
       }
 
       const { testDestinationNumber } = req.body;
-
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
-
-      if (!org?.id) {
-        res.status(400).json({ error: 'Organization not initialized', requestId });
-        return;
-      }
-
-      const orgId = org.id;
 
       // Fetch integration settings from database (keys stored securely)
       const settings = await getIntegrationSettings();
@@ -2251,7 +2252,7 @@ router.post(
       // The 'agents' table is legacy/stale for this specific new config flow
       const { data: outboundConfig } = await supabase
         .from('outbound_agent_config')
-        .select('*')
+        .select('system_prompt, first_message, voice_id, language, max_call_duration, vapi_assistant_id')
         .eq('org_id', orgId)
         .maybeSingle();
 

@@ -3,10 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-import { supabase } from '@/lib/supabase';
 import { Settings, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, ChevronDown } from 'lucide-react';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface VapiAssistant {
   id: string;
@@ -47,21 +45,13 @@ export default function SettingsPage() {
   const [selectedAssistantId, setSelectedAssistantId] = useState('');
   const [showAssistantDropdown, setShowAssistantDropdown] = useState(false);
 
-  const getToken = async () => (await supabase.auth.getSession()).data.session?.access_token;
-
   // Load current settings
   useEffect(() => {
     const loadSettings = async () => {
       try {
         setLoading(true);
         setError(null);
-        const token = await getToken();
-
-        const res = await fetch(`${API_BASE_URL}/api/founder-console/settings`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-
-        const data = await res.json();
+        const data = await authedBackendFetch<any>('/api/founder-console/settings');
         setSettings(data);
         
         if (data.vapiApiKey) {
@@ -94,21 +84,14 @@ export default function SettingsPage() {
         return;
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/vapi/discover/all`, {
+      const data = await authedBackendFetch<any>('/api/vapi/discover/all', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           apiKey: apiKey.trim()
-        })
+        }),
+        timeoutMs: 30000,
+        retries: 1,
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to discover resources');
-      }
 
       setAssistants(data.assistants || []);
       setPhoneNumbers(data.phoneNumbers || []);
@@ -142,44 +125,29 @@ export default function SettingsPage() {
         return;
       }
 
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/vapi/discover/configure`, {
+      const data = await authedBackendFetch<any>('/api/vapi/discover/configure', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           apiKey: apiKey.trim(),
           assistantId: selectedAssistantId
-        })
+        }),
+        timeoutMs: 30000,
+        retries: 1,
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to configure webhook');
-      }
 
       setSuccess(`✅ Webhook configured successfully for ${selectedAssistantId}`);
       
       // Save to database
-      const saveRes = await fetch(`${API_BASE_URL}/api/founder-console/settings`, {
+      const newSettings = await authedBackendFetch<any>('/api/founder-console/settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           vapi_api_key: apiKey.trim(),
           vapi_assistant_id: selectedAssistantId
-        })
+        }),
+        timeoutMs: 30000,
+        retries: 1,
       });
-
-      if (saveRes.ok) {
-        const newSettings = await saveRes.json();
-        setSettings(newSettings);
-      }
+      setSettings(newSettings);
     } catch (err: any) {
       setError(`Configuration failed: ${err?.message}`);
     } finally {

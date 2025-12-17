@@ -3,6 +3,21 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(req: NextRequest) {
+    const host = req.headers.get('host') || '';
+    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+    const isVercelHost = host.endsWith('.vercel.app');
+
+    // Prevent Supabase PKCE (code_verifier) mismatch by forcing a single canonical origin.
+    // If the OAuth flow starts on *.vercel.app and returns to callwaitingai.dev (or vice versa),
+    // the code_verifier stored per-origin won't be found and Supabase throws bad_code_verifier.
+    if (!isLocalhost && isVercelHost) {
+        const url = req.nextUrl.clone();
+        url.hostname = 'callwaitingai.dev';
+        url.protocol = 'https:';
+        url.port = '';
+        return NextResponse.redirect(url, 308);
+    }
+
     let res = NextResponse.next({
         request: {
             headers: req.headers,

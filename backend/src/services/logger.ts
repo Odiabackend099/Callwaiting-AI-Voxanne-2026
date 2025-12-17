@@ -26,7 +26,7 @@ interface LogEntry {
 }
 
 // Current log level (can be set via environment)
-let currentLogLevel: LogLevel = LogLevel.DEBUG;
+let currentLogLevel: LogLevel = process.env.NODE_ENV === 'test' ? LogLevel.NONE : LogLevel.DEBUG;
 
 // Request ID for tracing (set per-request via middleware)
 let currentRequestId: string | undefined;
@@ -57,6 +57,7 @@ export function getRequestId(): string | undefined {
  */
 export function initLogger(): void {
   const envLevel = process.env.LOG_LEVEL?.toUpperCase();
+  const nodeEnv = process.env.NODE_ENV;
   
   switch (envLevel) {
     case 'DEBUG':
@@ -75,8 +76,12 @@ export function initLogger(): void {
       currentLogLevel = LogLevel.NONE;
       break;
     default:
-      // Default to INFO in production, DEBUG in development
-      currentLogLevel = process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG;
+      // Default to NONE in test, INFO in production, DEBUG in development
+      currentLogLevel = nodeEnv === 'test'
+        ? LogLevel.NONE
+        : nodeEnv === 'production'
+          ? LogLevel.INFO
+          : LogLevel.DEBUG;
   }
 
   log.info('Logger', 'Logger initialized', { level: LogLevel[currentLogLevel] });

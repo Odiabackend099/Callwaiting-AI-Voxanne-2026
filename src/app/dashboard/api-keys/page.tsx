@@ -4,10 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Key, Save, CheckCircle, AlertCircle, Eye, EyeOff, Loader2, Phone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface IntegrationStatus {
     vapiConfigured: boolean;
@@ -46,25 +44,12 @@ export default function ApiKeysPage() {
         }
     }, [user, loading, router]);
 
-    const getAuthToken = async () => {
-        return (await supabase.auth.getSession()).data.session?.access_token;
-    };
-
     const fetchSettings = useCallback(async () => {
         try {
-            const token = await getAuthToken();
-            const response = await fetch(`${API_BASE_URL}/api/founder-console/settings`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setStatus(data);
-                if (data.testDestination) {
-                    setTestDestination(data.testDestination);
-                }
+            const data = await authedBackendFetch<any>('/api/founder-console/settings');
+            setStatus(data);
+            if (data?.testDestination) {
+                setTestDestination(data.testDestination);
             }
         } catch (error) {
             console.error('Error fetching settings:', error);
@@ -95,29 +80,22 @@ export default function ApiKeysPage() {
             if (twilioPhoneNumber) payload.twilio_from_number = twilioPhoneNumber;
             if (testDestination) payload.test_destination_number = testDestination;
 
-            const token = await getAuthToken();
-            const response = await fetch(`${API_BASE_URL}/api/founder-console/settings`, {
+            await authedBackendFetch<any>('/api/founder-console/settings', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                timeoutMs: 30000,
+                retries: 1,
             });
 
-            if (response.ok) {
-                // Clear sensitive inputs after save
-                setVapiApiKey('');
-                setTwilioAccountSid('');
-                setTwilioAuthToken('');
+            // Clear sensitive inputs after save
+            setVapiApiKey('');
+            setTwilioAccountSid('');
+            setTwilioAuthToken('');
 
-                // Refresh status
-                await fetchSettings();
+            // Refresh status
+            await fetchSettings();
 
-                alert('Settings saved successfully!');
-            } else {
-                alert('Failed to save settings');
-            }
+            alert('Settings saved successfully!');
         } catch (error) {
             console.error('Error saving settings:', error);
             alert('Error saving settings');

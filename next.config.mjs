@@ -2,9 +2,9 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
     dest: "public",
-    disable: process.env.NODE_ENV === "development",
-    register: true,
-    skipWaiting: true,
+    disable: true, // Disable PWA entirely to prevent precaching errors
+    register: false,
+    skipWaiting: false,
 });
 
 /** @type {import('next').NextConfig} */
@@ -22,17 +22,8 @@ const nextConfig = {
         ],
     },
     async rewrites() {
-        // In production, ensure backend URL is set
-        if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_BACKEND_URL) {
-            console.warn('⚠️ NEXT_PUBLIC_BACKEND_URL is not defined used for rewrites. Fallback to localhost which will likely fail in production container.');
-        }
-
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
         return [
-            {
-                source: '/api/:path*',
-                destination: `${backendUrl}/api/:path*`,
-            },
             {
                 source: '/frontend/stream',
                 destination: `${backendUrl}/frontend/stream`, // Next.js handles WS upgrades
@@ -42,19 +33,35 @@ const nextConfig = {
     async redirects() {
         return [
             {
+                source: '/:path*',
+                has: [
+                    {
+                        type: 'host',
+                        value: 'www.callwaitingai.dev',
+                    },
+                ],
+                destination: 'https://callwaitingai.dev/:path*',
+                permanent: true,
+            },
+            {
                 source: '/auth/login',
                 destination: '/login',
                 permanent: true,
             },
             {
+                source: '/sign-up',
+                destination: '/login',
+                permanent: false,
+            },
+            {
                 source: '/auth/sign-up',
-                destination: '/sign-up',
-                permanent: true,
+                destination: '/login',
+                permanent: false,
             },
             {
                 source: '/auth/signup',
-                destination: '/sign-up',
-                permanent: true,
+                destination: '/login',
+                permanent: false,
             },
         ];
     },

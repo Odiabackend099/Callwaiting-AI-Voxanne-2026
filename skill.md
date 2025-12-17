@@ -134,3 +134,142 @@ If changes make things worse:
 3) Vapi:
 - assistant.started
 - transcript/audio events
+
+
+# Skill: Fix Supabase Google OAuth Redirect + PKCE (Voxanne)
+
+## Goal
+Fix Google OAuth so it always:
+- returns to `.../auth/callback?code=...`
+- successfully exchanges the session (no `400 pkce` / `auth_failed`)
+- lands on `.../dashboard`
+
+This skill is designed for agent execution: configuration-first, minimal-risk, reproducible.
+
+---
+
+## Definitions (contracts)
+- **App callback route (authoritative):** `GET /auth/callback`
+  - exchanges `code` via `supabase.auth.exchangeCodeForSession(code)`
+  - redirects to `next` (default `/dashboard`)
+- **Post-login landing:** `/dashboard`
+- **OAuth initiation (client):** `signInWithOAuth({ options: { redirectTo: getAuthCallbackUrl() } })`
+- **Allowed redirect URLs (Supabase):** must include the exact callback URLs used in dev/prod, including `www`/non-`www`.
+
+---
+
+## Step 0 — Preconditions
+- Frontend running on `http://localhost:3000`
+- Supabase project selected (prod)
+- You can reproduce the failure in **incognito**
+- You do NOT rely on stale service workers (see Step 4)
+
+---
+
+## Step 1 — Capture the failure signature (no guessing)
+1) Incognito → `http://localhost:3000/login`
+2) Click Google
+3) After redirect back to app, record:
+- Final URL (`/auth/callback?...` OR `/?code=...`)
+- Error query on login page (`/login?error=...`)
+
+**Decision:**
+- If you land on `/?code=...`, callback route is bypassed → fix Supabase allowlist / fallback routing.
+- If you land on `/auth/callback?code=...` but then go to `/login?error=...`, exchange failed → diagnose PKCE/cookies/origin.
+
+---
+
+## Step 2 — Verify Supabase URL Configuration (most common root cause)
+Supabase Dashboard → Authentication → URL Configuration
+
+### Site URL
+Must match your canonical production host (choose one):
+- `https://www.callwaitingai.dev` OR
+- `https://callwaitingai.dev`
+
+### Redirect URLs (allowlist)
+Must include **exact** callback URLs used by the app:
+- `http://localhost:3000/auth/callback`
+- `http://localhost:3000/auth/callback?next=/update-password`
+- `https://www.callwaitingai.dev/auth/callback`
+- `https://www.callwaitingai.dev/auth/callback?next=/update-password`
+- (optional, if non-www is still served)
+  - `https://callwaitingai.dev/auth/callback`
+  - `https://callwaitingai.dev/auth/callback?next=/update-password`
+
+**Fail condition:** any mismatch of port (`9121` vs `3000`) or domain (`www` vs non-`www`) can cause:
+- redirect to Site URL root `/?code=...`
+- PKCE verifier mismatch → `exchangeCodeForSession` fails
+
+---
+
+## Step 3 — Verify Google Cloud OAuth Client redirect URIs
+Google Cloud Console → OAuth Client → Authorized redirect URIs
+
+Include:
+- `https://<your-supabase-project>.supabase.co/auth/v1/callback`
+- `http://localhost:3000/auth/callback`
+- `https://www.callwaitingai.dev/auth/callback`
+
+If you use non-www, include it too.
+
+---
+
+## Step 4 — Eliminate Service Worker / PWA interference (must-do in this repo)
+In Chrome devtools (on localhost and prod):
+- Application → Service Workers → **Unregister**
+- Application → Storage → **Clear site data**
+
+Rationale: stale SW can force asset/domain mismatches and break OAuth continuity.
+
+---
+
+## Step 5 — Confirm the app is generating the correct `redirectTo`
+Expected at runtime:
+- On `http://localhost:3000`, `getAuthCallbackUrl()` must resolve to `http://localhost:3000/auth/callback`
+- On `https://www.callwaitingai.dev`, it must resolve to `https://www.callwaitingai.dev/auth/callback`
+
+**Repo note:** The helper should prefer `window.location.origin` in the browser to avoid www/port drift.
+
+---
+
+## Step 6 — Minimal instrumentation (temporary, safe)
+Only if exchange still fails:
+
+1) In `src/app/auth/callback/route.ts`, log in non-production only:
+- `{ code: error.code, name: error.name, message: error.message }`
+2) Redirect back to login with a sanitized error:
+- `/login?error=<safeError>`
+
+Never log:
+- auth codes
+- tokens
+- user emails
+
+---
+
+## Step 7 — Failsafe: handle `/?code=...` by forwarding to `/auth/callback`
+If Supabase (or a misconfig) ever sends `code` to `/`, the homepage must forward it.
+
+Minimal behavior:
+- If `window.location.search` contains `code=...`, redirect to `/auth/callback` preserving querystring.
+
+---
+
+## Verification checklist (golden path)
+### Local
+- Google OAuth returns to: `http://localhost:3000/auth/callback?code=...`
+- Callback redirects to: `http://localhost:3000/dashboard`
+- Refresh `/dashboard` keeps you authenticated
+
+### Production
+- Google OAuth returns to: `https://www.callwaitingai.dev/auth/callback?code=...`
+- Callback redirects to: `https://www.callwaitingai.dev/dashboard`
+
+---
+
+## Rollback plan
+- If auth breaks after changes:
+  - revert the root “code catcher” forwarding logic
+  - revert any redirect helper changes
+  - restore Supabase URL configuration to last-known-good

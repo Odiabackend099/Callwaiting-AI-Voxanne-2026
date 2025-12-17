@@ -124,7 +124,23 @@ export default function VoxanneDashboard() {
         return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     };
 
-    if (loading || isLoading) {
+    // 1. Show loading while checking authentication status
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+                    <p className="text-gray-700">Verifying session...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // 2. If not authenticated, return null (router.push will redirect)
+    if (!user) return null;
+
+    // 3. If authenticated but fetching data, show dashboard loader
+    if (isLoading) {
         return (
             <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
@@ -134,8 +150,6 @@ export default function VoxanneDashboard() {
             </div>
         );
     }
-
-    if (!user) return null;
 
     return (
         <div className="flex h-screen bg-white">

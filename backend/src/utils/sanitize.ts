@@ -6,10 +6,11 @@ export function sanitizeName(name: string | null | undefined): string {
   if (!name) return '';
 
   return name
-    .replace(/[<>{}$]/g, '')  // Remove template/HTML chars
     .replace(/\$\{.*?\}/g, '')  // Remove ${} expressions
+    .replace(/[<>{}$]/g, '')  // Remove template/HTML chars
     .replace(/`/g, '')  // Remove backticks
     .replace(/\\/g, '')  // Remove backslashes
+    .replace(/\bprocess\b/gi, '')  // Remove common template-injection runtime identifier
     .substring(0, 100)  // Limit length
     .trim();
 }

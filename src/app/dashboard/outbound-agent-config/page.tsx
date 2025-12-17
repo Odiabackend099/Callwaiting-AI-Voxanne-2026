@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Save, AlertCircle, CheckCircle, Loader, TestTube } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface OutboundAgentConfig {
   id?: string;
@@ -88,29 +87,9 @@ export default function OutboundAgentConfigPage() {
     }
   }, [user]);
 
-  const getToken = async () => {
-    try {
-      const response = await fetch('/api/auth/token');
-      const data = await response.json();
-      return data.token;
-    } catch {
-      return null;
-    }
-  };
-
   const fetchInboundStatus = async () => {
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/inbound/status`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-
-      if (!res.ok) {
-        setInboundStatus(null);
-        return;
-      }
-
-      const data = await res.json();
+      const data = await authedBackendFetch<any>('/api/inbound/status');
       setInboundStatus({
         configured: Boolean(data?.configured),
         inboundNumber: data?.inboundNumber,
@@ -125,16 +104,7 @@ export default function OutboundAgentConfigPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/founder-console/outbound-agent-config`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to fetch configuration');
-      }
-
-      const data = await res.json();
+      const data = await authedBackendFetch<any>('/api/founder-console/outbound-agent-config');
 
       // Don't overwrite existing values with masked values from backend
       setConfig(prev => ({
@@ -209,10 +179,6 @@ export default function OutboundAgentConfigPage() {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const token = await getToken();
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
-
         // Prepare payload with correct types
         const payload = {
           system_prompt: config.system_prompt,
@@ -226,28 +192,12 @@ export default function OutboundAgentConfigPage() {
           ...(config.vapi_assistant_id && { vapi_assistant_id: config.vapi_assistant_id }),
         };
 
-        const res = await fetch(`${API_BASE_URL}/api/founder-console/outbound-agent-config`, {
+        const data = await authedBackendFetch<any>('/api/founder-console/outbound-agent-config', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` })
-          },
           body: JSON.stringify(payload),
-          signal: controller.signal
+          timeoutMs: 30000,
+          retries: 1,
         });
-
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          // Don't retry 4xx errors (validation failures)
-          if (res.status >= 400 && res.status < 500) {
-            throw new Error(errorData.error || 'Validation failed');
-          }
-          throw new Error(errorData.error || 'Server error');
-        }
-
-        const data = await res.json();
         setConfig(data);
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);

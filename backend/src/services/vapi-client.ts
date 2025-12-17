@@ -1,4 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { createLogger } from './logger';
+
+const logger = createLogger('VapiClient');
 
 // ========== CIRCUIT BREAKER ==========
 
@@ -11,48 +14,11 @@ interface CircuitBreakerState {
 const CIRCUIT_BREAKER_THRESHOLD = 5; // Open circuit after 5 failures
 const CIRCUIT_BREAKER_RESET_MS = 60000; // Reset after 1 minute
 
-const circuitBreaker: CircuitBreakerState = {
-  failures: 0,
-  lastFailure: 0,
-  isOpen: false
-};
-
-function checkCircuitBreaker(): void {
-  // Reset circuit if enough time has passed
-  if (circuitBreaker.isOpen && Date.now() - circuitBreaker.lastFailure > CIRCUIT_BREAKER_RESET_MS) {
-    console.log('[VapiClient] Circuit breaker reset - attempting to reconnect');
-    circuitBreaker.isOpen = false;
-    circuitBreaker.failures = 0;
-  }
-
-  if (circuitBreaker.isOpen) {
-    throw new Error('Vapi API circuit breaker is open. Service temporarily unavailable. Please try again later.');
-  }
-}
-
-function recordFailure(): void {
-  circuitBreaker.failures++;
-  circuitBreaker.lastFailure = Date.now();
-
-  if (circuitBreaker.failures >= CIRCUIT_BREAKER_THRESHOLD) {
-    console.error(`[VapiClient] Circuit breaker opened after ${circuitBreaker.failures} failures`);
-    circuitBreaker.isOpen = true;
-  }
-}
-
-function recordSuccess(): void {
-  // Reset failures on success
-  if (circuitBreaker.failures > 0) {
-    circuitBreaker.failures = 0;
-  }
-}
-
-export function getCircuitBreakerStatus(): { isOpen: boolean; failures: number; lastFailure: number } {
-  return { ...circuitBreaker };
-}
-
 // ========== INTERFACES ==========
 
+/**
+ * Configuration for creating a Vapi assistant
+ */
 export interface AssistantConfig {
   name: string;
   systemPrompt: string;
@@ -98,6 +64,7 @@ export interface ImportTwilioParams {
 export class VapiClient {
   private client: AxiosInstance;
   private apiKey: string;
+  private circuitBreaker: CircuitBreakerState;
 
   constructor(apiKey: string) {
     // CRITICAL: Sanitize API key to prevent "Invalid character in header content" errors
@@ -111,6 +78,12 @@ export class VapiClient {
     }
 
     this.apiKey = sanitizedKey;
+
+    this.circuitBreaker = {
+      failures: 0,
+      lastFailure: 0,
+      isOpen: false
+    };
 
     this.client = axios.create({
       baseURL: 'https://api.vapi.ai',
@@ -136,17 +109,26 @@ export class VapiClient {
           config.retry = 0;
         }
 
+        const method = (config.method || 'get').toString().toUpperCase();
+        const isSafeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+        const status = error.response?.status;
+        const retryAfterHeader = error.response?.headers?.['retry-after'];
+        const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+
         // Retry on 5xx server errors AND network errors, max 3 attempts
         const isRetryableError =
-          (error.response?.status && error.response.status >= 500) ||
+          (status && (status >= 500 || status === 429)) ||
           error.code === 'ECONNREFUSED' ||
           error.code === 'ETIMEDOUT' ||
           error.code === 'ECONNABORTED';
 
-        if (config.retry < 3 && isRetryableError) {
+        if (config.retry < 3 && isRetryableError && isSafeMethod) {
           config.retry += 1;
-          const delay = Math.pow(2, config.retry) * 1000; // 2s, 4s, 8s
-          console.log(`[VapiClient] Retrying request (attempt ${config.retry}/3) after ${delay}ms`);
+          const baseDelay = Math.pow(2, config.retry) * 1000;
+          const retryAfterMs = Number.isFinite(retryAfterSeconds) ? Math.max(0, retryAfterSeconds * 1000) : 0;
+          const jitter = Math.floor(Math.random() * 250);
+          const delay = Math.max(baseDelay, retryAfterMs) + jitter;
+          logger.warn('Retrying request after retryable error', { attempt: config.retry, maxAttempts: 3, delayMs: delay });
           await new Promise(resolve => setTimeout(resolve, delay));
           return this.client(config);
         }
@@ -156,10 +138,59 @@ export class VapiClient {
     );
   }
 
+  private checkCircuitBreaker(): void {
+    if (this.circuitBreaker.isOpen && Date.now() - this.circuitBreaker.lastFailure > CIRCUIT_BREAKER_RESET_MS) {
+      logger.info('Circuit breaker reset - attempting to reconnect');
+      this.circuitBreaker.isOpen = false;
+      this.circuitBreaker.failures = 0;
+    }
+
+    if (this.circuitBreaker.isOpen) {
+      throw new Error('Vapi API circuit breaker is open. Service temporarily unavailable. Please try again later.');
+    }
+  }
+
+  private recordFailure(): void {
+    this.circuitBreaker.failures++;
+    this.circuitBreaker.lastFailure = Date.now();
+
+    if (this.circuitBreaker.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+      logger.error('Circuit breaker opened', { failures: this.circuitBreaker.failures });
+      this.circuitBreaker.isOpen = true;
+    }
+  }
+
+  private recordSuccess(): void {
+    if (this.circuitBreaker.failures > 0) {
+      this.circuitBreaker.failures = 0;
+    }
+  }
+
+  public getCircuitBreakerStatus(): { isOpen: boolean; failures: number; lastFailure: number } {
+    return { ...this.circuitBreaker };
+  }
+
+  private async request<T>(fn: () => Promise<{ data: T }>, logContext?: Record<string, any>): Promise<T> {
+    this.checkCircuitBreaker();
+    try {
+      const response = await fn();
+      this.recordSuccess();
+      return response.data;
+    } catch (error) {
+      this.recordFailure();
+      logger.exception('Vapi request failed', error as Error, logContext);
+      throw error;
+    }
+  }
+
   // ========== ASSISTANTS ==========
 
-  async createAssistant(config: AssistantConfig) {
-    checkCircuitBreaker();
+  /**
+   * Create a new Vapi assistant
+   * @param config Assistant configuration
+   * @returns Created assistant object
+   */
+  async createAssistant(config: AssistantConfig): Promise<any> {
     try {
       const payload: any = {
         name: config.name,
@@ -193,49 +224,32 @@ export class VapiClient {
         payload.maxDurationSeconds = config.maxDurationSeconds;
       }
 
-      const response = await this.client.post('/assistant', payload);
-      recordSuccess();
-      return response.data;
+      return await this.request<any>(() => this.client.post('/assistant', payload), { route: 'POST /assistant' });
     } catch (error) {
-      recordFailure();
-      console.error('[VapiClient] Failed to create assistant:', error);
       throw error;
     }
   }
 
   async updateAssistant(assistantId: string, updates: any) {
-    checkCircuitBreaker();
     try {
-      const response = await this.client.patch(`/assistant/${assistantId}`, updates);
-      recordSuccess();
-      return response.data;
+      return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updates), { route: 'PATCH /assistant/:id', assistantId });
     } catch (error) {
-      recordFailure();
-      console.error('[VapiClient] Failed to update assistant:', error);
       throw error;
     }
   }
 
   async getAssistant(assistantId: string) {
-    checkCircuitBreaker();
     try {
-      const response = await this.client.get(`/assistant/${assistantId}`);
-      return response.data;
+      return await this.request<any>(() => this.client.get(`/assistant/${assistantId}`), { route: 'GET /assistant/:id', assistantId });
     } catch (error) {
-      console.error('[VapiClient] Failed to get assistant:', error);
       throw error;
     }
   }
 
   async listAssistants() {
-    checkCircuitBreaker();
     try {
-      const response = await this.client.get('/assistant');
-      recordSuccess();
-      return response.data;
+      return await this.request<any>(() => this.client.get('/assistant'), { route: 'GET /assistant' });
     } catch (error) {
-      recordFailure();
-      console.error('[VapiClient] Failed to list assistants:', error);
       throw error;
     }
   }
@@ -260,7 +274,7 @@ export class VapiClient {
       const response = await this.client.get('/voice');
       return response.data;
     } catch (error) {
-      console.warn('[VapiClient] Failed to list voices from API, might not be supported:', error);
+      logger.warn('Failed to list voices from API, might not be supported', { error: (error as any)?.message });
       // Return empty or throw, the caller should handle fallback to hardcoded list
       return [];
     }
@@ -269,7 +283,6 @@ export class VapiClient {
   // ========== CALLS ==========
 
   async createOutboundCall(params: CreateCallParams) {
-    checkCircuitBreaker();
     try {
       const payload: any = {
         assistantId: params.assistantId,
@@ -297,22 +310,16 @@ export class VapiClient {
         }
       }
 
-      const response = await this.client.post('/call/phone', payload);
-      recordSuccess();
-      return response.data;
+      return await this.request<any>(() => this.client.post('/call/phone', payload), { route: 'POST /call/phone' });
     } catch (error) {
-      recordFailure();
-      console.error('[VapiClient] Failed to create outbound call:', error);
       throw error;
     }
   }
 
   async getCall(callId: string) {
     try {
-      const response = await this.client.get(`/call/${callId}`);
-      return response.data;
+      return await this.request<any>(() => this.client.get(`/call/${callId}`), { route: 'GET /call/:id', callId });
     } catch (error) {
-      console.error('[VapiClient] Failed to get call:', error);
       throw error;
     }
   }
@@ -325,7 +332,6 @@ export class VapiClient {
       sampleRate: number;
     };
   }) {
-    checkCircuitBreaker();
     try {
       const payload = {
         assistantId: params.assistantId,
@@ -335,34 +341,24 @@ export class VapiClient {
         }
       };
 
-      const response = await this.client.post('/call', payload);
-      recordSuccess();
-      return response.data;
+      return await this.request<any>(() => this.client.post('/call', payload), { route: 'POST /call' });
     } catch (error) {
-      recordFailure();
-      console.error('[VapiClient] Failed to create WebSocket call:', error);
       throw error;
     }
   }
 
   async endCall(callId: string) {
     try {
-      const response = await this.client.delete(`/call/${callId}`);
-      return response.data;
+      return await this.request<any>(() => this.client.delete(`/call/${callId}`), { route: 'DELETE /call/:id', callId });
     } catch (error) {
-      console.error('[VapiClient] Failed to end call:', error);
       throw error;
     }
   }
 
   async listCalls(limit: number = 50) {
     try {
-      const response = await this.client.get('/call', {
-        params: { limit }
-      });
-      return response.data;
+      return await this.request<any>(() => this.client.get('/call', { params: { limit } }), { route: 'GET /call' });
     } catch (error) {
-      console.error('[VapiClient] Failed to list calls:', error);
       throw error;
     }
   }
@@ -376,11 +372,10 @@ export class VapiClient {
         name: name
       };
 
-      const response = await this.client.post('/phone-number', payload);
-      console.log('[VapiClient] Created Vapi phone number:', response.data.id);
-      return response.data;
+      const result = await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number' });
+      logger.info('Created Vapi phone number', { phoneNumberId: result?.id });
+      return result;
     } catch (error) {
-      console.error('[VapiClient] Failed to create Vapi phone number:', error);
       throw error;
     }
   }
@@ -394,54 +389,44 @@ export class VapiClient {
         twilioAuthToken: params.twilioAuthToken
       };
 
-      const response = await this.client.post('/phone-number', payload);
-      return response.data;
+      return await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number (twilio)' });
     } catch (error) {
-      console.error('[VapiClient] Failed to import Twilio number:', error);
       throw error;
     }
   }
 
   async getPhoneNumber(phoneNumberId: string) {
     try {
-      const response = await this.client.get(`/phone-number/${phoneNumberId}`);
-      return response.data;
+      return await this.request<any>(() => this.client.get(`/phone-number/${phoneNumberId}`), { route: 'GET /phone-number/:id', phoneNumberId });
     } catch (error) {
-      console.error('[VapiClient] Failed to get phone number:', error);
       throw error;
     }
   }
 
   async listPhoneNumbers() {
     try {
-      const response = await this.client.get('/phone-number');
-      const payload: any = response.data;
+      const payload: any = await this.request<any>(() => this.client.get('/phone-number'), { route: 'GET /phone-number' });
       if (Array.isArray(payload)) return payload;
       if (Array.isArray(payload?.data)) return payload.data;
       if (Array.isArray(payload?.items)) return payload.items;
       return [];
     } catch (error) {
-      console.error('[VapiClient] Failed to list phone numbers:', error);
       throw error;
     }
   }
 
   async updatePhoneNumber(phoneNumberId: string, updates: any) {
     try {
-      const response = await this.client.patch(`/phone-number/${phoneNumberId}`, updates);
-      return response.data;
+      return await this.request<any>(() => this.client.patch(`/phone-number/${phoneNumberId}`, updates), { route: 'PATCH /phone-number/:id', phoneNumberId });
     } catch (error) {
-      console.error('[VapiClient] Failed to update phone number:', error);
       throw error;
     }
   }
 
   async deletePhoneNumber(phoneNumberId: string) {
     try {
-      const response = await this.client.delete(`/phone-number/${phoneNumberId}`);
-      return response.data;
+      return await this.request<any>(() => this.client.delete(`/phone-number/${phoneNumberId}`), { route: 'DELETE /phone-number/:id', phoneNumberId });
     } catch (error) {
-      console.error('[VapiClient] Failed to delete phone number:', error);
       throw error;
     }
   }

@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface Call {
     id: string;
@@ -62,26 +61,10 @@ const CallsPageContent = () => {
         }
     }, [user, loading, router]);
 
-    const getToken = async () => {
-        try {
-            const response = await fetch('/api/auth/token');
-            const data = await response.json();
-            return data.token;
-        } catch {
-            return null;
-        }
-    };
-
     const fetchAnalytics = useCallback(async () => {
         try {
-            const token = await getToken();
-            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard/analytics/summary`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setAnalytics(data);
-            }
+            const data = await authedBackendFetch<any>('/api/calls-dashboard/analytics/summary');
+            setAnalytics(data);
         } catch (err) {
             console.error('Error fetching analytics:', err);
         }
@@ -91,7 +74,6 @@ const CallsPageContent = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const token = await getToken();
             const params = new URLSearchParams({
                 page: currentPage.toString(),
                 limit: callsPerPage.toString(),
@@ -100,15 +82,7 @@ const CallsPageContent = () => {
                 ...(searchQuery && { search: searchQuery })
             });
 
-            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard?${params}`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-
-            if (!res.ok) {
-                throw new Error(`Failed to fetch calls (HTTP ${res.status})`);
-            }
-
-            const data = await res.json();
+            const data = await authedBackendFetch<any>(`/api/calls-dashboard?${params.toString()}`);
             setCalls(data.calls || []);
             setTotalCalls(data.pagination?.total || 0);
         } catch (err: any) {
@@ -128,16 +102,7 @@ const CallsPageContent = () => {
 
     const fetchCallDetail = async (callId: string) => {
         try {
-            const token = await getToken();
-            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard/${callId}`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-
-            if (!res.ok) {
-                throw new Error('Failed to fetch call details');
-            }
-
-            const data = await res.json();
+            const data = await authedBackendFetch<any>(`/api/calls-dashboard/${callId}`);
             setSelectedCall(data);
             setShowDetailModal(true);
         } catch (err: any) {
@@ -149,15 +114,9 @@ const CallsPageContent = () => {
         if (!confirm('Are you sure you want to delete this call?')) return;
 
         try {
-            const token = await getToken();
-            const res = await fetch(`${API_BASE_URL}/api/calls-dashboard/${callId}`, {
+            await authedBackendFetch(`/api/calls-dashboard/${callId}`, {
                 method: 'DELETE',
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
             });
-
-            if (!res.ok) {
-                throw new Error('Failed to delete call');
-            }
 
             setCalls(calls.filter(c => c.id !== callId));
             setError(null);

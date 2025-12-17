@@ -12,16 +12,17 @@ export class AudioPlayer {
 
     // Jitter buffer to smooth out network irregularities
     private jitterBuffer: ArrayBuffer[] = [];
-    private readonly JITTER_BUFFER_SIZE = 4; // Increased from 2 to smooth network jitter
+    private readonly JITTER_BUFFER_SIZE = 6; // Increased to smooth Vapi's bursty delivery
     private bufferDraining = false;
     private drainTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    private lastPlaybackTime = 0; // Track last scheduled playback to prevent overlaps
 
     // Source sample rate from Vapi (16kHz PCM16)
     private readonly SOURCE_SAMPLE_RATE = 16000;
 
     constructor() {
-        // Let browser choose optimal output sample rate
-        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        // Force AudioContext to 16kHz to match source (prevents resampling glitches)
+        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
 
         // Create gain node to prevent clipping and reduce crackling
         this.gainNode = this.ctx.createGain();

@@ -10,13 +10,7 @@ export function getSupabase(): SupabaseClient {
     if (_supabase) return _supabase;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-        console.warn('Supabase environment variables are missing. Using placeholders to prevent build crash.');
-        // Return a client initialized with placeholders - requests will fail but build might pass
-        _supabase = createBrowserClient(
-            supabaseUrl || 'https://placeholder.supabase.co',
-            supabaseAnonKey || 'placeholder'
-        );
-        return _supabase;
+        throw new Error('Missing Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)');
     }
 
     _supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);

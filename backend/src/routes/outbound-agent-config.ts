@@ -52,7 +52,7 @@ router.get('/', requireAuthOrDev, async (req: Request, res: Response): Promise<v
 
     const { data: config, error } = await supabase
       .from('outbound_agent_config')
-      .select('*')
+      .select('id, org_id, vapi_api_key, vapi_assistant_id, system_prompt, first_message, voice_id, language, max_call_duration, is_active, last_synced_at, created_at, updated_at')
       .eq('org_id', orgId)
       .single();
 
@@ -64,9 +64,6 @@ router.get('/', requireAuthOrDev, async (req: Request, res: Response): Promise<v
           org_id: orgId,
           vapi_api_key: null,
           vapi_assistant_id: null,
-          twilio_account_sid: null,
-          twilio_auth_token: null,
-          twilio_phone_number: null,
           system_prompt: null,
           first_message: null,
           voice_id: 'Paige',
@@ -88,11 +85,7 @@ router.get('/', requireAuthOrDev, async (req: Request, res: Response): Promise<v
     // Mask sensitive keys before returning
     const maskedConfig = {
       ...config,
-      vapi_api_key: config.vapi_api_key ? maskKey(config.vapi_api_key) : null,
-      // Single-number policy: outbound Twilio fields are not used
-      twilio_account_sid: null,
-      twilio_auth_token: null,
-      twilio_phone_number: null
+      vapi_api_key: (config as any)?.vapi_api_key ? maskKey((config as any).vapi_api_key) : null
     };
 
     res.status(200).json(maskedConfig);
@@ -139,14 +132,10 @@ router.post('/', configLimiter, requireAuthOrDev, async (req: Request, res: Resp
         .from('outbound_agent_config')
         .update({
           ...validated,
-          // Single-number policy: never persist outbound Twilio fields
-          twilio_account_sid: null,
-          twilio_auth_token: null,
-          twilio_phone_number: null,
           updated_at: new Date().toISOString()
         })
         .eq('org_id', orgId)
-        .select('*')
+        .select('id, org_id, vapi_api_key, vapi_assistant_id, system_prompt, first_message, voice_id, language, max_call_duration, is_active, last_synced_at, created_at, updated_at')
         .single();
 
       if (updateError) {
@@ -158,10 +147,7 @@ router.post('/', configLimiter, requireAuthOrDev, async (req: Request, res: Resp
       logger.info('POST / Config updated', { orgId, configId: updated.id });
       res.status(200).json({
         ...updated,
-        vapi_api_key: maskKey(updated.vapi_api_key),
-        twilio_account_sid: null,
-        twilio_auth_token: null,
-        twilio_phone_number: null
+        vapi_api_key: updated.vapi_api_key ? maskKey(updated.vapi_api_key) : null
       });
     } else {
       // Create new config
@@ -170,14 +156,10 @@ router.post('/', configLimiter, requireAuthOrDev, async (req: Request, res: Resp
         .insert({
           org_id: orgId,
           ...validated,
-          // Single-number policy: never persist outbound Twilio fields
-          twilio_account_sid: null,
-          twilio_auth_token: null,
-          twilio_phone_number: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
-        .select('*')
+        .select('id, org_id, vapi_api_key, vapi_assistant_id, system_prompt, first_message, voice_id, language, max_call_duration, is_active, last_synced_at, created_at, updated_at')
         .single();
 
       if (createError) {
@@ -189,10 +171,7 @@ router.post('/', configLimiter, requireAuthOrDev, async (req: Request, res: Resp
       logger.info('POST / Config created', { orgId, configId: created.id });
       res.status(201).json({
         ...created,
-        vapi_api_key: maskKey(created.vapi_api_key),
-        twilio_account_sid: null,
-        twilio_auth_token: null,
-        twilio_phone_number: null
+        vapi_api_key: created.vapi_api_key ? maskKey(created.vapi_api_key) : null
       });
     }
   } catch (error: any) {
@@ -230,14 +209,10 @@ router.put('/', requireAuthOrDev, async (req: Request, res: Response): Promise<v
       .from('outbound_agent_config')
       .update({
         ...validated,
-        // Single-number policy: never persist outbound Twilio fields
-        twilio_account_sid: null,
-        twilio_auth_token: null,
-        twilio_phone_number: null,
         updated_at: new Date().toISOString()
       })
       .eq('org_id', orgId)
-      .select('*')
+      .select('id, org_id, vapi_api_key, vapi_assistant_id, system_prompt, first_message, voice_id, language, max_call_duration, is_active, last_synced_at, created_at, updated_at')
       .single();
 
     if (error) {
@@ -254,10 +229,7 @@ router.put('/', requireAuthOrDev, async (req: Request, res: Response): Promise<v
     logger.info('PUT / Config updated', { orgId, configId: updated.id });
     res.status(200).json({
       ...updated,
-      vapi_api_key: maskKey(updated.vapi_api_key),
-      twilio_account_sid: null,
-      twilio_auth_token: null,
-      twilio_phone_number: null
+      vapi_api_key: updated.vapi_api_key ? maskKey(updated.vapi_api_key) : null
     });
   } catch (error: any) {
     logger.error('PUT / Error', { error: error.message });

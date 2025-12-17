@@ -16,6 +16,7 @@ import { initLogger, requestLogger, log } from './services/logger';
 import { WebSocketServer } from 'ws';
 import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
+import { supabase } from './services/supabase-client';
 import webTestDiagnosticsRouter from './routes/web-test-diagnostics';
 import inboundSetupRouter from './routes/inbound-setup';
 import knowledgeBaseRouter from './routes/knowledge-base';
@@ -30,6 +31,20 @@ import outboundAgentConfigRouter from './routes/outbound-agent-config';
 // Initialize logger
 initLogger();
 
+declare global {
+  namespace Express {
+    interface Request {
+      rawBody?: string;
+    }
+  }
+}
+
+declare module 'http' {
+  interface IncomingMessage {
+    rawBody?: string;
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -39,10 +54,30 @@ app.set('trust proxy', true);
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: (origin, callback) => {
+    const raw = (process.env.CORS_ORIGIN || '').trim();
+    if (!raw || raw === '*') {
+      return callback(null, true);
+    }
+
+    const allowed = raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    return callback(null, allowed.includes(origin));
+  },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf?.toString('utf8');
+  },
+}));
 
 // Request logging middleware (replaces console.log)
 app.use(requestLogger());
@@ -113,24 +148,59 @@ const server = createServer(app);
 const webTestWss = new WebSocketServer({ noServer: true });
 console.log('[WebSocket] Server initialized for /api/web-voice/*');
 
-// WebSocket server for live calls (shared service used by wsBroadcast)
-initWebSocket(server);
+// WebSocket server for live calls (noServer: manual upgrade handling to avoid conflicts)
+const liveCallsWss = new WebSocketServer({ noServer: true });
+console.log('[WebSocket] Server initialized for /ws/live-calls/*');
+
+// Initialize WebSocket service (pass noServer wss, not HTTP server)
+initWebSocket(liveCallsWss);
 
 // Manual upgrade handling to support path prefixes (ws library path option is exact match only)
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url || '';
-  console.log('[WebSocket] Upgrade request received', { pathname, method: request.method });
+  console.log('[WebSocket] Upgrade request received', {
+    pathname,
+    method: request.method,
+    headers: {
+      upgrade: request.headers.upgrade,
+      connection: request.headers.connection,
+      'sec-websocket-key': request.headers['sec-websocket-key'],
+      'sec-websocket-version': request.headers['sec-websocket-version'],
+    },
+  });
 
   if (pathname.startsWith('/api/web-voice')) {
     console.log('[WebSocket] Handling /api/web-voice upgrade');
-    webTestWss.handleUpgrade(request, socket, head, (ws) => {
-      console.log('[WebSocket] Upgrade successful, emitting connection event');
-      webTestWss.emit('connection', ws, request);
-    });
+    try {
+      webTestWss.handleUpgrade(request, socket, head, (ws) => {
+        console.log('[WebSocket] Upgrade successful, emitting connection event');
+        webTestWss.emit('connection', ws, request);
+      });
+    } catch (err) {
+      console.error('[WebSocket] handleUpgrade error', { pathname, error: err instanceof Error ? err.message : String(err) });
+      try {
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      } catch {
+        // ignore
+      }
+    }
   } else if (pathname.startsWith('/ws/live-calls')) {
-    console.log('[WebSocket] Handling /ws/live-calls upgrade (delegated to initWebSocket)');
-    // Let the shared WebSocket service (initWebSocket) handle upgrades for /ws/live-calls
-    return;
+    console.log('[WebSocket] Handling /ws/live-calls upgrade');
+    try {
+      liveCallsWss.handleUpgrade(request, socket, head, (ws) => {
+        console.log('[WebSocket] /ws/live-calls upgrade successful, emitting connection event');
+        liveCallsWss.emit('connection', ws, request);
+      });
+    } catch (err) {
+      console.error('[WebSocket] /ws/live-calls handleUpgrade error', { pathname, error: err instanceof Error ? err.message : String(err) });
+      try {
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      } catch {
+        // ignore
+      }
+    }
   } else {
     console.log('[WebSocket] Unknown path, sending 404', { pathname });
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -143,30 +213,87 @@ webTestWss.on('connection', (ws, req) => {
   try {
     const url = new URL(req.url || '', 'http://localhost');
     const trackingId = url.pathname.replace('/api/web-voice/', '').split('?')[0];
-    const userId = url.searchParams.get('userId') || 'unknown';
+    const isDev = (process.env.NODE_ENV || 'development') === 'development';
+    const userIdParam = url.searchParams.get('userId') || '';
 
-    console.log('[WebVoice] WS connection attempt', { trackingId, userId, path: req.url });
+    const attach = (effectiveUserId: string) => {
+      console.log('[WebVoice] WS connection attempt', { trackingId, userId: effectiveUserId, path: req.url });
 
-    // Attach to in-memory session
-    const attached = attachClientWebSocket(trackingId, ws, userId);
-    if (!attached) {
-      console.error('[WebVoice] Failed to attach to session', { trackingId, userId });
-      console.error('[WebVoice] Session may have expired or been cleaned up. Closing connection.');
-      // Delay closing to allow specific error message from attachClientWebSocket to be sent
-      // Increased to 500ms to ensure browser onopen fires first
+      const attached = attachClientWebSocket(trackingId, ws, effectiveUserId);
+      if (!attached) {
+        console.error('[WebVoice] Failed to attach to session', { trackingId, userId: effectiveUserId });
+        console.error('[WebVoice] Session may have expired or been cleaned up. Closing connection.');
+        setTimeout(() => {
+          try {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.close(1008, 'Session not found or unauthorized');
+            }
+          } catch (e) {
+            // ignore already closed
+          }
+        }, 500);
+        return;
+      }
+
+      console.log('[WebVoice] ✅ Client attached to session', { trackingId });
+    };
+
+    // Require auth message in prod; allow dev fallback if no token (E2E/dev).
+    const authTimeout = setTimeout(() => {
+      try {
+        if (!isDev) {
+          ws.close(1008, 'Unauthorized');
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg?.type !== 'auth') return;
+        clearTimeout(authTimeout);
+
+        const token = typeof msg.token === 'string' ? msg.token : '';
+        if (!token) {
+          if (!isDev) {
+            ws.close(1008, 'Unauthorized');
+            return;
+          }
+          attach(userIdParam || process.env.DEV_USER_ID || 'dev-user');
+          return;
+        }
+
+        supabase.auth.getUser(token)
+          .then(({ data, error }) => {
+            const uid = data?.user?.id;
+            if (error || !uid) {
+              ws.close(1008, 'Unauthorized');
+              return;
+            }
+            attach(uid);
+          })
+          .catch(() => {
+            ws.close(1008, 'Unauthorized');
+          });
+      } catch {
+        // ignore
+      }
+    });
+
+    // Dev fallback: if no auth message is sent, still allow attachment via query param.
+    if (isDev) {
       setTimeout(() => {
         try {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.close(1008, 'Session not found or unauthorized');
+            attach(userIdParam || process.env.DEV_USER_ID || 'dev-user');
           }
-        } catch (e) {
-          // ignore already closed
+        } catch {
+          // ignore
         }
-      }, 500);
-      return;
+      }, 100);
     }
-
-    console.log('[WebVoice] ✅ Client attached to session', { trackingId });
 
     ws.on('close', (code, reason) => {
       console.log('[WebVoice] WS closed', { trackingId, code, reason: reason.toString() });

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { getRedirectUrl } from '@/lib/auth-redirect';
 import { Mail, CheckCircle, AlertCircle, Loader, Copy } from 'lucide-react';
 
 function VerifyEmailContent() {
@@ -12,44 +13,48 @@ function VerifyEmailContent() {
     const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'pending'>('loading');
     const [message, setMessage] = useState('');
     const [code, setCode] = useState('');
+    const [email, setEmail] = useState('');
+    const [resendLoading, setResendLoading] = useState(false);
     const [showCodeInput, setShowCodeInput] = useState(false);
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         const verifyEmailLink = async () => {
             try {
-                // Check if there's a token in the URL
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                const token = searchParams.get('token') || hashParams.get('access_token');
-                const type = searchParams.get('type') || hashParams.get('type');
+                const initialEmail = searchParams.get('email') || '';
+                if (initialEmail) setEmail(initialEmail);
 
-                if (token && type === 'email') {
-                    // Verify the token
-                    const { data, error } = await supabase.auth.verifyOtp({
-                        type: 'email',
-                        token: token,
-                        email: ''
-                    });
+                // Supabase email confirmation links typically include token_hash + type
+                const tokenHash = searchParams.get('token_hash');
+                const type = (searchParams.get('type') || 'signup') as any;
+
+                if (tokenHash) {
+                    const { error } = await supabase.auth.verifyOtp({
+                        type,
+                        token_hash: tokenHash,
+                    } as any);
 
                     if (error) {
                         setStatus('error');
-                        setMessage('Verification link is invalid or expired. Please check your email again or sign up.');
-                        setShowCodeInput(true);
+                        setMessage('Verification link is invalid or expired. Please request a new verification email.');
+                        setShowCodeInput(false);
                         return;
                     }
 
                     setStatus('success');
                     setMessage('Email verified successfully!');
-                    setTimeout(() => router.push('/auth/login'), 2000);
-                } else {
-                    setStatus('pending');
-                    setShowCodeInput(true);
+                    await supabase.auth.getSession().catch(() => null);
+                    setTimeout(() => router.push('/dashboard'), 1000);
+                    return;
                 }
+
+                setStatus('pending');
+                setShowCodeInput(false);
             } catch (err) {
                 console.error('Verification error:', err);
                 setStatus('error');
                 setMessage('An error occurred during verification. Please try again.');
-                setShowCodeInput(true);
+                setShowCodeInput(false);
             }
         };
 
@@ -63,10 +68,9 @@ function VerifyEmailContent() {
         try {
             setStatus('loading');
             const { error } = await supabase.auth.verifyOtp({
-                type: 'email',
+                type: 'signup',
                 token: code,
-                email: ''
-            });
+            } as any);
 
             if (error) {
                 setStatus('error');
@@ -76,10 +80,40 @@ function VerifyEmailContent() {
 
             setStatus('success');
             setMessage('Email verified successfully!');
-            setTimeout(() => router.push('/auth/login'), 2000);
+            await supabase.auth.getSession().catch(() => null);
+            setTimeout(() => router.push('/dashboard'), 1000);
         } catch (err) {
             setStatus('error');
             setMessage('Verification failed. Please try again.');
+        }
+    };
+
+    const handleResend = async () => {
+        if (!email.trim()) return;
+        setResendLoading(true);
+        setMessage('');
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email: email.trim(),
+                options: {
+                    emailRedirectTo: getRedirectUrl('/verify-email'),
+                },
+            } as any);
+
+            if (error) {
+                setStatus('error');
+                setMessage(error.message || 'Failed to resend verification email.');
+                return;
+            }
+
+            setStatus('pending');
+            setMessage('Verification email sent. Please check your inbox.');
+        } catch (err) {
+            setStatus('error');
+            setMessage('Failed to resend verification email.');
+        } finally {
+            setResendLoading(false);
         }
     };
 
@@ -116,7 +150,7 @@ function VerifyEmailContent() {
                                 Email Verified
                             </h1>
                             <p className="text-slate-400">
-                                Your email has been verified successfully. Redirecting to login...
+                                Your email has been verified successfully. Redirecting to dashboard...
                             </p>
                         </>
                     )}
@@ -208,13 +242,49 @@ function VerifyEmailContent() {
                 )}
 
                 {status !== 'success' && (
+                    <div className="mt-8 space-y-3">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-2">
+                                Email
+                            </label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="you@company.com"
+                                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                            />
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleResend}
+                            disabled={!email.trim() || resendLoading}
+                            className="w-full bg-white text-black hover:bg-slate-200 disabled:bg-slate-700 disabled:text-slate-400 font-medium py-2 px-4 rounded-lg transition-colors"
+                        >
+                            {resendLoading ? 'Sending...' : 'Resend verification email'}
+                        </button>
+                    </div>
+                )}
+
+                {status !== 'success' && (
                     <div className="mt-6 text-center">
                         <Link
-                            href="/auth/login"
+                            href="/login"
                             className="text-cyan-400 hover:text-cyan-300 text-sm font-medium"
                         >
                             Back to Login
                         </Link>
+                        <div className="mt-3">
+                            <a
+                                href="https://calendly.com/callwaitingai/demo"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-white hover:text-cyan-200 text-sm font-semibold transition-colors"
+                            >
+                                Book a Demo
+                            </a>
+                        </div>
                     </div>
                 )}
             </div>

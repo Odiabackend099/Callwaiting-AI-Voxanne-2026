@@ -2,9 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { getAuthCallbackUrl, getPasswordResetCallbackUrl } from '@/lib/auth-redirect';
+import { supabase } from '@/lib/supabase';
 
 interface UserSettings {
     business_name?: string;
@@ -15,10 +15,10 @@ interface UserSettings {
 interface AuthContextType {
     user: User | null;
     session: Session | null;
+    isVerified: boolean;
     userSettings: UserSettings | null;
     loading: boolean;
     error: string | null;
-    signUp: (email: string, password: string, userData?: object) => Promise<{ user: User | null; error: Error | null }>;
     signIn: (email: string, password: string) => Promise<{ user: User | null; error: Error | null }>;
     signInWithGoogle: () => Promise<{ error: Error | null }>;
     resetPassword: (email: string) => Promise<{ error: Error | null }>;
@@ -30,18 +30,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function isEmailVerified(user: User | null): boolean {
+    if (!user) return false;
+    const u: any = user as any;
+    return Boolean(u.email_confirmed_at || u.confirmed_at);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    // Create Supabase client for client-side components with cookie handling
-    const [supabase] = useState(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
-    ));
 
     const router = useRouter();
 
@@ -91,6 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setSession(data.session);
                 setUser(data.session?.user ?? null);
 
+                if (data.session?.user && !isEmailVerified(data.session.user)) {
+                    const qs = data.session.user.email ? `?email=${encodeURIComponent(data.session.user.email)}` : '';
+                    router.push(`/verify-email${qs}`);
+                }
+
                 // Fetch settings in background (non-blocking)
                 if (data.session?.user) {
                     fetchUserSettings(data.session.user.id).catch(err => {
@@ -125,6 +130,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 setSession(session);
                 setUser(session?.user ?? null);
+
+                if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+                    if (!isEmailVerified(session.user)) {
+                        const qs = session.user.email ? `?email=${encodeURIComponent(session.user.email)}` : '';
+                        router.push(`/verify-email${qs}`);
+                        return;
+                    }
+                }
 
                 // Only fetch settings on specific events to avoid N+1 queries
                 if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -174,31 +187,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (process.env.NODE_ENV !== 'production') {
                 console.error('Settings fetch error:', err);
             }
-        }
-    };
-
-    const signUp = async (email: string, password: string, userData?: object) => {
-        try {
-            setError(null);
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    emailRedirectTo: getAuthCallbackUrl(),
-                    data: userData
-                }
-            });
-
-            if (error) {
-                setError(error.message);
-                return { user: null, error };
-            }
-
-            return { user: data.user, error: null };
-        } catch (err) {
-            const error = err instanceof Error ? err : new Error('Sign up failed');
-            setError(error.message);
-            return { user: null, error };
         }
     };
 
@@ -342,10 +330,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <AuthContext.Provider value={{
             user,
             session,
+            isVerified: isEmailVerified(user),
             userSettings,
             loading,
             error,
-            signUp,
             signIn,
             signInWithGoogle,
             resetPassword,

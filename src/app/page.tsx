@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import SmoothScroll from "@/components/SmoothScroll";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
@@ -29,6 +30,21 @@ import CampaignShowcase from "@/components/CampaignShowcase";
 import Team from "@/components/Team";
 import OfficeLocation from "@/components/OfficeLocation";
 
+function AuthCodeRedirector() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        const code = searchParams.get('code');
+        if (code) {
+            const qs = searchParams.toString();
+            router.replace(qs ? `/auth/callback?${qs}` : '/auth/callback');
+        }
+    }, [router, searchParams]);
+
+    return null;
+}
+
 export default function Home() {
     const [isBookingOpen, setIsBookingOpen] = useState(false);
 
@@ -37,6 +53,9 @@ export default function Home() {
     return (
         <SmoothScroll>
             <main className="relative min-h-screen bg-black text-white selection:bg-purple-500/30">
+                <Suspense fallback={null}>
+                    <AuthCodeRedirector />
+                </Suspense>
                 <Navbar />
 
                 {/* 1. HOOK: Reptilian Brain & Loss Aversion */}

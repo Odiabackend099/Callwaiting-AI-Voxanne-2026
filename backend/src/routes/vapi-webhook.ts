@@ -8,6 +8,7 @@ import { Router, Request, Response } from 'express';
 import { supabase } from '../services/supabase-client';
 import { generateEmbedding } from '../services/embeddings';
 import { log } from '../services/logger';
+import { verifyVapiSignature } from '../utils/vapi-webhook-signature';
 
 const vapiWebhookRouter = Router();
 
@@ -23,12 +24,39 @@ const MAX_CONTEXT_LENGTH = 3000;
  */
 vapiWebhookRouter.post('/webhook', async (req: Request, res: Response) => {
   try {
-    const { message, assistantId, orgId } = req.body;
+    const { message, assistantId } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ 
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const secret = process.env.VAPI_WEBHOOK_SECRET;
+
+    if (!secret) {
+      if (nodeEnv === 'production') {
+        log.error('Vapi-Webhook', 'Missing VAPI_WEBHOOK_SECRET in production, rejecting');
+        return res.status(500).json({ success: false, error: 'Webhook not configured' });
+      }
+      log.warn('Vapi-Webhook', 'VAPI_WEBHOOK_SECRET not configured, accepting unsigned webhooks (dev mode)');
+    } else {
+      const signature = req.headers['x-vapi-signature'] as string;
+      const timestamp = req.headers['x-vapi-timestamp'] as string;
+      const rawBody = typeof (req as any).rawBody === 'string' ? (req as any).rawBody : JSON.stringify(req.body);
+
+      const ok = verifyVapiSignature({
+        secret,
+        signature,
+        timestamp,
+        rawBody
+      });
+
+      if (!ok) {
+        log.warn('Vapi-Webhook', 'Invalid webhook signature, rejecting', { assistantId });
+        return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
+      }
+    }
+
+    if (typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({
         success: false,
-        error: 'Missing message' 
+        error: 'Missing message'
       });
     }
 
@@ -37,9 +65,24 @@ vapiWebhookRouter.post('/webhook', async (req: Request, res: Response) => {
       messageLength: message.length 
     });
 
-    let retrievalOrgId = orgId;
-    if (!retrievalOrgId && assistantId) {
-      log.warn('Vapi-Webhook', 'No orgId provided', { assistantId });
+    // Never trust orgId from the request body. Resolve org_id server-side from assistantId.
+    let retrievalOrgId: string | null = null;
+    if (typeof assistantId === 'string' && assistantId.trim().length > 0) {
+      const { data: agent, error: agentError } = await supabase
+        .from('agents')
+        .select('org_id')
+        .eq('vapi_assistant_id', assistantId)
+        .maybeSingle();
+
+      if (agentError) {
+        log.warn('Vapi-Webhook', 'Failed to resolve org_id from assistantId', { assistantId, error: agentError.message });
+      }
+
+      retrievalOrgId = (agent as any)?.org_id ?? null;
+    }
+
+    if (!retrievalOrgId) {
+      log.warn('Vapi-Webhook', 'No org_id resolved for assistantId; returning without context', { assistantId });
       return res.json({
         success: true,
         message,

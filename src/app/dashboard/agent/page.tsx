@@ -4,10 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 const AGENT_CONFIG_CONSTRAINTS = {
     MIN_DURATION_SECONDS: 60,
@@ -54,48 +52,31 @@ export default function AgentConfigPage() {
     const [originalConfig, setOriginalConfig] = useState<AgentConfig | null>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const getAuthToken = async () => {
-        return (await supabase.auth.getSession()).data.session?.access_token;
-    };
-
     const loadData = useCallback(async () => {
         try {
             setIsLoading(true);
             setError(null);
-            const token = await getAuthToken();
-            const headers = { 'Authorization': `Bearer ${token}` };
 
-            // Fetch voices, settings, and agent config in parallel
-            const [voicesRes, settingsRes, agentRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/assistants/voices/available`, { headers }),
-                fetch(`${API_BASE_URL}/api/founder-console/settings`, { headers }),
-                fetch(`${API_BASE_URL}/api/founder-console/agent/config`, { headers })
+            const [voicesData, settingsData, agentData] = await Promise.all([
+                authedBackendFetch<any>('/api/assistants/voices/available'),
+                authedBackendFetch<any>('/api/founder-console/settings'),
+                authedBackendFetch<any>('/api/founder-console/agent/config'),
             ]);
 
-            if (voicesRes.ok) {
-                const voicesData = await voicesRes.json();
-                setVoices(voicesData);
-            }
+            setVoices(Array.isArray(voicesData) ? voicesData : (voicesData?.voices || []));
+            setVapiConfigured(Boolean(settingsData?.vapiConfigured));
 
-            if (settingsRes.ok) {
-                const settingsData = await settingsRes.json();
-                setVapiConfigured(settingsData.vapiConfigured);
-            }
-
-            if (agentRes.ok) {
-                const agentData = await agentRes.json();
-                if (agentData?.vapi) {
-                    const vapi = agentData.vapi;
-                    const loadedConfig = {
-                        systemPrompt: vapi.systemPrompt || '',
-                        firstMessage: vapi.firstMessage || '',
-                        voice: vapi.voice || '',
-                        language: vapi.language || 'en-US',
-                        maxDuration: vapi.maxCallDuration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                    };
-                    setConfig(loadedConfig);
-                    setOriginalConfig(loadedConfig);
-                }
+            if (agentData?.vapi) {
+                const vapi = agentData.vapi;
+                const loadedConfig = {
+                    systemPrompt: vapi.systemPrompt || '',
+                    firstMessage: vapi.firstMessage || '',
+                    voice: vapi.voice || '',
+                    language: vapi.language || 'en-US',
+                    maxDuration: vapi.maxCallDuration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                };
+                setConfig(loadedConfig);
+                setOriginalConfig(loadedConfig);
             }
         } catch (err) {
             console.error('Error loading configuration:', err);
@@ -135,7 +116,6 @@ export default function AgentConfigPage() {
         setError(null);
 
         try {
-            const token = await getAuthToken();
             const payload = {
                 systemPrompt: config.systemPrompt,
                 firstMessage: config.firstMessage,
@@ -144,18 +124,12 @@ export default function AgentConfigPage() {
                 maxDurationSeconds: config.maxDuration
             };
 
-            const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/behavior`, {
+            await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                timeoutMs: 30000,
+                retries: 1,
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to save configuration');
-            }
 
             setOriginalConfig(config);
             setSaveSuccess(true);

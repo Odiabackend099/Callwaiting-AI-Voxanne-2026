@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import { useVoiceAgent } from '@/hooks/useVoiceAgent';
 import { motion, AnimatePresence } from 'framer-motion';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
@@ -158,16 +159,7 @@ const TestAgentPageContent = () => {
     useEffect(() => {
         const loadInboundStatus = async () => {
             try {
-                const token = await getAuthToken();
-                if (!token) return;
-                const res = await fetch(`${API_BASE_URL}/api/inbound/status`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) {
-                    setInboundStatus(null);
-                    return;
-                }
-                const data = await res.json();
+                const data = await authedBackendFetch<any>('/api/inbound/status');
                 setInboundStatus({
                     configured: Boolean(data?.configured),
                     inboundNumber: data?.inboundNumber,
@@ -197,18 +189,7 @@ const TestAgentPageContent = () => {
 
             setOutboundConfigLoading(true);
             try {
-                const token = await getAuthToken();
-                const response = await fetch(`${API_BASE_URL}/api/founder-console/outbound-agent-config`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to load outbound agent configuration');
-                }
-
-                const config = await response.json();
+                const config = await authedBackendFetch<any>('/api/founder-console/outbound-agent-config');
                 const missingFields = [];
                 if (!config.system_prompt) missingFields.push('System Prompt');
 
@@ -267,22 +248,12 @@ const TestAgentPageContent = () => {
         setIsCallingPhone(true);
         setCallSummary(null);
         try {
-            const token = await getAuthToken();
-            const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test-outbound`, {
+            const data = await authedBackendFetch<any>('/api/founder-console/agent/web-test-outbound', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ phoneNumber })
+                body: JSON.stringify({ phoneNumber }),
+                timeoutMs: 30000,
+                retries: 1,
             });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to initiate call');
-            }
-
-            const data = await response.json();
             if (data.trackingId) {
                 setOutboundTrackingId(data.trackingId);
                 setPhoneCallId(data.callId);
@@ -304,14 +275,8 @@ const TestAgentPageContent = () => {
         // Fetch call summary
         if (outboundTrackingId) {
             try {
-                const token = await getAuthToken();
-                const response = await fetch(`${API_BASE_URL}/api/founder-console/calls/${outboundTrackingId}/state`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const summary = await response.json();
-                    setCallSummary(summary);
-                }
+                const summary = await authedBackendFetch<any>(`/api/founder-console/calls/${outboundTrackingId}/state`);
+                setCallSummary(summary);
             } catch (err) {
                 console.error('Failed to fetch call summary:', err);
             }

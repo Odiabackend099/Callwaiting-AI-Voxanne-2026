@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { AudioRecorder } from '@/lib/audio/recorder';
 import { AudioPlayer } from '@/lib/audio/player';
 import { useAuth } from '@/contexts/AuthContext';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import type { VoiceAgentState, TranscriptMessage, WebSocketEvent } from '@/types/voice';
 import { mapDbSpeakerToFrontend, type FrontendSpeaker } from '@/types/transcript';
 
-// Use frontend API proxy to avoid same-origin policy issues with WebSocket
-const API_BASE_URL = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : 'http://localhost:3000';
 const MAX_TRANSCRIPT_HISTORY = 100;
 const INTERIM_TRANSCRIPT_TIMEOUT_MS = 5000;
+const DEBUG_VOICE_AGENT = process.env.NEXT_PUBLIC_DEBUG_VOICE_AGENT === 'true';
 
 interface UseVoiceAgentOptions {
     onConnected?: () => void;
@@ -48,10 +48,17 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
     const interimTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const manualDisconnectRef = useRef(false);
 
     const MAX_RECONNECT_ATTEMPTS = 3;
     const RECONNECT_DELAY = 2000;
     const CONNECTION_TIMEOUT_MS = 10000;
+
+    const getReconnectDelayMs = useCallback((attempt: number) => {
+        const base = Math.min(8000, RECONNECT_DELAY * Math.pow(2, Math.max(0, attempt - 1)));
+        return base + Math.floor(Math.random() * 250);
+    }, []);
 
     /**
      * Handle transcript event with proper speaker mapping and deduplication
@@ -199,6 +206,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
         try {
             isConnectingRef.current = true;
+            manualDisconnectRef.current = false;
             setState(prev => ({ ...prev, error: null, isConnected: false }));
 
             // Cleanup any existing stale connection
@@ -214,34 +222,23 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 throw new Error('Not authenticated. Please log in first.');
             }
 
-            console.log('[VoiceAgent] Initiating web test...');
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json'
-            };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
-            const response = await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({})
-            });
-
             if (!isMountedRef.current) return;
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                if (response.status === 401) {
+            const data = await authedBackendFetch<WebTestResponse>('/api/founder-console/agent/web-test', {
+                method: 'POST',
+                body: JSON.stringify({}),
+                timeoutMs: 30000,
+                retries: 2,
+                requireAuth: !isDevBypass,
+            }).catch((err: any) => {
+                if (err?.status === 401) {
                     throw new Error('Not authenticated. Please log in first.');
                 }
-                if (response.status === 400) {
-                    throw new Error(errorData.error || 'Agent not configured. Please configure agent settings first.');
+                if (err?.status === 400) {
+                    throw new Error(err?.message || 'Agent not configured. Please configure agent settings first.');
                 }
-                throw new Error(errorData.error || `Failed to start web test: ${response.status}`);
-            }
-
-            const data: WebTestResponse = await response.json();
+                throw err;
+            });
 
             if (!isMountedRef.current) return;
 
@@ -249,7 +246,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 throw new Error(data.error || 'Failed to get WebSocket URL from backend');
             }
 
-            console.log('[VoiceAgent] Web test initiated:', { trackingId: data.trackingId });
+            if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Web test initiated:', { trackingId: data.trackingId });
             trackingIdRef.current = data.trackingId;
 
             let wsUrl = data.bridgeWebsocketUrl;
@@ -266,7 +263,16 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             } catch {
                 // If URL parsing fails, keep original value.
             }
-            console.log('[VoiceAgent] Connecting to WebSocket:', wsUrl);
+
+            if (DEBUG_VOICE_AGENT) {
+                try {
+                    const safe = new URL(wsUrl);
+                    safe.searchParams.delete('token');
+                    console.log('[VoiceAgent] Connecting to WebSocket:', safe.toString());
+                } catch {
+                    console.log('[VoiceAgent] Connecting to WebSocket: [unparseable url]');
+                }
+            }
 
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
@@ -291,7 +297,18 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     ws.close();
                     return;
                 }
-                console.log('[VoiceAgent] WebSocket connected');
+
+                // Authenticate immediately after connect (avoid token in URL/subprotocol).
+                try {
+                    if (token) {
+                        ws.send(JSON.stringify({ type: 'auth', token }));
+                    }
+                } catch {
+                    // ignore
+                }
+
+                isConnectingRef.current = false;
+                if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] WebSocket connected');
                 reconnectAttemptsRef.current = 0;
 
                 // Clear transcripts on new connection (fresh session)
@@ -320,7 +337,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                             await playerRef.current.resume();
                             await playerRef.current.playChunk(arrayBuffer);
                             setState(prev => ({ ...prev, isSpeaking: true }));
-                            setTimeout(() => {
+                            if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
+                            speakingTimeoutRef.current = setTimeout(() => {
                                 setState(prev => ({ ...prev, isSpeaking: false }));
                             }, 1000);
                         }
@@ -332,7 +350,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                             await playerRef.current.resume();
                             await playerRef.current.playChunk(event.data);
                             setState(prev => ({ ...prev, isSpeaking: true }));
-                            setTimeout(() => {
+                            if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
+                            speakingTimeoutRef.current = setTimeout(() => {
                                 setState(prev => ({ ...prev, isSpeaking: false }));
                             }, 1000);
                         }
@@ -345,19 +364,21 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     // Filter out keepalive/ping if necessary
                     if ((data as any).type === 'ping') return;
 
-                    console.log('[VoiceAgent] WebSocket message:', data.type);
+                    if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] WebSocket message:', data.type);
 
                     switch (data.type) {
                         case 'connected':
-                            console.log('[VoiceAgent] Agent ready');
+                            if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Agent ready');
                             break;
 
                         case 'transcript':
-                            console.log('[VoiceAgent] Transcript received:', {
-                                speaker: data.speaker,
-                                textLength: data.text?.length,
-                                isFinal: data.is_final
-                            });
+                            if (DEBUG_VOICE_AGENT) {
+                                console.log('[VoiceAgent] Transcript received:', {
+                                    speaker: data.speaker,
+                                    textLength: data.text?.length,
+                                    isFinal: data.is_final
+                                });
+                            }
 
                             setState(prev => {
                                 const newState = handleTranscriptEvent(data, prev);
@@ -418,7 +439,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
 
                         case 'interrupt':
-                            console.log('[VoiceAgent] Agent interrupted');
+                            if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Agent interrupted');
                             playerRef.current?.stop();
                             setState(prev => ({ ...prev, isSpeaking: false }));
                             break;
@@ -453,12 +474,14 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 options.onDisconnected?.();
 
                 // Auto-reconnect logic
-                if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS && event.code !== 1000 && event.code !== 1008 && isMountedRef.current) {
+                if (!manualDisconnectRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS && event.code !== 1000 && event.code !== 1008 && isMountedRef.current) {
                     reconnectAttemptsRef.current++;
-                    console.log(`[VoiceAgent] Reconnecting... (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+                    if (DEBUG_VOICE_AGENT) {
+                        console.log(`[VoiceAgent] Reconnecting... (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+                    }
                     reconnectTimeoutRef.current = setTimeout(() => {
                         connect();
-                    }, RECONNECT_DELAY);
+                    }, getReconnectDelayMs(reconnectAttemptsRef.current));
                 }
             };
 
@@ -471,7 +494,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             }
             isConnectingRef.current = false;
         }
-    }, [user, session, options, handleTranscriptEvent, scheduleInterimTimeout]);
+    }, [user, session, options, handleTranscriptEvent, scheduleInterimTimeout, getReconnectDelayMs]);
 
     const startRecording = useCallback(async () => {
         try {
@@ -507,6 +530,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
     }, []);
 
     const disconnect = useCallback(async () => {
+        manualDisconnectRef.current = true;
+
         if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
@@ -515,6 +540,16 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         if (connectionTimeoutRef.current) {
             clearTimeout(connectionTimeoutRef.current);
             connectionTimeoutRef.current = null;
+        }
+
+        if (interimTranscriptTimeoutRef.current) {
+            clearTimeout(interimTranscriptTimeoutRef.current);
+            interimTranscriptTimeoutRef.current = null;
+        }
+
+        if (speakingTimeoutRef.current) {
+            clearTimeout(speakingTimeoutRef.current);
+            speakingTimeoutRef.current = null;
         }
 
         stopRecording();
@@ -528,19 +563,14 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             try {
                 const token = session?.access_token;
                 if (token || user?.id === 'dev-user') {
-                    const headers: HeadersInit = {
-                        'Content-Type': 'application/json'
-                    };
-                    if (token) {
-                        headers['Authorization'] = `Bearer ${token}`;
-                    }
-
-                    await fetch(`${API_BASE_URL}/api/founder-console/agent/web-test/end`, {
+                    await authedBackendFetch('/api/founder-console/agent/web-test/end', {
                         method: 'POST',
-                        headers,
-                        body: JSON.stringify({ trackingId: trackingIdRef.current })
+                        body: JSON.stringify({ trackingId: trackingIdRef.current }),
+                        timeoutMs: 20000,
+                        retries: 1,
+                        requireAuth: token ? true : false,
                     });
-                    console.log('[VoiceAgent] Web test session ended');
+                    if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Web test session ended');
                 }
             } catch (e) {
                 console.error('[VoiceAgent] Failed to end session:', e);
@@ -552,6 +582,9 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             wsRef.current.close(1000, 'User disconnected');
             wsRef.current = null;
         }
+
+        isConnectingRef.current = false;
+        reconnectAttemptsRef.current = 0;
 
         setState(prev => ({
             ...prev,

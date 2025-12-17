@@ -4,10 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-import { supabase } from '@/lib/supabase';
 import { BookOpen, Plus, Trash2, Save, Loader2, RefreshCw, CloudUpload, Sparkles, AlertCircle, CheckCircle2, Upload, File } from 'lucide-react';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 type KBItem = {
   id: string;
@@ -42,18 +40,11 @@ export default function KnowledgeBasePage() {
   const [chunkCount, setChunkCount] = useState(0);
   const [autoChunk, setAutoChunk] = useState(true);
 
-  const getToken = async () => (await supabase.auth.getSession()).data.session?.access_token;
-
   const loadItems = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/knowledge-base`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || `Failed to load (HTTP ${res.status})`);
+      const data = await authedBackendFetch<any>('/api/knowledge-base');
       setItems((data?.items || []) as KBItem[]);
     } catch (e: any) {
       setError(e?.message || 'Failed to load knowledge base');
@@ -187,69 +178,50 @@ export default function KnowledgeBasePage() {
       setLastSaveTime(now);
       setError(null);
       setSuccess(null);
-
-      const token = await getToken();
       const isUpdate = Boolean(draft.id);
-      const url = isUpdate ? `${API_BASE_URL}/api/knowledge-base/${draft.id}` : `${API_BASE_URL}/api/knowledge-base`;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      const res = await fetch(url, {
-        method: isUpdate ? 'PATCH' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          filename,
-          category: draft.category,
-          content,
-          active: draft.active
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(data?.error || `Save failed (HTTP ${res.status})`);
-      }
+      const data = await authedBackendFetch<any>(
+        isUpdate ? `/api/knowledge-base/${draft.id}` : '/api/knowledge-base',
+        {
+          method: isUpdate ? 'PATCH' : 'POST',
+          body: JSON.stringify({
+            filename,
+            category: draft.category,
+            content,
+            active: draft.active
+          }),
+          timeoutMs: 30000,
+          retries: 1,
+        }
+      );
 
       setSuccess(isUpdate ? 'Document updated!' : 'Document created!');
 
       // Auto-chunk if enabled and new document
       if (autoChunk && !isUpdate && (data?.id || data?.item?.id)) {
         const docId = data?.id || data?.item?.id;
-        try {
-          setSuccess('Document created! Chunking and embedding...');
+        if (autoChunk) {
+          try {
+            setSuccess('Document created! Chunking and embedding...');
 
-          const chunkRes = await fetch(`${API_BASE_URL}/api/knowledge-base/chunk`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({
-              knowledgeBaseId: docId,
-              content,
-              chunkSize: 1000,
-              chunkOverlap: 200
-            })
-          });
+            const chunkData = await authedBackendFetch<any>('/api/knowledge-base/chunk', {
+              method: 'POST',
+              body: JSON.stringify({
+                knowledgeBaseId: docId,
+                chunkSize: 800,
+                chunkOverlap: 100
+              }),
+              timeoutMs: 30000,
+              retries: 1,
+            });
 
-          const chunkData = await chunkRes.json().catch(() => null);
-          if (chunkRes.ok && chunkData?.chunkCount) {
-            setChunkCount(chunkData.chunkCount);
-            setSuccess(`✅ Document created with ${chunkData.chunkCount} chunks! RAG is ready.`);
-          } else {
-            setError(`Chunking failed: ${chunkData?.error || 'Unknown error'}`);
+            setChunkCount(chunkData?.chunks || 0);
+            setSuccess(`✅ Saved & chunked! (${chunkData?.chunks || 0} chunks)`);
+          } catch (chunkErr: any) {
+            setSuccess(`✅ Saved! Chunking failed: ${chunkErr?.message}`);
           }
-        } catch (err: any) {
-          setError(`Chunking error: ${err?.message}`);
-          console.error('RAG chunking failed', { error: err?.message });
+        } else {
+          setSuccess(isUpdate ? '✅ Updated successfully' : '✅ Created successfully');
         }
       }
 
@@ -271,18 +243,17 @@ export default function KnowledgeBasePage() {
       setIsSaving(true);
       setError(null);
       setSuccess(null);
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/knowledge-base/${id}`, {
+
+      await authedBackendFetch<any>(`/api/knowledge-base/${id}`, {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        timeoutMs: 30000,
+        retries: 1,
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || `Delete failed (HTTP ${res.status})`);
-      setSuccess('Document deleted');
+      setSuccess('Deleted successfully');
+      setItems(prev => prev.filter(i => i.id !== id));
       if (draft.id === id) beginNew();
-      await loadItems();
     } catch (e: any) {
-      setError(e?.message || 'Failed to delete document');
+      setError(e?.message || 'Delete failed');
     } finally {
       setIsSaving(false);
     }
@@ -293,17 +264,16 @@ export default function KnowledgeBasePage() {
       setIsSaving(true);
       setError(null);
       setSuccess(null);
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/knowledge-base/seed/beverly`, {
+
+      const data = await authedBackendFetch<any>('/api/knowledge-base/seed/beverly', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        timeoutMs: 30000,
+        retries: 1,
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || `Seed failed (HTTP ${res.status})`);
-      setSuccess(data?.message || `Loaded ${data?.seeded || 0} sample documents`);
+      setSuccess(data?.message || 'Seed completed');
       await loadItems();
     } catch (e: any) {
-      setError(e?.message || 'Failed to load sample documents');
+      setError(e?.message || 'Seed failed');
     } finally {
       setIsSaving(false);
     }
@@ -314,29 +284,19 @@ export default function KnowledgeBasePage() {
       setIsSaving(true);
       setError(null);
       setSuccess(null);
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/knowledge-base/sync`, {
+
+      const data = await authedBackendFetch<any>('/api/knowledge-base/sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           toolName: 'knowledge-search',
-          assistantRoles: ['inbound', 'outbound']
-        })
+          orgId: 'a0000000-0000-0000-0000-000000000001'
+        }),
+        timeoutMs: 30000,
+        retries: 1,
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        if (res.status === 429) {
-          throw new Error(data?.error || 'Sync rate limited. Please wait before trying again.');
-        }
-        throw new Error(data?.error || `Sync failed (HTTP ${res.status})`);
-      }
-      const count = Array.isArray(data?.assistantsUpdated) ? data.assistantsUpdated.length : 0;
-      setSuccess(`Synced to ${count} assistant${count !== 1 ? 's' : ''}`);
+      setSuccess(data?.message || 'Sync completed');
     } catch (e: any) {
-      setError(e?.message || 'Failed to sync documents');
+      setError(e?.message || 'Sync failed');
     } finally {
       setIsSaving(false);
     }
@@ -501,6 +461,7 @@ export default function KnowledgeBasePage() {
                     <input
                       ref={fileInputRef}
                       type="file"
+                      aria-label="Upload knowledge base document"
                       onChange={handleFileUpload}
                       accept=".txt,.pdf,.doc,.docx,.md"
                       className="hidden"
@@ -510,8 +471,9 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Document Name</label>
+                  <label htmlFor="kb-filename" className="block text-sm font-semibold text-gray-900 mb-2">Document Name</label>
                   <input
+                    id="kb-filename"
                     value={draft.filename}
                     onChange={(e) => setDraft((p) => ({ ...p, filename: e.target.value }))}
                     placeholder="e.g., pricing.md"
@@ -521,8 +483,9 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Category</label>
+                  <label htmlFor="kb-category" className="block text-sm font-semibold text-gray-900 mb-2">Category</label>
                   <select
+                    id="kb-category"
                     value={draft.category}
                     onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
                     className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
@@ -535,8 +498,9 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Content</label>
+                  <label htmlFor="kb-content" className="block text-sm font-semibold text-gray-900 mb-2">Content</label>
                   <textarea
+                    id="kb-content"
                     value={draft.content}
                     onChange={(e) => setDraft((p) => ({ ...p, content: e.target.value }))}
                     placeholder="Paste your content here. Markdown is supported."

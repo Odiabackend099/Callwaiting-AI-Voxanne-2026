@@ -4,9 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import { Settings, Loader2, CheckCircle2, AlertCircle, Copy, Check } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface VapiSetupStatus {
   configured: boolean;
@@ -26,21 +24,13 @@ export default function VapiSetupPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const getToken = async () => (await supabase.auth.getSession()).data.session?.access_token;
-
   // Check current Vapi setup status
   useEffect(() => {
     const checkStatus = async () => {
       try {
         setLoading(true);
         setError(null);
-        const token = await getToken();
-
-        const res = await fetch(`${API_BASE_URL}/api/vapi/setup/status`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-
-        const data = await res.json();
+        const data = await authedBackendFetch<any>('/api/vapi/setup/status');
         setStatus(data);
       } catch (err: any) {
         setError(`Failed to check status: ${err?.message}`);
@@ -61,21 +51,12 @@ export default function VapiSetupPage() {
       setError(null);
       setSuccess(null);
 
-      const token = await getToken();
-      const res = await fetch(`${API_BASE_URL}/api/vapi/setup/configure-webhook`, {
+      const data = await authedBackendFetch<any>('/api/vapi/setup/configure-webhook', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({})
+        body: JSON.stringify({}),
+        timeoutMs: 30000,
+        retries: 1,
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to configure webhook');
-      }
 
       setSuccess('Vapi webhook configured successfully!');
       setStatus({

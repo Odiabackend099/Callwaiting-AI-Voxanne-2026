@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Mail, Lock, ArrowRight, Loader } from 'lucide-react';
@@ -27,7 +27,20 @@ const BRANDING_IMAGES = [
 ];
 
 export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-black text-white flex font-sans items-center justify-center">
+                <Loader className="w-6 h-6 animate-spin" />
+            </div>
+        }>
+            <LoginPageContent />
+        </Suspense>
+    );
+}
+
+function LoginPageContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { signIn, signInWithGoogle } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -35,6 +48,16 @@ export default function LoginPage() {
     const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+    useEffect(() => {
+        const err = searchParams.get('error');
+        const hint = searchParams.get('hint');
+        if (err) {
+            const safeErr = err.toString().slice(0, 60);
+            const safeHint = hint ? hint.toString().slice(0, 120) : '';
+            setError(safeHint ? `${safeErr}: ${safeHint}` : safeErr);
+        }
+    }, [searchParams]);
 
     // Auto-rotate carousel
     useEffect(() => {

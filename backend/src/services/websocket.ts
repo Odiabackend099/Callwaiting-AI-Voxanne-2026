@@ -8,6 +8,22 @@ import { Server } from 'http';
 import { attachClientWebSocket } from './web-voice-bridge';
 import { supabase } from './supabase-client';
 
+const DEBUG_WS = process.env.DEBUG_WEBSOCKET === 'true';
+const MAX_WS_BUFFERED_AMOUNT_BYTES = Number(process.env.WS_MAX_BUFFERED_BYTES || 2_000_000);
+
+function safeSend(ws: WebSocket, message: string): boolean {
+  if (ws.readyState !== WebSocket.OPEN) return false;
+  if (typeof (ws as any).bufferedAmount === 'number' && (ws as any).bufferedAmount > MAX_WS_BUFFERED_AMOUNT_BYTES) {
+    return false;
+  }
+  try {
+    ws.send(message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Metrics data structure
 export interface UsageMetrics {
   today: {
@@ -48,27 +64,14 @@ const clients: Map<WebSocket, WebSocketClient> = new Map();
 let wss: WebSocketServer | null = null;
 
 /**
- * Initialize WebSocket server on existing HTTP server
+ * Initialize WebSocket server on existing WebSocketServer instance
  */
-export function initWebSocket(server: Server): WebSocketServer {
-  wss = new WebSocketServer({
-    server,
-    path: '/ws/live-calls',
-    // Validate origin for CORS security
-    verifyClient: (info, callback) => {
-      const origin = info.req.headers.origin;
-      const allowedOrigins = (process.env.WS_ALLOWED_ORIGINS || 'http://localhost:3002,http://127.0.0.1:3002').split(',');
-      const isAllowed = !origin || allowedOrigins.some(allowed => origin === allowed.trim());
-
-      if (!isAllowed) {
-        console.warn(`[WebSocket] Connection rejected from unauthorized origin: ${origin}`);
-        callback(false, 403, 'Forbidden');
-        return;
-      }
-
-      callback(true);
-    }
-  });
+export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
+  wss = wssInstance;
+  
+  // Set up origin verification for manual upgrade handling
+  // (verifyClient is only used when WebSocketServer is attached to HTTP server directly)
+  // For manual upgrade handling, origin validation happens in server.ts upgrade handler
 
   wss.on('connection', (ws: WebSocket, req) => {
     const origin = req.headers.origin || 'unknown';
@@ -80,7 +83,7 @@ export function initWebSocket(server: Server): WebSocketServer {
     ws.on('message', (message: Buffer) => {
       try {
         const data = JSON.parse(message.toString());
-        console.log('[WebSocket] Received message:', data);
+        if (DEBUG_WS) console.log('[WebSocket] Received message:', { type: data?.type });
         
         // Handle subscribe message to set userId
         if (data.type === 'subscribe') {
@@ -106,7 +109,7 @@ export function initWebSocket(server: Server): WebSocketServer {
                 }
 
                 client.userId = authData.user.id;
-                console.log('[WebSocket] Client authenticated and subscribed', { userId: client.userId });
+                if (DEBUG_WS) console.log('[WebSocket] Client authenticated and subscribed', { userId: client.userId });
               })
               .catch(() => {
                 ws.close(1008, 'Unauthorized');
@@ -114,7 +117,7 @@ export function initWebSocket(server: Server): WebSocketServer {
           } else if (isDev && typeof data.userId === 'string' && data.userId) {
             // Dev-only fallback for local testing
             client.userId = data.userId;
-            console.log('[WebSocket] Dev-mode subscription accepted', { userId: client.userId });
+            if (DEBUG_WS) console.log('[WebSocket] Dev-mode subscription accepted', { userId: client.userId });
           } else {
             ws.close(1008, 'Unauthorized');
             return;
@@ -123,7 +126,7 @@ export function initWebSocket(server: Server): WebSocketServer {
         
         // Handle ping/pong for connection health
         if (data.type === 'ping') {
-          ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
+          safeSend(ws, JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
         }
       } catch (e) {
         console.error('[WebSocket] Failed to parse message:', e);
@@ -165,14 +168,11 @@ export function wsBroadcast(event: WSEventType): void {
     // Filter by userId for call events (always present)
     if ((event as any).userId && client.userId !== (event as any).userId) return;
 
-    if (client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(message);
-      sentCount++;
-    }
+    if (safeSend(client.ws, message)) sentCount++;
   });
 
   const targetInfo = (event as any).userId ? ` to user ${(event as any).userId}` : ' to all clients';
-  console.log(`[WebSocket] Broadcast ${(event as any).type}${targetInfo}: ${sentCount} clients`);
+  if (DEBUG_WS) console.log(`[WebSocket] Broadcast ${(event as any).type}${targetInfo}: ${sentCount} clients`);
 }
 
 /**

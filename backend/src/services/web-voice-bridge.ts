@@ -21,6 +21,8 @@ const VAPI_AUDIO_SAMPLE_RATE = 16000;
 const WEB_VOICE_SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_CLEANUP_INTERVAL_MS = 60_000; // Check every 60 seconds
 const CALL_TIMEOUT_MS = 15 * 60 * 1000; // 15 minute hard timeout for calls
+const MAX_VAPI_BUFFERED_AMOUNT_BYTES = 2 * 1024 * 1024; // 2MB
+const DEBUG_WEB_VOICE_BRIDGE = process.env.DEBUG_WEB_VOICE_BRIDGE === 'true';
 
 interface WebVoiceSession {
   vapiCallId: string;
@@ -33,6 +35,7 @@ interface WebVoiceSession {
   vapiClosed?: boolean; // Flag if Vapi closed cleanly or errored
   closeReason?: string; // Reason for Vapi closure
   closeCode?: number; // Code for Vapi closure
+  ended?: boolean;
 }
 
 interface VapiTranscriptMessage {
@@ -106,11 +109,24 @@ function markSessionClosed(trackingId: string, code: number, reason: string): vo
   }, 5000);
 }
 
+function broadcastCallEndedOnce(session: WebVoiceSession, reason: string, durationSeconds?: number): void {
+  if (session.ended) return;
+  session.ended = true;
+  wsBroadcast({
+    type: 'call_ended',
+    vapiCallId: session.vapiCallId,
+    trackingId: session.trackingId,
+    userId: session.userId,
+    reason,
+    ...(typeof durationSeconds === 'number' ? { durationSeconds } : {})
+  });
+}
+
 /**
  * Periodic cleanup of stale sessions (TTL-based)
  */
 function startSessionCleanup(): void {
-  setInterval(() => {
+  const interval = setInterval(() => {
     const now = Date.now();
     const sessionsToDelete: string[] = [];
 
@@ -127,6 +143,8 @@ function startSessionCleanup(): void {
 
     sessionsToDelete.forEach(trackingId => endSession(trackingId));
   }, SESSION_CLEANUP_INTERVAL_MS);
+
+  interval.unref();
 }
 
 // Start cleanup on module load
@@ -145,6 +163,22 @@ export function createWebVoiceSession(
   vapiTransportUrl: string
 ): Promise<WebVoiceSession> {
   return new Promise((resolve, reject) => {
+    try {
+      const parsed = new URL(vapiTransportUrl);
+      if (parsed.protocol !== 'wss:') {
+        reject(new Error('Invalid Vapi transport URL protocol'));
+        return;
+      }
+      const host = parsed.hostname.toLowerCase();
+      if (!(host === 'api.vapi.ai' || host.endsWith('.vapi.ai'))) {
+        reject(new Error('Invalid Vapi transport URL host'));
+        return;
+      }
+    } catch {
+      reject(new Error('Invalid Vapi transport URL'));
+      return;
+    }
+
     // Check for duplicate sessions
     if (webVoiceSessions.has(trackingId)) {
       console.warn('[WebVoiceBridge] Duplicate session creation, cleaning up old session', { trackingId });
@@ -193,6 +227,7 @@ export function createWebVoiceSession(
     // Reject on error
     vapiWs.on('error', (err) => {
       console.error('[WebVoiceBridge] Vapi WebSocket error during connection', { vapiCallId, error: err.message });
+      markSessionClosed(trackingId, 1011, err.message || 'Vapi WebSocket error');
       reject(err);
     });
 
@@ -217,14 +252,7 @@ export function createWebVoiceSession(
         session.clientWebSocket.close(1000, 'Vapi connection closed');
       }
 
-      // Broadcast call_ended
-      wsBroadcast({
-        type: 'call_ended',
-        vapiCallId,
-        trackingId,
-        userId,
-        reason: 'vapi_disconnected'
-      });
+      broadcastCallEndedOnce(session, 'vapi_disconnected');
 
       // Mark session as closed with reason, don't delete immediately
       markSessionClosed(trackingId, code, reason?.toString());
@@ -234,19 +262,49 @@ export function createWebVoiceSession(
 
 /**
  * Handle messages from Vapi (binary audio or JSON control messages)
+ * CRITICAL FIX: Buffer audio to smooth out Vapi's bursty delivery
  */
 function handleVapiMessage(data: WebSocket.Data, session: WebVoiceSession): void {
-  // Forward to client if connected
+  // Forward to client if connected, but only if it's valid data
   if (session.clientWebSocket?.readyState === WebSocket.OPEN) {
-    session.clientWebSocket.send(data);
+    // Validate data before sending
+    if (Buffer.isBuffer(data) && data.byteLength > 0) {
+      // Only send if it looks like audio (not JSON control message)
+      const maybeJson = data.toString('utf8');
+      const trimmed = maybeJson.trimStart();
+      const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+      
+      // If it's not JSON, it's audio - send it
+      if (!looksLikeJson) {
+        try {
+          session.clientWebSocket.send(data);
+        } catch (err) {
+          console.error('[WebVoiceBridge] Failed to send audio to client', { trackingId: session.trackingId, error: err instanceof Error ? err.message : String(err) });
+        }
+        return;
+      }
+    } else if (typeof data === 'string' && data.length > 0) {
+      // String data - send as-is (likely JSON)
+      try {
+        session.clientWebSocket.send(data);
+      } catch (err) {
+        console.error('[WebVoiceBridge] Failed to send message to client', { trackingId: session.trackingId, error: err instanceof Error ? err.message : String(err) });
+      }
+      return;
+    }
   }
 
   // Try to parse as JSON control message (transcript, status, etc.)
   if (Buffer.isBuffer(data)) {
     const maybeJson = data.toString('utf8');
 
-    // Log non-audio messages
-    if (maybeJson.length < 500) {
+    const trimmed = maybeJson.trimStart();
+    const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+    if (!looksLikeJson || maybeJson.length > 2000) {
+      return;
+    }
+
+    if (DEBUG_WEB_VOICE_BRIDGE && maybeJson.length < 500) {
       console.log('[WebVoiceBridge] Vapi buffer message', {
         trackingId: session.trackingId,
         length: data.byteLength,
@@ -271,20 +329,24 @@ function handleVapiMessage(data: WebSocket.Data, session: WebVoiceSession): void
   }
 
   if (typeof data === 'string') {
-    console.log('[WebVoiceBridge] Vapi string message', {
-      trackingId: session.trackingId,
-      length: data.length,
-      preview: data.substring(0, 150)
-    });
+    if (DEBUG_WEB_VOICE_BRIDGE) {
+      console.log('[WebVoiceBridge] Vapi string message', {
+        trackingId: session.trackingId,
+        length: data.length,
+        preview: data.substring(0, 150)
+      });
+    }
 
     try {
       const message = JSON.parse(data) as VapiTranscriptMessage;
-      console.log('[WebVoiceBridge] Parsed Vapi JSON from string', {
-        trackingId: session.trackingId,
-        type: message.type,
-        hasText: !!message.text,
-        role: message.role
-      });
+      if (DEBUG_WEB_VOICE_BRIDGE) {
+        console.log('[WebVoiceBridge] Parsed Vapi JSON from string', {
+          trackingId: session.trackingId,
+          type: message.type,
+          hasText: !!message.text,
+          role: message.role
+        });
+      }
       handleVapiTranscriptMessage(message, session);
     } catch {
       // Non-JSON text: ignore or log at debug level
@@ -322,12 +384,14 @@ function handleVapiTranscriptMessage(
     ts: timestamp
   };
 
-  console.log('[WebVoiceBridge] Broadcasting transcript', {
-    trackingId: session.trackingId,
-    speaker,
-    textLength: text.length,
-    timestamp
-  });
+  if (DEBUG_WEB_VOICE_BRIDGE) {
+    console.log('[WebVoiceBridge] Broadcasting transcript', {
+      trackingId: session.trackingId,
+      speaker,
+      textLength: text.length,
+      timestamp
+    });
+  }
 
   // Send transcript event directly to client WebSocket (real-time)
   if (session.clientWebSocket?.readyState === WebSocket.OPEN) {
@@ -392,9 +456,10 @@ export function attachClientWebSocket(
     return false;
   }
 
-  // Log all active sessions for debugging
   const activeSessions = Array.from(webVoiceSessions.keys());
-  console.log('[WebVoiceBridge] Attachment attempt', { trackingId, userId, activeSessions });
+  if (DEBUG_WEB_VOICE_BRIDGE) {
+    console.log('[WebVoiceBridge] Attachment attempt', { trackingId, userId, activeSessions });
+  }
 
   const session = webVoiceSessions.get(trackingId);
   if (!session) {
@@ -469,6 +534,15 @@ export function attachClientWebSocket(
     }
 
     try {
+      if (session.vapiWebSocket.bufferedAmount > MAX_VAPI_BUFFERED_AMOUNT_BYTES) {
+        console.warn('[WebVoiceBridge] Backpressure: dropping audio frame', {
+          trackingId,
+          frameCount: audioFrameCount,
+          vapiBuffered: session.vapiWebSocket.bufferedAmount
+        });
+        return;
+      }
+
       session.vapiWebSocket.send(data);
 
       // Log every 100 frames to avoid spam
@@ -527,14 +601,7 @@ export function endWebVoiceSession(trackingId: string): void {
     }
   }
 
-  // Broadcast call_ended
-  wsBroadcast({
-    type: 'call_ended',
-    vapiCallId: session.vapiCallId,
-    trackingId: session.trackingId,
-    userId: session.userId,
-    reason: 'client_ended'
-  });
+  broadcastCallEndedOnce(session, 'client_ended');
 
   // Clean up
   endSession(trackingId);

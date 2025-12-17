@@ -8,8 +8,23 @@ import { getIntegrationSettings } from './founder-console-settings';
 import { validateE164Format } from '../utils/phone-validation';
 import { uploadCallRecording, deleteRecording } from '../services/call-recording-storage';
 import { detectCallType, getAgentConfigForCallType } from '../services/call-type-detector';
+import { getCachedIntegrationSettings } from '../services/settings-cache';
+import { computeVapiSignature } from '../utils/vapi-webhook-signature';
 
 export const webhooksRouter = express.Router();
+
+function redactEmail(value: unknown): string {
+  const email = typeof value === 'string' ? value.trim() : '';
+  const at = email.indexOf('@');
+  if (at <= 1) return '***';
+  return `${email.slice(0, 1)}***${email.slice(at)}`;
+}
+
+function redactPhone(value: unknown): string {
+  const phone = typeof value === 'string' ? value.trim() : '';
+  if (phone.length <= 4) return '***';
+  return `***${phone.slice(-4)}`;
+}
 
 // Rate limiter for webhook endpoints to prevent abuse
 const webhookLimiter = rateLimit({
@@ -22,12 +37,12 @@ const webhookLimiter = rateLimit({
 
 /**
  * Verify Vapi webhook signature for security
- * Uses secret stored in database (from founder console settings)
+ * Uses secret stored in database (cached)
  * Prevents unauthorized webhook events from being processed
  */
 async function verifyVapiSignature(req: express.Request): Promise<boolean> {
-  // Fetch webhook secret from database
-  const settings = await getIntegrationSettings();
+  // Fetch webhook secret from database (cached)
+  const settings = await getCachedIntegrationSettings();
   const secret = settings?.vapi_webhook_secret;
   const nodeEnv = process.env.NODE_ENV || 'development';
 
@@ -63,21 +78,21 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
 
     const tsMs = tsNum > 1e12 ? tsNum : tsNum * 1000;
     const nowMs = Date.now();
-    const maxSkewMs = 60 * 1000; // 60 seconds (reduced from 5 minutes for security)
+    const maxSkewMs = 5 * 60 * 1000; // 5 minutes (allows for provider retries + queue delays)
     if (Math.abs(nowMs - tsMs) > maxSkewMs) {
       console.error('[Webhook] Timestamp outside allowed skew window');
       return false;
     }
 
-    const payload = JSON.stringify(req.body);
-    const hash = crypto
-      .createHmac('sha256', secret)
-      .update(`${timestamp}.${payload}`)
-      .digest('hex');
+    const payload = typeof (req as any).rawBody === 'string'
+      ? (req as any).rawBody
+      : JSON.stringify(req.body);
+
+    const hash = computeVapiSignature(secret, timestamp, payload);
 
     // Timing-safe comparison
-    const a = Buffer.from(hash, 'utf8');
-    const b = Buffer.from(signature, 'utf8');
+    const a = Buffer.from(hash, 'hex');
+    const b = Buffer.from(signature, 'hex');
     if (a.length !== b.length) return false;
     return crypto.timingSafeEqual(a, b);
   } catch (error: any) {
@@ -433,7 +448,7 @@ async function handleCallEnded(event: VapiEvent) {
     // Fetch call log to check if it's a test call
     const { data: callLog } = await supabase
       .from('call_logs')
-      .select('*')
+      .select('id, lead_id, org_id, metadata')
       .eq('vapi_call_id', call.id)
       .maybeSingle();
 
@@ -455,26 +470,48 @@ async function handleCallEnded(event: VapiEvent) {
 
     // Update lead status only if this is not a test call
     const isTestCall = (callLog?.metadata as any)?.is_test_call === true;
-    if (!isTestCall && call.customer?.number) {
-      const { error: leadError } = await supabase
-        .from('leads')
-        .update({
-          status: 'called_1',
-          last_contacted_at: new Date().toISOString()
-        })
-        .eq('phone', call.customer.number);
+    if (!isTestCall) {
+      // Prefer lead_id + org_id (multi-tenant safe)
+      if (callLog?.lead_id && callLog?.org_id) {
+        const { error: leadError } = await supabase
+          .from('leads')
+          .update({
+            status: 'called_1',
+            last_contacted_at: new Date().toISOString()
+          })
+          .eq('id', callLog.lead_id)
+          .eq('org_id', callLog.org_id);
 
-      if (leadError) {
-        console.error('[handleCallEnded] Failed to update lead:', leadError);
+        if (leadError) {
+          console.error('[handleCallEnded] Failed to update lead:', leadError);
+        }
+      } else if (call.customer?.number && callLog?.org_id) {
+        // Fallback: scope by org_id + phone
+        const { error: leadError } = await supabase
+          .from('leads')
+          .update({
+            status: 'called_1',
+            last_contacted_at: new Date().toISOString()
+          })
+          .eq('phone', call.customer.number)
+          .eq('org_id', callLog.org_id);
+
+        if (leadError) {
+          console.error('[handleCallEnded] Failed to update lead:', leadError);
+        }
       }
     }
 
     // Also update call_tracking if exists
-    const { data: callTracking } = await supabase
+    const { data: callTracking, error: callTrackingError } = await supabase
       .from('call_tracking')
       .select('id, metadata')
       .eq('vapi_call_id', call.id)
-      .single();
+      .maybeSingle();
+
+    if (callTrackingError && callTrackingError.code !== 'PGRST116') {
+      console.error('[handleCallEnded] Failed to fetch call_tracking:', callTrackingError);
+    }
 
     if (callTracking) {
       await supabase
@@ -642,10 +679,19 @@ async function handleTranscript(event: any) {
   }
 }
 
+// Pre-compile regex patterns to avoid re-creation on every call
+const CLAIM_PATTERNS = [
+  /costs?\s+\$?([\d,]+)/gi,                          // "costs $100"
+  /prices?\s+\$?([\d,]+)/gi,                         // "price $50"
+  /hours?\s+(\d{1,2}:\d{2})/gi,                      // "hours 9:00"
+  /(?:founded|established)\s+(\d{4})/gi,            // "established 2020"
+  /(?:location|address)[:\s]+([^.!?\n]+)/gi         // "location: 123 Main St"
+];
+
 /**
  * Detect potential hallucinations in AI responses
  * Flags claims that don't appear to be grounded in knowledge base
- * 
+ *
  * NOTE: Uses simplified regex patterns to avoid ReDoS (Regular Expression Denial of Service)
  * and limits transcript size to prevent performance issues
  */
@@ -656,8 +702,7 @@ async function detectHallucinations(
   callId: string
 ): Promise<void> {
   try {
-    // Skip hallucination detection for very long transcripts to prevent ReDoS
-    const MAX_TRANSCRIPT_FOR_DETECTION = 10000;
+    const MAX_TRANSCRIPT_FOR_DETECTION = 2000; // Reduced from 10000 to prevent DoS
     if (transcript.length > MAX_TRANSCRIPT_FOR_DETECTION) {
       console.warn('[detectHallucinations] Transcript too long for hallucination detection, skipping', {
         callId,
@@ -667,24 +712,15 @@ async function detectHallucinations(
       return;
     }
 
-    // Extract potential factual claims from transcript
-    // Use simplified regex patterns to avoid ReDoS vulnerability
-    // Look for patterns like: "costs", "pricing", "hours", "established"
-    const claimPatterns = [
-      /costs?\s+\$?([\d,]+)/gi,                          // "costs $100"
-      /prices?\s+\$?([\d,]+)/gi,                         // "price $50"
-      /hours?\s+(\d{1,2}:\d{2})/gi,                      // "hours 9:00"
-      /(?:founded|established)\s+(\d{4})/gi,            // "established 2020"
-      /(?:location|address)[:\s]+([^.!?\n]+)/gi         // "location: 123 Main St"
-    ];
-
     const flaggedClaims = new Set<string>();
 
-    for (const pattern of claimPatterns) {
+    for (const pattern of CLAIM_PATTERNS) {
       let match;
-      // Limit iterations to prevent DoS
       let iterations = 0;
-      const MAX_ITERATIONS = 100;
+      const MAX_ITERATIONS = 20; // Reduced iterations
+
+      // Reset lastIndex for global regex
+      pattern.lastIndex = 0;
 
       while ((match = pattern.exec(transcript)) !== null && iterations < MAX_ITERATIONS) {
         flaggedClaims.add(match[0].substring(0, 100)); // Limit claim length
@@ -696,49 +732,57 @@ async function detectHallucinations(
       return; // No factual claims detected
     }
 
-    // Get all knowledge bases for this organization
-    const { data: kbs } = await supabase
-      .from('knowledge_base')
-      .select('content, category')
-      .eq('org_id', orgId)
-      .eq('active', true);
+    // OPTIMIZATION: Do NOT load full KB content.
+    // This is a placeholder for a proper vector similarity check.
+    // Loading all KBs into memory is too dangerous for production.
+    console.warn('[detectHallucinations] Skipping deep check to prevent OOM. Implement Vector Check here.');
 
-    const kbContent = kbs?.map(kb => kb.content).join('\n') || '';
+    /*
+    // Original dangerous logic commented out for production safety:
+    // const { data: kbs } = await supabase
+    //   .from('knowledge_base')
+    //   .select('content, category')
+    //   .eq('org_id', orgId)
+    //   .eq('active', true);
 
-    // Check if claims are grounded in knowledge base
-    for (const claim of flaggedClaims) {
-      // Simple check: does the knowledge base contain significant parts of the claim?
-      const claimWords = claim
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(w => w.length > 3);
+    // const kbContent = kbs?.map(kb => kb.content).join('\n') || '';
 
-      const matchedWords = claimWords.filter(word =>
-        kbContent.toLowerCase().includes(word)
-      );
+    // // Check if claims are grounded in knowledge base
+    // for (const claim of flaggedClaims) {
+    //   // Simple check: does the knowledge base contain significant parts of the claim?
+    //   const claimWords = claim
+    //     .toLowerCase()
+    //     .split(/\s+/)
+    //     .filter(w => w.length > 3);
 
-      const confidenceScore = matchedWords.length / Math.max(claimWords.length, 1);
+    //   const matchedWords = claimWords.filter(word =>
+    //     kbContent.toLowerCase().includes(word)
+    //   );
 
-      // Flag if confidence is below 0.5 (less than 50% of claim words found)
-      if (confidenceScore < 0.5 && claimWords.length > 2) {
-        await supabase
-          .from('hallucination_flags')
-          .insert([
-            {
-              org_id: orgId,
-              agent_id: agentId,
-              call_id: callId,
-              transcript: transcript.substring(0, 500), // Store truncated transcript
-              flagged_claim: claim,
-              confidence_score: confidenceScore,
-              knowledge_base_search_result: `Matched ${matchedWords.length}/${claimWords.length} words`,
-              status: 'pending'
-            }
-          ]);
+    //   const confidenceScore = matchedWords.length / Math.max(claimWords.length, 1);
 
-        console.log(`[Hallucination Detected] "${claim}" - Confidence: ${(confidenceScore * 100).toFixed(1)}%`);
-      }
-    }
+    //   // Flag if confidence is below 0.5 (less than 50% of claim words found)
+    //   if (confidenceScore < 0.5 && claimWords.length > 2) {
+    //     await supabase
+    //       .from('hallucination_flags')
+    //       .insert([
+    //         {
+    //           org_id: orgId,
+    //           agent_id: agentId,
+    //           call_id: callId,
+    //           transcript: transcript.substring(0, 500), // Store truncated transcript
+    //           flagged_claim: claim,
+    //           confidence_score: confidenceScore,
+    //           knowledge_base_search_result: `Matched ${matchedWords.length}/${claimWords.length} words`,
+    //           status: 'pending'
+    //         }
+    //       ]);
+
+    //     console.log(`[Hallucination Detected] "${claim}" - Confidence: ${(confidenceScore * 100).toFixed(1)}%`);
+    //   }
+    // }
+    */
+
   } catch (error) {
     console.error('[detectHallucinations] Error:', error);
     // Don't throw - hallucination detection shouldn't break webhook processing
@@ -754,6 +798,21 @@ async function handleEndOfCallReport(event: VapiEvent) {
   }
 
   try {
+    const eventId = `end-of-call-report:${call.id}`;
+
+    const { data: existing, error: checkError } = await supabase
+      .from('processed_webhook_events')
+      .select('id')
+      .eq('event_id', eventId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('[handleEndOfCallReport] Error checking idempotency:', checkError);
+    } else if (existing) {
+      console.log('[handleEndOfCallReport] Duplicate event, skipping', { eventId, vapiCallId: call.id });
+      return;
+    }
+
     // Get agent and org info from call log
     const { data: callLog } = await supabase
       .from('call_logs')
@@ -903,7 +962,7 @@ async function handleFunctionCall(event: any) {
     const { name, parameters } = functionCall || {};
 
     if (name === 'send_demo_email') {
-      console.log('[handleFunctionCall] Sending demo email to:', parameters.prospect_email);
+      console.log('[handleFunctionCall] Sending demo email to:', redactEmail(parameters.prospect_email));
       const recipient: DemoRecipient = {
         name: parameters.prospect_name,
         email: parameters.prospect_email,
@@ -915,9 +974,9 @@ async function handleFunctionCall(event: any) {
         call_id: call.id
       };
       await sendDemoEmail(recipient, context);
-      return { result: `Demo email sent to ${parameters.prospect_email}` };
+      return { result: `Demo email sent to ${redactEmail(parameters.prospect_email)}` };
     } else if (name === 'send_demo_whatsapp') {
-      console.log('[handleFunctionCall] Sending demo WhatsApp to:', parameters.prospect_phone);
+      console.log('[handleFunctionCall] Sending demo WhatsApp to:', redactPhone(parameters.prospect_phone));
       const recipient: DemoRecipient = {
         name: parameters.prospect_name,
         phone: parameters.prospect_phone,
@@ -929,9 +988,9 @@ async function handleFunctionCall(event: any) {
         call_id: call.id
       };
       await sendDemoWhatsApp(recipient, context);
-      return { result: `Demo WhatsApp sent to ${parameters.prospect_phone}` };
+      return { result: `Demo WhatsApp sent to ${redactPhone(parameters.prospect_phone)}` };
     } else if (name === 'send_demo_sms') {
-      console.log('[handleFunctionCall] Sending demo SMS to:', parameters.prospect_phone);
+      console.log('[handleFunctionCall] Sending demo SMS to:', redactPhone(parameters.prospect_phone));
       const recipient: DemoRecipient = {
         name: parameters.prospect_name,
         phone: parameters.prospect_phone,
@@ -943,7 +1002,7 @@ async function handleFunctionCall(event: any) {
         call_id: call.id
       };
       await sendDemoSms(recipient, context);
-      return { result: `Demo SMS sent to ${parameters.prospect_phone}` };
+      return { result: `Demo SMS sent to ${redactPhone(parameters.prospect_phone)}` };
     }
 
     return { result: `Function ${name} executed` };

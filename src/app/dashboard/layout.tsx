@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import DashboardGate from './DashboardGate';
 
 export const metadata: Metadata = {
     title: "Voxanne AI - Voice Agent Dashboard",
@@ -12,7 +13,7 @@ export default function DashboardLayout({
 }>) {
     return (
         <div className="min-h-screen bg-black text-white">
-            {children}
+            <DashboardGate>{children}</DashboardGate>
         </div>
     );
 }

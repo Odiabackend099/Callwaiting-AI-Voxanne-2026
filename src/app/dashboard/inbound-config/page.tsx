@@ -6,11 +6,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Phone, Save, Loader2, Check, AlertCircle, RefreshCw, Download, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 export default function InboundConfigPage() {
-    const { user, session } = useAuth();
+    const { user } = useAuth();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -29,33 +28,13 @@ export default function InboundConfigPage() {
 
     useEffect(() => {
         fetchStatus();
-    }, [session]);
+    }, [user]);
 
     const fetchStatus = async () => {
         try {
             setLoading(true);
             setError(null);
-            const headers: Record<string, string> = {};
-            if (session?.access_token) {
-                headers['Authorization'] = `Bearer ${session.access_token}`;
-            }
-
-            const res = await fetch(`${API_BASE_URL}/api/inbound/status`, {
-                headers
-            });
-
-            let data: any = null;
-            try {
-                data = await res.json();
-            } catch {
-                data = null;
-            }
-
-            if (!res.ok) {
-                const message = data?.error || `Failed to fetch status (HTTP ${res.status})`;
-                setError(message);
-                return;
-            }
+            const data = await authedBackendFetch<any>('/api/inbound/status');
 
             setUiStatus(data?.configured ? 'active' : 'not_configured');
             if (data?.configured) {
@@ -94,33 +73,16 @@ export default function InboundConfigPage() {
 
         setSaving(true);
         try {
-            const headers: Record<string, string> = {
-                'Content-Type': 'application/json'
-            };
-            if (session?.access_token) {
-                headers['Authorization'] = `Bearer ${session.access_token}`;
-            }
-
-            const res = await fetch(`${API_BASE_URL}/api/inbound/setup`, {
+            const data = await authedBackendFetch<any>('/api/inbound/setup', {
                 method: 'POST',
-                headers,
                 body: JSON.stringify({
                     twilioAccountSid: config.accountSid,
                     twilioAuthToken: config.authToken,
                     twilioPhoneNumber: config.phoneNumber
-                })
+                }),
+                timeoutMs: 30000,
+                retries: 1,
             });
-
-            let data: any = null;
-            try {
-                data = await res.json();
-            } catch {
-                data = null;
-            }
-
-            if (!res.ok) {
-                throw new Error(data?.error || `Failed to setup inbound (HTTP ${res.status})`);
-            }
 
             setSuccess('Inbound setup successful! Your agent is now live on this number.');
             setUiStatus('active');
@@ -143,18 +105,12 @@ export default function InboundConfigPage() {
 
     const handleTestCall = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/inbound/test`, {
+            const data = await authedBackendFetch<any>('/api/inbound/test', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${session?.access_token}`
-                }
+                timeoutMs: 30000,
+                retries: 1,
             });
-            const data = await res.json();
-            if (res.ok) {
-                alert(`Test initiated! ${data.note}`);
-            } else {
-                alert(`Error: ${data.error}`);
-            }
+            alert(`Test initiated! ${data?.note || ''}`);
         } catch (err) {
             alert('Failed to start test');
         }

@@ -6,23 +6,24 @@
  */
 
 export function getRedirectUrl(path: string = '/auth/callback'): string {
+  // Ensure path starts with /
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  // In the browser, always use the current origin to avoid www/non-www and port mismatches.
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}${normalizedPath}`;
+  }
+
   // Get the app URL from environment (must be set in .env.local and production env vars)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   
   if (!appUrl) {
-    // Fallback for development (should not happen if env is set correctly)
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${path}`;
-    }
     // Server-side fallback
-    return `http://localhost:3000${path}`;
+    return `http://localhost:3000${normalizedPath}`;
   }
   
   // Ensure appUrl doesn't have trailing slash
   const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
-  
-  // Ensure path starts with /
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   
   return `${baseUrl}${normalizedPath}`;
 }

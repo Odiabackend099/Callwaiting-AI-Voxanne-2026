@@ -4,19 +4,19 @@ import { withTimeout } from '../src/utils/timeout-helper';
 describe('Production Fixes Verification', () => {
   describe('Timeout Cleanup', () => {
     it('should cleanup timeout on success', async () => {
-      const before = process._getActiveHandles().length;
+      const before = (process as any)._getActiveHandles().length;
       
       await withTimeout(
         Promise.resolve('success'),
         1000
       );
       
-      const after = process._getActiveHandles().length;
+      const after = (process as any)._getActiveHandles().length;
       expect(after).toBeLessThanOrEqual(before);
     });
 
     it('should cleanup timeout on failure', async () => {
-      const before = process._getActiveHandles().length;
+      const before = (process as any)._getActiveHandles().length;
       
       try {
         await withTimeout(
@@ -25,7 +25,7 @@ describe('Production Fixes Verification', () => {
         );
       } catch {}
       
-      const after = process._getActiveHandles().length;
+      const after = (process as any)._getActiveHandles().length;
       expect(after).toBeLessThanOrEqual(before);
     });
   });
