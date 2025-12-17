@@ -12,6 +12,7 @@ import { detectCallType, getAgentConfigForCallType } from '../services/call-type
 import { getCachedIntegrationSettings } from '../services/settings-cache';
 import { computeVapiSignature } from '../utils/vapi-webhook-signature';
 import { log as logger } from '../services/logger';
+import { getRagContext } from '../services/rag-context-provider';
 
 export const webhooksRouter = express.Router();
 
@@ -509,7 +510,27 @@ async function handleCallStarted(event: VapiEvent) {
       lead = leadData;
     }
 
-    // Create call log entry with metadata
+    // Fetch RAG context from knowledge base (fire-and-forget, don't block call)
+    let ragContext = '';
+    try {
+      // Use a generic query to retrieve KB context
+      const { context, hasContext } = await getRagContext('customer inquiry', callTracking.org_id);
+      if (hasContext) {
+        ragContext = context;
+        logger.info('handleCallStarted', 'RAG context retrieved', {
+          vapiCallId: call.id,
+          contextLength: context.length
+        });
+      }
+    } catch (ragErr: any) {
+      logger.warn('handleCallStarted', 'Failed to retrieve RAG context (non-blocking)', {
+        vapiCallId: call.id,
+        error: ragErr?.message
+      });
+      // Don't throw - RAG context is optional
+    }
+
+    // Create call log entry with metadata (including RAG context)
     const { error: logError } = await supabase.from('call_logs').upsert({
       vapi_call_id: call.id,
       lead_id: lead?.id || null,
@@ -518,7 +539,8 @@ async function handleCallStarted(event: VapiEvent) {
       started_at: new Date().toISOString(),
       metadata: {
         is_test_call: callTracking?.metadata?.is_test_call ?? false,
-        channel: callTracking?.metadata?.channel ?? 'outbound'
+        channel: callTracking?.metadata?.channel ?? 'outbound',
+        rag_context: ragContext || null
       }
     }, { onConflict: 'vapi_call_id' });
 

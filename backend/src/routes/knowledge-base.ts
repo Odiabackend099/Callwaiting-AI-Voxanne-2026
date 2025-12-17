@@ -4,6 +4,8 @@ import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import VapiClient from '../services/vapi-client';
 import { log } from '../services/logger';
+import { chunkDocumentWithMetadata } from '../services/document-chunker';
+import { generateEmbeddings } from '../services/embeddings';
 
 const knowledgeBaseRouter = express.Router();
 const KB_MAX_BYTES = 300_000;
@@ -137,6 +139,70 @@ async function attachToolToAssistant(params: { vapi: VapiClient; assistantId: st
   await params.vapi.updateAssistant(params.assistantId, { model: { ...model, toolIds: nextToolIds } });
 }
 
+/**
+ * Auto-chunk and embed a KB document
+ * Called automatically after document is saved
+ */
+async function autoChunkDocument(params: { orgId: string; docId: string; content: string }): Promise<void> {
+  try {
+    log.info('KnowledgeBase', 'Auto-chunking document', { orgId: params.orgId, docId: params.docId });
+    
+    // Chunk the document
+    const chunks = chunkDocumentWithMetadata(params.content, {
+      chunkSize: 1000,
+      chunkOverlap: 200
+    });
+
+    if (chunks.length === 0) {
+      log.warn('KnowledgeBase', 'Document produced no chunks', { orgId: params.orgId, docId: params.docId });
+      return;
+    }
+
+    // Generate embeddings for all chunks
+    const embeddings = await generateEmbeddings(chunks.map(c => c.content));
+
+    // Insert chunks with embeddings
+    const chunkRecords = chunks.map((chunk, idx) => ({
+      knowledge_base_id: params.docId,
+      org_id: params.orgId,
+      chunk_index: chunk.index,
+      content: chunk.content,
+      embedding: embeddings[idx],
+      token_count: chunk.tokenCount
+    }));
+
+    const { error: insertError } = await supabase
+      .from('knowledge_base_chunks')
+      .insert(chunkRecords);
+
+    if (insertError) {
+      log.error('KnowledgeBase', 'Failed to insert chunks', { orgId: params.orgId, docId: params.docId, error: insertError.message });
+      return;
+    }
+
+    // Update knowledge_base table with chunk status
+    const { error: updateError } = await supabase
+      .from('knowledge_base')
+      .update({
+        is_chunked: true,
+        chunk_count: chunks.length,
+        embedding_status: 'completed'
+      })
+      .eq('id', params.docId)
+      .eq('org_id', params.orgId);
+
+    if (updateError) {
+      log.error('KnowledgeBase', 'Failed to update document chunk status', { orgId: params.orgId, docId: params.docId, error: updateError.message });
+      return;
+    }
+
+    log.info('KnowledgeBase', 'Auto-chunking completed', { orgId: params.orgId, docId: params.docId, chunkCount: chunks.length });
+  } catch (error: any) {
+    log.error('KnowledgeBase', 'Auto-chunking failed', { orgId: params.orgId, docId: params.docId, error: error?.message });
+    // Don't throw - chunking failure shouldn't block document save
+  }
+}
+
 async function vapiDeleteFile(params: { apiKey: string; fileId: string }): Promise<void> {
   return retryVapiCall(async () => {
     const res = await fetch(`https://api.vapi.ai/file/${params.fileId}`, {
@@ -240,6 +306,15 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
       log.error('KnowledgeBase', 'Changelog insert failed', { orgId, docId: data.id, error: changelogError });
       return res.status(500).json({ error: 'Failed to record change history' });
     }
+
+    // Auto-chunk document asynchronously (don't block response)
+    setTimeout(async () => {
+      try {
+        await autoChunkDocument({ orgId, docId: data.id, content: parsed.content });
+      } catch (chunkErr) {
+        log.error('KnowledgeBase', 'Auto-chunking failed in background', { orgId, docId: data.id, error: chunkErr });
+      }
+    }, 500);
 
     // Auto-sync KB to both agents after save
     try {
@@ -359,6 +434,27 @@ knowledgeBaseRouter.patch('/:id', async (req: Request, res: Response) => {
       if (changelogError) {
         log.error('KnowledgeBase', 'Changelog insert failed', { orgId, docId: id, error: changelogError });
         return res.status(500).json({ error: 'Failed to record change history' });
+      }
+
+      // Auto-chunk updated document asynchronously (don't block response)
+      // First delete old chunks, then create new ones
+      const newContent = parsed.content;
+      if (newContent) {
+        setTimeout(async () => {
+          try {
+            // Delete old chunks
+            await supabase
+              .from('knowledge_base_chunks')
+              .delete()
+              .eq('knowledge_base_id', id)
+              .eq('org_id', orgId);
+
+            // Re-chunk with new content
+            await autoChunkDocument({ orgId, docId: id, content: newContent });
+          } catch (chunkErr) {
+            log.error('KnowledgeBase', 'Auto-chunking failed on update', { orgId, docId: id, error: chunkErr });
+          }
+        }, 500);
       }
     }
 
