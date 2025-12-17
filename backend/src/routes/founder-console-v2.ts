@@ -547,18 +547,27 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   const startTime = Date.now();
 
   // 1. Get agent from DB (source of truth) - SELECT ONLY NEEDED COLUMNS
-  const { data: agent, error: agentError } = await supabase
+  const { data: agents, error: agentError } = await supabase
     .from('agents')
     .select('id, name, system_prompt, voice, language, first_message, max_call_duration, vapi_assistant_id')
-    .eq('id', agentId)
-    .single();
+    .eq('id', agentId);
 
-  if (agentError || !agent) {
+  if (agentError) {
     throw new Error(
-      `Agent sync failed: Agent ${agentId} not found. ` +
-      `DB Error: ${agentError?.message || 'none'}`
+      `Agent sync failed: Database error. ` +
+      `Error: ${agentError.message}`
     );
   }
+
+  if (!agents || agents.length === 0) {
+    throw new Error(`Agent sync failed: Agent ${agentId} not found in database`);
+  }
+
+  if (agents.length > 1) {
+    logger.warn('Multiple agents found with same ID (data corruption)', { agentId, count: agents.length });
+  }
+
+  const agent = agents[0];
 
   // 2. Build config from DB state (using constants)
   // Set server.url to webhook endpoint for programmatic event delivery
@@ -1577,13 +1586,12 @@ router.post(
       const outboundPayload = buildUpdatePayload(outbound, 'outbound');
 
       // Fetch org and vapi integration
-      const [{ data: org, error: orgError }, { data: vapiIntegration }] =
+      const [{ data: orgs, error: orgError }, { data: vapiIntegration }] =
         await Promise.all([
           supabase
             .from('organizations')
             .select('id')
-            .eq('id', orgId)
-            .single(),
+            .eq('id', orgId),
           supabase
             .from('integrations')
             .select('config')
@@ -1592,11 +1600,19 @@ router.post(
             .maybeSingle()
         ]);
 
-      if (orgError || !org) {
+      if (orgError) {
+        logger.error('Failed to fetch organization', { orgId, userId: user.id, error: orgError.message, requestId });
+        res.status(500).json({ error: 'Failed to fetch organization', requestId });
+        return;
+      }
+
+      if (!orgs || orgs.length === 0) {
         logger.error('Org not found for user', { orgId, userId: user.id, requestId });
         res.status(404).json({ error: 'Organization not found', requestId });
         return;
       }
+
+      const org = orgs[0];
 
       // Get the stored Vapi API key
       let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
@@ -1625,18 +1641,22 @@ router.post(
       const agentMap: Record<string, string> = {}; // role -> agentId
 
       for (const role of [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND]) {
-        const { data: existingAgent } = await supabase
+        const { data: existingAgents, error: existingError } = await supabase
           .from('agents')
           .select('id')
           .eq('role', role)
-          .eq('org_id', orgId)
-          .maybeSingle();
+          .eq('org_id', orgId);
 
-        let agentId = existingAgent?.id;
+        if (existingError) {
+          logger.error(`Failed to fetch ${role} agent`, { requestId, error: existingError });
+          continue;
+        }
+
+        let agentId = existingAgents?.[0]?.id;
 
         if (!agentId) {
           const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
-          const { data: newAgent, error: insertError } = await supabase
+          const { data: newAgents, error: insertError } = await supabase
             .from('agents')
             .insert({
               role: role,
@@ -1644,18 +1664,24 @@ router.post(
               status: 'active',
               org_id: orgId
             })
-            .select('id')
-            .single();
+            .select('id');
 
           if (insertError) {
             logger.error(`Failed to create ${role} agent`, { requestId, error: insertError });
             continue;
           }
-          agentId = newAgent?.id;
+
+          if (!newAgents || newAgents.length === 0) {
+            logger.error(`Failed to create ${role} agent: no ID returned`, { requestId });
+            continue;
+          }
+
+          agentId = newAgents[0].id;
         }
 
         if (agentId) {
           agentMap[role] = agentId;
+          logger.info(`Agent found/created for ${role}`, { agentId, requestId });
         }
       }
 
@@ -1721,6 +1747,21 @@ router.post(
 
       const successfulSyncs = syncResults.filter(r => r.status === 'fulfilled').map((r: any) => r.value);
       const failedSyncs = syncResults.filter(r => r.status === 'rejected');
+
+      // CRITICAL: If ALL syncs failed, return error instead of success
+      if (successfulSyncs.length === 0) {
+        const errorMessages = failedSyncs.map((r: any) => r.reason?.message || String(r.reason)).join('; ');
+        logger.error('All agents failed to sync to Vapi', {
+          failCount: failedSyncs.length,
+          errors: errorMessages,
+          requestId
+        });
+        res.status(500).json({ 
+          error: `Failed to sync agents to Vapi: ${errorMessages}`,
+          requestId 
+        });
+        return;
+      }
 
       if (failedSyncs.length > 0) {
         logger.warn('Some agents failed to sync to Vapi', {
