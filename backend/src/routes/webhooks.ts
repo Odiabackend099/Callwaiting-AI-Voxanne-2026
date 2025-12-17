@@ -13,6 +13,7 @@ import { getCachedIntegrationSettings } from '../services/settings-cache';
 import { computeVapiSignature } from '../utils/vapi-webhook-signature';
 import { log as logger } from '../services/logger';
 import { getRagContext } from '../services/rag-context-provider';
+import VapiClient from '../services/vapi-client';
 
 export const webhooksRouter = express.Router();
 
@@ -60,6 +61,53 @@ const webhookLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
+/**
+ * Inject RAG context into agent's system prompt at call time
+ * This ensures the agent uses KB information in responses
+ */
+async function injectRagContextIntoAgent(params: {
+  vapiApiKey: string;
+  assistantId: string;
+  ragContext: string;
+}): Promise<void> {
+  try {
+    if (!params.ragContext || params.ragContext.trim().length === 0) {
+      logger.debug('Webhooks', 'No RAG context to inject', { assistantId: params.assistantId });
+      return;
+    }
+
+    const vapi = new VapiClient(params.vapiApiKey);
+    const assistant = await vapi.getAssistant(params.assistantId);
+    
+    if (!assistant) {
+      logger.warn('Webhooks', 'Assistant not found for RAG injection', { assistantId: params.assistantId });
+      return;
+    }
+
+    // Get current system prompt
+    const currentSystemPrompt = assistant.firstMessage || '';
+    
+    // Append RAG context to system prompt
+    const enhancedSystemPrompt = `${currentSystemPrompt}\n\n---\n\nKNOWLEDGE BASE INFORMATION:\n${params.ragContext}`;
+
+    // Update assistant with enhanced system prompt
+    await vapi.updateAssistant(params.assistantId, {
+      firstMessage: enhancedSystemPrompt
+    });
+
+    logger.info('Webhooks', 'RAG context injected into agent system prompt', {
+      assistantId: params.assistantId,
+      contextLength: params.ragContext.length,
+      promptLength: enhancedSystemPrompt.length
+    });
+  } catch (error: any) {
+    logger.warn('Webhooks', 'Failed to inject RAG context into agent (non-blocking)', {
+      error: error?.message
+    });
+    // Don't throw - RAG injection failure shouldn't block call
+  }
+}
 
 /**
  * Verify Vapi webhook signature for security
@@ -510,7 +558,7 @@ async function handleCallStarted(event: VapiEvent) {
       lead = leadData;
     }
 
-    // Fetch RAG context from knowledge base (fire-and-forget, don't block call)
+    // Fetch RAG context from knowledge base and inject into agent
     let ragContext = '';
     try {
       // Use a generic query to retrieve KB context
@@ -521,6 +569,26 @@ async function handleCallStarted(event: VapiEvent) {
           vapiCallId: call.id,
           contextLength: context.length
         });
+
+        // Inject RAG context into agent's system prompt for this call
+        if (call.assistantId) {
+          try {
+            const vapiKey = process.env.VAPI_API_KEY;
+            if (vapiKey) {
+              await injectRagContextIntoAgent({
+                vapiApiKey: vapiKey,
+                assistantId: call.assistantId,
+                ragContext: context
+              });
+            }
+          } catch (injectErr: any) {
+            logger.warn('handleCallStarted', 'Failed to inject RAG context into agent', {
+              vapiCallId: call.id,
+              error: injectErr?.message
+            });
+            // Continue - injection failure shouldn't block call
+          }
+        }
       }
     } catch (ragErr: any) {
       logger.warn('handleCallStarted', 'Failed to retrieve RAG context (non-blocking)', {
