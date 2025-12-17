@@ -6,6 +6,7 @@ import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, Ch
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import { RecordingPlayer } from '@/components/RecordingPlayer';
+import { useTranscript } from '@/hooks/useTranscript';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface Call {
@@ -48,6 +49,9 @@ const CallsPageContent = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [analytics, setAnalytics] = useState<any>(null);
+    
+    // Use transcript hook for live transcript display
+    const { segments: liveTranscript, isConnected: wsConnected } = useTranscript(selectedCall?.id || null);
 
     // Initialize activeTab from query param if present
     const tabParam = searchParams.get('tab');
@@ -476,23 +480,31 @@ const CallsPageContent = () => {
                             )}
 
                             {/* Transcript */}
-                            {selectedCall.transcript && selectedCall.transcript.length > 0 && (
+                            {(liveTranscript.length > 0 || (selectedCall.transcript && selectedCall.transcript.length > 0)) && (
                                 <div className="bg-gray-50 rounded-lg p-4">
-                                    <p className="text-sm font-bold text-gray-900 mb-3">Transcript</p>
-                                    <div className="space-y-3">
-                                        {selectedCall.transcript.map((segment, idx) => (
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="text-sm font-bold text-gray-900">Transcript</p>
+                                        {wsConnected && <span className="text-xs text-green-600 font-medium">🟢 Live</span>}
+                                    </div>
+                                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                                        {/* Show live transcript if available, otherwise show saved transcript */}
+                                        {(liveTranscript.length > 0 ? liveTranscript : selectedCall.transcript || []).map((segment, idx) => (
                                             <div key={idx} className="bg-white rounded p-3 border border-gray-200">
                                                 <div className="flex items-start gap-3">
-                                                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${segment.speaker === 'caller'
-                                                        ? 'bg-blue-100 text-blue-700'
-                                                        : 'bg-emerald-100 text-emerald-700'
-                                                        }`}>
-                                                        {segment.speaker === 'caller' ? 'Caller' : 'Voxanne'}
+                                                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold whitespace-nowrap ${
+                                                        segment.speaker === 'customer' || segment.speaker === 'caller'
+                                                            ? 'bg-blue-100 text-blue-700'
+                                                            : 'bg-emerald-100 text-emerald-700'
+                                                    }`}>
+                                                        {segment.speaker === 'customer' || segment.speaker === 'caller' ? 'Caller' : 'Voxanne'}
                                                     </span>
-                                                    <div className="flex-1">
-                                                        <p className="text-sm text-gray-900">{segment.text}</p>
-                                                        {segment.sentiment && (
-                                                            <p className="text-xs text-gray-500 mt-1">Sentiment: {segment.sentiment}</p>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm text-gray-900 break-words">{segment.text}</p>
+                                                        {(segment as any).sentiment && (
+                                                            <p className="text-xs text-gray-500 mt-1">Sentiment: {(segment as any).sentiment}</p>
+                                                        )}
+                                                        {(segment as any).confidence && (
+                                                            <p className="text-xs text-gray-500 mt-1">Confidence: {((segment as any).confidence * 100).toFixed(0)}%</p>
                                                         )}
                                                     </div>
                                                 </div>
