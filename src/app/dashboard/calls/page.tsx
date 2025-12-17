@@ -49,6 +49,7 @@ const CallsPageContent = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [analytics, setAnalytics] = useState<any>(null);
+    const [filterDate, setFilterDate] = useState<string>(''); // 'today', 'week', 'month', or ''
     
     // Use transcript hook for live transcript display
     const { segments: liveTranscript, isConnected: wsConnected } = useTranscript(selectedCall?.id || null);
@@ -58,7 +59,7 @@ const CallsPageContent = () => {
     const initialTab = (tabParam === 'inbound' || tabParam === 'outbound') ? tabParam : 'inbound';
     const [activeTab, setActiveTab] = useState<'inbound' | 'outbound'>(initialTab);
 
-    const callsPerPage = 20;
+    const callsPerPage = 100; // MVP: Show last 100 calls
 
     useEffect(() => {
         if (!loading && !user) {
@@ -84,7 +85,8 @@ const CallsPageContent = () => {
                 limit: callsPerPage.toString(),
                 call_type: activeTab,
                 ...(filterStatus && { status: filterStatus }),
-                ...(searchQuery && { search: searchQuery })
+                ...(searchQuery && { search: searchQuery }),
+                ...(filterDate && { date_filter: filterDate })
             });
 
             const data = await authedBackendFetch<any>(`/api/calls-dashboard?${params.toString()}`);
@@ -96,7 +98,7 @@ const CallsPageContent = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentPage, filterStatus, searchQuery, activeTab]);
+    }, [currentPage, filterStatus, searchQuery, activeTab, filterDate]);
 
     useEffect(() => {
         if (user) {
@@ -104,6 +106,38 @@ const CallsPageContent = () => {
             fetchAnalytics();
         }
     }, [user, fetchCalls, fetchAnalytics]);
+
+    // Auto-refresh calls when new calls arrive via WebSocket
+    useEffect(() => {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+        
+        const ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                // Refresh calls when a new call_ended event arrives
+                if (data.type === 'call_ended') {
+                    // Refresh the calls list
+                    fetchCalls();
+                    fetchAnalytics();
+                }
+            } catch (err) {
+                console.error('Failed to parse WebSocket message:', err);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        return () => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        };
+    }, [fetchCalls, fetchAnalytics]);
 
     const fetchCallDetail = async (callId: string) => {
         try {
@@ -254,7 +288,7 @@ const CallsPageContent = () => {
                     </div>
 
                     {/* Filters */}
-                    <div className="mb-6 flex gap-4">
+                    <div className="mb-6 flex gap-4 flex-wrap">
                         <input
                             type="text"
                             placeholder="Search by caller name or phone..."
@@ -263,7 +297,7 @@ const CallsPageContent = () => {
                                 setSearchQuery(e.target.value);
                                 setCurrentPage(1);
                             }}
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="flex-1 min-w-64 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                         <select
                             value={filterStatus}
@@ -278,6 +312,19 @@ const CallsPageContent = () => {
                             <option value="missed">Missed</option>
                             <option value="transferred">Transferred</option>
                             <option value="failed">Failed</option>
+                        </select>
+                        <select
+                            value={filterDate}
+                            onChange={(e) => {
+                                setFilterDate(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                            <option value="">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
                         </select>
                     </div>
 
