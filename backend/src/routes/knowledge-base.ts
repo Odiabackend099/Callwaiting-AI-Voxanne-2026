@@ -307,14 +307,15 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Failed to record change history' });
     }
 
-    // Auto-chunk document asynchronously (don't block response)
-    setTimeout(async () => {
-      try {
-        await autoChunkDocument({ orgId, docId: data.id, content: parsed.content });
-      } catch (chunkErr) {
-        log.error('KnowledgeBase', 'Auto-chunking failed in background', { orgId, docId: data.id, error: chunkErr });
-      }
-    }, 500);
+    // Auto-chunk document SYNCHRONOUSLY (block until chunks are created)
+    try {
+      await autoChunkDocument({ orgId, docId: data.id, content: parsed.content });
+      log.info('KnowledgeBase', 'Document chunked and embedded successfully', { orgId, docId: data.id });
+    } catch (chunkErr: any) {
+      log.error('KnowledgeBase', 'Auto-chunking failed', { orgId, docId: data.id, error: chunkErr?.message });
+      // Don't fail the entire save if chunking fails - document is still created
+      // But log it so user knows chunking didn't work
+    }
 
     // Auto-sync KB to both agents after save
     try {
@@ -436,25 +437,24 @@ knowledgeBaseRouter.patch('/:id', async (req: Request, res: Response) => {
         return res.status(500).json({ error: 'Failed to record change history' });
       }
 
-      // Auto-chunk updated document asynchronously (don't block response)
-      // First delete old chunks, then create new ones
+      // Auto-chunk updated document SYNCHRONOUSLY (block until chunks are created)
       const newContent = parsed.content;
       if (newContent) {
-        setTimeout(async () => {
-          try {
-            // Delete old chunks
-            await supabase
-              .from('knowledge_base_chunks')
-              .delete()
-              .eq('knowledge_base_id', id)
-              .eq('org_id', orgId);
+        try {
+          // Delete old chunks
+          await supabase
+            .from('knowledge_base_chunks')
+            .delete()
+            .eq('knowledge_base_id', id)
+            .eq('org_id', orgId);
 
-            // Re-chunk with new content
-            await autoChunkDocument({ orgId, docId: id, content: newContent });
-          } catch (chunkErr) {
-            log.error('KnowledgeBase', 'Auto-chunking failed on update', { orgId, docId: id, error: chunkErr });
-          }
-        }, 500);
+          // Re-chunk with new content
+          await autoChunkDocument({ orgId, docId: id, content: newContent });
+          log.info('KnowledgeBase', 'Document re-chunked and embedded successfully', { orgId, docId: id });
+        } catch (chunkErr: any) {
+          log.error('KnowledgeBase', 'Auto-chunking failed on update', { orgId, docId: id, error: chunkErr?.message });
+          // Don't fail the entire update if chunking fails - document is still updated
+        }
       }
     }
 
