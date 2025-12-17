@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
+import { RecordingPlayer } from '@/components/RecordingPlayer';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface Call {
@@ -464,13 +465,13 @@ const CallsPageContent = () => {
                             </div>
 
                             {/* Recording Player */}
-                            {selectedCall.recording_url && (
+                            {selectedCall.has_recording && (
                                 <div className="bg-gray-50 rounded-lg p-4">
                                     <p className="text-sm font-bold text-gray-900 mb-3">Recording</p>
-                                    <audio controls className="w-full">
-                                        <source src={selectedCall.recording_url} type="audio/wav" />
-                                        Your browser does not support the audio element.
-                                    </audio>
+                                    <RecordingPlayer 
+                                        callId={selectedCall.id} 
+                                        recordingUrl={selectedCall.recording_url}
+                                    />
                                 </div>
                             )}
 

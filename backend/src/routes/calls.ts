@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
+import { getSignedRecordingUrl } from '../services/call-recording-storage';
 
 export const callsRouter = express.Router();
 
@@ -272,6 +273,52 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
     res.status(500).json({
       error: error.message || 'Failed to fetch call details'
     });
+  }
+});
+
+// Get recording URL for a call
+callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
+  try {
+    const { callId } = req.params;
+
+    // Fetch call_logs to get recording_url or storage path
+    const { data: callLog, error: callError } = await supabase
+      .from('call_logs')
+      .select('recording_url, vapi_call_id')
+      .eq('vapi_call_id', callId)
+      .maybeSingle();
+
+    if (callError) {
+      console.error('[GET /calls/:callId/recording] DB error:', callError.message);
+      res.status(500).json({ error: 'Failed to fetch call recording' });
+      return;
+    }
+
+    if (!callLog) {
+      res.status(404).json({ error: 'Call not found' });
+      return;
+    }
+
+    if (!callLog.recording_url) {
+      res.status(404).json({ error: 'No recording available for this call' });
+      return;
+    }
+
+    // If it's a storage path, generate signed URL
+    if (callLog.recording_url.startsWith('calls/')) {
+      const signedUrl = await getSignedRecordingUrl(callLog.recording_url);
+      if (!signedUrl) {
+        res.status(500).json({ error: 'Failed to generate recording URL' });
+        return;
+      }
+      res.json({ recordingUrl: signedUrl });
+    } else {
+      // Direct URL from Vapi
+      res.json({ recordingUrl: callLog.recording_url });
+    }
+  } catch (error: any) {
+    console.error('[GET /calls/:callId/recording] Error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch recording' });
   }
 });
 
