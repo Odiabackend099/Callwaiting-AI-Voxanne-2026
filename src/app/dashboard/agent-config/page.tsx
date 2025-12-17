@@ -88,8 +88,37 @@ export default function AgentConfigPage() {
                 inboundNumber: inboundStatusData?.inboundNumber
             });
 
-            // Load inbound agent config
-            if (agentData?.vapi) {
+            // Load both inbound and outbound agent configs from unified endpoint
+            if (agentData?.agents) {
+                // agentData.agents is an array with inbound and outbound agents
+                const inboundAgent = agentData.agents.find((a: any) => a.role === 'inbound');
+                const outboundAgent = agentData.agents.find((a: any) => a.role === 'outbound');
+
+                if (inboundAgent) {
+                    const loadedConfig = {
+                        systemPrompt: inboundAgent.system_prompt || '',
+                        firstMessage: inboundAgent.first_message || '',
+                        voice: inboundAgent.voice || '',
+                        language: inboundAgent.language || 'en-US',
+                        maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                    };
+                    setInboundConfig(loadedConfig);
+                    setOriginalInboundConfig(loadedConfig);
+                }
+
+                if (outboundAgent) {
+                    const loadedConfig = {
+                        systemPrompt: outboundAgent.system_prompt || '',
+                        firstMessage: outboundAgent.first_message || '',
+                        voice: outboundAgent.voice || '',
+                        language: outboundAgent.language || 'en-US',
+                        maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                    };
+                    setOutboundConfig(loadedConfig);
+                    setOriginalOutboundConfig(loadedConfig);
+                }
+            } else if (agentData?.vapi) {
+                // Fallback for old response format
                 const vapi = agentData.vapi;
                 const loadedConfig = {
                     systemPrompt: vapi.systemPrompt || '',
@@ -100,20 +129,6 @@ export default function AgentConfigPage() {
                 };
                 setInboundConfig(loadedConfig);
                 setOriginalInboundConfig(loadedConfig);
-            }
-
-            // Load outbound agent config
-            const outboundData = await authedBackendFetch<any>('/api/founder-console/outbound-agent-config');
-            if (outboundData) {
-                const loadedConfig = {
-                    systemPrompt: outboundData.system_prompt || '',
-                    firstMessage: outboundData.first_message || '',
-                    voice: outboundData.voice_id || '',
-                    language: outboundData.language || 'en-US',
-                    maxDuration: outboundData.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                };
-                setOutboundConfig(loadedConfig);
-                setOriginalOutboundConfig(loadedConfig);
             }
         } catch (err) {
             console.error('Error loading configuration:', err);
