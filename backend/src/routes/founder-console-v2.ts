@@ -673,14 +673,46 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     );
   }
 
+  // Validate Vapi response contains assistant ID
+  if (!assistant || !assistant.id) {
+    logger.error('Vapi assistant creation returned invalid response', {
+      agentId,
+      assistant: assistant ? Object.keys(assistant) : 'null',
+      hasId: Boolean(assistant?.id)
+    });
+    throw new Error(`Vapi assistant creation succeeded but returned no ID. Response: ${JSON.stringify(assistant)}`);
+  }
+
+  logger.info('Vapi assistant created successfully', {
+    agentId,
+    assistantId: assistant.id,
+    name: assistant.name
+  });
+
   // 6. Save assistant ID to DB with race condition protection
-  const { data: updated } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('agents')
     .update({ vapi_assistant_id: assistant.id })
     .eq('id', agentId)
     .eq('vapi_assistant_id', null) // Only update if still null
     .select('vapi_assistant_id')
     .single();
+
+  if (updateError) {
+    logger.error('Failed to save Vapi assistant ID to database', {
+      agentId,
+      assistantId: assistant.id,
+      error: updateError.message
+    });
+    throw new Error(`Failed to save Vapi assistant ID: ${updateError.message}`);
+  }
+
+  if (!updated) {
+    logger.warn('Race condition: another request already saved assistant ID', {
+      agentId,
+      newAssistantId: assistant.id
+    });
+  }
 
   // If another request already created an assistant, use that one
   if (!updated) {
