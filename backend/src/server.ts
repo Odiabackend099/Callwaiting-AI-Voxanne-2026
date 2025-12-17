@@ -158,8 +158,11 @@ initWebSocket(liveCallsWss);
 // Manual upgrade handling to support path prefixes (ws library path option is exact match only)
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url || '';
+  const origin = request.headers.origin || 'unknown';
+  
   console.log('[WebSocket] Upgrade request received', {
     pathname,
+    origin,
     method: request.method,
     headers: {
       upgrade: request.headers.upgrade,
@@ -168,6 +171,24 @@ server.on('upgrade', (request, socket, head) => {
       'sec-websocket-version': request.headers['sec-websocket-version'],
     },
   });
+
+  // Validate origin for CORS security (allow localhost and production domains)
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://voxanne-frontend-7c8wg3jiv-odia-backends-projects.vercel.app',
+    'https://callwaitingai.dev',
+    process.env.FRONTEND_URL || ''
+  ].filter(Boolean);
+
+  const isOriginAllowed = !origin || origin === 'unknown' || allowedOrigins.some(allowed => origin === allowed);
+  
+  if (!isOriginAllowed) {
+    console.error('[WebSocket] Origin not allowed', { origin, allowedOrigins });
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+    socket.destroy();
+    return;
+  }
 
   if (pathname.startsWith('/api/web-voice')) {
     console.log('[WebSocket] Handling /api/web-voice upgrade');
