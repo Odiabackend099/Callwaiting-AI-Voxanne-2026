@@ -37,8 +37,6 @@ export default function KnowledgeBasePage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [chunkCount, setChunkCount] = useState(0);
-  const [autoChunk, setAutoChunk] = useState(true);
 
   const loadItems = useCallback(async () => {
     try {
@@ -195,34 +193,22 @@ export default function KnowledgeBasePage() {
         }
       );
 
-      setSuccess(isUpdate ? 'Document updated!' : 'Document created!');
+      setSuccess(isUpdate ? 'Document updated! Syncing to AI...' : 'Document created! Syncing to AI...');
 
-      // Auto-chunk if enabled and new document
-      if (autoChunk && !isUpdate && (data?.id || data?.item?.id)) {
-        const docId = data?.id || data?.item?.id;
-        if (autoChunk) {
-          try {
-            setSuccess('Document created! Chunking and embedding...');
-
-            const chunkData = await authedBackendFetch<any>('/api/knowledge-base/chunk', {
-              method: 'POST',
-              body: JSON.stringify({
-                knowledgeBaseId: docId,
-                chunkSize: 800,
-                chunkOverlap: 100
-              }),
-              timeoutMs: 30000,
-              retries: 1,
-            });
-
-            setChunkCount(chunkData?.chunks || 0);
-            setSuccess(`✅ Saved & chunked! (${chunkData?.chunks || 0} chunks)`);
-          } catch (chunkErr: any) {
-            setSuccess(`✅ Saved! Chunking failed: ${chunkErr?.message}`);
-          }
-        } else {
-          setSuccess(isUpdate ? '✅ Updated successfully' : '✅ Created successfully');
-        }
+      // Auto-sync to both agents after save
+      try {
+        await authedBackendFetch<any>('/api/knowledge-base/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            toolName: 'knowledge-search',
+            assistantRoles: ['inbound', 'outbound']
+          }),
+          timeoutMs: 30000,
+          retries: 1,
+        });
+        setSuccess(`✅ ${isUpdate ? 'Updated' : 'Created'} & synced! Your agents now have access to this document.`);
+      } catch (syncErr: any) {
+        setSuccess(`✅ ${isUpdate ? 'Updated' : 'Created'} successfully, but sync to AI failed. Try clicking "Sync to AI" button.`);
       }
 
       beginNew();
@@ -249,7 +235,25 @@ export default function KnowledgeBasePage() {
         timeoutMs: 30000,
         retries: 1,
       });
-      setSuccess('Deleted successfully');
+      
+      setSuccess('Document deleted! Syncing changes to AI...');
+      
+      // Auto-sync to both agents after delete
+      try {
+        await authedBackendFetch<any>('/api/knowledge-base/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            toolName: 'knowledge-search',
+            assistantRoles: ['inbound', 'outbound']
+          }),
+          timeoutMs: 30000,
+          retries: 1,
+        });
+        setSuccess('✅ Document deleted & synced! Your agents no longer have access to it.');
+      } catch (syncErr: any) {
+        setSuccess('✅ Document deleted, but sync to AI failed. Try clicking "Sync to AI" button.');
+      }
+      
       setItems(prev => prev.filter(i => i.id !== id));
       if (draft.id === id) beginNew();
     } catch (e: any) {
@@ -289,12 +293,12 @@ export default function KnowledgeBasePage() {
         method: 'POST',
         body: JSON.stringify({
           toolName: 'knowledge-search',
-          orgId: 'a0000000-0000-0000-0000-000000000001'
+          assistantRoles: ['inbound', 'outbound']
         }),
         timeoutMs: 30000,
         retries: 1,
       });
-      setSuccess(data?.message || 'Sync completed');
+      setSuccess(`✅ Synced! Knowledge base attached to ${data?.assistantsUpdated?.length || 2} agent(s).`);
     } catch (e: any) {
       setError(e?.message || 'Sync failed');
     } finally {

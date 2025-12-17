@@ -134,6 +134,26 @@ async function attachToolToAssistant(params: { vapi: VapiClient; assistantId: st
   await params.vapi.updateAssistant(params.assistantId, { model: { ...model, toolIds: nextToolIds } });
 }
 
+async function vapiDeleteFile(params: { apiKey: string; fileId: string }): Promise<void> {
+  return retryVapiCall(async () => {
+    const res = await fetch(`https://api.vapi.ai/file/${params.fileId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${params.apiKey}` }
+    });
+
+    if (!res.ok && res.status !== 404) {
+      let msg = `Vapi file delete failed (HTTP ${res.status})`;
+      try {
+        const data: any = await res.json();
+        msg = data?.message || msg;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
+  });
+}
+
 knowledgeBaseRouter.use(requireAuthOrDev);
 
 knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
@@ -329,6 +349,23 @@ knowledgeBaseRouter.delete('/:id', async (req: Request, res: Response) => {
       .single();
 
     if (existingError || !existing) return res.status(404).json({ error: 'Document not found' });
+
+    // Delete from Vapi if file was synced
+    const vapiFileId = existing.metadata?.vapi_file_id;
+    if (vapiFileId) {
+      try {
+        const apiKey = await getVapiApiKeyForOrg(orgId);
+        if (apiKey) {
+          await vapiDeleteFile({ apiKey, fileId: vapiFileId });
+          log.info('KnowledgeBase', 'DELETE - Vapi file deleted', { orgId, docId: id, vapiFileId });
+        }
+      } catch (vapiErr: any) {
+        log.warn('KnowledgeBase', 'DELETE - Failed to delete Vapi file (non-blocking)', { 
+          orgId, docId: id, vapiFileId, error: vapiErr?.message 
+        });
+        // Don't fail the entire delete if Vapi cleanup fails
+      }
+    }
 
     const { error } = await supabase
       .from('knowledge_base')
@@ -573,16 +610,53 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
 
     // Validate agents exist
     if (!agents || agents.length === 0) {
-      return res.status(400).json({ error: 'No agents found for this organization. Create agents before syncing.' });
+      return res.status(400).json({ 
+        error: 'No agents found for this organization. Please create agents in Agent Configuration first, then sync knowledge base.' 
+      });
     }
 
-    // Attach tool to all valid agents in parallel
+    // Validate at least one agent has a Vapi assistant ID
     const validAgents = agents.filter(a => a.vapi_assistant_id);
+    if (validAgents.length === 0) {
+      return res.status(400).json({ 
+        error: 'No agents have been synced to Vapi yet. Please save Agent Configuration first to create Vapi assistants.' 
+      });
+    }
+
+    // Log which agents will be updated
+    log.info('KnowledgeBase', 'Attaching KB tool to agents', { 
+      orgId, 
+      agentCount: validAgents.length,
+      roles: validAgents.map(a => a.role)
+    });
+
+    // Attach tool to all valid agents in parallel
     const attachmentPromises = validAgents.map(a => 
       attachToolToAssistant({ vapi, assistantId: a.vapi_assistant_id, toolId })
+        .catch(err => {
+          log.error('KnowledgeBase', 'Failed to attach tool to agent', { 
+            orgId, 
+            agentId: a.id, 
+            role: a.role,
+            error: err?.message 
+          });
+          throw err;
+        })
     );
 
-    await Promise.all(attachmentPromises);
+    const attachmentResults = await Promise.allSettled(attachmentPromises);
+    const failedAttachments = attachmentResults.filter(r => r.status === 'rejected');
+    
+    if (failedAttachments.length > 0) {
+      log.error('KnowledgeBase', 'Some agents failed to attach KB tool', { 
+        orgId,
+        failedCount: failedAttachments.length,
+        totalCount: validAgents.length
+      });
+      return res.status(500).json({ 
+        error: `Failed to attach knowledge base to ${failedAttachments.length} agent(s). Please try again.` 
+      });
+    }
 
     const updated = validAgents.map(a => ({ 
       role: a.role, 
