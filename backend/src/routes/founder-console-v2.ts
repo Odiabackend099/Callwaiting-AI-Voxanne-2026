@@ -1639,6 +1639,7 @@ router.post(
 
       // INDEPENDENT AGENT UPDATES: Find or create agents by role
       const agentMap: Record<string, string> = {}; // role -> agentId
+      const creationErrors: string[] = [];
 
       for (const role of [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND]) {
         const { data: existingAgents, error: existingError } = await supabase
@@ -1648,7 +1649,9 @@ router.post(
           .eq('org_id', orgId);
 
         if (existingError) {
-          logger.error(`Failed to fetch ${role} agent`, { requestId, error: existingError });
+          const errorMsg = `Failed to fetch ${role} agent: ${existingError.message}`;
+          logger.error(errorMsg, { requestId });
+          creationErrors.push(errorMsg);
           continue;
         }
 
@@ -1667,12 +1670,16 @@ router.post(
             .select('id');
 
           if (insertError) {
-            logger.error(`Failed to create ${role} agent`, { requestId, error: insertError });
+            const errorMsg = `Failed to create ${role} agent: ${insertError.message}`;
+            logger.error(errorMsg, { requestId });
+            creationErrors.push(errorMsg);
             continue;
           }
 
           if (!newAgents || newAgents.length === 0) {
-            logger.error(`Failed to create ${role} agent: no ID returned`, { requestId });
+            const errorMsg = `Failed to create ${role} agent: no ID returned from database`;
+            logger.error(errorMsg, { requestId });
+            creationErrors.push(errorMsg);
             continue;
           }
 
@@ -1683,6 +1690,14 @@ router.post(
           agentMap[role] = agentId;
           logger.info(`Agent found/created for ${role}`, { agentId, requestId });
         }
+      }
+
+      // CRITICAL: Validate that both agents were created/found
+      if (Object.keys(agentMap).length === 0) {
+        const errorMsg = `Failed to create/find any agents: ${creationErrors.join('; ')}`;
+        logger.error(errorMsg, { orgId, requestId });
+        res.status(500).json({ error: errorMsg, requestId });
+        return;
       }
 
       // Update each agent independently with its own payload
