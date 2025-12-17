@@ -162,15 +162,51 @@ export default function AgentConfigPage() {
         setError(null);
 
         try {
-            const payload = {
-                systemPrompt: inboundConfig.systemPrompt,
-                firstMessage: inboundConfig.firstMessage,
-                voiceId: inboundConfig.voice,
-                language: inboundConfig.language,
-                maxDurationSeconds: inboundConfig.maxDuration
-            };
+            // Build independent payloads for each agent
+            const payload: any = {};
 
-            // Save both agents (endpoint updates both inbound and outbound)
+            // Only include inbound config if it has changes
+            if (originalInboundConfig && (
+                inboundConfig.systemPrompt !== originalInboundConfig.systemPrompt ||
+                inboundConfig.firstMessage !== originalInboundConfig.firstMessage ||
+                inboundConfig.voice !== originalInboundConfig.voice ||
+                inboundConfig.language !== originalInboundConfig.language ||
+                inboundConfig.maxDuration !== originalInboundConfig.maxDuration
+            )) {
+                payload.inbound = {
+                    systemPrompt: inboundConfig.systemPrompt,
+                    firstMessage: inboundConfig.firstMessage,
+                    voiceId: inboundConfig.voice,
+                    language: inboundConfig.language,
+                    maxDurationSeconds: inboundConfig.maxDuration
+                };
+            }
+
+            // Only include outbound config if it has changes
+            if (originalOutboundConfig && (
+                outboundConfig.systemPrompt !== originalOutboundConfig.systemPrompt ||
+                outboundConfig.firstMessage !== originalOutboundConfig.firstMessage ||
+                outboundConfig.voice !== originalOutboundConfig.voice ||
+                outboundConfig.language !== originalOutboundConfig.language ||
+                outboundConfig.maxDuration !== originalOutboundConfig.maxDuration
+            )) {
+                payload.outbound = {
+                    systemPrompt: outboundConfig.systemPrompt,
+                    firstMessage: outboundConfig.firstMessage,
+                    voiceId: outboundConfig.voice,
+                    language: outboundConfig.language,
+                    maxDurationSeconds: outboundConfig.maxDuration
+                };
+            }
+
+            // If no changes, don't send
+            if (!payload.inbound && !payload.outbound) {
+                setError('No changes to save');
+                setIsSaving(false);
+                return;
+            }
+
+            // Save both agents independently
             const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -179,7 +215,7 @@ export default function AgentConfigPage() {
             });
 
             if (!result?.success) {
-                throw new Error('Failed to sync agent configuration to Vapi');
+                throw new Error(result?.error || 'Failed to sync agent configuration to Vapi');
             }
 
             setOriginalInboundConfig(inboundConfig);
@@ -193,7 +229,7 @@ export default function AgentConfigPage() {
 
         } catch (err) {
             console.error('Error saving:', err);
-            setError('Failed to save changes. Please try again.');
+            setError(err instanceof Error ? err.message : 'Failed to save changes. Please try again.');
         } finally {
             setIsSaving(false);
         }

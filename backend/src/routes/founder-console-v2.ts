@@ -1450,9 +1450,9 @@ router.post(
 
 /**
  * POST /api/founder-console/agent/behavior
- * Save agent behavior fields (Global Persona).
- * Updates BOTH outbound and inbound agents to ensure consistent persona.
- * Accepts: systemPrompt, firstMessage, voiceId, maxDurationSeconds, language.
+ * Save agent behavior fields independently for inbound and outbound agents.
+ * Accepts separate configs for inbound and outbound agents.
+ * Only updates fields that are provided (undefined fields are skipped).
  * Syncs to Vapi for both assistants concurrently.
  */
 router.post(
@@ -1477,40 +1477,60 @@ router.post(
 
     try {
       const orgId: string = user.orgId;
-      const { systemPrompt, firstMessage, voiceId, maxDurationSeconds, language } = req.body;
+      const { inbound, outbound } = req.body;
 
-      logger.info('Parsed request fields', {
+      logger.info('Parsed request - independent agent configs', {
         requestId,
-        systemPromptLength: systemPrompt?.length,
-        firstMessageLength: firstMessage?.length,
-        voiceId,
-        maxDurationSeconds,
-        language
+        hasInbound: Boolean(inbound),
+        hasOutbound: Boolean(outbound),
+        inboundFields: inbound ? Object.keys(inbound).join(',') : 'none',
+        outboundFields: outbound ? Object.keys(outbound).join(',') : 'none'
       });
 
-      // Validate at least one field is provided
-      if (!systemPrompt && !firstMessage && !voiceId && maxDurationSeconds === undefined && !language) {
-        res.status(400).json({ error: 'No fields to update', requestId });
+      // Validate at least one agent config is provided
+      if (!inbound && !outbound) {
+        res.status(400).json({ error: 'No agent configuration provided', requestId });
         return;
       }
 
-      // Validate voiceId if provided
-      if (voiceId && !isValidVoiceId(voiceId)) {
-        res.status(400).json({ error: 'Invalid voice selection', requestId });
-        return;
-      }
+      // Helper function to validate and build update payload
+      const buildUpdatePayload = (config: any, agentRole: string): Record<string, any> | null => {
+        if (!config) return null;
 
-      // Validate language if provided
-      if (language && !isValidLanguage(language)) {
-        res.status(400).json({ error: 'Invalid language selection', requestId });
-        return;
-      }
+        const payload: Record<string, any> = {};
 
-      // Validate maxDurationSeconds if provided
-      if (maxDurationSeconds !== undefined && (typeof maxDurationSeconds !== 'number' || maxDurationSeconds < 60)) {
-        res.status(400).json({ error: 'Max duration must be at least 60 seconds', requestId });
-        return;
-      }
+        // Validate and add fields only if provided
+        if (config.systemPrompt !== undefined && config.systemPrompt !== null) {
+          payload.system_prompt = config.systemPrompt;
+        }
+        if (config.firstMessage !== undefined && config.firstMessage !== null) {
+          payload.first_message = config.firstMessage;
+        }
+        if (config.voiceId !== undefined && config.voiceId !== null) {
+          if (!isValidVoiceId(config.voiceId)) {
+            throw new Error(`Invalid voice selection for ${agentRole} agent`);
+          }
+          payload.voice = config.voiceId;
+        }
+        if (config.language !== undefined && config.language !== null) {
+          if (!isValidLanguage(config.language)) {
+            throw new Error(`Invalid language selection for ${agentRole} agent`);
+          }
+          payload.language = config.language;
+        }
+        if (config.maxDurationSeconds !== undefined && config.maxDurationSeconds !== null) {
+          if (typeof config.maxDurationSeconds !== 'number' || config.maxDurationSeconds < 60) {
+            throw new Error(`Max duration must be at least 60 seconds for ${agentRole} agent`);
+          }
+          payload.max_call_duration = config.maxDurationSeconds;
+        }
+
+        return Object.keys(payload).length > 0 ? payload : null;
+      };
+
+      // Build payloads for each agent
+      const inboundPayload = buildUpdatePayload(inbound, 'inbound');
+      const outboundPayload = buildUpdatePayload(outbound, 'outbound');
 
       // Fetch org and vapi integration
       const [{ data: org, error: orgError }, { data: vapiIntegration }] =
@@ -1557,12 +1577,10 @@ router.post(
         return;
       }
 
-      // GLOBAL PERSONA UPDATE: Identify Outbound AND Inbound Agents
-      // We will perform upsert-like logic: find them, or create them if missing.
-      const rolesToSync = [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND];
-      const agentIdsToSync: string[] = [];
+      // INDEPENDENT AGENT UPDATES: Find or create agents by role
+      const agentMap: Record<string, string> = {}; // role -> agentId
 
-      for (const role of rolesToSync) {
+      for (const role of [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND]) {
         const { data: existingAgent } = await supabase
           .from('agents')
           .select('id')
@@ -1573,7 +1591,6 @@ router.post(
         let agentId = existingAgent?.id;
 
         if (!agentId) {
-          // Create missing agent (e.g. Inbound might not exist yet)
           const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
           const { data: newAgent, error: insertError } = await supabase
             .from('agents')
@@ -1588,43 +1605,66 @@ router.post(
 
           if (insertError) {
             logger.error(`Failed to create ${role} agent`, { requestId, error: insertError });
-            continue; // Skip this role if creation failed
+            continue;
           }
           agentId = newAgent?.id;
         }
 
         if (agentId) {
-          agentIdsToSync.push(agentId);
+          agentMap[role] = agentId;
         }
       }
 
+      // Update each agent independently with its own payload
+      const updateResults: Array<{ role: string; agentId: string; success: boolean; error?: string }> = [];
+
+      // Update INBOUND agent if payload exists
+      if (inboundPayload && agentMap[AGENT_ROLES.INBOUND]) {
+        const inboundAgentId = agentMap[AGENT_ROLES.INBOUND];
+        const { error: updateError } = await supabase
+          .from('agents')
+          .update(inboundPayload)
+          .eq('id', inboundAgentId)
+          .eq('org_id', orgId);
+
+        if (updateError) {
+          logger.error('Failed to update inbound agent', { agentId: inboundAgentId, updateError, requestId });
+          updateResults.push({ role: AGENT_ROLES.INBOUND, agentId: inboundAgentId, success: false, error: updateError.message });
+        } else {
+          logger.info('Inbound agent updated', { agentId: inboundAgentId, requestId });
+          updateResults.push({ role: AGENT_ROLES.INBOUND, agentId: inboundAgentId, success: true });
+        }
+      }
+
+      // Update OUTBOUND agent if payload exists
+      if (outboundPayload && agentMap[AGENT_ROLES.OUTBOUND]) {
+        const outboundAgentId = agentMap[AGENT_ROLES.OUTBOUND];
+        const { error: updateError } = await supabase
+          .from('agents')
+          .update(outboundPayload)
+          .eq('id', outboundAgentId)
+          .eq('org_id', orgId);
+
+        if (updateError) {
+          logger.error('Failed to update outbound agent', { agentId: outboundAgentId, updateError, requestId });
+          updateResults.push({ role: AGENT_ROLES.OUTBOUND, agentId: outboundAgentId, success: false, error: updateError.message });
+        } else {
+          logger.info('Outbound agent updated', { agentId: outboundAgentId, requestId });
+          updateResults.push({ role: AGENT_ROLES.OUTBOUND, agentId: outboundAgentId, success: true });
+        }
+      }
+
+      // Collect agent IDs that need Vapi sync
+      const agentIdsToSync = updateResults
+        .filter(r => r.success)
+        .map(r => r.agentId);
+
       if (agentIdsToSync.length === 0) {
-        res.status(500).json({ error: 'Failed to find or create any agents', requestId });
+        res.status(400).json({ error: 'No agents were updated', requestId });
         return;
       }
 
-      // Build partial update object
-      const updatePayload: Record<string, any> = {};
-      if (systemPrompt !== undefined) updatePayload.system_prompt = systemPrompt;
-      if (firstMessage !== undefined) updatePayload.first_message = firstMessage;
-      if (voiceId !== undefined) updatePayload.voice = voiceId;
-      if (language !== undefined) updatePayload.language = language;
-      if (maxDurationSeconds !== undefined) updatePayload.max_call_duration = maxDurationSeconds;
-
-      // Update ALL valid agents in the DB
-      const { error: updateError } = await supabase
-        .from('agents')
-        .update(updatePayload)
-        .in('id', agentIdsToSync)
-        .eq('org_id', orgId);
-
-      if (updateError) {
-        logger.error('Failed to update agents behavior', { agentIdsToSync, orgId, updateError, requestId });
-        res.status(500).json({ error: 'Internal server error', requestId });
-        return;
-      }
-
-      // Parallel Vapi Sync for all updated agents
+      // Parallel Vapi Sync for updated agents
       logger.info('Syncing agents to Vapi', { agentIds: agentIdsToSync, requestId });
 
       const syncPromises = agentIdsToSync.map(id => ensureAssistantSynced(id, vapiApiKey!));
@@ -1634,25 +1674,22 @@ router.post(
       const failedSyncs = syncResults.filter(r => r.status === 'rejected');
 
       if (failedSyncs.length > 0) {
-        logger.warn('Some agents failed to sync', {
+        logger.warn('Some agents failed to sync to Vapi', {
           successCount: successfulSyncs.length,
           failCount: failedSyncs.length,
           errors: failedSyncs.map((r: any) => r.reason.message),
           requestId
         });
       } else {
-        logger.info('All agents synced successfully', { count: successfulSyncs.length, requestId });
+        logger.info('All agents synced successfully to Vapi', { count: successfulSyncs.length, requestId });
       }
 
-      // Return success if at least one synced (usually outbound)
-      // If Global Persona logic partially fails, we still consider the save "successful" for the user,
-      // but internal logs will show the warning.
       res.status(200).json({
         success: true,
-        syncedAgentIds: successfulSyncs, // Return IDs of assistants that were updated
-        message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated with latest system prompt, voice, and knowledge base.`,
-        voiceSynced: true, // Confirm voice was synced
-        knowledgeBaseSynced: true, // Confirm KB was attached
+        syncedAgentIds: successfulSyncs,
+        message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated.`,
+        voiceSynced: successfulSyncs.length > 0,
+        knowledgeBaseSynced: successfulSyncs.length > 0,
         requestId
       });
 
@@ -1662,7 +1699,7 @@ router.post(
         requestId
       });
       logger.exception('Stack trace', error);
-      res.status(500).json({ error: 'Internal server error', requestId });
+      res.status(500).json({ error: error?.message || 'Internal server error', requestId });
     }
   }
 );
