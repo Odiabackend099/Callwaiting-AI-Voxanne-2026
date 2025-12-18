@@ -100,9 +100,9 @@ export async function POST(request: NextRequest) {
         const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
         // With Call Waiting AI (98% call answer rate - industry-leading)
-        const withCall Waiting AIMissed = Math.round(missedCallsPerMonth * 0.02);
-        const withCall Waiting AIRevenueSaved = Math.round((missedCallsPerMonth - withCall Waiting AIMissed) * avgProcedureValue * conversionRate);
-        const yearlyRevenueSaved = withCall Waiting AIRevenueSaved * 12;
+        const withCallWaitingAIMissed = Math.round(missedCallsPerMonth * 0.02);
+        const withCallWaitingAIRevenueSaved = Math.round((missedCallsPerMonth - withCallWaitingAIMissed) * avgProcedureValue * conversionRate);
+        const yearlyRevenueSaved = withCallWaitingAIRevenueSaved * 12;
 
         // Create HTML email with professional ROI report
         const htmlContent = `
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
                             
                             <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
                                 <p style="margin: 0 0 10px 0; color: #d1fae5; font-size: 14px; font-weight: 600; text-transform: uppercase;">98% Call Answer Rate</p>
-                                <p style="margin: 0; color: #ffffff; font-size: 48px; font-weight: 700;">$${withCall Waiting AIRevenueSaved.toLocaleString()}</p>
+                                <p style="margin: 0; color: #ffffff; font-size: 48px; font-weight: 700;">$${withCallWaitingAIRevenueSaved.toLocaleString()}</p>
                                 <p style="margin: 10px 0 0 0; color: #d1fae5; font-size: 16px;">saved per month</p>
                             </div>
 
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
                                     <td width="50%" style="padding-left: 10px;">
                                         <div style="background-color: #ffffff; border: 2px solid #10b981; padding: 20px; border-radius: 8px; text-align: center;">
                                             <p style="margin: 0 0 5px 0; color: #065f46; font-size: 12px; font-weight: 600; text-transform: uppercase;">MISSED CALLS</p>
-                                            <p style="margin: 0; color: #047857; font-size: 24px; font-weight: 700;">Only ${withCall Waiting AIMissed}/mo</p>
+                                            <p style="margin: 0; color: #047857; font-size: 24px; font-weight: 700;">Only ${withCallWaitingAIMissed}/mo</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
                 missedCallsPerMonth,
                 monthlyRevenueLoss,
                 yearlyRevenueLoss,
-                withCall Waiting AIRevenueSaved,
+                withCallWaitingAIRevenueSaved,
                 yearlyRevenueSaved,
             }
         });

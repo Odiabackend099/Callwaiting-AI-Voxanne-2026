@@ -21,9 +21,9 @@ export const ROICalculator = () => {
     const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
     // With Call Waiting AI (98% call answer rate - industry-leading)
-    const withCall Waiting AIMissed = Math.round(missedCallsPerMonth * 0.02);
-    const withCall Waiting AIRevenueSaved = Math.round((missedCallsPerMonth - withCall Waiting AIMissed) * avgProcedureValue * conversionRate);
-    const yearlyRevenueSaved = withCall Waiting AIRevenueSaved * 12;
+    const withCallWaitingAIMissed = Math.round(missedCallsPerMonth * 0.02);
+    const withCallWaitingAIRevenueSaved = Math.round((missedCallsPerMonth - withCallWaitingAIMissed) * avgProcedureValue * conversionRate);
+    const yearlyRevenueSaved = withCallWaitingAIRevenueSaved * 12;
 
     return (
         <div className="relative py-24 px-6 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -153,23 +153,23 @@ export const ROICalculator = () => {
                                 <div>
                                     <p className="text-slate-400 text-sm mb-1">Monthly Revenue Saved</p>
                                     <motion.p
-                                        key={withCall Waiting AIRevenueSaved}
+                                        key={withCallWaitingAIRevenueSaved}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="text-3xl font-bold text-emerald-400"
                                     >
-                                        ${withCall Waiting AIRevenueSaved.toLocaleString()}
+                                        ${withCallWaitingAIRevenueSaved.toLocaleString()}
                                     </motion.p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400 text-sm mb-1">Yearly Revenue Saved</p>
                                     <motion.p
-                                        key={withCall Waiting AIRevenueSaved * 12}
+                                        key={withCallWaitingAIRevenueSaved * 12}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="text-2xl font-bold text-emerald-300"
                                     >
-                                        ${(withCall Waiting AIRevenueSaved * 12).toLocaleString()}
+                                        ${(withCallWaitingAIRevenueSaved * 12).toLocaleString()}
                                     </motion.p>
                                 </div>
                                 <div className="pt-4 border-t border-emerald-500/20">
@@ -178,7 +178,7 @@ export const ROICalculator = () => {
                                         <span>98% Call Answer Rate</span>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-1">
-                                        Only {withCall Waiting AIMissed} missed calls/month
+                                        Only {withCallWaitingAIMissed} missed calls/month
                                     </p>
                                 </div>
                             </div>
