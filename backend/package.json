@@ -52,8 +52,6 @@
     "openai": "^6.13.0",
     "opossum": "^9.0.0",
     "resend": "^6.6.0",
-    "@sentry/node": "^7.91.0",
-    "@sentry/tracing": "^7.91.0",
     "twilio": "^5.10.7",
     "typescript": "^5.2.2",
     "uuid": "^13.0.0",

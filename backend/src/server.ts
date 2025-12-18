@@ -14,7 +14,6 @@ import integrationsRouter from './routes/integrations';
 import founderConsoleRouter from './routes/founder-console-v2';
 import founderConsoleSettingsRouter from './routes/founder-console-settings';
 import { initLogger, requestLogger, log } from './services/logger';
-import { initSentry, sentryRequestHandler, sentryErrorHandler } from './services/sentry';
 import { WebSocketServer } from 'ws';
 import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
@@ -33,9 +32,6 @@ import outboundAgentConfigRouter from './routes/outbound-agent-config';
 
 // Initialize logger
 initLogger();
-
-// Initialize Sentry for error tracking
-initSentry();
 
 declare global {
   namespace Express {
@@ -58,7 +54,6 @@ const PORT = process.env.PORT || 3001;
 app.set('trust proxy', true);
 
 // Middleware
-app.use(sentryRequestHandler());
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
@@ -139,7 +134,7 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    name: 'Call Waiting AI Backend',
+    name: 'Voxanne Backend',
     version: '1.0.0',
     endpoints: {
       health: '/health',
@@ -150,9 +145,6 @@ app.get('/', (req, res) => {
     }
   });
 });
-
-// Sentry error handler (must be before other error handlers)
-app.use(sentryErrorHandler());
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -364,7 +356,7 @@ server.listen(PORT, () => {
 
   console.log(`
 ╔════════════════════════════════════════╗
-║    Call Waiting AI Backend Server Started      ║
+║    Voxanne Backend Server Started      ║
 ╚════════════════════════════════════════╝
 
 Port: ${PORT}

@@ -17,11 +17,13 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Call Waiting AI | The #1 AI Receptionist for Clinics & Spas",
-  description: "Call Waiting AI is the AI voice receptionist. Stop missing calls—our AI answers, qualifies, and books appointments 24/7 for clinics and med spas.",
+  title: "Voxanne by CallWaiting AI | The #1 AI Receptionist for Clinics & Spas",
+  description: "Voxanne is the AI voice receptionist from CallWaiting AI. Stop missing calls—Voxanne answers, qualifies, and books appointments 24/7 for clinics and med spas.",
   keywords: [
     "AI receptionist",
-    "Call Waiting AI",
+    "CallWaiting AI",
+    "Voxanne",
+    "Voxanne AI",
     "medical answering service",
     "virtual receptionist",
     "clinic automation",
@@ -30,17 +32,17 @@ export const metadata: Metadata = {
     "appointment booking AI",
     "24/7 call answering"
   ],
-  authors: [{ name: "Call Waiting AI" }],
-  creator: "Call Waiting AI",
+  authors: [{ name: "CallWaiting AI" }],
+  creator: "CallWaiting AI",
   metadataBase: new URL('https://callwaitingai.dev'),
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: "Call Waiting AI | The #1 AI Receptionist",
+    title: "CallWaiting AI | The #1 AI Receptionist",
     description: "Replace your missed calls with revenue. The AI receptionist that books appointments for you.",
     url: 'https://callwaitingai.dev',
-    siteName: 'Call Waiting AI',
+    siteName: 'CallWaiting AI',
     images: [
       {
         url: 'https://callwaitingai.dev/callwaiting-ai-logo.png',
@@ -55,8 +57,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "Call Waiting AI | AI Receptionist",
-    description: "The AI receptionist that answers calls and books appointments for you.",
+    title: "CallWaiting AI | The #1 AI Receptionist",
+    description: "Don't let missed calls cost you money. Switch to CallWaiting AI.",
     images: ['/callwaiting-ai-logo.png'],
   },
   robots: {
@@ -87,15 +89,16 @@ export const viewport = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en">
-      <head>
+    <html lang="en" className={`dark ${lato.variable} ${playfair.variable}`} suppressHydrationWarning>
+      <body
+        className="antialiased font-sans bg-black text-white"
+        suppressHydrationWarning
+      >
         <JsonLd />
-      </head>
-      <body className={`${lato.variable} ${playfair.variable} font-lato bg-white`} suppressHydrationWarning>
         <DevSwCleanup />
         <AuthProvider>
           {children}

@@ -10,8 +10,8 @@
 }
 
 .dark {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #000000;
+  --foreground: #ffffff;
 }
 
 /* @theme {
@@ -21,8 +21,8 @@
 
 body {
   color: var(--foreground);
-  background: #ffffff !important;
-  background-image: none !important;
+  background: var(--background);
+  /* background-image: url('/ceramic-light.png'); */
   background-size: cover;
   background-attachment: fixed;
   background-position: center;
