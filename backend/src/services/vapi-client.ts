@@ -189,10 +189,10 @@ export class VapiClient {
    * Create a new Vapi assistant
    * @param config Assistant configuration
    * @returns Created assistant object
+   * @throws Error if API request fails
    */
   async createAssistant(config: AssistantConfig): Promise<any> {
-    try {
-      const payload: any = {
+    const payload: any = {
         name: config.name,
         serverUrl: config.serverUrl,
         serverMessages: config.serverMessages, // Pass serverMessages
@@ -224,58 +224,38 @@ export class VapiClient {
         payload.maxDurationSeconds = config.maxDurationSeconds;
       }
 
-      return await this.request<any>(() => this.client.post('/assistant', payload), { route: 'POST /assistant' });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.post('/assistant', payload), { route: 'POST /assistant' });
   }
 
   async updateAssistant(assistantId: string, updates: any) {
-    try {
-      return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updates), { route: 'PATCH /assistant/:id', assistantId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updates), { route: 'PATCH /assistant/:id', assistantId });
   }
 
   async getAssistant(assistantId: string) {
-    try {
-      return await this.request<any>(() => this.client.get(`/assistant/${assistantId}`), { route: 'GET /assistant/:id', assistantId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.get(`/assistant/${assistantId}`), { route: 'GET /assistant/:id', assistantId });
   }
 
   async listAssistants() {
-    try {
-      return await this.request<any>(() => this.client.get('/assistant'), { route: 'GET /assistant' });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.get('/assistant'), { route: 'GET /assistant' });
   }
 
   async validateConnection(): Promise<boolean> {
     try {
-      // We try to list assistants with limit 1 as a lightweight check
-      await this.client.get('/assistant', { params: { limit: 1 } });
+      // Use this.request() to respect circuit breaker
+      await this.request<any>(() => this.client.get('/assistant', { params: { limit: 1 } }), { route: 'GET /assistant (validation)' });
       return true;
     } catch (error) {
+      logger.warn('Connection validation failed', { error: (error as any)?.message });
       return false;
     }
   }
 
   async listVoices() {
     try {
-      // VAPI doesn't have a public endpoint documented for listing voices in the same way
-      // but we can try to hit /voice if it exists, or return our hardcoded list
-      // as fallback if the API call fails or is not implemented.
-      // Based on research, VAPI integrates with providers.
-      // For now, we will try the /voice endpoint as per plan, but catch if it fails.
       const response = await this.client.get('/voice');
       return response.data;
     } catch (error) {
       logger.warn('Failed to list voices from API, might not be supported', { error: (error as any)?.message });
-      // Return empty or throw, the caller should handle fallback to hardcoded list
       return [];
     }
   }
@@ -283,8 +263,7 @@ export class VapiClient {
   // ========== CALLS ==========
 
   async createOutboundCall(params: CreateCallParams) {
-    try {
-      const payload: any = {
+    const payload: any = {
         assistantId: params.assistantId,
         phoneNumberId: params.phoneNumberId,
         customer: {
@@ -310,18 +289,11 @@ export class VapiClient {
         }
       }
 
-      return await this.request<any>(() => this.client.post('/call/phone', payload), { route: 'POST /call/phone' });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.post('/call/phone', payload), { route: 'POST /call/phone' });
   }
 
   async getCall(callId: string) {
-    try {
-      return await this.request<any>(() => this.client.get(`/call/${callId}`), { route: 'GET /call/:id', callId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.get(`/call/${callId}`), { route: 'GET /call/:id', callId });
   }
 
   async createWebSocketCall(params: {
@@ -332,8 +304,7 @@ export class VapiClient {
       sampleRate: number;
     };
   }) {
-    try {
-      const payload = {
+    const payload = {
         assistantId: params.assistantId,
         transport: {
           provider: 'vapi.websocket',
@@ -341,99 +312,71 @@ export class VapiClient {
         }
       };
 
-      return await this.request<any>(() => this.client.post('/call', payload), { route: 'POST /call' });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.post('/call', payload), { route: 'POST /call' });
   }
 
   async endCall(callId: string) {
-    try {
-      return await this.request<any>(() => this.client.delete(`/call/${callId}`), { route: 'DELETE /call/:id', callId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.delete(`/call/${callId}`), { route: 'DELETE /call/:id', callId });
   }
 
   async listCalls(limit: number = 50) {
-    try {
-      return await this.request<any>(() => this.client.get('/call', { params: { limit } }), { route: 'GET /call' });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.get('/call', { params: { limit } }), { route: 'GET /call' });
   }
 
   // ========== PHONE NUMBERS ==========
 
   async createVapiPhoneNumber(name: string = 'Default Outbound Number') {
-    try {
-      const payload = {
+    const payload = {
         provider: 'vapi',
         name: name
       };
 
-      const result = await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number' });
-      logger.info('Created Vapi phone number', { phoneNumberId: result?.id });
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    const result = await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number' });
+    logger.info('Created Vapi phone number', { phoneNumberId: result?.id });
+    return result;
   }
 
   async importTwilioNumber(params: ImportTwilioParams) {
-    try {
-      const payload = {
+    const payload = {
         provider: 'twilio',
         number: params.phoneNumber,
         twilioAccountSid: params.twilioAccountSid,
         twilioAuthToken: params.twilioAuthToken
       };
 
-      return await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number (twilio)' });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number (twilio)' });
   }
 
   async getPhoneNumber(phoneNumberId: string) {
-    try {
-      return await this.request<any>(() => this.client.get(`/phone-number/${phoneNumberId}`), { route: 'GET /phone-number/:id', phoneNumberId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.get(`/phone-number/${phoneNumberId}`), { route: 'GET /phone-number/:id', phoneNumberId });
   }
 
   async listPhoneNumbers() {
-    try {
-      const payload: any = await this.request<any>(() => this.client.get('/phone-number'), { route: 'GET /phone-number' });
-      if (Array.isArray(payload)) return payload;
-      if (Array.isArray(payload?.data)) return payload.data;
-      if (Array.isArray(payload?.items)) return payload.items;
-      return [];
-    } catch (error) {
-      throw error;
-    }
+    const payload: any = await this.request<any>(() => this.client.get('/phone-number'), { route: 'GET /phone-number' });
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.items)) return payload.items;
+    logger.warn('Unexpected phone numbers response format, returning empty array', { payloadType: typeof payload });
+    return [];
   }
 
   async updatePhoneNumber(phoneNumberId: string, updates: any) {
-    try {
-      return await this.request<any>(() => this.client.patch(`/phone-number/${phoneNumberId}`, updates), { route: 'PATCH /phone-number/:id', phoneNumberId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.patch(`/phone-number/${phoneNumberId}`, updates), { route: 'PATCH /phone-number/:id', phoneNumberId });
   }
 
   async deletePhoneNumber(phoneNumberId: string) {
-    try {
-      return await this.request<any>(() => this.client.delete(`/phone-number/${phoneNumberId}`), { route: 'DELETE /phone-number/:id', phoneNumberId });
-    } catch (error) {
-      throw error;
-    }
+    return await this.request<any>(() => this.client.delete(`/phone-number/${phoneNumberId}`), { route: 'DELETE /phone-number/:id', phoneNumberId });
   }
 
-  // Get default demo delivery function definitions
+  /**
+   * Get default demo delivery function definitions for Vapi assistant
+   * These functions allow the AI to send demo videos via email, SMS, or WhatsApp
+   */
   public getDefaultDemoFunctions() {
-    const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000';
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL;
+    if (!baseUrl || baseUrl.includes('localhost')) {
+      logger.warn('BASE_URL not configured or is localhost - demo functions may not work in production', { baseUrl });
+    }
 
     return [
       {
@@ -470,6 +413,7 @@ export class VapiClient {
           },
           required: ['prospect_name', 'prospect_email', 'clinic_name', 'demo_type', 'agent_id']
         },
+        // NOTE: Server URL commented out - enable when demo endpoint is ready
         // server: {
         //   url: `${baseUrl}/api/demo/send-email`,
         //   method: 'POST'
@@ -509,6 +453,7 @@ export class VapiClient {
           },
           required: ['prospect_name', 'prospect_phone', 'clinic_name', 'demo_type', 'agent_id']
         },
+        // NOTE: Server URL commented out - enable when demo endpoint is ready
         // server: {
         //   url: `${baseUrl}/api/demo/send-whatsapp`,
         //   method: 'POST'
@@ -548,6 +493,7 @@ export class VapiClient {
           },
           required: ['prospect_name', 'prospect_phone', 'clinic_name', 'demo_type', 'agent_id']
         },
+        // NOTE: Server URL commented out - enable when demo endpoint is ready
         // server: {
         //   url: `${baseUrl}/api/demo/send-sms`,
         //   method: 'POST'
