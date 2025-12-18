@@ -20,6 +20,8 @@ def test_start_outbound_calls():
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)
         # Accept 200 (success), 400 (validation), 401 (auth), 500 (server error)
+        print(f"Status Code: {response.status_code}")
+        print(f"Response: {response.text}")
         assert response.status_code in (200, 400, 401, 500), f"Unexpected status code: {response.status_code}"
     except requests.RequestException as e:
         assert False, f"Request failed: {e}"

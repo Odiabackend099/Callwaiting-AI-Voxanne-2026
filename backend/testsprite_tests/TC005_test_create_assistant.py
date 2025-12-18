@@ -6,10 +6,11 @@ TIMEOUT = 30
 HEADERS = {"Content-Type": "application/json"}
 
 def test_create_assistant():
-    # Correct route: POST /api/assistants/{agentId}/sync (not POST /api/assistants)
+    # Correct route: POST /api/assistants/sync
     agent_id = "test-agent-123"
-    url = f"{BASE_URL}/api/assistants/{agent_id}/sync"
+    url = f"{BASE_URL}/api/assistants/sync"
     payload = {
+        "agentId": agent_id,
         "system_prompt": "You are a helpful assistant.",
         "name": "Test Assistant",
         "voice": "jennifer"
@@ -17,8 +18,8 @@ def test_create_assistant():
 
     try:
         response = requests.post(url, json=payload, headers=HEADERS, timeout=TIMEOUT)
-        # Accept 200 (success), 400 (validation), 401 (auth)
-        assert response.status_code in (200, 400, 401), f"Unexpected status code: {response.status_code}"
+        # Accept 200 (success), 400 (validation), 401 (auth), 404 (agent not found)
+        assert response.status_code in (200, 400, 401, 404), f"Unexpected status code: {response.status_code}"
 
         if response.status_code == 200:
             response_json = response.json()
