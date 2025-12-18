@@ -12,9 +12,23 @@ function getApiBaseUrl(): string {
     }
   }
 
-  return configured || 'http://localhost:3001';
+  if (!configured) {
+    const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    if (isProduction) {
+      throw new Error('NEXT_PUBLIC_BACKEND_URL is not configured in production');
+    }
+    return 'http://localhost:3001';
+  }
+  return configured;
 }
 
+/**
+ * Options for authedBackendFetch
+ * @property headers Custom headers to merge with auth headers
+ * @property timeoutMs Request timeout in milliseconds (default: 30000)
+ * @property retries Number of retry attempts for network/5xx errors (default: 3)
+ * @property requireAuth Whether to require authentication (default: true)
+ */
 type AuthedBackendFetchOptions = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>;
   timeoutMs?: number;
@@ -35,6 +49,11 @@ function jitterMs(baseMs: number): number {
   return baseMs + Math.floor(Math.random() * 250);
 }
 
+/**
+ * Parse Retry-After header (in seconds) to milliseconds
+ * @param headerValue Retry-After header value
+ * @returns Milliseconds to wait, or null if invalid
+ */
 function parseRetryAfterMs(headerValue: string | null): number | null {
   if (!headerValue) return null;
   const s = Number(headerValue);
@@ -61,6 +80,14 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Perform a fetch request to the backend with authentication.
+ * 
+ * @param endpoint The endpoint to fetch, relative to the backend base URL.
+ * @param options Options for the fetch request.
+ * @returns The response data, or null if the response was 204 No Content.
+ * @throws An error if the request failed, with the response status and body.
+ */
 export async function authedBackendFetch<T>(
   endpoint: string,
   options: AuthedBackendFetchOptions = {}
@@ -75,8 +102,13 @@ export async function authedBackendFetch<T>(
 
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-  const delays = [250, 500, 1000];
+  const RETRY_DELAYS_MS = [250, 500, 1000];
   const requestId = makeRequestId();
+
+  const token = await getAccessToken();
+  if (requireAuth && !token) {
+    throw new Error('Not authenticated');
+  }
 
   let lastErr: unknown = null;
 
@@ -85,23 +117,21 @@ export async function authedBackendFetch<T>(
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const token = await getAccessToken();
-      if (requireAuth && !token) {
-        throw new Error('Not authenticated');
-      }
-
       const bodyIsFormData = typeof FormData !== 'undefined' && requestInit.body instanceof FormData;
       const shouldSetJsonContentType = !!requestInit.body && !bodyIsFormData;
+
+      // Build headers once per request (not per retry)
+      const finalHeaders = {
+        ...(shouldSetJsonContentType ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+        'x-request-id': requestId,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
 
       const res = await fetch(url, {
         ...requestInit,
         signal: controller.signal,
-        headers: {
-          ...(shouldSetJsonContentType ? { 'Content-Type': 'application/json' } : {}),
-          ...headers,
-          'x-request-id': requestId,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: finalHeaders,
       });
 
       clearTimeout(timeoutId);
@@ -120,8 +150,9 @@ export async function authedBackendFetch<T>(
 
         if (attempt < retries - 1 && isRetryable) {
           const retryAfterMs = res.status === 429 ? parseRetryAfterMs(res.headers.get('retry-after')) : null;
-          const baseDelay = delays[Math.min(attempt, delays.length - 1)];
-          await sleep(jitterMs(Math.max(baseDelay, retryAfterMs ?? 0)));
+          const baseDelay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+          const delayMs = Math.max(baseDelay, retryAfterMs ?? 0);
+          await sleep(jitterMs(delayMs));
           lastErr = err;
           continue;
         }
@@ -143,7 +174,8 @@ export async function authedBackendFetch<T>(
       const isNetwork = err instanceof TypeError;
 
       if (attempt < retries - 1 && (isAbort || isNetwork)) {
-        await sleep(jitterMs(delays[Math.min(attempt, delays.length - 1)]));
+        const baseDelay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+        await sleep(jitterMs(baseDelay));
         continue;
       }
 
