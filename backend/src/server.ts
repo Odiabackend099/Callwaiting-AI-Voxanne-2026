@@ -29,6 +29,7 @@ import { vapiSetupRouter } from './routes/vapi-setup';
 import vapiDiscoveryRouter from './routes/vapi-discovery';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
 import outboundAgentConfigRouter from './routes/outbound-agent-config';
+import voiceChatRouter, { handleVoiceChatWebSocket } from './routes/voice-chat';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -125,6 +126,7 @@ app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
 // app.use('/api/founder-console/workspace', workspaceRouter);
 app.use('/api/founder-console/outbound-agent-config', outboundAgentConfigRouter);
+app.use('/api/voice-chat', voiceChatRouter);
 app.use('/', webTestDiagnosticsRouter);
 
 // Health check endpoint
@@ -229,6 +231,34 @@ server.on('upgrade', (request, socket, head) => {
       });
     } catch (err) {
       console.error('[WebSocket] handleUpgrade error', { pathname, error: err instanceof Error ? err.message : String(err) });
+      try {
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      } catch {
+        // ignore
+      }
+    }
+  } else if (pathname.startsWith('/api/voice-chat')) {
+    console.log('[WebSocket] Handling /api/voice-chat upgrade');
+    try {
+      const url = new URL(request.url || '', 'http://localhost');
+      const trackingId = url.pathname.replace('/api/voice-chat/', '').split('?')[0];
+      const userId = url.searchParams.get('userId');
+
+      if (!trackingId || !userId) {
+        console.error('[WebSocket] Missing trackingId or userId', { trackingId, userId });
+        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      const voiceChatWss = new WebSocketServer({ noServer: true });
+      voiceChatWss.handleUpgrade(request, socket, head, (ws) => {
+        console.log('[WebSocket] Voice chat upgrade successful', { trackingId, userId });
+        handleVoiceChatWebSocket(ws, trackingId, userId);
+      });
+    } catch (err) {
+      console.error('[WebSocket] /api/voice-chat handleUpgrade error', { pathname, error: err instanceof Error ? err.message : String(err) });
       try {
         socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
         socket.destroy();
