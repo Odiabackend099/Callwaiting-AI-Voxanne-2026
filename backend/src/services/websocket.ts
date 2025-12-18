@@ -7,6 +7,9 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { attachClientWebSocket } from './web-voice-bridge';
 import { supabase } from './supabase-client';
+import { createLogger } from './logger';
+
+const logger = createLogger('WebSocket');
 
 const DEBUG_WS = process.env.DEBUG_WEBSOCKET === 'true';
 const MAX_WS_BUFFERED_AMOUNT_BYTES = Number(process.env.WS_MAX_BUFFERED_BYTES || 2_000_000);
@@ -75,7 +78,7 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
 
   wss.on('connection', (ws: WebSocket, req) => {
     const origin = req.headers.origin || 'unknown';
-    console.log(`[WebSocket] Client connected from ${req.socket.remoteAddress} (origin: ${origin})`);
+    logger.info('Client connected', { remoteAddress: req.socket.remoteAddress, origin });
     
     // Store client with empty userId initially
     clients.set(ws, { ws, userId: undefined });
@@ -83,44 +86,52 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
     ws.on('message', (message: Buffer) => {
       try {
         const data = JSON.parse(message.toString());
-        if (DEBUG_WS) console.log('[WebSocket] Received message:', { type: data?.type });
+        if (DEBUG_WS) logger.debug('Received message', { type: data?.type });
         
         // Handle subscribe message to set userId
         if (data.type === 'subscribe') {
           const client = clients.get(ws);
           if (!client) return;
 
-          const isDev = (process.env.NODE_ENV || 'development') === 'development';
           const token = typeof data.token === 'string' ? data.token : undefined;
 
-          // In production, never trust a client-provided userId.
-          if (!isDev && !token) {
+          // Always require token in production, allow dev-only bypass with explicit flag
+          const isDev = process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_WS_BYPASS === 'true';
+          if (!token && !isDev) {
+            logger.warn('WebSocket subscription rejected: no token provided');
             ws.close(1008, 'Unauthorized');
             return;
           }
 
           if (token) {
+            // Authenticate with timeout to prevent race conditions
+            const authTimeout = setTimeout(() => {
+              logger.warn('WebSocket auth timeout');
+              ws.close(1008, 'Auth timeout');
+            }, 5000);
+
             supabase.auth
               .getUser(token)
               .then(({ data: authData, error }) => {
+                clearTimeout(authTimeout);
                 if (error || !authData?.user?.id) {
+                  logger.warn('WebSocket auth failed', { error: error?.message });
                   ws.close(1008, 'Unauthorized');
                   return;
                 }
 
                 client.userId = authData.user.id;
-                if (DEBUG_WS) console.log('[WebSocket] Client authenticated and subscribed', { userId: client.userId });
+                if (DEBUG_WS) logger.debug('Client authenticated and subscribed', { userId: client.userId });
               })
-              .catch(() => {
+              .catch((err) => {
+                clearTimeout(authTimeout);
+                logger.error('WebSocket auth error', { error: err?.message });
                 ws.close(1008, 'Unauthorized');
               });
-          } else if (isDev && typeof data.userId === 'string' && data.userId) {
-            // Dev-only fallback for local testing
-            client.userId = data.userId;
-            if (DEBUG_WS) console.log('[WebSocket] Dev-mode subscription accepted', { userId: client.userId });
-          } else {
-            ws.close(1008, 'Unauthorized');
-            return;
+          } else if (isDev) {
+            // Dev-only: use hardcoded test userId
+            client.userId = 'dev-test-user';
+            if (DEBUG_WS) logger.debug('Dev-mode subscription accepted', { userId: client.userId });
           }
         }
         
@@ -129,22 +140,22 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
           safeSend(ws, JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
         }
       } catch (e) {
-        console.error('[WebSocket] Failed to parse message:', e);
+        logger.error('Failed to parse WebSocket message', { error: (e as any)?.message });
       }
     });
 
     ws.on('close', () => {
-      console.log('[WebSocket] Client disconnected');
+      logger.debug('Client disconnected');
       clients.delete(ws);
     });
 
     ws.on('error', (error) => {
-      console.error('[WebSocket] Client error:', error);
+      logger.error('Client error', { error: (error as any)?.message });
       clients.delete(ws);
     });
   });
 
-  console.log('[WebSocket] Server initialized on /ws/live-calls');
+  logger.info('Server initialized on /ws/live-calls');
   return wss;
 }
 
@@ -157,6 +168,7 @@ export function wsBroadcast(event: WSEventType): void {
   // This prevents cross-user transcript leakage if a handler forgets to attach userId.
   if (process.env.NODE_ENV === 'production') {
     if ((event as any).type !== 'metrics_update' && !(event as any).userId) {
+      logger.warn('Dropping event in production: missing userId', { type: (event as any).type });
       return;
     }
   }
@@ -171,8 +183,8 @@ export function wsBroadcast(event: WSEventType): void {
     if (safeSend(client.ws, message)) sentCount++;
   });
 
-  const targetInfo = (event as any).userId ? ` to user ${(event as any).userId}` : ' to all clients';
-  if (DEBUG_WS) console.log(`[WebSocket] Broadcast ${(event as any).type}${targetInfo}: ${sentCount} clients`);
+  const broadcastScope = (event as any).userId ? ` to user ${(event as any).userId}` : ' to all clients';
+  if (DEBUG_WS) logger.debug(`Broadcast ${(event as any).type}${broadcastScope}`, { sentCount });
 }
 
 /**
@@ -202,46 +214,53 @@ export function initWebVoiceWebSocket(server: Server): WebSocketServer {
 
   webVoiceWss.on('connection', (ws: WebSocket, req) => {
     const url = req.url || '';
-    console.log('[WebVoice] New connection:', { url });
+    logger.debug('WebVoice new connection', { url });
 
     // Extract trackingId from path: /api/web-voice/trackingId?userId=xxx
     const pathMatch = url.match(/\/api\/web-voice\/([^/?]+)/);
     const trackingId = pathMatch?.[1];
 
-    // Extract userId from query params
-    const urlObj = new URL(url, 'http://localhost');
-    const userId = urlObj.searchParams.get('userId');
+    // Extract userId from query params with error handling
+    let userId: string | null = null;
+    try {
+      const urlObj = new URL(url, 'http://localhost');
+      userId = urlObj.searchParams.get('userId');
+    } catch (err) {
+      logger.error('WebVoice URL parsing failed', { url, error: (err as any)?.message });
+      ws.close(1008, 'Invalid URL');
+      return;
+    }
 
-    console.log('[WebVoice] Parsed connection params:', { trackingId, userId });
+    logger.debug('WebVoice parsed connection params', { trackingId, userId });
 
     if (!trackingId || !userId) {
-      console.warn('[WebVoice] Connection rejected: missing trackingId or userId', { trackingId, userId });
+      logger.warn('WebVoice connection rejected: missing trackingId or userId', { trackingId, userId });
       ws.close(1008, 'Missing trackingId or userId');
       return;
     }
 
-    console.log(`[WebVoice] Client connecting to session: ${trackingId}`);
+    logger.info('WebVoice client connecting to session', { trackingId });
 
     // Attach client WebSocket to the session with authorization
     const attached = attachClientWebSocket(trackingId, ws, userId);
     if (!attached) {
-      console.error('[WebVoice] Failed to attach client to session', { trackingId });
+      logger.error('WebVoice failed to attach client to session', { trackingId });
       ws.close(1008, 'Session not found or unauthorized');
       return;
     }
 
-    console.log(`[WebVoice] Client successfully attached to session: ${trackingId}`);
+    logger.info('WebVoice client successfully attached to session', { trackingId });
 
     ws.on('close', () => {
-      console.log(`[WebVoice] Client disconnected from session: ${trackingId}`);
+      logger.debug('WebVoice client disconnected from session', { trackingId });
     });
 
     ws.on('error', (error) => {
-      console.error(`[WebVoice] Client error for session ${trackingId}:`, error);
+      logger.error('WebVoice client error', { trackingId, error: (error as any)?.message });
     });
   });
 
-  console.log('[WebVoice] WebSocket server initialized for media bridge');
+  logger.info('WebVoice WebSocket server initialized for media bridge');
   return webVoiceWss;
 }
 
@@ -259,7 +278,7 @@ export function closeWebSocket(): void {
     wss = null;
   }
   
-  console.log('[WebSocket] Server closed');
+  logger.info('Server closed');
 }
 
 export default {
