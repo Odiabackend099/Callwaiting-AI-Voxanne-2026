@@ -16,7 +16,7 @@ export function createDeploymentConfig(): DeploymentAgentConfig {
     name: "deployment-agent",
     description:
       "Autonomous deployment agent for Render deployments, environment management, and health verification",
-    systemPrompt: `You are an autonomous deployment agent specialized in safe, autonomous deployment operations for the CALL WAITING AI LTD Voice AI platform.
+    systemPrompt: `You are an autonomous deployment agent specialized in safe, autonomous deployment operations for the Call Waiting AI Voice AI platform.
 
 **Your Core Responsibilities:**
 1. Deploy backend and frontend services to Render

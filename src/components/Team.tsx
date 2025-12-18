@@ -9,12 +9,12 @@ export default function Team() {
             <div className="container mx-auto max-w-6xl">
                 <div className="grid md:grid-cols-2 gap-12 items-center mb-24">
                     <div>
-                        <h2 className="text-3xl md:text-5xl font-bold mb-6 text-white">Why We Built CALL WAITING AI LTD</h2>
+                        <h2 className="text-3xl md:text-5xl font-bold mb-6 text-white">Why We Built Call Waiting AI</h2>
                         <p className="text-zinc-400 text-lg leading-relaxed mb-6">
                             CallWaiting AI was founded on a simple premise: <span className="text-white">Healthcare providers should be focused on patients, not phones.</span>
                         </p>
                         <p className="text-zinc-400 text-lg leading-relaxed">
-                            We saw brilliant surgeons losing millions in revenue simply because they were too busy saving lives to answer the phone. We built CALL WAITING AI LTD to bridge that gap—ensuring no patient is ever ignored, and no practice ever "bleeds" revenue again.
+                            We saw brilliant surgeons losing millions in revenue simply because they were too busy saving lives to answer the phone. We built Call Waiting AI to bridge that gap—ensuring no patient is ever ignored, and no practice ever "bleeds" revenue again.
                         </p>
                     </div>
                     <div className="bg-zinc-900/30 p-8 rounded-3xl border border-white/5">
@@ -42,7 +42,7 @@ export default function Team() {
                         {
                             name: "Peter Ntaji",
                             role: "CEO & Founder",
-                            bio: "CALL WAITING AI LTD isn't here to replace your staff. She's here to empower them—handling the overflow so they can focus on care.",
+                            bio: "Call Waiting AI isn't here to replace your staff. She's here to empower them—handling the overflow so they can focus on care.",
                             image: "/images/team/peter-ntaji.png"
                         },
                         {

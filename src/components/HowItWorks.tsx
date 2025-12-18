@@ -7,7 +7,7 @@ const steps = [
     {
         number: "01",
         title: "15-Minute Setup Call",
-        description: "We configure CALL WAITING AI LTD for your clinic. No technical knowledge required.",
+        description: "We configure Call Waiting AI for your clinic. No technical knowledge required.",
         icon: Settings,
         details: [
             "Share your FAQ document and pricing",
@@ -20,7 +20,7 @@ const steps = [
     {
         number: "02",
         title: "48-Hour Training",
-        description: "CALL WAITING AI LTD learns your procedures, pricing, and practice personality.",
+        description: "Call Waiting AI learns your procedures, pricing, and practice personality.",
         icon: Zap,
         details: [
             "Pre-trained on 500+ medical procedures",

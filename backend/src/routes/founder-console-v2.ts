@@ -2491,7 +2491,7 @@ router.post(
         try {
           const vapiClient = new VapiClient(vapiApiKey);
           await vapiClient.updateAssistant(assistantId, {
-            name: 'CALL WAITING AI LTD Outbound Agent (Test)',
+            name: 'Call Waiting AI Outbound Agent (Test)',
             model: {
               provider: VAPI_DEFAULTS.MODEL_PROVIDER,
               model: VAPI_DEFAULTS.MODEL_NAME,

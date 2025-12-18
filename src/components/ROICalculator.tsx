@@ -20,10 +20,10 @@ export const ROICalculator = () => {
     const monthlyRevenueLoss = Math.round(missedCallsPerMonth * avgProcedureValue * conversionRate);
     const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
-    // With CALL WAITING AI LTD (98% call answer rate - industry-leading)
-    const withCALL WAITING AI LTDMissed = Math.round(missedCallsPerMonth * 0.02);
-    const withCALL WAITING AI LTDRevenueSaved = Math.round((missedCallsPerMonth - withCALL WAITING AI LTDMissed) * avgProcedureValue * conversionRate);
-    const yearlyRevenueSaved = withCALL WAITING AI LTDRevenueSaved * 12;
+    // With Call Waiting AI (98% call answer rate - industry-leading)
+    const withCall Waiting AIMissed = Math.round(missedCallsPerMonth * 0.02);
+    const withCall Waiting AIRevenueSaved = Math.round((missedCallsPerMonth - withCall Waiting AIMissed) * avgProcedureValue * conversionRate);
+    const yearlyRevenueSaved = withCall Waiting AIRevenueSaved * 12;
 
     return (
         <div className="relative py-24 px-6 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -95,7 +95,7 @@ export const ROICalculator = () => {
 
                     {/* Results Grid */}
                     <div className="grid md:grid-cols-2 gap-6">
-                        {/* Without CALL WAITING AI LTD */}
+                        {/* Without Call Waiting AI */}
                         <motion.div
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
@@ -104,7 +104,7 @@ export const ROICalculator = () => {
                         >
                             <div className="flex items-center gap-2 mb-4">
                                 <TrendingDown className="w-5 h-5 text-red-400" />
-                                <h3 className="font-bold text-white">Without CALL WAITING AI LTD</h3>
+                                <h3 className="font-bold text-white">Without Call Waiting AI</h3>
                             </div>
                             <div className="space-y-4">
                                 <div>
@@ -137,7 +137,7 @@ export const ROICalculator = () => {
                             </div>
                         </motion.div>
 
-                        {/* With CALL WAITING AI LTD */}
+                        {/* With Call Waiting AI */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             whileInView={{ opacity: 1, x: 0 }}
@@ -147,29 +147,29 @@ export const ROICalculator = () => {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
                             <div className="flex items-center gap-2 mb-4 relative z-10">
                                 <TrendingUp className="w-5 h-5 text-emerald-400" />
-                                <h3 className="font-bold text-white">With CALL WAITING AI LTD</h3>
+                                <h3 className="font-bold text-white">With Call Waiting AI</h3>
                             </div>
                             <div className="space-y-4 relative z-10">
                                 <div>
                                     <p className="text-slate-400 text-sm mb-1">Monthly Revenue Saved</p>
                                     <motion.p
-                                        key={withCALL WAITING AI LTDRevenueSaved}
+                                        key={withCall Waiting AIRevenueSaved}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="text-3xl font-bold text-emerald-400"
                                     >
-                                        ${withCALL WAITING AI LTDRevenueSaved.toLocaleString()}
+                                        ${withCall Waiting AIRevenueSaved.toLocaleString()}
                                     </motion.p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400 text-sm mb-1">Yearly Revenue Saved</p>
                                     <motion.p
-                                        key={withCALL WAITING AI LTDRevenueSaved * 12}
+                                        key={withCall Waiting AIRevenueSaved * 12}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="text-2xl font-bold text-emerald-300"
                                     >
-                                        ${(withCALL WAITING AI LTDRevenueSaved * 12).toLocaleString()}
+                                        ${(withCall Waiting AIRevenueSaved * 12).toLocaleString()}
                                     </motion.p>
                                 </div>
                                 <div className="pt-4 border-t border-emerald-500/20">
@@ -178,7 +178,7 @@ export const ROICalculator = () => {
                                         <span>98% Call Answer Rate</span>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-1">
-                                        Only {withCALL WAITING AI LTDMissed} missed calls/month
+                                        Only {withCall Waiting AIMissed} missed calls/month
                                     </p>
                                 </div>
                             </div>
@@ -189,7 +189,7 @@ export const ROICalculator = () => {
                     <div className="mt-10 text-center">
                         <p className="text-slate-300 mb-4">
                             Stop losing <span className="text-red-400 font-bold">${monthlyRevenueLoss.toLocaleString()}/month</span>.
-                            Start saving with CALL WAITING AI LTD.
+                            Start saving with Call Waiting AI.
                         </p>
                         <button className="px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-lg hover:shadow-cyan-500/40 hover:scale-105 transition-all shadow-xl">
                             Get Your Free ROI Report

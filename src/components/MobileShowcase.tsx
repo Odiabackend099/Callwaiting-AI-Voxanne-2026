@@ -111,7 +111,7 @@ export default function MobileShowcase() {
                         <div className="mt-12 p-8 rounded-3xl bg-gradient-to-r from-cyan-900/20 to-blue-900/20 border border-cyan-500/20">
                             <h3 className="text-2xl font-bold text-white mb-4 text-center">Manage from Anywhere</h3>
                             <p className="text-slate-300 text-center mb-6">
-                                Control CALL WAITING AI LTD from your phone with our iOS and Android apps. Monitor calls, update settings, and respond to leads on the go.
+                                Control Call Waiting AI from your phone with our iOS and Android apps. Monitor calls, update settings, and respond to leads on the go.
                             </p>
                             <div className="flex items-center justify-center gap-6 flex-wrap">
                                 <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/50 border border-white/10">
@@ -128,7 +128,7 @@ export default function MobileShowcase() {
                                 </div>
                             </div>
                             <p className="text-slate-400 text-sm text-center mt-4">
-                                Get instant notifications when CALL WAITING AI LTD books a consultation or needs your attention
+                                Get instant notifications when Call Waiting AI books a consultation or needs your attention
                             </p>
                         </div>
                     </div>

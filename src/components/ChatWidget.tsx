@@ -10,7 +10,7 @@ import { TranscriptDisplay } from "@/components/voice/TranscriptDisplay";
 export const ChatWidget = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<{ role: "bot" | "user" | "system"; text: string }[]>([
-        { role: "bot", text: "Hi there! 👋 I'm CALL WAITING AI LTD. I can answer calls, book appointments, and handle FAQs for your clinic 24/7." },
+        { role: "bot", text: "Hi there! 👋 I'm Call Waiting AI. I can answer calls, book appointments, and handle FAQs for your clinic 24/7." },
         { role: "bot", text: "How can I help you today?" }
     ]);
     const [inputValue, setInputValue] = useState("");
@@ -112,7 +112,7 @@ export const ChatWidget = () => {
 
             // Do not auto-start recording here; wait until connection succeeds and user taps again
             if (!isConnected) {
-                setVoiceError("Unable to connect to the CALL WAITING AI LTD voice server. Please try again in a moment.");
+                setVoiceError("Unable to connect to the Call Waiting AI voice server. Please try again in a moment.");
             }
             return;
         }
@@ -125,7 +125,7 @@ export const ChatWidget = () => {
 
             // Extra guard: avoid calling startRecording if connection dropped between renders
             if (!isConnected) {
-                setVoiceError("Lost connection to the CALL WAITING AI LTD voice server. Please try again.");
+                setVoiceError("Lost connection to the Call Waiting AI voice server. Please try again.");
                 return;
             }
 
@@ -183,10 +183,10 @@ export const ChatWidget = () => {
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-3">
                                     <div className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/30">
-                                        <Image src="/callwaiting-ai-logo.png" alt="CALL WAITING AI LTD" width={40} height={40} className="object-contain" />
+                                        <Image src="/callwaiting-ai-logo.png" alt="Call Waiting AI" width={40} height={40} className="object-contain" />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-white text-sm">CALL WAITING AI LTD AI</h3>
+                                        <h3 className="font-bold text-white text-sm">Call Waiting AI AI</h3>
                                         <div className="flex items-center gap-1.5">
                                             <div className={`w-2 h-2 rounded-full ${mode === "voice" && isConnected ? "bg-green-400" : "bg-green-400"} animate-pulse`} />
                                             <span className="text-xs text-white/90">
@@ -344,7 +344,7 @@ export const ChatWidget = () => {
                                                 <span>
                                                     {isConnected
                                                         ? isSpeaking
-                                                            ? "CALL WAITING AI LTD is speaking…"
+                                                            ? "Call Waiting AI is speaking…"
                                                             : isRecording
                                                                 ? "Listening…"
                                                                 : "Ready"

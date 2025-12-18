@@ -30,7 +30,7 @@ export default function DemoSection() {
                             transition={{ delay: 0.2 }}
                             className="text-lg text-zinc-400 mb-8 leading-relaxed"
                         >
-                            CALL WAITING AI LTD isn't a robot menu. She's a hyper-realistic AI that speaks with empathy, intelligence, and the professional tone your high-end clinic demands.
+                            Call Waiting AI isn't a robot menu. She's a hyper-realistic AI that speaks with empathy, intelligence, and the professional tone your high-end clinic demands.
                         </motion.p>
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
@@ -39,7 +39,7 @@ export default function DemoSection() {
                             className="bg-zinc-900/50 p-6 rounded-xl border border-white/5 shadow-sm mb-8"
                         >
                             <p className="text-zinc-300 italic">
-                                "Imagine it's 9 PM. A patient is scrolling Instagram, sees your BBL results, and calls. Instead of voicemail, they're greeted by CALL WAITING AI LTD. She answers their questions about recovery time, quotes a price range, and books their consultation for Tuesday morning."
+                                "Imagine it's 9 PM. A patient is scrolling Instagram, sees your BBL results, and calls. Instead of voicemail, they're greeted by Call Waiting AI. She answers their questions about recovery time, quotes a price range, and books their consultation for Tuesday morning."
                             </p>
                         </motion.div>
                     </div>

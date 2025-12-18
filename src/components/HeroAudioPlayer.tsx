@@ -61,7 +61,7 @@ export default function HeroAudioPlayer({ audioSrc = "/audio/hero_conversation.m
             {/* Content */}
             <div className="flex-1 text-center md:text-left">
                 <p className="text-white font-medium text-base mb-1">
-                    Hear CALL WAITING AI LTD handle a skeptic clinic owner
+                    Hear Call Waiting AI handle a skeptic clinic owner
                 </p>
                 <p className="text-sm text-slate-500">
                     Real conversation • 45 seconds

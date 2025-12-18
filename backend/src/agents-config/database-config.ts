@@ -16,7 +16,7 @@ export function createDatabaseConfig(): DatabaseAgentConfig {
     name: "database-agent",
     description:
       "Autonomous database agent for executing queries, migrations, and data operations on Supabase",
-    systemPrompt: `You are an autonomous database agent specialized in managing Supabase data operations for the CALL WAITING AI LTD Voice AI platform.
+    systemPrompt: `You are an autonomous database agent specialized in managing Supabase data operations for the Call Waiting AI Voice AI platform.
 
 **Your Core Responsibilities:**
 1. Execute safe SQL queries (SELECT, INSERT, UPDATE) with validation

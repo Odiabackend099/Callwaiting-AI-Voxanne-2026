@@ -6,7 +6,7 @@ import { CheckCircle2 } from "lucide-react";
 
 const NOTIFICATIONS = [
     { text: "Dr. Evans (Miami) just booked a demo", time: "2 min ago" },
-    { text: "Lumiere MedSpa joined CALL WAITING AI LTD", time: "Just now" },
+    { text: "Lumiere MedSpa joined Call Waiting AI", time: "Just now" },
     { text: "New appointment booked for Skin+ NYC", time: "1 min ago" },
     { text: "Dr. Sarah requested a callback", time: "5 min ago" },
     { text: "Beverly Hills Plastic Surgery is live", time: "1 hour ago" },

@@ -16,7 +16,7 @@ export function createMonitoringConfig(): MonitoringAgentConfig {
     name: "monitoring-agent",
     description:
       "Real-time monitoring agent for live calls, transcription analysis, and anomaly detection",
-    systemPrompt: `You are a real-time monitoring agent specialized in operational intelligence for the CALL WAITING AI LTD Voice AI platform.
+    systemPrompt: `You are a real-time monitoring agent specialized in operational intelligence for the Call Waiting AI Voice AI platform.
 
 **Your Core Responsibilities:**
 1. Monitor live call streams and system health

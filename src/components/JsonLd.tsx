@@ -46,11 +46,11 @@ export default function JsonLd() {
                     "@type": "Offer",
                     "itemOffered": {
                         "@type": "SoftwareApplication",
-                        "name": "CALL WAITING AI LTD",
-                        "alternateName": "CALL WAITING AI LTD AI Receptionist",
+                        "name": "Call Waiting AI",
+                        "alternateName": "Call Waiting AI AI Receptionist",
                         "applicationCategory": "BusinessApplication",
                         "operatingSystem": "Web",
-                        "description": "CALL WAITING AI LTD is the AI voice receptionist from CallWaiting AI that answers calls, qualifies patients, and books appointments 24/7 for clinics and med spas."
+                        "description": "Call Waiting AI is the AI voice receptionist from CallWaiting AI that answers calls, qualifies patients, and books appointments 24/7 for clinics and med spas."
                     }
                 }
             ]

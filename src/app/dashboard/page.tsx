@@ -32,7 +32,7 @@ interface RecentCall {
     } | null;
 }
 
-export default function CALL WAITING AI LTDDashboard() {
+export default function Call Waiting AIDashboard() {
     const router = useRouter();
     const { user, loading } = useAuth();
     const [stats, setStats] = useState<DashboardStats>({

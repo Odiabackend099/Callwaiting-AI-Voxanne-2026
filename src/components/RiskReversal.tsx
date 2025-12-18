@@ -20,7 +20,7 @@ export default function RiskReversal() {
                         </h2>
 
                         <p className="text-slate-300 text-lg mb-8 max-w-2xl mx-auto leading-relaxed">
-                            Try CALL WAITING AI LTD in your clinic for 30 days. If she doesn&apos;t capture at least <strong className="text-white">one new patient booking</strong> that you would have otherwise missed, we will refund 100% of your subscription.
+                            Try Call Waiting AI in your clinic for 30 days. If she doesn&apos;t capture at least <strong className="text-white">one new patient booking</strong> that you would have otherwise missed, we will refund 100% of your subscription.
                         </p>
 
                         <div className="flex flex-col md:flex-row items-center justify-center gap-6 text-sm text-slate-400">

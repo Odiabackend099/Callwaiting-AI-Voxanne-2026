@@ -58,11 +58,11 @@ export default function DermatologyPage() {
                     }
                     subtitle={
                         <>
-                            CALL WAITING AI LTD handles the chaos of high-volume dermatology calls. She triages medical vs. cosmetic, <br />
+                            Call Waiting AI handles the chaos of high-volume dermatology calls. She triages medical vs. cosmetic, <br />
                             handling 100+ calls a day without burnout.
                         </>
                     }
-                    ctaText="See CALL WAITING AI LTD in Action"
+                    ctaText="See Call Waiting AI in Action"
                 />
 
                 <MedicalAudioDemos />

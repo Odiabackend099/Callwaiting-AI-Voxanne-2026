@@ -36,7 +36,7 @@ export default function CampaignShowcase() {
                         Designed for <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">High-End Clinics</span>
                     </motion.h2>
                     <p className="text-center text-zinc-500 mt-4 max-w-2xl mx-auto">
-                        Your brand is premium. Your receptionist should be too. CALL WAITING AI LTD delivers a white-glove experience that matches your aesthetic.
+                        Your brand is premium. Your receptionist should be too. Call Waiting AI delivers a white-glove experience that matches your aesthetic.
                     </p>
                 </div>
 

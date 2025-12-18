@@ -24,7 +24,7 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                         </span>
                     </h2>
                     <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-                        One missed rhinoplasty covers CALL WAITING AI LTD for 5 years. Stop stepping over dollars to pick up pennies.
+                        One missed rhinoplasty covers Call Waiting AI for 5 years. Stop stepping over dollars to pick up pennies.
                     </p>
                 </div>
 
@@ -163,7 +163,7 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                 <div className="mt-16 text-center">
                     <p className="text-slate-500 text-sm flex items-center justify-center gap-2">
                         <Info className="w-4 h-4" />
-                        <span>Compare to average UK receptionist salary: <strong>£24,500/yr</strong> vs. CALL WAITING AI LTD <strong>£5,964/yr</strong></span>
+                        <span>Compare to average UK receptionist salary: <strong>£24,500/yr</strong> vs. Call Waiting AI <strong>£5,964/yr</strong></span>
                     </p>
                 </div>
             </div>

@@ -114,7 +114,7 @@ async function testWebhook() {
     console.log('\n🔄 Testing webhook configuration...');
 
     const testPayload = {
-      message: 'What is the pricing for CALL WAITING AI LTD?',
+      message: 'What is the pricing for Call Waiting AI?',
       assistantId: VAPI_ASSISTANT_ID,
       orgId: 'test-org-id'
     };
@@ -159,7 +159,7 @@ async function main() {
   console.log('\nNext steps:');
   console.log('1. Verify the webhook is active in Vapi dashboard');
   console.log('2. Make a test call to your Vapi number');
-  console.log('3. Ask a question about CALL WAITING AI LTD pricing or features');
+  console.log('3. Ask a question about Call Waiting AI pricing or features');
   console.log('4. The AI should now use the Knowledge Base to answer');
 }
 

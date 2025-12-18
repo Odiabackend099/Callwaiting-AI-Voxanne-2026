@@ -175,7 +175,7 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
                     </div>
                     <p className="text-slate-400 text-sm mb-2">No conversation yet</p>
                     <p className="text-slate-600 text-xs max-w-xs">
-                        Start speaking to begin your conversation with CALL WAITING AI LTD
+                        Start speaking to begin your conversation with Call Waiting AI
                     </p>
                 </motion.div>
             )}

@@ -20,7 +20,7 @@ export default function SafetySection() {
                         </span>
                     </h2>
                     <p className="text-slate-400 max-w-2xl mx-auto text-lg">
-                        CALL WAITING AI LTD is the only AI receptionist with &quot;Safe Mode&quot; — a breakdown-proof protocol that prevents medical liability while capturing revenue.
+                        Call Waiting AI is the only AI receptionist with &quot;Safe Mode&quot; — a breakdown-proof protocol that prevents medical liability while capturing revenue.
                     </p>
                 </div>
 
@@ -93,7 +93,7 @@ export default function SafetySection() {
                     {[
                         {
                             title: "Zero Medical Advice",
-                            desc: "CALL WAITING AI LTD is hardcoded to never diagnose or prescribe. She deflects medical questions to your team 100% of the time.",
+                            desc: "Call Waiting AI is hardcoded to never diagnose or prescribe. She deflects medical questions to your team 100% of the time.",
                             colors: "border-red-500/20 hover:border-red-500/40"
                         },
                         {
