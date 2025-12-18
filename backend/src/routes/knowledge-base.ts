@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
+import { validateKnowledgeBaseInput } from '../middleware/input-validation'; 
 import VapiClient from '../services/vapi-client';
 import { log } from '../services/logger';
 import { chunkDocumentWithMetadata } from '../services/document-chunker';
