@@ -1,4 +1,3 @@
-
 # TestSprite AI Testing Report (MCP)
 
 ---
@@ -6,104 +5,110 @@
 ## 1️⃣ Document Metadata
 - **Project Name:** voxanne-backend
 - **Date:** 2025-12-18
-- **Prepared by:** TestSprite AI Team (via Trae)
+- **Prepared by:** TestSprite AI Team
 
 ---
 
 ## 2️⃣ Requirement Validation Summary
 
-### Feature: Webhook Handling
 #### Test TC001
-- **Test Name:** test_receive_vapi_webhooks
-- **Test Code:** [TC001_test_receive_vapi_webhooks.py](./TC001_test_receive_vapi_webhooks.py)
+- **Test Name:** post api webhooks vapi webhook processing
 - **Status:** ❌ Failed
 - **Error:** 400 Bad Request
-- **Analysis:** The webhook endpoint rejected the payload. This suggests validation logic in the handler is stricter than the test payload provided. Missing required fields in the `call` object or `message` structure.
+- **Analysis / Findings:**
+  - The endpoint `/api/webhooks/vapi` rejected the request with "Invalid event structure".
+  - **Root Cause:** The test payload was missing required fields enforced by the Zod schema in `webhooks.ts`. Specifically, `call.id` is required but likely missing or the structure `message.call` vs `call` was incorrect.
+  - **Correction:** Update test payload to match `VapiEventValidationSchema`.
 
-### Feature: Call Management
 #### Test TC002
-- **Test Name:** test_start_outbound_calls
-- **Test Code:** [TC002_test_start_outbound_calls.py](./TC002_test_start_outbound_calls.py)
+- **Test Name:** post api calls start outbound call initiation
 - **Status:** ❌ Failed
 - **Error:** 400 Bad Request
-- **Analysis:** The `start` endpoint rejected the request. Likely missing `vapiAgentId` or `selectedVoice` in the test payload, or invalid lead format.
+- **Analysis / Findings:**
+  - The endpoint `/api/calls/start` rejected the request.
+  - **Root Cause:** The payload validation requires `leads` (or `leadIds`), `vapiAgentId`, and `selectedVoice`. The test generated payload likely missed one or more of these required fields.
+  - **Correction:** Ensure test payload includes all required fields.
 
 #### Test TC003
-- **Test Name:** test_get_call_logs
-- **Test Code:** [TC003_test_get_call_logs.py](./TC003_test_get_call_logs.py)
+- **Test Name:** get api calls dashboard retrieve call logs
 - **Status:** ❌ Failed
-- **Error:** Assertion Error (Schema Mismatch)
-- **Analysis:** The API returned call logs, but the structure didn't match expectations. Specifically, `direction` or `escalationFlag` fields were missing in the response items.
+- **Error:** Assertion Error: Response JSON should be a list
+- **Analysis / Findings:**
+  - The endpoint `/api/calls-dashboard` (or `/api/calls/logs`) returned an object (likely an error) instead of a list.
+  - **Root Cause:** Likely returned 401 Unauthorized or 500 Error due to missing Supabase/DB credentials or context in the test environment.
+  - **Correction:** Ensure authentication headers (if required) and DB connection are valid.
 
-### Feature: Assistants
 #### Test TC004
-- **Test Name:** test_list_assistants
-- **Test Code:** [TC004_test_list_assistants.py](./TC004_test_list_assistants.py)
+- **Test Name:** get post api assistants manage ai assistants
 - **Status:** ❌ Failed
-- **Error:** 500 Internal Server Error
-- **Analysis:** Server crashed while listing assistants. This strongly indicates a configuration issue, likely missing or invalid Supabase credentials/connection in the test environment.
+- **Error:** 404 Not Found
+- **Analysis / Findings:**
+  - Failed on `POST /api/assistants`.
+  - **Root Cause:** The route `POST /api/assistants` does not exist. The actual route for creating/syncing assistants is `POST /api/assistants/:agentId/sync`.
+  - **Correction:** Update test to use the correct endpoint.
 
 #### Test TC005
-- **Test Name:** test_create_assistant
-- **Test Code:** [TC005_test_create_assistant.py](./TC005_test_create_assistant.py)
+- **Test Name:** post api knowledge base upload document
 - **Status:** ❌ Failed
 - **Error:** 404 Not Found
-- **Analysis:** Endpoint `/api/assistants` (POST) not found.
+- **Analysis / Findings:**
+  - Failed on `POST /api/knowledge-base/upload`.
+  - **Root Cause:** The route likely differs. `knowledge-base.ts` might use `/upload` but `knowledge-base-rag.ts` uses `/chunk`. Need to verify `src/routes/knowledge-base.ts`.
+  - **Correction:** Verify exact route path.
 
-### Feature: Knowledge Base
 #### Test TC006
-- **Test Name:** test_upload_knowledge_base_document
+- **Test Name:** post api knowledge base query knowledge base
 - **Status:** ❌ Failed
-- **Error:** 404 Not Found (`/api/knowledge-base/upload`)
-- **Analysis:** Route path mismatch.
+- **Error:** 404 Not Found
+- **Analysis / Findings:**
+  - Failed on `POST /api/knowledge-base/query`.
+  - **Root Cause:** The actual route is `/api/knowledge-base/search` (as seen in `knowledge-base-rag.ts`).
+  - **Correction:** Update test to use `/api/knowledge-base/search`.
 
 #### Test TC007
-- **Test Name:** test_query_knowledge_base
+- **Test Name:** post api vapi setup integration setup
 - **Status:** ❌ Failed
 - **Error:** 404 Not Found
-- **Analysis:** Route path mismatch.
+- **Analysis / Findings:**
+  - Failed on `POST /api/vapi/setup`.
+  - **Root Cause:** The actual route is `/api/vapi/setup/configure-webhook` (as seen in `vapi-setup.ts`).
+  - **Correction:** Update test to use correct path.
 
-### Feature: Vapi Integration
 #### Test TC008
-- **Test Name:** test_setup_vapi_integration
+- **Test Name:** post api inbound config update inbound call handling
 - **Status:** ❌ Failed
-- **Error:** 404 Not Found (`/api/vapi/setup`)
-- **Analysis:** Route path mismatch.
+- **Error:** 404 Not Found
+- **Analysis / Findings:**
+  - Failed on `POST /api/inbound/config`.
+  - **Root Cause:** The actual route is `/api/inbound/setup` (as seen in `inbound-setup.ts`).
+  - **Correction:** Update test to use correct path.
 
-### Feature: Inbound Config
 #### Test TC009
-- **Test Name:** test_update_inbound_config
-- **Status:** ❌ Failed
-- **Error:** 404 Not Found (`/api/inbound/config`)
-- **Analysis:** Route path mismatch.
-
-### Feature: Founder Console
-#### Test TC010
-- **Test Name:** test_get_founder_console_settings
-- **Status:** ❌ Failed
-- **Error:** Assertion Error
-- **Analysis:** Response received but missing expected feature flags.
+- **Test Name:** get api founder console settings retrieve settings
+- **Status:** ✅ Passed
+- **Analysis / Findings:**
+  - The endpoint `/api/founder-console/settings` is correctly implemented and reachable.
 
 ---
 
 ## 3️⃣ Coverage & Matching Metrics
 
-- **0.00%** of tests passed (0/10)
+- **11.11%** of tests passed (1/9)
 
 | Requirement | Total Tests | ✅ Passed | ❌ Failed |
-|---|---|---|---|
+|-------------|-------------|-----------|-----------|
 | Webhooks | 1 | 0 | 1 |
-| Call Management | 2 | 0 | 2 |
-| Assistants | 2 | 0 | 2 |
+| Calls | 2 | 0 | 2 |
+| Assistants | 1 | 0 | 1 |
 | Knowledge Base | 2 | 0 | 2 |
-| Vapi Integration | 1 | 0 | 1 |
+| Vapi Setup | 1 | 0 | 1 |
 | Inbound Config | 1 | 0 | 1 |
-| Founder Console | 1 | 0 | 1 |
+| Founder Console | 1 | 1 | 0 |
 
 ---
 
 ## 4️⃣ Key Gaps / Risks
 
-1. **Route Mismatches**: High number of 404s indicates the API documentation/summary used to generate tests does not match the actual code routes.
-2. **Environment Configuration**: 500 errors suggest the test environment lacks necessary secrets (Supabase keys, Vapi keys).
-3. **Payload Validation**: Strict validation on webhooks and calls endpoints requires precise test data generation matching the schemas.
+1.  **Route Mismatches**: High number of 404s indicates the API documentation/summary used to generate tests does not match the actual code routes.
+2.  **Environment Configuration**: 500 errors suggest the test environment lacks necessary secrets (Supabase keys, Vapi keys).
+3.  **Payload Validation**: Strict validation on webhooks and calls endpoints requires precise test data generation matching the schemas.

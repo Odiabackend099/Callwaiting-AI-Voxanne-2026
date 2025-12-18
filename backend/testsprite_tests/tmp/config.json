@@ -8,10 +8,10 @@
     "projectName": "voxanne-backend",
     "projectPath": "/Users/mac/Desktop/VOXANNE  WEBSITE/backend",
     "testIds": [],
-    "additionalInstruction": "Verify features: Inbound call handling, Call recording, Live transcript, Call log dashboard, Knowledge Base RAG, Agent config, Smart Escalation, Real-time updates, Auth, Production deployment.",
+    "additionalInstruction": "",
     "envs": {
       "API_KEY": "sk-user-aAJ4_xQoTfvrdHOUVSDJ11a0Ou8Nn3vwXF3aRr4n32GpEjVU4MPrqPaKhH1I608EaoGdn36xDS8pOoLcB9G-fdzkxThkLOqW9WIZxbFc-N4n1qQVXInAddeDNpKzwvfvGIM"
     }
   },
-  "proxy": "http://1881a2df-5e55-46bb-a4f0-6b933b05a8c7:IPMbUPobxwDO6U82w62d41KxXjDTsDNZ@tun.testsprite.com:8080"
+  "proxy": "http://3ce65d2c-cfda-4d3f-82b4-343489fcb81e:U9l3VKrwm6qiT76mjNxHjJw97oe8mvi6@tun.testsprite.com:8080"
 }

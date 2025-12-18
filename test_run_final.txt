@@ -1,0 +1,28 @@
+
+============================================================
+🧪 TestSprite Corrected Tests - Master Runner
+============================================================
+
+📋 Checking environment variables...
+
+🚀 Running tests...
+
+⚠️  TC001_webhook_handling.py - UNKNOWN STATUS
+⚠️  TC002_outbound_calls.py - UNKNOWN STATUS
+⚠️  TC003_call_logs.py - UNKNOWN STATUS
+⚠️  TC004_list_assistants.py - UNKNOWN STATUS
+⚠️  TC005_create_assistant.py - UNKNOWN STATUS
+⚠️  TC006_upload_kb.py - UNKNOWN STATUS
+⚠️  TC007_query_kb.py - UNKNOWN STATUS
+⚠️  TC008_vapi_setup.py - UNKNOWN STATUS
+⚠️  TC009_inbound_config.py - UNKNOWN STATUS
+⚠️  TC010_founder_console_settings.py - UNKNOWN STATUS
+
+============================================================
+📊 Test Summary
+============================================================
+✅ Passed: 0/10
+❌ Failed: 0/10
+⚠️  Errors: 10/10
+
+⚠️  Some tests failed. Check routes and environment variables.
