@@ -1,4 +1,5 @@
 import requests
+import os
 
 BASE_URL = "http://localhost:3001"
 TIMEOUT = 30
@@ -8,13 +9,15 @@ def test_start_outbound_calls():
     headers = {
         "Content-Type": "application/json"
     }
+    # Use actual Vapi assistant ID from environment
+    vapi_assistant_id = os.getenv("VAPI_ASSISTANT_ID", "a5a7f7be-6329-4344-8493-da19ee38d800")
     payload = {
         "leads": [
             {"id": "lead-1", "phone": "+1234567890", "name": "Lead 1"},
             {"id": "lead-2", "phone": "+1987654321", "name": "Lead 2"}
         ],
-        "vapiAgentId": "agent-12345",
-        "selectedVoice": "en-US-Wavenet-F"
+        "vapiAgentId": vapi_assistant_id,
+        "selectedVoice": "Paige"
     }
 
     try:

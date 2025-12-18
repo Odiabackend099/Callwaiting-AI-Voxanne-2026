@@ -7,11 +7,11 @@
     "description": "Verify that the /api/webhooks/vapi endpoint correctly processes incoming Vapi webhook events. The payload MUST include 'type' (e.g., 'call.started') and a 'call' object with 'id', 'status', 'assistantId', and 'customer'. Expected status: 200.",
     "code": "import requests\n\nBASE_URL = \"http://localhost:3001\"\nTIMEOUT = 30\n\ndef test_receive_vapi_webhooks():\n    url = f\"{BASE_URL}/api/webhooks/vapi\"\n    headers = {\n        \"Content-Type\": \"application/json\"\n    }\n    payload = {\n        \"type\": \"call.started\",\n        \"call\": {\n            \"id\": \"call-12345\",\n            \"status\": \"started\",\n            \"assistantId\": \"assistant-67890\",\n            \"customer\": {\n                \"id\": \"customer-abcde\",\n                \"name\": \"Jane Doe\",\n                \"phone\": \"+1234567890\"\n            }\n        }\n    }\n    try:\n        response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)\n        response.raise_for_status()\n        assert response.status_code == 200, f\"Expected status 200, got {response.status_code}\"\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n\ntest_receive_vapi_webhooks()",
     "testStatus": "FAILED",
-    "testError": "Traceback (most recent call last):\n  File \"<string>\", line 26, in test_receive_vapi_webhooks\n  File \"/var/task/requests/models.py\", line 1024, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: http://localhost:3001/api/webhooks/vapi\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/var/task/handler.py\", line 258, in run_with_retry\n    exec(code, exec_env)\n  File \"<string>\", line 31, in <module>\n  File \"<string>\", line 29, in test_receive_vapi_webhooks\nAssertionError: Request failed: 500 Server Error: Internal Server Error for url: http://localhost:3001/api/webhooks/vapi\n",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.866Z",
-    "modified": "2025-12-18T00:48:04.477Z"
+    "modified": "2025-12-18T01:20:31.906Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -21,11 +21,11 @@
     "description": "Verify that the /api/calls/start endpoint initiates outbound calls. The payload MUST include 'leads' (array of objects with 'id', 'phone', 'name'), 'vapiAgentId', and 'selectedVoice'. Expected status: 200.",
     "code": "import requests\n\nBASE_URL = \"http://localhost:3001\"\nTIMEOUT = 30\n\ndef test_start_outbound_calls():\n    url = f\"{BASE_URL}/api/calls/start\"\n    headers = {\n        \"Content-Type\": \"application/json\"\n    }\n    payload = {\n        \"leads\": [\n            {\"phone\": \"+1234567890\"},\n            {\"phone\": \"+1987654321\"}\n        ],\n        \"vapiAgentId\": \"agent-12345\",\n        \"selectedVoice\": \"en-US-Wavenet-F\"\n    }\n\n    try:\n        response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)\n        assert response.status_code == 200, f\"Expected status code 200, got {response.status_code}\"\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n\n\ntest_start_outbound_calls()\n",
     "testStatus": "FAILED",
-    "testError": "Traceback (most recent call last):\n  File \"/var/task/handler.py\", line 258, in run_with_retry\n    exec(code, exec_env)\n  File \"<string>\", line 27, in <module>\n  File \"<string>\", line 22, in test_start_outbound_calls\nAssertionError: Expected status code 200, got 400\n",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.873Z",
-    "modified": "2025-12-18T00:48:26.217Z"
+    "modified": "2025-12-18T01:20:31.913Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -34,12 +34,12 @@
     "title": "TC003-test_get_call_logs",
     "description": "Verify that the /api/calls-dashboard endpoint returns a list of call logs. The response is a JSON list or object containing call data. Expected status: 200.",
     "code": "import requests\n\ndef test_get_call_logs():\n    base_url = \"http://localhost:3001\"\n    url = f\"{base_url}/api/calls-dashboard\"\n    headers = {\n        \"Accept\": \"application/json\"\n    }\n    try:\n        response = requests.get(url, headers=headers, timeout=30)\n        assert response.status_code == 200, f\"Expected status code 200, got {response.status_code}\"\n        \n        # Validate response content type\n        content_type = response.headers.get(\"Content-Type\", \"\")\n        assert \"application/json\" in content_type, f\"Expected JSON response but got {content_type}\"\n        \n        data = response.json()\n        # The response should be a list or an object (dict) containing call log data\n        assert isinstance(data, (list, dict)), f\"Response JSON is not a list or object but {type(data)}\"\n        \n        # Optionally, check that if list is returned, entries could be dicts (call logs)\n        if isinstance(data, list):\n            for entry in data:\n                assert isinstance(entry, dict), \"Expected call log entry to be a dict\"\n        elif isinstance(data, dict):\n            # Must contain relevant keys - but no schema given, so just confirm non-empty object\n            assert len(data) > 0 or len(data) == 0, \"Response JSON object is empty but acceptable\"\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n\ntest_get_call_logs()",
-    "testStatus": "PASSED",
-    "testError": "",
+    "testStatus": "FAILED",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.881Z",
-    "modified": "2025-12-18T00:47:58.844Z"
+    "modified": "2025-12-18T01:20:31.921Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -48,12 +48,12 @@
     "title": "TC004-test_list_assistants",
     "description": "Verify that the GET /api/assistants endpoint returns a list of AI assistants configured in the system. Expected status: 200.",
     "code": "import requests\n\nBASE_URL = \"http://localhost:3001\"\nTIMEOUT = 30\n\ndef test_list_assistants():\n    url = f\"{BASE_URL}/api/assistants\"\n    headers = {\n        \"Accept\": \"application/json\"\n    }\n    try:\n        response = requests.get(url, headers=headers, timeout=TIMEOUT)\n        response.raise_for_status()\n    except requests.RequestException as e:\n        assert False, f\"Request to list assistants failed: {e}\"\n    assert response.status_code == 200, f\"Expected status 200 but got {response.status_code}\"\n    try:\n        data = response.json()\n    except ValueError:\n        assert False, \"Response is not valid JSON\"\n    assert isinstance(data, (list, dict)), f\"Expected response data to be list or dict, got {type(data)}\"\n\ntest_list_assistants()",
-    "testStatus": "PASSED",
-    "testError": "",
+    "testStatus": "FAILED",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.888Z",
-    "modified": "2025-12-18T00:48:04.461Z"
+    "modified": "2025-12-18T01:20:31.928Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -63,11 +63,11 @@
     "description": "Verify that the POST /api/assistants/{agentId}/sync endpoint syncs an assistant. Use a mock agentId in the path (e.g. 'agent-123'). Payload must include 'system_prompt', 'name', and 'voice'. Expected status: 200.",
     "code": "import requests\n\ndef test_sync_assistant():\n    base_url = \"http://localhost:3001\"\n    url = f\"{base_url}/api/assistants\"\n    payload = {\n        \"system_prompt\": \"Welcome to your AI receptionist assistant.\",\n        \"name\": \"ReceptionistBot\",\n        \"voice\": \"en-US-Wavenet-D\"\n    }\n    headers = {\n        \"Content-Type\": \"application/json\"\n    }\n    try:\n        response = requests.post(url, json=payload, headers=headers, timeout=30)\n        response.raise_for_status()\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n    assert response.status_code == 200, f\"Expected status 200, got {response.status_code}\"\n\ntest_sync_assistant()",
     "testStatus": "FAILED",
-    "testError": "Traceback (most recent call last):\n  File \"<string>\", line 16, in test_sync_assistant\n  File \"/var/task/requests/models.py\", line 1024, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 404 Client Error: Not Found for url: http://localhost:3001/api/assistants\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/var/task/handler.py\", line 258, in run_with_retry\n    exec(code, exec_env)\n  File \"<string>\", line 21, in <module>\n  File \"<string>\", line 18, in test_sync_assistant\nAssertionError: Request failed: 404 Client Error: Not Found for url: http://localhost:3001/api/assistants\n",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.895Z",
-    "modified": "2025-12-18T00:48:20.470Z"
+    "modified": "2025-12-18T01:20:31.935Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -77,11 +77,11 @@
     "description": "Verify that the POST /api/knowledge-base/chunk endpoint accepts document content. Payload must include 'knowledgeBaseId' and 'content'. Expected status: 200.",
     "code": "import requests\n\nBASE_URL = \"http://localhost:3001\"\nTIMEOUT = 30\n\ndef test_chunk_knowledge_base():\n    kb_upload_url = f\"{BASE_URL}/api/knowledge-base/upload\"\n    # Prepare multipart form-data with a dummy file and metadata\n    files = {\n        'file': ('test_doc.txt', 'This is a test document content for chunking.', 'text/plain')\n    }\n    data = {\n        'name': 'Test Knowledge Base Document',\n        'description': 'Temporary knowledge base document for chunking test'\n    }\n\n    knowledgeBaseId = None\n    try:\n        upload_resp = requests.post(kb_upload_url, files=files, data=data, timeout=TIMEOUT)\n        assert upload_resp.status_code == 200, f\"Upload endpoint returned unexpected status code: {upload_resp.status_code}\"\n        upload_json = upload_resp.json()\n        knowledgeBaseId = upload_json.get('id') or upload_json.get('documentId') or upload_json.get('knowledgeBaseId')\n        assert knowledgeBaseId is not None, \"knowledgeBaseId not returned from upload response\"\n\n        # Chunking happens automatically on upload as per PRD, no separate call needed\n\n    finally:\n        # Cleanup if such endpoint exists\n        if knowledgeBaseId:\n            try:\n                delete_url = f\"{BASE_URL}/api/knowledge-base/{knowledgeBaseId}\"\n                requests.delete(delete_url, timeout=TIMEOUT)\n            except Exception:\n                pass\n\ntest_chunk_knowledge_base()\n",
     "testStatus": "FAILED",
-    "testError": "Traceback (most recent call last):\n  File \"/var/task/handler.py\", line 258, in run_with_retry\n    exec(code, exec_env)\n  File \"<string>\", line 36, in <module>\n  File \"<string>\", line 20, in test_chunk_knowledge_base\nAssertionError: Upload endpoint returned unexpected status code: 404\n",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.902Z",
-    "modified": "2025-12-18T00:48:21.899Z"
+    "modified": "2025-12-18T01:20:31.942Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -90,12 +90,12 @@
     "title": "TC007-test_search_knowledge_base",
     "description": "Verify that the POST /api/knowledge-base/search endpoint returns search results. Payload must include 'query'. Expected status: 200.",
     "code": "import requests\n\ndef test_search_knowledge_base():\n    base_url = \"http://localhost:3001\"\n    url = f\"{base_url}/api/knowledge-base/search\"\n    headers = {\"Content-Type\": \"application/json\"}\n    payload = {\n        \"query\": \"clinic hours\"\n    }\n    try:\n        response = requests.post(url, json=payload, headers=headers, timeout=30)\n        assert response.status_code == 200, f\"Expected status 200, got {response.status_code}\"\n        json_data = response.json()\n        assert isinstance(json_data, dict) or isinstance(json_data, list), \"Response is not JSON object or list\"\n        # Optional: Check that results contain expected keys if any specific structure is expected\n        # Here we only check response presence.\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n\ntest_search_knowledge_base()",
-    "testStatus": "PASSED",
-    "testError": "",
+    "testStatus": "FAILED",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.910Z",
-    "modified": "2025-12-18T00:48:08.766Z"
+    "modified": "2025-12-18T01:20:31.955Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -105,11 +105,11 @@
     "description": "Verify that the POST /api/vapi/setup/configure-webhook endpoint sets up the webhook. Expected status: 200.",
     "code": "import requests\n\ndef test_configure_vapi_webhook():\n    base_url = \"http://localhost:3001\"\n    url = f\"{base_url}/api/vapi/setup\"\n    headers = {\n        \"Content-Type\": \"application/json\"\n    }\n    # Payload kept as is, since PRD doesn't specify exact payload details\n    payload = {\n        \"webhookUrl\": \"https://example.com/webhook/vapi\",\n        \"events\": [\n            \"call.started\",\n            \"call.ended\",\n            \"transcript.updated\",\n            \"recording.available\"\n        ],\n        \"secretToken\": \"supersecrettoken123\"\n    }\n\n    try:\n        response = requests.post(url, json=payload, headers=headers, timeout=30)\n        response.raise_for_status()\n        assert response.status_code == 200\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n\ntest_configure_vapi_webhook()\n",
     "testStatus": "FAILED",
-    "testError": "Traceback (most recent call last):\n  File \"<string>\", line 23, in test_configure_vapi_webhook\n  File \"/var/task/requests/models.py\", line 1024, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 404 Client Error: Not Found for url: http://localhost:3001/api/vapi/setup\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/var/task/handler.py\", line 258, in run_with_retry\n    exec(code, exec_env)\n  File \"<string>\", line 28, in <module>\n  File \"<string>\", line 26, in test_configure_vapi_webhook\nAssertionError: Request failed: 404 Client Error: Not Found for url: http://localhost:3001/api/vapi/setup\n",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.921Z",
-    "modified": "2025-12-18T00:48:28.272Z"
+    "modified": "2025-12-18T01:20:31.963Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -119,11 +119,11 @@
     "description": "Verify that the POST /api/inbound/setup endpoint updates inbound credentials. Payload must include 'twilioAccountSid', 'twilioAuthToken', and 'twilioPhoneNumber'. Expected status: 200.",
     "code": "import requests\n\nBASE_URL = \"http://localhost:3001\"\nTIMEOUT = 30\n\n\ndef test_setup_inbound():\n    url = f\"{BASE_URL}/api/inbound/config\"\n    payload = {\n        \"twilioAccountSid\": \"ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\n        \"twilioAuthToken\": \"your_auth_token_here\",\n        \"twilioPhoneNumber\": \"+12345678901\"\n    }\n    headers = {\n        \"Content-Type\": \"application/json\"\n    }\n    try:\n        response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)\n        response.raise_for_status()\n        assert response.status_code == 200, f\"Expected status 200, got {response.status_code}\"\n    except requests.RequestException as e:\n        assert False, f\"Request to {url} failed: {e}\"\n\n\ntest_setup_inbound()",
     "testStatus": "FAILED",
-    "testError": "Traceback (most recent call last):\n  File \"<string>\", line 19, in test_setup_inbound\n  File \"/var/task/requests/models.py\", line 1024, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 404 Client Error: Not Found for url: http://localhost:3001/api/inbound/config\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/var/task/handler.py\", line 258, in run_with_retry\n    exec(code, exec_env)\n  File \"<string>\", line 25, in <module>\n  File \"<string>\", line 22, in test_setup_inbound\nAssertionError: Request to http://localhost:3001/api/inbound/config failed: 404 Client Error: Not Found for url: http://localhost:3001/api/inbound/config\n",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.927Z",
-    "modified": "2025-12-18T00:48:25.331Z"
+    "modified": "2025-12-18T01:20:31.970Z"
   },
   {
     "projectId": "7338fc33-0c37-4241-a2ce-121f4c693f8b",
@@ -132,11 +132,11 @@
     "title": "TC010-test_get_founder_console_settings",
     "description": "Verify that the GET /api/founder-console/settings endpoint returns the current founder console settings. Expected status: 200.",
     "code": "import requests\n\nBASE_URL = \"http://localhost:3001\"\nTIMEOUT = 30\n\ndef test_get_founder_console_settings():\n    url = f\"{BASE_URL}/api/founder-console/settings\"\n    headers = {\n        \"Accept\": \"application/json\"\n    }\n    try:\n        response = requests.get(url, headers=headers, timeout=TIMEOUT)\n    except requests.RequestException as e:\n        assert False, f\"Request failed: {e}\"\n\n    assert response.status_code == 200, f\"Expected status code 200, got {response.status_code}\"\n    try:\n        data = response.json()\n    except ValueError:\n        assert False, \"Response is not valid JSON\"\n    # Additional validations can be added here if schema was provided\n\ntest_get_founder_console_settings()",
-    "testStatus": "PASSED",
-    "testError": "",
+    "testStatus": "FAILED",
+    "testError": "Test execution timed out after 15 minutes",
     "testType": "BACKEND",
     "createFrom": "mcp",
     "created": "2025-12-18T00:47:37.938Z",
-    "modified": "2025-12-18T00:48:14.665Z"
+    "modified": "2025-12-18T01:20:31.977Z"
   }
 ]
