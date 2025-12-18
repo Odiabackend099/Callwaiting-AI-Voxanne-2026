@@ -3,23 +3,18 @@ import requests
 BASE_URL = "http://localhost:3001"
 TIMEOUT = 30
 
-def test_receive_vapi_webhooks():
-    url = f"{BASE_URL}/api/webhooks/vapi"
+def test_knowledge_base():
+    # Test knowledge base search - correct route is POST /api/knowledge-base/search
+    url = f"{BASE_URL}/api/knowledge-base/search"
     headers = {
         "Content-Type": "application/json"
     }
     payload = {
-        "type": "call.started",
-        "call": {
-            "id": "c92f5843-1b7a-4256-a3b7-7c1a8a2a953e",
-            "status": "in-progress",
-            "assistantId": "assistant-67890",
-            "customer": {
-                "number": "+1234567890",
-                "name": "Jane Doe"
-            }
-        }
+        "query": "How do I reset password?",
+        "limit": 5,
+        "threshold": 0.5
     }
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT)
         # Accept 200 (success), 400 (validation), 401 (auth), 500 (server error)
@@ -27,4 +22,4 @@ def test_receive_vapi_webhooks():
     except requests.RequestException as e:
         assert False, f"Request failed: {e}"
 
-test_receive_vapi_webhooks()
+test_knowledge_base()

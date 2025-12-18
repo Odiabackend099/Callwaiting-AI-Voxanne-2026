@@ -1125,15 +1125,16 @@ body {
             <li><span class="coverage-highlight">Key gaps / risks:</span>
             
               <ol>
-<li><strong>Persistence of 404s:</strong> Despite updating <code>code_summary.json</code>, the generated tests seemingly <strong>retained the old invalid routes</strong> (e.g., TC005, TC006, TC007, TC008, TC009 still failing with 404). This suggests the <code>generateCodeAndExecute</code> command might have used cached plans or the previous test files were not overwritten/updated with the new route info.</li>
-<li><strong>Payload Structure:</strong> The 400 errors (TC001, TC002) indicate that even if the route is correct, the payload structure is strictly validated and the auto-generated test data is failing schema checks.</li>
-<li><strong>Authentication:</strong> TC003 failure suggests response format mismatch, but likely also relates to authentication context missing in the test runner.</li>
+<li><strong>Environment Configuration:</strong> The 500 errors (TC005, TC006, TC008) strongly suggest that the local backend environment is missing necessary API keys (OpenAI, Vapi, Supabase) to perform third-party integrations.</li>
+<li><strong>Strict Validation:</strong> The 400 errors (TC001, TC002, TC009) indicate a mismatch between the test data and the backend's Zod schemas. The API documentation needs to be strictly aligned with the code validation logic.</li>
+<li><strong>Authentication:</strong> Some endpoints might be failing silent auth checks if headers aren't perfectly set (though 401s were not observed, 500s could mask auth config failures).</li>
 </ol>
 <hr>
-<h2>5️⃣ Recommendations for Next Run</h2>
+<h2>5️⃣ Recommendations</h2>
 <ol>
-<li><strong>Force Clean Regeneration:</strong> Delete the <code>backend/testsprite_tests/</code> directory (except <code>code_summary.json</code>) to force the agent to regenerate the test plan and code from scratch using the <em>new</em> summary.</li>
-<li><strong>Manual Test Plan Override:</strong> Manually edit <code>testsprite_backend_test_plan.json</code> to explicitly specify the correct paths if the agent continues to hallucinate the old ones.</li>
+<li><strong>Verify Environment Variables:</strong> Ensure <code>.env</code> contains valid keys for <code>VAPI_PRIVATE_KEY</code>, <code>OPENAI_API_KEY</code>, <code>SUPABASE_URL</code>, and <code>SUPABASE_ANON_KEY</code>.</li>
+<li><strong>Debug Zod Schemas:</strong> Inspect <code>src/routes/webhooks.ts</code> and <code>src/routes/calls.ts</code> to log exact validation errors to the console to pinpoint why payloads are rejected.</li>
+<li><strong>Retry with Valid Creds:</strong> Rerun tests once the environment is fully configured.</li>
 </ol>
 
             </li>

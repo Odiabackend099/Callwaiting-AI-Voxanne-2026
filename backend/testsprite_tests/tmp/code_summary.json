@@ -28,21 +28,21 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": ["type"],
+                      "required": ["type", "call"],
                       "properties": {
-                        "type": { "type": "string", "enum": ["call.started", "call.ended", "call.transcribed", "end-of-call-report", "function-call"] },
+                        "type": { "type": "string", "enum": ["call.started", "call.ended", "call.transcribed", "end-of-call-report", "function-call"], "example": "call.started" },
                         "call": {
                           "type": "object",
                           "required": ["id", "status"],
                           "properties": {
-                            "id": { "type": "string" },
-                            "status": { "type": "string" },
-                            "assistantId": { "type": "string" },
+                            "id": { "type": "string", "example": "c92f5843-1b7a-4256-a3b7-7c1a8a2a953e" },
+                            "status": { "type": "string", "enum": ["queued", "ringing", "in-progress", "forwarding", "ended"], "example": "in-progress" },
+                            "assistantId": { "type": "string", "example": "a4d3-22f1" },
                             "customer": {
                               "type": "object",
                               "properties": {
-                                "number": { "type": "string" },
-                                "name": { "type": "string" }
+                                "number": { "type": "string", "example": "+15551234567" },
+                                "name": { "type": "string", "example": "John Doe" }
                               }
                             }
                           }
@@ -81,18 +81,20 @@
                       "properties": {
                         "leads": {
                           "type": "array",
+                          "minItems": 1,
                           "items": {
                             "type": "object",
                             "required": ["id", "phone"],
                             "properties": {
-                              "id": { "type": "string" },
-                              "phone": { "type": "string" },
-                              "name": { "type": "string" }
+                              "id": { "type": "string", "example": "l123" },
+                              "phone": { "type": "string", "example": "+15550001111" },
+                              "name": { "type": "string", "example": "Jane Doe" }
                             }
-                          }
+                          },
+                          "example": [{"id": "lead_1", "phone": "+15559998888", "name": "Test Lead"}]
                         },
-                        "vapiAgentId": { "type": "string" },
-                        "selectedVoice": { "type": "string" }
+                        "vapiAgentId": { "type": "string", "example": "agent-123" },
+                        "selectedVoice": { "type": "string", "example": "jennifer" }
                       }
                     }
                   }
@@ -139,7 +141,7 @@
                   "name": "agentId",
                   "in": "path",
                   "required": true,
-                  "schema": { "type": "string" }
+                  "schema": { "type": "string", "example": "agent-uuid-123" }
                 }
               ],
               "requestBody": {
@@ -148,9 +150,9 @@
                        "schema": {
                           "type": "object",
                           "properties": {
-                             "system_prompt": { "type": "string" },
-                             "name": { "type": "string" },
-                             "voice": { "type": "string" }
+                             "system_prompt": { "type": "string", "example": "You are a helpful assistant." },
+                             "name": { "type": "string", "example": "Sales Bot" },
+                             "voice": { "type": "string", "example": "jennifer" }
                           }
                        }
                     }
@@ -174,26 +176,18 @@
       "api_doc": {
         "openapi": "3.0.0",
         "paths": {
-          "/api/knowledge-base": {
-            "post": {
-              "summary": "Upload document metadata (handled by knowledge-base.ts)",
-              "responses": {
-                "200": { "description": "Document uploaded" }
-              }
-            }
-          },
            "/api/knowledge-base/chunk": {
             "post": {
               "summary": "Chunk document content",
-               "requestBody": {
+              "requestBody": {
                 "content": {
                   "application/json": {
                     "schema": {
                       "type": "object",
                       "required": ["knowledgeBaseId", "content"],
                       "properties": {
-                        "knowledgeBaseId": { "type": "string" },
-                        "content": { "type": "string" }
+                        "knowledgeBaseId": { "type": "string", "example": "kb-123" },
+                        "content": { "type": "string", "example": "This is a document content to chunk." }
                       }
                     }
                   }
@@ -214,9 +208,9 @@
                       "type": "object",
                       "required": ["query"],
                       "properties": {
-                        "query": { "type": "string" },
-                        "limit": { "type": "number" },
-                        "threshold": { "type": "number" }
+                        "query": { "type": "string", "example": "How do I reset password?" },
+                        "limit": { "type": "number", "default": 5 },
+                        "threshold": { "type": "number", "default": 0.5 }
                       }
                     }
                   }
@@ -269,9 +263,9 @@
                       "type": "object",
                       "required": ["twilioAccountSid", "twilioAuthToken", "twilioPhoneNumber"],
                       "properties": {
-                        "twilioAccountSid": { "type": "string" },
-                        "twilioAuthToken": { "type": "string" },
-                        "twilioPhoneNumber": { "type": "string" }
+                        "twilioAccountSid": { "type": "string", "example": "AC123456789" },
+                        "twilioAuthToken": { "type": "string", "example": "auth_token_123" },
+                        "twilioPhoneNumber": { "type": "string", "example": "+15551234567" }
                       }
                     }
                   }

@@ -8,10 +8,10 @@
     "projectName": "voxanne-backend",
     "projectPath": "/Users/mac/Desktop/VOXANNE  WEBSITE/backend",
     "testIds": [],
-    "additionalInstruction": "Use correct API routes from the updated code_summary.json. Ensure test payloads match the required schemas (e.g., call.id for webhooks, leads array for calls). Expect 401/500 errors for authenticated endpoints if credentials are missing, but 404s should be resolved.",
+    "additionalInstruction": "Generate python tests for the provided test plan. Strictly follow the endpoint paths and payload requirements described in each test case description. Do NOT hallucinate other paths. Use the provided examples in code_summary.json for payloads.",
     "envs": {
       "API_KEY": "sk-user-aAJ4_xQoTfvrdHOUVSDJ11a0Ou8Nn3vwXF3aRr4n32GpEjVU4MPrqPaKhH1I608EaoGdn36xDS8pOoLcB9G-fdzkxThkLOqW9WIZxbFc-N4n1qQVXInAddeDNpKzwvfvGIM"
     }
   },
-  "proxy": "http://f75f5ea8-a002-4273-b8ad-8a5d4174012c:wyp613ZbBevUFLP4lyniZjqy5P8zTQaZ@tun.testsprite.com:8080"
+  "proxy": "http://728589f4-b8d2-4727-9ab8-21007ea8cb82:Fsqe4MvfIiESXGyDUS8gONabjCfMHdKJ@tun.testsprite.com:8080"
 }

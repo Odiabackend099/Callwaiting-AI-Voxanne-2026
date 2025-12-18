@@ -1,12 +1,12 @@
-# TestSprite AI Testing Report (MCP) - V2
+# TestSprite AI Testing Report (MCP) - Final Manual Run
 
 ---
 
 ## 1️⃣ Document Metadata
 - **Project Name:** voxanne-backend
 - **Date:** 2025-12-18
-- **Prepared by:** TestSprite AI Team
-- **Test Suite Version:** 2.0 (Corrected Routes & Schemas)
+- **Prepared by:** TestSprite AI Team (Manual Override)
+- **Test Suite Version:** 3.0 (Manual Execution)
 
 ---
 
@@ -16,94 +16,76 @@
 - **Test Name:** test_receive_vapi_webhooks
 - **Status:** ❌ Failed
 - **Error:** 400 Bad Request
-- **Analysis / Findings:**
-  - The endpoint `/api/webhooks/vapi` rejected the request with "Invalid event structure".
-  - **Root Cause:** Despite updating the schema documentation, the test generator may have still missed the exact structure required by Zod. Specifically, `call.id` and `call.status` are mandatory. The error suggests the payload structure still doesn't match `VapiEventValidationSchema`.
-  - **Correction:** Manually verify the exact JSON payload being sent vs expected Zod schema in `webhooks.ts`.
+- **Analysis:** Endpoint `/api/webhooks/vapi` returned 400.
+- **Findings:** The Zod schema validation is extremely strict. Even with updated payloads, the backend is rejecting the event structure. Requires inspection of `src/routes/webhooks.ts` to match the exact expected schema (e.g., `call.customer.number` vs `call.customer.phone`).
 
 #### Test TC002
 - **Test Name:** test_start_outbound_calls
 - **Status:** ❌ Failed
 - **Error:** 400 Bad Request
-- **Analysis / Findings:**
-  - The endpoint `/api/calls/start` rejected the request.
-  - **Root Cause:** The payload likely still misses one of the required fields: `leads` array, `vapiAgentId`, or `selectedVoice`.
-  - **Correction:** Ensure test data generation explicitly includes valid mock UUIDs for IDs and valid phone strings.
+- **Analysis:** Endpoint `/api/calls/start` returned 400.
+- **Findings:** Payload validation failed. Likely issues with the `leads` array structure or `selectedVoice` format expected by Vapi.
 
 #### Test TC003
 - **Test Name:** test_get_call_logs
-- **Status:** ❌ Failed
-- **Error:** Assertion Error: 'pagination' missing field 'totalPages'
-- **Analysis / Findings:**
-  - The endpoint returned a response, but the test expected a `pagination` object with `totalPages`.
-  - **Root Cause:** The API might be returning a flat list or a different pagination structure than inferred. The `calls-dashboard` endpoint typically returns a list of logs directly or a wrapper.
-  - **Correction:** Adjust test expectation to match the actual response shape of `/api/calls-dashboard`.
+- **Status:** ✅ Passed
+- **Analysis:** Endpoint `/api/calls-dashboard` returned 200 OK with valid JSON structure.
 
 #### Test TC004
 - **Test Name:** test_list_assistants
 - **Status:** ✅ Passed
-- **Analysis / Findings:**
-  - `GET /api/assistants` returned 200 OK.
-  - **Success:** The endpoint correctly lists assistants.
+- **Analysis:** Endpoint `/api/assistants` returned 200 OK and listed available assistants.
 
 #### Test TC005
-- **Test Name:** test_create_assistant
+- **Test Name:** test_sync_assistant
 - **Status:** ❌ Failed
-- **Error:** 404 Not Found
-- **Analysis / Findings:**
-  - **Root Cause:** The test likely tried `POST /api/assistants` (which doesn't exist) instead of `POST /api/assistants/{agentId}/sync` as documented in the updated summary. The test generator might not have picked up the path parameter requirement correctly or defaulted to the base resource.
-  - **Correction:** Force test to use `POST /api/assistants/:id/sync`.
+- **Error:** 500 Internal Server Error
+- **Analysis:** Endpoint `/api/assistants/:id/sync` returned 500.
+- **Findings:** Likely due to missing API keys or database credentials in the local environment needed to perform the sync operation with Vapi/Supabase.
 
 #### Test TC006
-- **Test Name:** test_upload_knowledge_base_document
+- **Test Name:** test_chunk_knowledge_base
 - **Status:** ❌ Failed
-- **Error:** 404 Not Found
-- **Analysis / Findings:**
-  - **Root Cause:** Test used `POST /api/knowledge-base/upload` (or similar) which is 404. The valid route is `POST /api/knowledge-base/chunk`.
-  - **Correction:** Ensure test uses `/api/knowledge-base/chunk`.
+- **Error:** 500 Internal Server Error
+- **Analysis:** Endpoint `/api/knowledge-base/chunk` returned 500.
+- **Findings:** Chunking/Embedding generation failed. This usually indicates missing `OPENAI_API_KEY` or `SUPABASE_URL`/`KEY` in the running environment.
 
 #### Test TC007
-- **Test Name:** test_query_knowledge_base
-- **Status:** ❌ Failed
-- **Error:** 404 Not Found
-- **Analysis / Findings:**
-  - **Root Cause:** Test used `/api/knowledge-base/query`, but actual is `/api/knowledge-base/search`.
-  - **Correction:** Ensure test uses `/api/knowledge-base/search`.
+- **Test Name:** test_search_knowledge_base
+- **Status:** ✅ Passed
+- **Analysis:** Endpoint `/api/knowledge-base/search` returned 200 OK.
 
 #### Test TC008
-- **Test Name:** test_setup_vapi_integration
+- **Test Name:** test_configure_vapi_webhook
 - **Status:** ❌ Failed
-- **Error:** 404 Not Found
-- **Analysis / Findings:**
-  - **Root Cause:** Test used `/api/vapi/setup`, actual is `/api/vapi/setup/configure-webhook`.
-  - **Correction:** Ensure test uses `/api/vapi/setup/configure-webhook`.
+- **Error:** 500 Internal Server Error
+- **Analysis:** Endpoint `/api/vapi/setup/configure-webhook` returned 500.
+- **Findings:** Server-side error during webhook registration. Likely missing Vapi credentials or database connection issues.
 
 #### Test TC009
-- **Test Name:** test_update_inbound_config
+- **Test Name:** test_setup_inbound
 - **Status:** ❌ Failed
-- **Error:** 404 Not Found
-- **Analysis / Findings:**
-  - **Root Cause:** Test used `/api/inbound/config`, actual is `/api/inbound/setup`.
-  - **Correction:** Ensure test uses `/api/inbound/setup`.
+- **Error:** 400 Bad Request
+- **Analysis:** Endpoint `/api/inbound/setup` returned 400.
+- **Findings:** Validation error for payload fields (`twilioAccountSid`, etc.).
 
 #### Test TC010
 - **Test Name:** test_get_founder_console_settings
 - **Status:** ✅ Passed
-- **Analysis / Findings:**
-  - `GET /api/founder-console/settings` is working correctly.
+- **Analysis:** Endpoint `/api/founder-console/settings` returned 200 OK.
 
 ---
 
 ## 3️⃣ Coverage & Matching Metrics
 
-- **20%** of tests passed (2/10)
+- **40%** of tests passed (4/10)
 
 | Requirement | Total Tests | ✅ Passed | ❌ Failed |
 |-------------|-------------|-----------|-----------|
 | Webhooks | 1 | 0 | 1 |
-| Calls | 2 | 0 | 2 |
+| Calls | 2 | 1 | 1 |
 | Assistants | 2 | 1 | 1 |
-| Knowledge Base | 2 | 0 | 2 |
+| Knowledge Base | 2 | 1 | 1 |
 | Vapi Setup | 1 | 0 | 1 |
 | Inbound Config | 1 | 0 | 1 |
 | Founder Console | 1 | 1 | 0 |
@@ -112,13 +94,14 @@
 
 ## 4️⃣ Key Gaps / Risks
 
-1.  **Persistence of 404s:** Despite updating `code_summary.json`, the generated tests seemingly **retained the old invalid routes** (e.g., TC005, TC006, TC007, TC008, TC009 still failing with 404). This suggests the `generateCodeAndExecute` command might have used cached plans or the previous test files were not overwritten/updated with the new route info.
-2.  **Payload Structure:** The 400 errors (TC001, TC002) indicate that even if the route is correct, the payload structure is strictly validated and the auto-generated test data is failing schema checks.
-3.  **Authentication:** TC003 failure suggests response format mismatch, but likely also relates to authentication context missing in the test runner.
+1.  **Environment Configuration:** The 500 errors (TC005, TC006, TC008) strongly suggest that the local backend environment is missing necessary API keys (OpenAI, Vapi, Supabase) to perform third-party integrations.
+2.  **Strict Validation:** The 400 errors (TC001, TC002, TC009) indicate a mismatch between the test data and the backend's Zod schemas. The API documentation needs to be strictly aligned with the code validation logic.
+3.  **Authentication:** Some endpoints might be failing silent auth checks if headers aren't perfectly set (though 401s were not observed, 500s could mask auth config failures).
 
 ---
 
-## 5️⃣ Recommendations for Next Run
+## 5️⃣ Recommendations
 
-1.  **Force Clean Regeneration:** Delete the `backend/testsprite_tests/` directory (except `code_summary.json`) to force the agent to regenerate the test plan and code from scratch using the *new* summary.
-2.  **Manual Test Plan Override:** Manually edit `testsprite_backend_test_plan.json` to explicitly specify the correct paths if the agent continues to hallucinate the old ones.
+1.  **Verify Environment Variables:** Ensure `.env` contains valid keys for `VAPI_PRIVATE_KEY`, `OPENAI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_ANON_KEY`.
+2.  **Debug Zod Schemas:** Inspect `src/routes/webhooks.ts` and `src/routes/calls.ts` to log exact validation errors to the console to pinpoint why payloads are rejected.
+3.  **Retry with Valid Creds:** Rerun tests once the environment is fully configured.
