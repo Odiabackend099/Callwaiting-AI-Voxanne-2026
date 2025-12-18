@@ -138,16 +138,13 @@ const TestAgentPageContent = () => {
         } else {
             setCallInitiating(true);
             try {
-                // Route to new unified voice chat UI
-                const trackingId = `web-test-${Date.now()}`;
-                const userId = user?.id || 'unknown';
-                const agentName = 'Test Agent';
-                
-                router.push(
-                  `/dashboard/voice-chat?trackingId=${trackingId}&userId=${userId}&agentName=${encodeURIComponent(agentName)}&type=web-test`
-                );
+                await startCall();
+                // Wait a moment for connection to stabilize before recording
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                startRecording();
             } catch (err) {
                 console.error('Failed to start web call', err);
+            } finally {
                 setCallInitiating(false);
             }
         }
@@ -251,17 +248,20 @@ const TestAgentPageContent = () => {
         setIsCallingPhone(true);
         setCallSummary(null);
         try {
-            // Route to new unified voice chat UI for live calls
-            const trackingId = `live-call-${Date.now()}`;
-            const userId = user?.id || 'unknown';
-            const agentName = 'Live Agent';
-            
-            router.push(
-              `/dashboard/voice-chat?trackingId=${trackingId}&userId=${userId}&agentName=${encodeURIComponent(agentName)}&type=live-call&phoneNumber=${encodeURIComponent(phoneNumber)}`
-            );
+            const data = await authedBackendFetch<any>('/api/founder-console/agent/web-test-outbound', {
+                method: 'POST',
+                body: JSON.stringify({ phoneNumber }),
+                timeoutMs: 30000,
+                retries: 1,
+            });
+            if (data.trackingId) {
+                setOutboundTrackingId(data.trackingId);
+                setPhoneCallId(data.callId);
+            }
         } catch (err) {
             console.error('Phone call failed:', err);
             alert((err as any).message || 'Failed to start phone call');
+        } finally {
             setIsCallingPhone(false);
         }
     };
