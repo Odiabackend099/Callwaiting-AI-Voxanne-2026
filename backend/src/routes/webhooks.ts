@@ -88,21 +88,23 @@ async function injectRagContextIntoAgent(params: {
     // Get current system prompt
     const currentSystemPrompt = assistant.firstMessage || '';
     
-    // Append RAG context to system prompt
-    const enhancedSystemPrompt = `${currentSystemPrompt}\n\n---\n\nKNOWLEDGE BASE INFORMATION:\n${params.ragContext}`;
+    // Store RAG context in assistant metadata instead of modifying system prompt
+    // This prevents prompt bloat after multiple calls
+    const metadata = assistant.metadata || {};
+    metadata.rag_context = params.ragContext;
+    metadata.rag_context_updated_at = new Date().toISOString();
 
-    // Update assistant with enhanced system prompt
+    // Update assistant with RAG context in metadata
     await vapi.updateAssistant(params.assistantId, {
-      firstMessage: enhancedSystemPrompt
+      metadata: metadata
     });
 
-    logger.info('Webhooks', 'RAG context injected into agent system prompt', {
+    logger.info('Webhooks', 'RAG context stored in assistant metadata', {
       assistantId: params.assistantId,
-      contextLength: params.ragContext.length,
-      promptLength: enhancedSystemPrompt.length
+      contextLength: params.ragContext.length
     });
   } catch (error: any) {
-    logger.warn('Webhooks', 'Failed to inject RAG context into agent (non-blocking)', {
+    logger.warn('Webhooks', 'Failed to store RAG context in assistant metadata (non-blocking)', {
       error: error?.message
     });
     // Don't throw - RAG injection failure shouldn't block call
@@ -249,10 +251,9 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
       return;
     }
 
-    console.log('[Vapi Webhook]', {
+    logger.debug('Vapi Webhook', 'Event received', {
       type: event.type,
-      callId: event.call?.id,
-      timestamp: new Date().toISOString()
+      callId: event.call?.id
     });
 
     let handlerSuccess = true;
@@ -280,7 +281,7 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
           return;
 
         default:
-          console.log('[Vapi Webhook] Unhandled event type:', event.type);
+          logger.warn('Vapi Webhook', 'Unhandled event type', { type: event.type });
       }
     } catch (handlerError) {
       console.error('[Vapi Webhook] Handler error:', handlerError);
@@ -475,12 +476,11 @@ async function handleCallStarted(event: VapiEvent) {
       if (phoneNumber) {
         const phoneValidation = validateE164Format(phoneNumber);
         if (!phoneValidation.valid) {
-          logger.warn('handleCallStarted', 'Invalid phone number format, using as-is', {
+          logger.warn('handleCallStarted', 'Invalid phone number format, using original', {
             vapiCallId: call.id,
             providedNumber: phoneNumber,
             error: phoneValidation.error
           });
-          phoneNumber = phoneValidation.normalized || phoneNumber;
         } else {
           phoneNumber = phoneValidation.normalized || phoneNumber;
         }
@@ -511,7 +511,9 @@ async function handleCallStarted(event: VapiEvent) {
         logger.error('handleCallStarted', 'Failed to insert call_tracking for inbound call', {
           vapiCallId: call.id,
           agentId: agent.id,
-          error: insertError.message
+          errorMessage: insertError.message,
+          errorCode: insertError.code,
+          errorDetails: insertError.details
         });
         throw new Error(`Failed to create call_tracking: ${insertError.message}`);
       }
@@ -615,7 +617,9 @@ async function handleCallStarted(event: VapiEvent) {
     if (logError) {
       logger.error('handleCallStarted', 'Failed to insert call log', {
         vapiCallId: call.id,
-        error: logError.message
+        errorMessage: logError.message,
+        errorCode: logError.code,
+        errorDetails: logError.details
       });
       throw new Error(`Failed to create call log: ${logError.message}`);
     }
@@ -760,7 +764,12 @@ async function handleCallEnded(event: VapiEvent) {
           .eq('org_id', callLog.org_id);
 
         if (leadError) {
-          console.error('[handleCallEnded] Failed to update lead:', leadError);
+          logger.error('handleCallEnded', 'Failed to update lead (fallback)', {
+            vapiCallId: call.id,
+            phone: call.customer?.number,
+            errorMessage: leadError.message,
+            errorCode: leadError.code
+          });
         }
       }
     }
@@ -773,7 +782,11 @@ async function handleCallEnded(event: VapiEvent) {
       .maybeSingle();
 
     if (callTrackingError && callTrackingError.code !== 'PGRST116') {
-      console.error('[handleCallEnded] Failed to fetch call_tracking:', callTrackingError);
+      logger.error('handleCallEnded', 'Failed to fetch call_tracking', {
+        vapiCallId: call.id,
+        errorMessage: callTrackingError.message,
+        errorCode: callTrackingError.code
+      });
     }
 
     if (callTracking) {
