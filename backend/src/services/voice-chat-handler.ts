@@ -36,6 +36,9 @@ interface VADState {
 const activeSessions = new Map<string, VoiceChatSession>();
 let messageIdCounter = 0;
 
+// Track last speaker for each session to detect speaker changes
+const lastSpeakerMap = new Map<string, 'agent' | 'user' | null>();
+
 /**
  * Create a new voice chat session
  */
@@ -88,6 +91,15 @@ export function sendTranscript(
     session.agentMessages.push(text);
   } else {
     session.userMessages.push(text);
+  }
+
+  // Update VAD state based on speaker change
+  const lastSpeaker = lastSpeakerMap.get(session.trackingId);
+  if (lastSpeaker !== speaker) {
+    lastSpeakerMap.set(session.trackingId, speaker);
+    // Send VAD state update when speaker changes
+    const vadState = speaker === 'agent' ? 'speaking' : 'listening';
+    sendVADState(session, vadState, 0.9);
   }
 
   const payload: TranscriptMessage = {
@@ -203,6 +215,9 @@ export function endVoiceChatSession(session: VoiceChatSession): void {
 
   // Remove from active sessions
   activeSessions.delete(session.trackingId);
+  
+  // Clean up speaker tracking
+  lastSpeakerMap.delete(session.trackingId);
 }
 
 /**
