@@ -7,6 +7,7 @@ import VapiClient from '../services/vapi-client';
 import { log } from '../services/logger';
 import { chunkDocumentWithMetadata } from '../services/document-chunker';
 import { generateEmbeddings } from '../services/embeddings';
+import { getCached, setCached } from '../services/cache'; // <--- Changed cache service import
 
 const knowledgeBaseRouter = express.Router();
 const KB_MAX_BYTES = 300_000;
@@ -19,6 +20,9 @@ function getOrgId(req: Request): string | null {
 }
 
 async function getVapiApiKeyForOrg(orgId: string): Promise<string | null> {
+  const cachedApiKey = getCached<string>(`vapi-api-key-${orgId}`);
+  if (cachedApiKey) return cachedApiKey;
+
   const { data: vapiIntegration } = await supabase
     .from('integrations')
     .select('config')
