@@ -4,7 +4,6 @@
  */
 
 import * as Sentry from '@sentry/node';
-import * as Tracing from '@sentry/tracing';
 import { Request, Response, NextFunction } from 'express';
 
 /**
@@ -25,10 +24,6 @@ export function initSentry(): void {
     tracesSampleRate: environment === 'production' ? 0.1 : 1.0,
     integrations: [
       new Sentry.Integrations.Http({ tracing: true }),
-      new Tracing.Integrations.Express({
-        request: true,
-        serverName: true,
-      }),
     ],
     beforeSend(event, hint) {
       // Filter out health check errors
