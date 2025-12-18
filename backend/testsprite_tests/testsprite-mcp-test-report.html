@@ -1125,9 +1125,15 @@ body {
             <li><span class="coverage-highlight">Key gaps / risks:</span>
             
               <ol>
-<li><strong>Route Mismatches</strong>: High number of 404s indicates the API documentation/summary used to generate tests does not match the actual code routes.</li>
-<li><strong>Environment Configuration</strong>: 500 errors suggest the test environment lacks necessary secrets (Supabase keys, Vapi keys).</li>
-<li><strong>Payload Validation</strong>: Strict validation on webhooks and calls endpoints requires precise test data generation matching the schemas.</li>
+<li><strong>Persistence of 404s:</strong> Despite updating <code>code_summary.json</code>, the generated tests seemingly <strong>retained the old invalid routes</strong> (e.g., TC005, TC006, TC007, TC008, TC009 still failing with 404). This suggests the <code>generateCodeAndExecute</code> command might have used cached plans or the previous test files were not overwritten/updated with the new route info.</li>
+<li><strong>Payload Structure:</strong> The 400 errors (TC001, TC002) indicate that even if the route is correct, the payload structure is strictly validated and the auto-generated test data is failing schema checks.</li>
+<li><strong>Authentication:</strong> TC003 failure suggests response format mismatch, but likely also relates to authentication context missing in the test runner.</li>
+</ol>
+<hr>
+<h2>5️⃣ Recommendations for Next Run</h2>
+<ol>
+<li><strong>Force Clean Regeneration:</strong> Delete the <code>backend/testsprite_tests/</code> directory (except <code>code_summary.json</code>) to force the agent to regenerate the test plan and code from scratch using the <em>new</em> summary.</li>
+<li><strong>Manual Test Plan Override:</strong> Manually edit <code>testsprite_backend_test_plan.json</code> to explicitly specify the correct paths if the agent continues to hallucinate the old ones.</li>
 </ol>
 
             </li>

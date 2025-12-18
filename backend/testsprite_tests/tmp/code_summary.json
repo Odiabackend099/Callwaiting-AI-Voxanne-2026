@@ -24,31 +24,25 @@
             "post": {
               "summary": "Receive Vapi webhooks",
               "requestBody": {
-                "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": ["message"],
+                      "required": ["type"],
                       "properties": {
-                        "message": {
+                        "type": { "type": "string", "enum": ["call.started", "call.ended", "call.transcribed", "end-of-call-report", "function-call"] },
+                        "call": {
                           "type": "object",
-                          "required": ["type", "call"],
+                          "required": ["id", "status"],
                           "properties": {
-                            "type": { "type": "string", "enum": ["call.started", "call.ended", "call.transcribed", "end-of-call-report", "function-call"] },
-                            "call": {
+                            "id": { "type": "string" },
+                            "status": { "type": "string" },
+                            "assistantId": { "type": "string" },
+                            "customer": {
                               "type": "object",
-                              "required": ["id", "status"],
                               "properties": {
-                                "id": { "type": "string", "minLength": 1 },
-                                "status": { "type": "string" },
-                                "assistantId": { "type": "string" },
-                                "customer": {
-                                  "type": "object",
-                                  "properties": {
-                                    "number": { "type": "string" }
-                                  }
-                                }
+                                "number": { "type": "string" },
+                                "name": { "type": "string" }
                               }
                             }
                           }
@@ -77,9 +71,8 @@
         "paths": {
           "/api/calls/start": {
             "post": {
-              "summary": "Start bulk outbound calls",
+              "summary": "Start an outbound call",
               "requestBody": {
-                "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
@@ -106,37 +99,15 @@
                 }
               },
               "responses": {
-                "200": { "description": "Calls started" }
+                "200": { "description": "Call started" }
               }
             }
           },
-          "/api/calls": {
+          "/api/calls-dashboard": {
             "get": {
-              "summary": "Get call logs",
+              "summary": "Get call logs dashboard",
               "responses": {
                 "200": { "description": "List of call logs" }
-              }
-            }
-          },
-          "/api/calls/{callId}": {
-            "get": {
-              "summary": "Get call details",
-              "parameters": [
-                { "name": "callId", "in": "path", "required": true, "schema": { "type": "string" } }
-              ],
-              "responses": {
-                "200": { "description": "Call details" }
-              }
-            }
-          },
-          "/api/calls/{callId}/recording": {
-            "get": {
-              "summary": "Get call recording URL",
-              "parameters": [
-                { "name": "callId", "in": "path", "required": true, "schema": { "type": "string" } }
-              ],
-              "responses": {
-                "200": { "description": "Recording URL" }
               }
             }
           }
@@ -145,7 +116,7 @@
     },
     {
       "name": "Assistants API",
-      "description": "Manage Vapi assistants (list, sync).",
+      "description": "Manage Vapi assistants (sync).",
       "files": [
         "src/routes/assistants.ts"
       ],
@@ -153,20 +124,38 @@
         "openapi": "3.0.0",
         "paths": {
           "/api/assistants": {
-            "get": {
-              "summary": "List assistants from Vapi",
-              "responses": {
-                "200": { "description": "List of assistants" },
-                "503": { "description": "Vapi not configured (missing VAPI_API_KEY)" }
-              }
-            }
+             "get": {
+               "summary": "List assistants",
+               "responses": {
+                 "200": { "description": "List of assistants" }
+               }
+             }
           },
           "/api/assistants/{agentId}/sync": {
             "post": {
-              "summary": "Sync agent to Vapi assistant",
+              "summary": "Sync assistant with Vapi",
               "parameters": [
-                { "name": "agentId", "in": "path", "required": true, "schema": { "type": "string" } }
+                {
+                  "name": "agentId",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" }
+                }
               ],
+              "requestBody": {
+                 "content": {
+                    "application/json": {
+                       "schema": {
+                          "type": "object",
+                          "properties": {
+                             "system_prompt": { "type": "string" },
+                             "name": { "type": "string" },
+                             "voice": { "type": "string" }
+                          }
+                       }
+                    }
+                 }
+              },
               "responses": {
                 "200": { "description": "Assistant synced" }
               }
@@ -177,7 +166,7 @@
     },
     {
       "name": "Knowledge Base API",
-      "description": "Upload documents and query the knowledge base (RAG).",
+      "description": "Upload documents and search the knowledge base (RAG).",
       "files": [
         "src/routes/knowledge-base.ts",
         "src/routes/knowledge-base-rag.ts"
@@ -186,47 +175,48 @@
         "openapi": "3.0.0",
         "paths": {
           "/api/knowledge-base": {
-            "get": {
-              "summary": "List KB documents",
-              "responses": {
-                "200": { "description": "List of documents" }
-              }
-            },
             "post": {
-              "summary": "Create KB document",
-              "requestBody": {
-                "required": true,
+              "summary": "Upload document metadata (handled by knowledge-base.ts)",
+              "responses": {
+                "200": { "description": "Document uploaded" }
+              }
+            }
+          },
+           "/api/knowledge-base/chunk": {
+            "post": {
+              "summary": "Chunk document content",
+               "requestBody": {
                 "content": {
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": ["name", "content"],
+                      "required": ["knowledgeBaseId", "content"],
                       "properties": {
-                        "name": { "type": "string" },
-                        "content": { "type": "string" },
-                        "category": { "type": "string", "enum": ["products_services", "operations", "ai_guidelines", "general"] }
+                        "knowledgeBaseId": { "type": "string" },
+                        "content": { "type": "string" }
                       }
                     }
                   }
                 }
               },
               "responses": {
-                "200": { "description": "Document created" }
+                "200": { "description": "Document chunked" }
               }
             }
           },
           "/api/knowledge-base/search": {
             "post": {
-              "summary": "Search knowledge base using vector similarity",
+              "summary": "Search knowledge base",
               "requestBody": {
-                "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
                       "type": "object",
                       "required": ["query"],
                       "properties": {
-                        "query": { "type": "string" }
+                        "query": { "type": "string" },
+                        "limit": { "type": "number" },
+                        "threshold": { "type": "number" }
                       }
                     }
                   }
@@ -234,17 +224,6 @@
               },
               "responses": {
                 "200": { "description": "Search results" }
-              }
-            }
-          },
-          "/api/knowledge-base/{id}/chunks": {
-            "get": {
-              "summary": "Get chunks for a document",
-              "parameters": [
-                { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
-              ],
-              "responses": {
-                "200": { "description": "Document chunks" }
               }
             }
           }
@@ -262,30 +241,9 @@
         "paths": {
           "/api/vapi/setup/configure-webhook": {
             "post": {
-              "summary": "Configure Vapi assistant with RAG webhook",
-              "requestBody": {
-                "required": true,
-                "content": {
-                  "application/json": {
-                    "schema": {
-                      "type": "object",
-                      "properties": {
-                        "assistantId": { "type": "string" }
-                      }
-                    }
-                  }
-                }
-              },
+              "summary": "Configure Vapi webhook",
               "responses": {
-                "200": { "description": "Webhook configured" }
-              }
-            }
-          },
-          "/api/vapi/setup/status": {
-            "get": {
-              "summary": "Check Vapi webhook configuration status",
-              "responses": {
-                "200": { "description": "Configuration status" }
+                "200": { "description": "Setup complete" }
               }
             }
           }
@@ -294,7 +252,7 @@
     },
     {
       "name": "Inbound Setup API",
-      "description": "Configure inbound call handling with Twilio and Vapi.",
+      "description": "Configure inbound call handling settings.",
       "files": [
         "src/routes/inbound-setup.ts"
       ],
@@ -303,9 +261,8 @@
         "paths": {
           "/api/inbound/setup": {
             "post": {
-              "summary": "Configure Twilio credentials and link to Vapi inbound assistant",
+              "summary": "Setup inbound credentials",
               "requestBody": {
-                "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
@@ -321,23 +278,7 @@
                 }
               },
               "responses": {
-                "200": { "description": "Inbound setup complete" }
-              }
-            }
-          },
-          "/api/inbound/status": {
-            "get": {
-              "summary": "Get current inbound configuration status",
-              "responses": {
-                "200": { "description": "Inbound status" }
-              }
-            }
-          },
-          "/api/inbound/test": {
-            "post": {
-              "summary": "Test inbound setup by making a test call",
-              "responses": {
-                "200": { "description": "Test initiated" }
+                "200": { "description": "Config updated" }
               }
             }
           }
@@ -358,27 +299,6 @@
               "summary": "Get settings",
               "responses": {
                 "200": { "description": "Settings retrieved" }
-              }
-            },
-            "post": {
-              "summary": "Save settings",
-              "requestBody": {
-                "required": true,
-                "content": {
-                  "application/json": {
-                    "schema": {
-                      "type": "object",
-                      "properties": {
-                        "vapi_api_key": { "type": "string" },
-                        "twilio_account_sid": { "type": "string" },
-                        "twilio_auth_token": { "type": "string" }
-                      }
-                    }
-                  }
-                }
-              },
-              "responses": {
-                "200": { "description": "Settings saved" }
               }
             }
           }

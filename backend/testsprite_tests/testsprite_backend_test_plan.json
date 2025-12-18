@@ -1,47 +1,52 @@
 [
   {
     "id": "TC001",
-    "title": "post api webhooks vapi webhook processing",
-    "description": "Verify that the POST /api/webhooks/vapi endpoint correctly processes incoming Vapi webhook events for call started, ended, transcript, and recording, ensuring proper handling and response."
+    "title": "test_receive_vapi_webhooks",
+    "description": "Verify that the /api/webhooks/vapi endpoint correctly processes incoming Vapi webhook events for call started, ended, transcript, and recording, ensuring proper handling and response with status 200."
   },
   {
     "id": "TC002",
-    "title": "post api calls start outbound call initiation",
-    "description": "Test the POST /api/calls/start endpoint to ensure it initiates outbound calls correctly with provided leads, vapiAgentId, and selectedVoice parameters."
+    "title": "test_start_outbound_calls",
+    "description": "Verify that the /api/calls/start endpoint initiates outbound calls correctly when provided with leads, vapiAgentId, and selectedVoice, and returns a 200 status indicating calls were initiated."
   },
   {
     "id": "TC003",
-    "title": "get api calls dashboard retrieve call logs",
-    "description": "Validate that the GET /api/calls-dashboard endpoint returns the list of call logs with correct filtering, pagination, and analytics data."
+    "title": "test_get_call_logs",
+    "description": "Verify that the /api/calls-dashboard endpoint returns a list of call logs with correct pagination, filtering, and analytics data, responding with status 200."
   },
   {
     "id": "TC004",
-    "title": "get post api assistants manage ai assistants",
-    "description": "Check the GET /api/assistants endpoint for listing AI assistants and the POST /api/assistants endpoint for creating new assistants with proper data validation."
+    "title": "test_list_assistants",
+    "description": "Verify that the GET /api/assistants endpoint returns a list of AI assistants with their configurations and statuses."
   },
   {
     "id": "TC005",
-    "title": "post api knowledge base upload document",
-    "description": "Ensure the POST /api/knowledge-base/upload endpoint allows uploading documents to the knowledge base, triggering chunking, embedding, and indexing processes."
+    "title": "test_create_assistant",
+    "description": "Verify that the POST /api/assistants endpoint creates a new AI assistant with provided configuration details and returns appropriate success response."
   },
   {
     "id": "TC006",
-    "title": "post api knowledge base query knowledge base",
-    "description": "Test the POST /api/knowledge-base/query endpoint to verify querying the knowledge base returns relevant results based on the input query."
+    "title": "test_upload_knowledge_base_document",
+    "description": "Verify that the POST /api/knowledge-base/upload endpoint accepts document uploads, processes chunking and embedding synchronously, and stores the document correctly."
   },
   {
     "id": "TC007",
-    "title": "post api vapi setup integration setup",
-    "description": "Validate the POST /api/vapi/setup endpoint for setting up Vapi integration, ensuring correct configuration and response."
+    "title": "test_query_knowledge_base",
+    "description": "Verify that the POST /api/knowledge-base/query endpoint returns relevant search results from the knowledge base using vector search and RAG techniques."
   },
   {
     "id": "TC008",
-    "title": "post api inbound config update inbound call handling",
-    "description": "Test the POST /api/inbound/config endpoint to update inbound call handling configuration and verify changes are applied correctly."
+    "title": "test_setup_vapi_integration",
+    "description": "Verify that the POST /api/vapi/setup endpoint correctly configures Vapi integration settings and returns a success response."
   },
   {
     "id": "TC009",
-    "title": "get api founder console settings retrieve settings",
-    "description": "Verify the GET /api/founder-console/settings endpoint returns the current founder console settings accurately."
+    "title": "test_update_inbound_config",
+    "description": "Verify that the POST /api/inbound/config endpoint updates inbound call handling configuration correctly and returns a success response."
+  },
+  {
+    "id": "TC010",
+    "title": "test_get_founder_console_settings",
+    "description": "Verify that the GET /api/founder-console/settings endpoint returns the current settings for the founder console with status 200."
   }
 ]

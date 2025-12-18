@@ -1,74 +1,49 @@
 import requests
 
 BASE_URL = "http://localhost:3001"
-CALLS_DASHBOARD_ENDPOINT = f"{BASE_URL}/api/calls-dashboard"
 TIMEOUT = 30
 
-# Assuming JWT auth token is needed for authentication, replace with a valid token.
-AUTH_TOKEN = "YOUR_VALID_JWT_TOKEN_HERE"
-
 def test_get_call_logs():
+    url = f"{BASE_URL}/api/calls-dashboard"
     headers = {
-        "Authorization": f"Bearer {AUTH_TOKEN}",
         "Accept": "application/json"
     }
-    params = {
-        # Example pagination params:
-        "page": 1,
-        "pageSize": 10,
-        # Example filters (adjust keys as per actual API):
-        "filterInbound": "true",
-        "filterRecorded": "true",
-        # Additional filters can be added if API supports them
-    }
-
     try:
-        response = requests.get(CALLS_DASHBOARD_ENDPOINT, headers=headers, params=params, timeout=TIMEOUT)
+        response = requests.get(url, headers=headers, timeout=TIMEOUT)
     except requests.RequestException as e:
-        assert False, f"Request to get call logs failed: {e}"
+        assert False, f"Request to {url} failed: {e}"
 
-    assert response.status_code == 200, f"Expected status 200 but got {response.status_code}"
+    # Validate status code
+    assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
 
+    # Validate response is JSON and contains expected data structure
     try:
         data = response.json()
     except ValueError:
-        assert False, "Response is not a valid JSON"
+        assert False, "Response is not valid JSON"
 
-    # Validate that data is a dictionary
-    assert isinstance(data, dict), "Response JSON root should be a dictionary"
+    # Data should be a dict containing at least keys for pagination and call logs
+    assert isinstance(data, dict), "Response JSON root is not an object"
 
-    # Check for call logs list presence and type
-    call_logs = data.get("items") or data.get("calls") or data.get("callLogs")
-    assert call_logs is not None, "Response JSON missing 'items' or equivalent call logs list"
-    assert isinstance(call_logs, list), "'items' should be a list"
+    # Expect keys that relate to call logs list and pagination info
+    expected_keys = ["calls", "pagination"]
+    for key in expected_keys:
+        assert key in data, f"Response JSON missing expected key '{key}'"
 
-    # Validate at least one call log has expected keys reflecting core features
-    if call_logs:
-        sample = call_logs[0]
-        # Adjust key names to accept alternatives due to inconsistencies
-        direction_key = "direction" if "direction" in sample else "callDirection" if "callDirection" in sample else None
-        escalation_flag_key = "escalationFlag" if "escalationFlag" in sample else "escalation_flag" if "escalation_flag" in sample else None
+    # Validate that 'calls' is a list
+    assert isinstance(data["calls"], list), "'calls' should be a list"
 
-        expected_keys = ["id", direction_key, "recordingUrl", "transcript", "agentId", "startTime", "endTime", escalation_flag_key]
+    # Validate that 'pagination' is a dict with expected pagination fields
+    pagination = data["pagination"]
+    assert isinstance(pagination, dict), "'pagination' should be an object"
+    for field in ["page", "total", "totalPages"]:
+        assert field in pagination, f"'pagination' missing field '{field}'"
 
-        for key in expected_keys:
-            assert key is not None, "Expected key for 'direction' or 'escalationFlag' not found in call log item"
-            assert key in sample, f"Call log item missing expected key: {key}"
+    # Optionally check a sample call log object if exists
+    if data["calls"]:
+        call = data["calls"][0]
+        assert isinstance(call, dict), "Each call log entry should be an object"
+        for required_field in ["id", "startTime", "duration", "callerNumber"]:
+            assert required_field in call, f"Call log entry missing field '{required_field}'"
 
-        # direction validation for inbound call handling feature
-        assert sample[direction_key] in ["inbound", "outbound"], f"'{direction_key}' should be 'inbound' or 'outbound'"
-
-        # recordingUrl presence (can be None or valid URL string)
-        if sample["recordingUrl"] is not None:
-            assert isinstance(sample["recordingUrl"], str) and sample["recordingUrl"].startswith("http"), "'recordingUrl' should be a valid URL string or None"
-
-        # Transcript should be string or null (indicating live transcript or recorded)
-        assert sample["transcript"] is None or isinstance(sample["transcript"], str), "'transcript' should be null or string"
-
-        # escalationFlag bool for Smart Escalation feature validation
-        assert isinstance(sample.get(escalation_flag_key, False), bool), f"'{escalation_flag_key}' should be boolean"
-
-def run_test():
-    test_get_call_logs()
-
-run_test()
+test_get_call_logs()
