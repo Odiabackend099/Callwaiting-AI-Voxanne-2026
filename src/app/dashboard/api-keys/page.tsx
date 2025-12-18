@@ -118,7 +118,7 @@ export default function ApiKeysPage() {
         <div className="flex h-screen bg-white">
             <LeftSidebar />
 
-            <div className="flex-1 ml-64 overflow-y-auto">
+            <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
                 <div className="max-w-4xl mx-auto px-6 py-8">
                     <div className="mb-8">
                         <h1 className="text-3xl font-bold text-gray-900 mb-2">API Keys & Integrations</h1>

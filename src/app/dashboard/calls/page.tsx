@@ -218,7 +218,7 @@ const CallsPageContent = () => {
         <div className="flex h-screen bg-white">
             <LeftSidebar />
 
-            <div className="flex-1 ml-64 overflow-y-auto">
+            <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     {/* Header */}
                     <div className="mb-8">

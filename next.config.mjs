@@ -2,9 +2,13 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
     dest: "public",
-    disable: true, // Disable PWA entirely to prevent precaching errors
-    register: false,
-    skipWaiting: false,
+    // Non-breaking default:
+    // - Disable in development
+    // - Enable in production only when explicitly turned on
+    // This avoids reintroducing precache issues while still allowing PWA in prod.
+    disable: process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true',
+    register: true,
+    skipWaiting: true,
 });
 
 /** @type {import('next').NextConfig} */

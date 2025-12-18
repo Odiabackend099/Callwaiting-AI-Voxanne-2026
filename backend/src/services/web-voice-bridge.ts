@@ -364,8 +364,12 @@ function handleVapiTranscriptMessage(
   session: WebVoiceSession
 ): void {
   // Extract text from various possible fields
-  const text = (message.text ?? message.content ?? message.message ?? '').trim();
+  const text = ((message as any).transcript ?? message.text ?? message.content ?? message.message ?? '').trim();
   if (!text) return;
+
+  // Honor partial vs final transcripts when available (Vapi uses transcriptType)
+  const transcriptType = (message as any).transcriptType;
+  const isFinal = transcriptType ? transcriptType === 'final' : true;
 
   // Normalize speaker: Vapi uses 'assistant'/'user', we use 'agent'/'customer'
   const speaker: 'agent' | 'customer' =
@@ -379,7 +383,7 @@ function handleVapiTranscriptMessage(
     type: 'transcript',
     speaker,
     text,
-    is_final: true,
+    is_final: isFinal,
     confidence,
     ts: timestamp
   };
@@ -413,7 +417,7 @@ function handleVapiTranscriptMessage(
     userId: session.userId,
     speaker,
     text,
-    is_final: true,
+    is_final: isFinal,
     ts: timestamp
   } as any);
 

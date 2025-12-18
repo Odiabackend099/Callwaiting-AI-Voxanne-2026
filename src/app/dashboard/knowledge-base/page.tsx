@@ -320,7 +320,7 @@ export default function KnowledgeBasePage() {
     <div className="flex min-h-screen bg-gray-50">
       <LeftSidebar />
 
-      <main className="flex-1 ml-64 p-8">
+      <main className="flex-1 md:ml-64 pt-16 md:pt-0 p-8">
         <div className="max-w-5xl mx-auto space-y-6">
           {/* Header */}
           <div>

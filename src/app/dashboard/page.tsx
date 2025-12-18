@@ -157,7 +157,7 @@ export default function CallWaitingAIDashboard() {
             <LeftSidebar />
 
             {/* Main Content */}
-            <div className="flex-1 ml-64 overflow-y-auto">
+            <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
                 <div className="max-w-7xl mx-auto px-6 py-8 pb-32">
                     {/* Header */}
                     <div className="mb-12">
