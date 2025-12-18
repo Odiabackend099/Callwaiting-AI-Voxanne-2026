@@ -4,6 +4,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit'; // Add express-rate-limit import
 import { createServer } from 'http';
 import { webhooksRouter } from './routes/webhooks';
 import { callsRouter } from './routes/calls';
@@ -79,6 +80,24 @@ app.use(express.json({
     req.rawBody = buf?.toString('utf8');
   },
 }));
+
+// General API rate limiter (100 req/15min)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+app.use(apiLimiter);
+
+// Webhook rate limiter (30 req/1min)
+const webhookLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30,
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+app.use('/api/webhooks', webhookLimiter);
 
 // Request logging middleware (replaces console.log)
 app.use(requestLogger());
