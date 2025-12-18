@@ -24,7 +24,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
     // Determine status text
     const getStatusText = () => {
         if (!isConnected) return 'Connecting...';
-        if (isSpeaking) return 'Voxanne is speaking...';
+        if (isSpeaking) return 'CALL WAITING AI LTD is speaking...';
         if (isRecording) return 'Listening...';
         return 'Mic Muted';
     };

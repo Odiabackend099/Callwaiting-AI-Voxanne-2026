@@ -543,7 +543,7 @@ const CallsPageContent = () => {
                                                             ? 'bg-blue-100 text-blue-700'
                                                             : 'bg-emerald-100 text-emerald-700'
                                                     }`}>
-                                                        {segment.speaker === 'customer' || segment.speaker === 'caller' ? 'Caller' : 'Voxanne'}
+                                                        {segment.speaker === 'customer' || segment.speaker === 'caller' ? 'Caller' : 'CALL WAITING AI LTD'}
                                                     </span>
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm text-gray-900 break-words">{segment.text}</p>

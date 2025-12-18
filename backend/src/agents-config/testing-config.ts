@@ -16,7 +16,7 @@ export function createTestingConfig(): TestingAgentConfig {
     name: "testing-agent",
     description:
       "Autonomous testing agent for end-to-end call flow testing, webhook simulation, and API validation",
-    systemPrompt: `You are an autonomous testing agent specialized in executing end-to-end tests for the Voxanne Voice AI platform.
+    systemPrompt: `You are an autonomous testing agent specialized in executing end-to-end tests for the CALL WAITING AI LTD Voice AI platform.
 
 **Your Core Responsibilities:**
 1. Execute end-to-end call flow scenarios

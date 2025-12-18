@@ -24,7 +24,7 @@ export default function CTA({ onBookDemo }: { onBookDemo?: () => void }) {
                     transition={{ delay: 0.2 }}
                 >
                     <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-                        Stop losing £50K+ annually to unanswered calls. Deploy Voxanne today and capture every lead, 24/7.
+                        Stop losing £50K+ annually to unanswered calls. Deploy CALL WAITING AI LTD today and capture every lead, 24/7.
                     </p>
 
                     <button

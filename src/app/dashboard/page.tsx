@@ -32,7 +32,7 @@ interface RecentCall {
     } | null;
 }
 
-export default function VoxanneDashboard() {
+export default function CALL WAITING AI LTDDashboard() {
     const router = useRouter();
     const { user, loading } = useAuth();
     const [stats, setStats] = useState<DashboardStats>({

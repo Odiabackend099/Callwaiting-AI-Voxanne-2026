@@ -27,7 +27,7 @@ export default function LeftSidebar() {
                     <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
                         <Phone className="w-6 h-6 text-white" />
                     </div>
-                    <span className="text-xl font-bold text-gray-900">Voxanne</span>
+                    <span className="text-xl font-bold text-gray-900">CALL WAITING AI LTD</span>
                 </div>
             </div>
 

@@ -93,7 +93,7 @@ export default function Hero({
                 >
                     {subtitle || (
                         <>
-                            Voxanne captures every lead, 24/7. Your competition already installed her.
+                            CALL WAITING AI LTD captures every lead, 24/7. Your competition already installed her.
                             She&apos;s <strong className="text-white font-semibold">safe</strong>, compliant, and books revenue for your aesthetic practice while you sleep.
                         </>
                     )}
@@ -108,7 +108,7 @@ export default function Hero({
                 >
                     <p className="text-white font-medium mb-4 flex items-center justify-center gap-2 text-sm uppercase tracking-wide opacity-80">
                         <Phone className="w-4 h-4 text-cyan-400" />
-                        Hear Voxanne Now - Call in 10 Seconds
+                        Hear CALL WAITING AI LTD Now - Call in 10 Seconds
                     </p>
                     <OutboundDemo />
                 </motion.div>

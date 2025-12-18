@@ -139,7 +139,7 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    name: 'Voxanne Backend',
+    name: 'CALL WAITING AI LTD Backend',
     version: '1.0.0',
     endpoints: {
       health: '/health',
@@ -364,7 +364,7 @@ server.listen(PORT, () => {
 
   console.log(`
 ╔════════════════════════════════════════╗
-║    Voxanne Backend Server Started      ║
+║    CALL WAITING AI LTD Backend Server Started      ║
 ╚════════════════════════════════════════╝
 
 Port: ${PORT}

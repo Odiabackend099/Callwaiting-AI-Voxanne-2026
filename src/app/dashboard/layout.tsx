@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import DashboardGate from './DashboardGate';
 
 export const metadata: Metadata = {
-    title: "Voxanne AI - Voice Agent Dashboard",
-    description: "Manage and test your Voxanne AI voice agent",
+    title: "CALL WAITING AI LTD AI - Voice Agent Dashboard",
+    description: "Manage and test your CALL WAITING AI LTD AI voice agent",
 };
 
 export default function DashboardLayout({

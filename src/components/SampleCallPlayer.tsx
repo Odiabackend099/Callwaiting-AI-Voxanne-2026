@@ -32,7 +32,7 @@ export default function SampleCallPlayer() {
                             Listen to a Real Call
                         </h2>
                         <p className="text-slate-400 text-lg">
-                            Hear Voxanne handle a BBL inquiry from start to booking.
+                            Hear CALL WAITING AI LTD handle a BBL inquiry from start to booking.
                         </p>
                     </motion.div>
 
@@ -81,9 +81,9 @@ export default function SampleCallPlayer() {
                             </h4>
                             <div className="space-y-4 text-sm">
                                 <div>
-                                    <span className="text-cyan-400 font-medium">Voxanne:</span>
+                                    <span className="text-cyan-400 font-medium">CALL WAITING AI LTD:</span>
                                     <span className="text-slate-300 ml-2">
-                                        "Good afternoon, you've reached Dr. Chen's cosmetic surgery practice. This is Voxanne. How may I assist you today?"
+                                        "Good afternoon, you've reached Dr. Chen's cosmetic surgery practice. This is CALL WAITING AI LTD. How may I assist you today?"
                                     </span>
                                 </div>
                                 <div>
@@ -93,7 +93,7 @@ export default function SampleCallPlayer() {
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="text-cyan-400 font-medium">Voxanne:</span>
+                                    <span className="text-cyan-400 font-medium">CALL WAITING AI LTD:</span>
                                     <span className="text-slate-300 ml-2">
                                         "Absolutely! Dr. Chen's BBL packages start at £8,500. Have you had a consultation before?"
                                     </span>

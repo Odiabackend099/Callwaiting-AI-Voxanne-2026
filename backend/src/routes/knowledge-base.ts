@@ -550,17 +550,17 @@ knowledgeBaseRouter.post('/seed/beverly', async (req: Request, res: Response) =>
       {
         filename: 'beverly_product_guide.md',
         category: 'products_services',
-        content: `# Voxanne AI - Product Guide\n\n## What it is\nVoxanne is an AI receptionist trained for UK/EU medical aesthetics practices. It answers inbound calls 24/7, qualifies leads, and books demos.\n\n## Core promises\n- Answers instantly\n- Captures lead details\n- Books a demo\n- Safe Mode: no medical advice\n\n## Pricing (example)\n- Essentials: £169/mo + setup\n- Growth: £289/mo + setup\n- Premium: £449/mo + setup\n`
+        content: `# CALL WAITING AI LTD AI - Product Guide\n\n## What it is\nCALL WAITING AI LTD is an AI receptionist trained for UK/EU medical aesthetics practices. It answers inbound calls 24/7, qualifies leads, and books demos.\n\n## Core promises\n- Answers instantly\n- Captures lead details\n- Books a demo\n- Safe Mode: no medical advice\n\n## Pricing (example)\n- Essentials: £169/mo + setup\n- Growth: £289/mo + setup\n- Premium: £449/mo + setup\n`
       },
       {
         filename: 'beverly_objections.md',
         category: 'operations',
-        content: `# Voxanne Sales - Objection Handling\n\n## Too expensive\nReframe on ROI: one extra high-value consult can cover monthly cost many times over.\n\n## Patients won't like AI\nOffer a live demo line + emphasize instant answers vs voicemail.\n\n## Medical liability\nReinforce Safe Mode: escalate clinical questions to staff.`
+        content: `# CALL WAITING AI LTD Sales - Objection Handling\n\n## Too expensive\nReframe on ROI: one extra high-value consult can cover monthly cost many times over.\n\n## Patients won't like AI\nOffer a live demo line + emphasize instant answers vs voicemail.\n\n## Medical liability\nReinforce Safe Mode: escalate clinical questions to staff.`
       },
       {
         filename: 'beverly_call_script.md',
         category: 'ai_guidelines',
-        content: `# Voxanne Sales - Call Script (Short)\n\n## Opening\nGood afternoon, this is Sarah from CallWaiting AI. Are you the practice owner/manager?\n\n## Discovery\nAsk 11-14 questions (SPIN): call volume, hours, missed calls, after-hours, procedure mix.\n\n## Close\nBook a 15-minute demo. Offer two time slots.`
+        content: `# CALL WAITING AI LTD Sales - Call Script (Short)\n\n## Opening\nGood afternoon, this is Sarah from CallWaiting AI. Are you the practice owner/manager?\n\n## Discovery\nAsk 11-14 questions (SPIN): call volume, hours, missed calls, after-hours, procedure mix.\n\n## Close\nBook a 15-minute demo. Offer two time slots.`
       }
     ];
 

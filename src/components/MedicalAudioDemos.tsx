@@ -174,7 +174,7 @@ export const MedicalAudioDemos = () => {
                                     </div>
 
                                     <div className="pl-4">
-                                        <div className="text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1">Voxanne&apos;s Response</div>
+                                        <div className="text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1">CALL WAITING AI LTD&apos;s Response</div>
                                         <p className="text-sm text-slate-200 leading-relaxed">
                                             {demo.transcript}
                                         </p>

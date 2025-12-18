@@ -122,7 +122,7 @@ export async function sendDemoSmSTemplate(
   clinic_name: string,
   demo_url: string
 ): Promise<TwilioResult> {
-  const message = `Hi! 👋 Watch your Voxanne AI demo for ${clinic_name}: ${demo_url} - See how we answer 100% of calls 24/7! 📞✨`;
+  const message = `Hi! 👋 Watch your CALL WAITING AI LTD AI demo for ${clinic_name}: ${demo_url} - See how we answer 100% of calls 24/7! 📞✨`;
 
   return sendSmsTwilio({
     to,
@@ -138,7 +138,7 @@ export async function sendDemoWhatsAppTemplate(
   clinic_name: string,
   demo_url: string
 ): Promise<TwilioResult> {
-  const message = `Hi! 👋\n\nHere's your personalized Voxanne AI demo for ${clinic_name}:\n\n${demo_url}\n\nSee how we answer 100% of calls 24/7! 📞✨\n\nQuestions? Just reply here!`;
+  const message = `Hi! 👋\n\nHere's your personalized CALL WAITING AI LTD AI demo for ${clinic_name}:\n\n${demo_url}\n\nSee how we answer 100% of calls 24/7! 📞✨\n\nQuestions? Just reply here!`;
 
   return sendWhatsAppTwilio({
     to,

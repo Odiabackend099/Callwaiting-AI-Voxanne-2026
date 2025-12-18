@@ -73,7 +73,7 @@ export const LiveVoiceInterface = () => {
                         {isTalking && <div className="absolute inset-0 w-3 h-3 rounded-full bg-cyan-400 animate-ping opacity-75"></div>}
                     </div>
                     <span className="text-sm font-medium text-slate-300">
-                        {isTalking ? "Voxanne is listening..." : "Voxanne is ready"}
+                        {isTalking ? "CALL WAITING AI LTD is listening..." : "CALL WAITING AI LTD is ready"}
                     </span>
                 </div>
                 <div className="text-xs text-slate-500 font-mono">LIVE DEMO</div>
@@ -116,7 +116,7 @@ export const LiveVoiceInterface = () => {
                                     }`}
                             >
                                 <span className="block text-[10px] opacity-70 mb-1 font-bold uppercase tracking-wider">
-                                    {msg.role === "ai" ? "Voxanne AI" : "Caller"}
+                                    {msg.role === "ai" ? "CALL WAITING AI LTD AI" : "Caller"}
                                 </span>
                                 {msg.text}
                             </div>
@@ -134,7 +134,7 @@ export const LiveVoiceInterface = () => {
                                 : "bg-cyan-600 text-white rounded-tr-none"
                             }`}>
                             <span className="block text-[10px] opacity-70 mb-1 font-bold uppercase tracking-wider">
-                                {conversationFlow[transcript.length % conversationFlow.length]?.role === "ai" ? "Voxanne AI" : "Caller"}
+                                {conversationFlow[transcript.length % conversationFlow.length]?.role === "ai" ? "CALL WAITING AI LTD AI" : "Caller"}
                             </span>
                             {typingText}
                             <span className="animate-pulse">|</span>

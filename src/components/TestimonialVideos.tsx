@@ -9,7 +9,7 @@ const testimonials = [
         name: "Dr. Sarah Chen",
         role: "Plastic Surgeon",
         clinic: "Beverly Hills Aesthetic Center",
-        quote: "Voxanne paid for herself in the first month. We're now capturing every single after-hours BBL inquiry that we used to miss.",
+        quote: "CALL WAITING AI LTD paid for herself in the first month. We're now capturing every single after-hours BBL inquiry that we used to miss.",
         videoUrl: "/testimonials/dr-chen.mp4",
         thumbnail: "/testimonials/dr-chen-thumb.jpg",
         results: "+42% bookings"
@@ -18,7 +18,7 @@ const testimonials = [
         name: "Dr. James Morrison",
         role: "Dermatologist",
         clinic: "Harley Street Dermatology",
-        quote: "The British accent was crucial for our clientele. Voxanne sounds more professional than our previous receptionist.",
+        quote: "The British accent was crucial for our clientele. CALL WAITING AI LTD sounds more professional than our previous receptionist.",
         videoUrl: "/testimonials/dr-morrison.mp4",
         thumbnail: "/testimonials/dr-morrison-thumb.jpg",
         results: "£95K added revenue"
@@ -54,7 +54,7 @@ export default function TestimonialVideos() {
                         transition={{ delay: 0.1 }}
                         className="text-slate-400 max-w-2xl mx-auto text-lg"
                     >
-                        Real doctors, real results. Watch how Voxanne transformed their practices.
+                        Real doctors, real results. Watch how CALL WAITING AI LTD transformed their practices.
                     </motion.p>
                 </div>
 

@@ -22,7 +22,7 @@ export function SafetyDisclaimer() {
                             ⚖️ SAFE & COMPLIANT
                         </h3>
                         <p className="text-slate-400 text-xs leading-relaxed">
-                            Voxanne does not provide medical advice or diagnosis. All clinical questions are escalated
+                            CALL WAITING AI LTD does not provide medical advice or diagnosis. All clinical questions are escalated
                             to your licensed staff. HIPAA/GDPR certified with BAA included.
                         </p>
                     </div>

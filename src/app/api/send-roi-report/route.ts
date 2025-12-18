@@ -99,10 +99,10 @@ export async function POST(request: NextRequest) {
         const monthlyRevenueLoss = Math.round(missedCallsPerMonth * avgProcedureValue * conversionRate);
         const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
-        // With Voxanne (98% call answer rate - industry-leading)
-        const withVoxanneMissed = Math.round(missedCallsPerMonth * 0.02);
-        const withVoxanneRevenueSaved = Math.round((missedCallsPerMonth - withVoxanneMissed) * avgProcedureValue * conversionRate);
-        const yearlyRevenueSaved = withVoxanneRevenueSaved * 12;
+        // With CALL WAITING AI LTD (98% call answer rate - industry-leading)
+        const withCALL WAITING AI LTDMissed = Math.round(missedCallsPerMonth * 0.02);
+        const withCALL WAITING AI LTDRevenueSaved = Math.round((missedCallsPerMonth - withCALL WAITING AI LTDMissed) * avgProcedureValue * conversionRate);
+        const yearlyRevenueSaved = withCALL WAITING AI LTDRevenueSaved * 12;
 
         // Create HTML email with professional ROI report
         const htmlContent = `
@@ -145,14 +145,14 @@ export async function POST(request: NextRequest) {
                         </td>
                     </tr>
 
-                    <!-- With Voxanne -->
+                    <!-- With CALL WAITING AI LTD -->
                     <tr>
                         <td style="padding: 40px 30px; background-color: #f0fdf4;">
-                            <h2 style="margin: 0 0 20px 0; color: #0f172a; font-size: 24px; font-weight: 700;">✨ With Voxanne AI</h2>
+                            <h2 style="margin: 0 0 20px 0; color: #0f172a; font-size: 24px; font-weight: 700;">✨ With CALL WAITING AI LTD AI</h2>
                             
                             <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
                                 <p style="margin: 0 0 10px 0; color: #d1fae5; font-size: 14px; font-weight: 600; text-transform: uppercase;">98% Call Answer Rate</p>
-                                <p style="margin: 0; color: #ffffff; font-size: 48px; font-weight: 700;">$${withVoxanneRevenueSaved.toLocaleString()}</p>
+                                <p style="margin: 0; color: #ffffff; font-size: 48px; font-weight: 700;">$${withCALL WAITING AI LTDRevenueSaved.toLocaleString()}</p>
                                 <p style="margin: 10px 0 0 0; color: #d1fae5; font-size: 16px;">saved per month</p>
                             </div>
 
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
                                     <td width="50%" style="padding-left: 10px;">
                                         <div style="background-color: #ffffff; border: 2px solid #10b981; padding: 20px; border-radius: 8px; text-align: center;">
                                             <p style="margin: 0 0 5px 0; color: #065f46; font-size: 12px; font-weight: 600; text-transform: uppercase;">MISSED CALLS</p>
-                                            <p style="margin: 0; color: #047857; font-size: 24px; font-weight: 700;">Only ${withVoxanneMissed}/mo</p>
+                                            <p style="margin: 0; color: #047857; font-size: 24px; font-weight: 700;">Only ${withCALL WAITING AI LTDMissed}/mo</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
                     <tr>
                         <td style="padding: 40px 30px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); text-align: center;">
                             <h3 style="margin: 0 0 15px 0; color: #ffffff; font-size: 24px; font-weight: 700;">Ready to Stop Losing Revenue?</h3>
-                            <p style="margin: 0 0 25px 0; color: #cbd5e1; font-size: 16px;">Book a demo and see Voxanne in action</p>
+                            <p style="margin: 0 0 25px 0; color: #cbd5e1; font-size: 16px;">Book a demo and see CALL WAITING AI LTD in action</p>
                             <a href="https://callwaitingai.dev" style="display: inline-block; background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 700; font-size: 16px;">Book Your Demo →</a>
                         </td>
                     </tr>
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
                 missedCallsPerMonth,
                 monthlyRevenueLoss,
                 yearlyRevenueLoss,
-                withVoxanneRevenueSaved,
+                withCALL WAITING AI LTDRevenueSaved,
                 yearlyRevenueSaved,
             }
         });

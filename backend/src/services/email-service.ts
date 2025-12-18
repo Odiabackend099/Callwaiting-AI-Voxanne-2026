@@ -46,7 +46,7 @@ export async function sendEmailViaSmtp(
     const transporter = createTransporter();
 
     const fromEmail = options.from || process.env.FROM_EMAIL || 'noreply@callwaitingai.dev';
-    const fromName = options.from_name || 'Voxanne by CallWaiting AI';
+    const fromName = options.from_name || 'CALL WAITING AI LTD by CallWaiting AI';
 
     const mailOptions = {
       from: `${fromName} <${fromEmail}>`,
@@ -85,7 +85,7 @@ export async function sendDemoEmailTemplate(
   demo_url: string,
   demo_type: 'outbound_intro' | 'inbound_intro' | 'feature_overview'
 ): Promise<SendEmailResult> {
-  const subject = `Your ${demo_type === 'outbound_intro' ? 'Outbound' : 'Inbound'} Voxanne Demo - ${clinic_name}`;
+  const subject = `Your ${demo_type === 'outbound_intro' ? 'Outbound' : 'Inbound'} CALL WAITING AI LTD Demo - ${clinic_name}`;
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -111,13 +111,13 @@ export async function sendDemoEmailTemplate(
 <body>
     <div class="container">
         <div class="header">
-            <h1>Your Voxanne AI Demo</h1>
+            <h1>Your CALL WAITING AI LTD AI Demo</h1>
             <p>The #1 AI Receptionist for ${clinic_name}</p>
         </div>
         <div class="content">
             <p>Hi ${to_name},</p>
 
-            <p>Thanks for your interest in Voxanne! We've prepared a personalized demo showing exactly how our AI receptionist can transform ${clinic_name}'s phone operations.</p>
+            <p>Thanks for your interest in CALL WAITING AI LTD! We've prepared a personalized demo showing exactly how our AI receptionist can transform ${clinic_name}'s phone operations.</p>
 
             <p><strong>What you'll see in this 60-90 second video:</strong></p>
             <ul>
@@ -142,7 +142,7 @@ export async function sendDemoEmailTemplate(
             <p>Questions? Just reply to this email or call us at +44 7424 038250.</p>
 
             <p>Best regards,<br/>
-            <strong>The Voxanne Team</strong><br/>
+            <strong>The CALL WAITING AI LTD Team</strong><br/>
             CallWaiting AI<br/>
             <a href="https://callwaitingai.dev">callwaitingai.dev</a>
             </p>
@@ -157,11 +157,11 @@ export async function sendDemoEmailTemplate(
   `;
 
   const textBody = `
-Your Voxanne AI Demo
+Your CALL WAITING AI LTD AI Demo
 
 Hi ${to_name},
 
-Thanks for your interest in Voxanne! We've prepared a personalized demo showing exactly how our AI receptionist can transform ${clinic_name}'s phone operations.
+Thanks for your interest in CALL WAITING AI LTD! We've prepared a personalized demo showing exactly how our AI receptionist can transform ${clinic_name}'s phone operations.
 
 Watch your demo: ${demo_url}
 
@@ -181,7 +181,7 @@ Key Benefits for ${clinic_name}:
 Questions? Reply to this email or call +44 7424 038250.
 
 Best regards,
-The Voxanne Team
+The CALL WAITING AI LTD Team
 CallWaiting AI
 https://callwaitingai.dev
   `;

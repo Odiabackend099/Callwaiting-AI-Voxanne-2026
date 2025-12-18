@@ -40,14 +40,14 @@ const resources = [
         title: "Setup Walkthrough Video",
         type: "Video",
         icon: Video,
-        description: "5-minute video showing how to set up Voxanne from scratch",
+        description: "5-minute video showing how to set up CALL WAITING AI LTD from scratch",
         downloadUrl: "/resources/setup-video"
     },
     {
         title: "Integration Guide: Mindbody",
         type: "PDF Guide",
         icon: FileText,
-        description: "Step-by-step guide to connect Voxanne with your Mindbody account",
+        description: "Step-by-step guide to connect CALL WAITING AI LTD with your Mindbody account",
         downloadUrl: "/resources/mindbody-integration.pdf"
     }
 ];

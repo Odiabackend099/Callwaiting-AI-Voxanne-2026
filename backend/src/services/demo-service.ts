@@ -105,15 +105,15 @@ export async function sendDemoEmail(recipient: DemoRecipient, context: DemoConte
   if (!bookingId) throw new Error('Failed to create demo booking');
 
   // Send email
-  const emailSubject = `Your Voxanne AI Demo - ${recipient.clinic_name}`;
+  const emailSubject = `Your CALL WAITING AI LTD AI Demo - ${recipient.clinic_name}`;
   const emailBody = `
 Hi ${recipient.name},
 
-Thanks for your interest in Voxanne, the AI receptionist for ${recipient.clinic_name}!
+Thanks for your interest in CALL WAITING AI LTD, the AI receptionist for ${recipient.clinic_name}!
 
 Here's your personalized demo: ${demoAsset.url}
 
-This 60-90 second video shows exactly how Voxanne can:
+This 60-90 second video shows exactly how CALL WAITING AI LTD can:
 ✓ Answer 24/7 calls
 ✓ Book appointments automatically
 ✓ Qualify leads in real-time
@@ -122,7 +122,7 @@ This 60-90 second video shows exactly how Voxanne can:
 If you have questions or want to schedule a live walkthrough, just reply to this email!
 
 Best regards,
-The Voxanne Team
+The CALL WAITING AI LTD Team
 CallWaiting AI
 https://callwaitingai.dev
   `;
@@ -157,7 +157,7 @@ export async function sendDemoSms(recipient: DemoRecipient, context: DemoContext
   const bookingId = await createDemoBooking(agent.org_id, context.agent_id, recipient, context);
   if (!bookingId) throw new Error('Failed to create demo booking');
 
-  const smsMessage = `Hi ${recipient.name}! Watch your Voxanne AI demo here: ${demoAsset.url} - See how we capture 100% of calls 24/7!`;
+  const smsMessage = `Hi ${recipient.name}! Watch your CALL WAITING AI LTD AI demo here: ${demoAsset.url} - See how we capture 100% of calls 24/7!`;
 
   const smsResult = await sendSmsTwilio({ to: recipient.phone, message: smsMessage });
   if (!smsResult.success) throw new Error(smsResult.error || 'Failed to send SMS');
@@ -181,7 +181,7 @@ export async function sendDemoWhatsApp(recipient: DemoRecipient, context: DemoCo
   const bookingId = await createDemoBooking(agent.org_id, context.agent_id, recipient, context);
   if (!bookingId) throw new Error('Failed to create demo booking');
 
-  const whatsappMessage = `Hi ${recipient.name}! 👋\n\nHere's your Voxanne AI demo: ${demoAsset.url}\n\nSee how we answer 100% of calls 24/7! 📞✨`;
+  const whatsappMessage = `Hi ${recipient.name}! 👋\n\nHere's your CALL WAITING AI LTD AI demo: ${demoAsset.url}\n\nSee how we answer 100% of calls 24/7! 📞✨`;
 
   const whatsappResult = await sendWhatsAppTwilio({ to: recipient.phone, message: whatsappMessage });
   if (!whatsappResult.success) throw new Error(whatsappResult.error || 'Failed to send WhatsApp');

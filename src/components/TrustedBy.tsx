@@ -34,7 +34,7 @@ export default function TrustedBy() {
                     </div>
                 </div>
                 <div className="mt-10 text-center">
-                    <p className="text-zinc-300 italic font-medium text-lg">&quot;Since installing Voxanne, our after-hours consult bookings increased by 40%. She paid for herself in the first week.&quot;</p>
+                    <p className="text-zinc-300 italic font-medium text-lg">&quot;Since installing CALL WAITING AI LTD, our after-hours consult bookings increased by 40%. She paid for herself in the first week.&quot;</p>
                     <p className="text-zinc-500 text-sm mt-3 font-semibold">– Dr. Sarah J., Board Certified Plastic Surgeon</p>
                 </div>
 

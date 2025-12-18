@@ -58,7 +58,7 @@ export default function PlasticSurgeryPage() {
                     }
                     subtitle={
                         <>
-                            Capture the 40% of leads that call after-hours. Voxanne qualifies surgical candidates, <br />
+                            Capture the 40% of leads that call after-hours. CALL WAITING AI LTD qualifies surgical candidates, <br />
                             quotes ranges, and books consultations directly into your surgical calendar.
                         </>
                     }
@@ -88,7 +88,7 @@ export default function PlasticSurgeryPage() {
                                 </div>
                             </div>
                             <p className="mt-8 text-lg text-slate-300 italic">
-                                &quot;Voxanne pays for herself in the first 3 days of the month. She handles all the &apos;Are you open?&apos; calls so my coordinator can focus on closing surgeries.&quot;
+                                &quot;CALL WAITING AI LTD pays for herself in the first 3 days of the month. She handles all the &apos;Are you open?&apos; calls so my coordinator can focus on closing surgeries.&quot;
                             </p>
                             <p className="mt-4 text-slate-500 font-medium">- Dr. Michael Chen, Board Certified Plastic Surgeon</p>
                         </div>

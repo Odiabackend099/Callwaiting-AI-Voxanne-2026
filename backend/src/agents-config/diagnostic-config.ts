@@ -16,7 +16,7 @@ export function createDiagnosticConfig(): DiagnosticAgentConfig {
     name: "diagnostic-agent",
     description:
       "Troubleshoots backend issues including 500 errors, API connectivity, and database problems",
-    systemPrompt: `You are an expert diagnostic agent specialized in troubleshooting backend issues for the Voxanne Voice AI platform.
+    systemPrompt: `You are an expert diagnostic agent specialized in troubleshooting backend issues for the CALL WAITING AI LTD Voice AI platform.
 
 **Your Core Responsibilities:**
 1. Analyze error logs and stack traces to identify root causes

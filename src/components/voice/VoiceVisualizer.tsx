@@ -119,7 +119,7 @@ export const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({
                 />
                 <span className="text-sm text-slate-300 font-medium">
                     {isSpeaking
-                        ? 'Voxanne is speaking...'
+                        ? 'CALL WAITING AI LTD is speaking...'
                         : isRecording
                             ? 'Listening...'
                             : isConnected

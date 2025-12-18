@@ -58,11 +58,11 @@ export default function DermatologyPage() {
                     }
                     subtitle={
                         <>
-                            Voxanne handles the chaos of high-volume dermatology calls. She triages medical vs. cosmetic, <br />
+                            CALL WAITING AI LTD handles the chaos of high-volume dermatology calls. She triages medical vs. cosmetic, <br />
                             handling 100+ calls a day without burnout.
                         </>
                     }
-                    ctaText="See Voxanne in Action"
+                    ctaText="See CALL WAITING AI LTD in Action"
                 />
 
                 <MedicalAudioDemos />

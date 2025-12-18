@@ -58,7 +58,7 @@ export default function CosmeticDentistryPage() {
                     }
                     subtitle={
                         <>
-                            Convert high-ticket smile makeover leads while you're in surgery. Voxanne qualifies financing, <br />
+                            Convert high-ticket smile makeover leads while you're in surgery. CALL WAITING AI LTD qualifies financing, <br />
                             explains composite vs porcelain, and books your chair solid.
                         </>
                     }
