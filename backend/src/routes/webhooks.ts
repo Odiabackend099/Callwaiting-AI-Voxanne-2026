@@ -14,6 +14,7 @@ import { computeVapiSignature } from '../utils/vapi-webhook-signature';
 import { log as logger } from '../services/logger';
 import { getRagContext } from '../services/rag-context-provider';
 import VapiClient from '../services/vapi-client';
+import { getVoiceChatSession, sendTranscript, sendVADState } from '../services/voice-chat-handler';
 
 export const webhooksRouter = express.Router();
 
@@ -658,6 +659,16 @@ async function handleCallStarted(event: VapiEvent) {
       });
     }
 
+    // Send initial VAD state to voice chat handler (listening state)
+    const voiceChatSession = getVoiceChatSession(callTracking.id);
+    if (voiceChatSession) {
+      sendVADState(voiceChatSession, 'listening', 0.8);
+      console.log('[handleCallStarted] Sent initial VAD state to voice chat UI', {
+        trackingId: callTracking.id,
+        state: 'listening'
+      });
+    }
+
     logger.info('handleCallStarted', 'Call started successfully', {
       vapiCallId: call.id,
       trackingId: callTracking.id,
@@ -939,6 +950,18 @@ async function handleTranscript(event: any) {
         confidence: 0.95,
         ts: Date.now()
       });
+
+      // Send transcript to voice chat handler (real-time UI updates)
+      const voiceChatSession = getVoiceChatSession(callTracking.id);
+      if (voiceChatSession) {
+        const uiSpeaker = speaker === 'agent' ? 'agent' : 'user';
+        sendTranscript(voiceChatSession, uiSpeaker, cleanTranscript, true);
+        console.log('[handleTranscript] Sent to voice chat UI', {
+          trackingId: callTracking.id,
+          speaker: uiSpeaker,
+          textLength: cleanTranscript.length
+        });
+      }
 
       console.log('[handleTranscript] Broadcast transcript to UI', {
         vapiCallId: call.id,
