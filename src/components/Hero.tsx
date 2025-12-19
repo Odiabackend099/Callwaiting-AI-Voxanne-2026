@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Phone, Play, Pause } from "lucide-react";
-import OutboundDemo from "./OutboundDemo";
+import { ArrowRight, Play, Pause } from "lucide-react";
 import { useState, useRef } from "react";
 import { SafetyDisclaimer } from "./SafetyDisclaimer";
 
@@ -99,21 +98,7 @@ export default function Hero({
                     )}
                 </motion.p>
 
-                {/* PRIMARY CTA - The Demo Call */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.4 }}
-                    className="w-full max-w-xl mb-8"
-                >
-                    <p className="text-white font-medium mb-4 flex items-center justify-center gap-2 text-sm uppercase tracking-wide opacity-80">
-                        <Phone className="w-4 h-4 text-cyan-400" />
-                        Hear Call Waiting AI Now - Call in 10 Seconds
-                    </p>
-                    <OutboundDemo />
-                </motion.div>
-
-                {/* Secondary CTA - Visible Button */}
+                {/* PRIMARY CTA - Visible Button */}
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
