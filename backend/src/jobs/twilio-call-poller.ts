@@ -55,53 +55,55 @@ export async function pollTwilioCalls(): Promise<void> {
         // Check if call_log already exists for this Twilio call SID
         const { data: existing } = await supabase
           .from('call_logs')
-          .select('id')
+          .select('id, recording_storage_path')
           .eq('call_sid', call.sid)
           .maybeSingle();
 
-        if (existing) {
-          logger.debug('TwilioPoller', 'Call already processed', { callSid: call.sid });
-          continue;
+        let callLogId = existing?.id;
+
+        if (!existing) {
+          // Create call_log entry
+          const { data: callLog, error: insertError } = await supabase
+            .from('call_logs')
+            .insert({
+              call_sid: call.sid,
+              from_number: call.from,
+              to_number: call.to,
+              call_type: 'inbound',
+              status: 'completed',
+              duration_seconds: parseInt(call.duration) || 0,
+              created_at: new Date(call.date_created).toISOString(),
+              started_at: new Date(call.date_created).toISOString(),
+              ended_at: new Date().toISOString()
+            })
+            .select('id')
+            .single();
+
+          if (insertError) {
+            logger.error('TwilioPoller', 'Failed to create call_log', {
+              callSid: call.sid,
+              error: insertError.message
+            });
+            continue;
+          }
+
+          callLogId = callLog?.id;
+          logger.info('TwilioPoller', 'Created call_log entry', {
+            callSid: call.sid,
+            callLogId
+          });
         }
 
-        // Create call_log entry
-        const { data: callLog, error: insertError } = await supabase
-          .from('call_logs')
-          .insert({
-            call_sid: call.sid,
-            from_number: call.from,
-            to_number: call.to,
-            call_type: 'inbound',
-            status: 'completed',
-            duration_seconds: parseInt(call.duration) || 0,
-            created_at: new Date(call.date_created).toISOString(),
-            started_at: new Date(call.date_created).toISOString(),
-            ended_at: new Date().toISOString()
-          })
-          .select('id')
-          .single();
-
-        if (insertError) {
-          logger.error('TwilioPoller', 'Failed to create call_log', {
-            callSid: call.sid,
-            error: insertError.message
-          });
-          continue;
-        }
-
-        logger.info('TwilioPoller', 'Created call_log entry', {
-          callSid: call.sid,
-          callLogId: callLog?.id
-        });
-
-        // Fetch recordings for this call
-        try {
-          await fetchAndUploadRecordingsForCall(call.sid, callLog?.id);
-        } catch (recordingError: any) {
-          logger.warn('TwilioPoller', 'Failed to fetch/upload recordings (non-blocking)', {
-            callSid: call.sid,
-            error: recordingError?.message
-          });
+        // Fetch recordings if not already uploaded
+        if (!existing?.recording_storage_path) {
+          try {
+            await fetchAndUploadRecordingsForCall(call.sid, callLogId);
+          } catch (recordingError: any) {
+            logger.warn('TwilioPoller', 'Failed to fetch/upload recordings (non-blocking)', {
+              callSid: call.sid,
+              error: recordingError?.message
+            });
+          }
         }
       } catch (callError: any) {
         logger.error('TwilioPoller', 'Error processing call', {
