@@ -30,23 +30,37 @@ export async function pollVapiCalls(): Promise<void> {
   try {
     logger.info('VapiPoller', 'Starting Vapi call poll');
 
-    // Fetch completed calls from Vapi
-    const response = await axios.get(
-      'https://api.vapi.ai/call',
-      {
-        headers: {
-          'Authorization': `Bearer ${VAPI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        params: {
-          limit: 20,
-          status: 'ended'
-        },
-        timeout: 10000
-      }
-    );
+    // Fetch completed calls from Vapi - try multiple endpoints
+    let calls: VapiCall[] = [];
+    
+    try {
+      // Try the main calls endpoint
+      const response = await axios.get(
+        'https://api.vapi.ai/call',
+        {
+          headers: {
+            'Authorization': `Bearer ${VAPI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            limit: 20
+          },
+          timeout: 10000
+        }
+      );
 
-    const calls: VapiCall[] = response.data.calls || [];
+      calls = response.data.calls || response.data || [];
+      logger.info('VapiPoller', `Fetched calls from /call endpoint`, {
+        count: calls.length,
+        responseType: typeof response.data
+      });
+    } catch (error: any) {
+      logger.warn('VapiPoller', 'Failed to fetch from /call endpoint', {
+        error: error?.message,
+        status: error?.response?.status
+      });
+    }
+
     logger.info('VapiPoller', `Found ${calls.length} completed calls`, {
       count: calls.length
     });
