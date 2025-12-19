@@ -13,7 +13,7 @@ const logger = createLogger('CallRecordingStorage');
 
 // Configuration constants
 const RECORDING_CONFIG = {
-  SIGNED_URL_EXPIRY_SECONDS: parseInt(process.env.RECORDING_URL_EXPIRY_SECONDS || '900'), // 15 min default
+  SIGNED_URL_EXPIRY_SECONDS: parseInt(process.env.RECORDING_URL_EXPIRY_SECONDS || '3600'), // 1 hour default (was 15 min)
   MAX_DOWNLOAD_RETRIES: 3,
   RETRY_DELAYS_MS: [1000, 2000, 4000],
   MAX_FILE_SIZE_BYTES: 500 * 1024 * 1024, // 500MB

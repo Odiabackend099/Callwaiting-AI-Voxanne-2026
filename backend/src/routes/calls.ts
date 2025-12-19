@@ -284,7 +284,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
     // Fetch call_logs to get recording_url or storage path
     const { data: callLog, error: callError } = await supabase
       .from('call_logs')
-      .select('recording_url, vapi_call_id')
+      .select('recording_url, recording_storage_path, recording_signed_url_expires_at, vapi_call_id')
       .eq('vapi_call_id', callId)
       .maybeSingle();
 
@@ -299,26 +299,87 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
       return;
     }
 
-    if (!callLog.recording_url) {
+    if (!callLog.recording_url && !callLog.recording_storage_path) {
       res.status(404).json({ error: 'No recording available for this call' });
       return;
     }
 
     // If it's a storage path, generate signed URL
-    if (callLog.recording_url.startsWith('calls/')) {
-      const signedUrl = await getSignedRecordingUrl(callLog.recording_url);
+    if (callLog.recording_storage_path) {
+      const signedUrl = await getSignedRecordingUrl(callLog.recording_storage_path);
       if (!signedUrl) {
         res.status(500).json({ error: 'Failed to generate recording URL' });
         return;
       }
-      res.json({ recordingUrl: signedUrl });
-    } else {
-      // Direct URL from Vapi
-      res.json({ recordingUrl: callLog.recording_url });
+      res.json({ 
+        recordingUrl: signedUrl,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        expiresIn: 3600
+      });
+    } else if (callLog.recording_url) {
+      // Direct URL from Vapi (legacy)
+      res.json({ 
+        recordingUrl: callLog.recording_url,
+        expiresAt: callLog.recording_signed_url_expires_at,
+        expiresIn: callLog.recording_signed_url_expires_at 
+          ? Math.floor((new Date(callLog.recording_signed_url_expires_at).getTime() - Date.now()) / 1000)
+          : 900
+      });
     }
   } catch (error: any) {
     console.error('[GET /calls/:callId/recording] Error:', error.message);
     res.status(500).json({ error: 'Failed to fetch recording' });
+  }
+});
+
+// Refresh recording URL (before expiry)
+callsRouter.post('/:callId/recording/refresh', async (req: Request, res: Response) => {
+  try {
+    const { callId } = req.params;
+
+    // Fetch call_logs to get storage path
+    const { data: callLog, error: callError } = await supabase
+      .from('call_logs')
+      .select('recording_storage_path, vapi_call_id')
+      .eq('vapi_call_id', callId)
+      .maybeSingle();
+
+    if (callError) {
+      console.error('[POST /calls/:callId/recording/refresh] DB error:', callError.message);
+      res.status(500).json({ error: 'Failed to refresh recording URL' });
+      return;
+    }
+
+    if (!callLog || !callLog.recording_storage_path) {
+      res.status(404).json({ error: 'Recording not found or not stored' });
+      return;
+    }
+
+    // Generate fresh signed URL
+    const signedUrl = await getSignedRecordingUrl(callLog.recording_storage_path);
+    if (!signedUrl) {
+      res.status(500).json({ error: 'Failed to generate recording URL' });
+      return;
+    }
+
+    // Update the signed URL in database
+    const expiresAt = new Date(Date.now() + 3600000).toISOString();
+    await supabase
+      .from('call_logs')
+      .update({
+        recording_signed_url: signedUrl,
+        recording_signed_url_expires_at: expiresAt
+      })
+      .eq('vapi_call_id', callId);
+
+    res.json({ 
+      recordingUrl: signedUrl,
+      expiresAt,
+      expiresIn: 3600
+    });
+  } catch (error: any) {
+    console.error('[POST /calls/:callId/recording/refresh] Error:', error.message);
+    res.status(500).json({ error: 'Failed to refresh recording URL' });
   }
 });
 

@@ -216,7 +216,8 @@ export class VapiClient {
           language: config.language || 'en'  // Use stored language
         },
         firstMessage: config.firstMessage || 'Hello! How can I help you today?',
-        functions: config.functions || this.getDefaultDemoFunctions()
+        functions: config.functions || this.getDefaultDemoFunctions(),
+        recordingEnabled: true  // CRITICAL: Enable recording for all calls
       };
 
       // Add maxDurationSeconds if provided

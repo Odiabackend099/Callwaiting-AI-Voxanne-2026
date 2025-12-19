@@ -1127,7 +1127,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
   const { call, artifact } = event;
 
   if (!call || !call.id) {
-    console.error('[handleEndOfCallReport] Missing call data');
+    logger.error('Webhooks', 'Missing call data in end-of-call-report');
     return;
   }
 
@@ -1141,9 +1141,12 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .maybeSingle();
 
     if (checkError) {
-      console.error('[handleEndOfCallReport] Error checking idempotency:', checkError);
+      logger.error('Webhooks', 'Error checking idempotency', {
+        callId: call.id,
+        error: checkError.message
+      });
     } else if (existing) {
-      console.log('[handleEndOfCallReport] Duplicate event, skipping', { eventId, vapiCallId: call.id });
+      logger.info('Webhooks', 'Duplicate event, skipping', { eventId, vapiCallId: call.id });
       return;
     }
 
@@ -1155,7 +1158,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .single();
 
     if (!callLog) {
-      console.error('[handleEndOfCallReport] Call log not found:', call.id);
+      logger.error('Webhooks', 'Call log not found', { callId: call.id });
       return;
     }
 
@@ -1168,7 +1171,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
 
     const callType = callTypeResult?.callType || 'outbound';
 
-    console.log('[handleEndOfCallReport] Call type detected:', {
+    logger.info('Webhooks', 'Call type detected', {
       callId: call.id,
       callType,
       reason: callTypeResult?.reason
@@ -1177,9 +1180,13 @@ async function handleEndOfCallReport(event: VapiEvent) {
     // Handle recording upload to Supabase Storage
     let recordingStoragePath: string | null = null;
     let recordingSignedUrl: string | null = null;
+    let recordingUploadedAt: string | null = null;
 
     if (artifact?.recording) {
-      console.log('[handleEndOfCallReport] Uploading recording to storage:', call.id);
+      logger.info('Webhooks', 'Uploading recording to storage', {
+        callId: call.id,
+        callType
+      });
 
       const uploadResult = await uploadCallRecording({
         orgId: callLog.org_id,
@@ -1192,32 +1199,47 @@ async function handleEndOfCallReport(event: VapiEvent) {
       if (uploadResult.success) {
         recordingStoragePath = uploadResult.storagePath || null;
         recordingSignedUrl = uploadResult.signedUrl || null;
+        recordingUploadedAt = new Date().toISOString();
 
-        console.log('[handleEndOfCallReport] Recording uploaded successfully:', {
+        logger.info('Webhooks', 'Recording uploaded successfully', {
           callId: call.id,
-          storagePath: recordingStoragePath
+          storagePath: recordingStoragePath,
+          uploadedAt: recordingUploadedAt
         });
       } else {
-        console.error('[handleEndOfCallReport] Recording upload failed:', {
+        logger.error('Webhooks', 'Recording upload failed', {
           callId: call.id,
           error: uploadResult.error
         });
       }
+    } else {
+      logger.warn('Webhooks', 'No recording available for call', {
+        callId: call.id,
+        callType,
+        hasArtifact: !!artifact
+      });
     }
 
-    // Update call_logs with final data
+    // Update call_logs with final data including recording metadata
     const { error: callLogsError } = await supabase
       .from('call_logs')
       .update({
         outcome: 'completed',
-        recording_url: artifact?.recording || null,
+        recording_url: recordingSignedUrl || null,
+        recording_storage_path: recordingStoragePath || null,
+        recording_signed_url_expires_at: recordingSignedUrl ? new Date(Date.now() + 3600000).toISOString() : null,
+        recording_uploaded_at: recordingUploadedAt,
         transcript: artifact?.transcript || null,
+        transcript_only_fallback: !recordingStoragePath && !!artifact?.transcript,
         cost: call.cost || 0
       })
       .eq('vapi_call_id', call.id);
 
     if (callLogsError) {
-      console.error('[handleEndOfCallReport] Failed to update call log:', callLogsError);
+      logger.error('Webhooks', 'Failed to update call log', {
+        callId: call.id,
+        error: callLogsError.message
+      });
     }
 
     // Also update calls table with call_type and recording_storage_path
@@ -1231,20 +1253,25 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .eq('vapi_call_id', call.id);
 
     if (callsError) {
-      console.error('[handleEndOfCallReport] Failed to update calls table:', callsError);
+      logger.error('Webhooks', 'Failed to update calls table', {
+        callId: call.id,
+        error: callsError.message
+      });
 
       // CRITICAL: If calls table update fails, clean up orphaned recording
       if (recordingStoragePath) {
-        console.warn('[handleEndOfCallReport] Cleaning up orphaned recording due to DB error:', {
+        logger.warn('Webhooks', 'Cleaning up orphaned recording due to DB error', {
           callId: call.id,
           storagePath: recordingStoragePath
         });
 
         try {
           await deleteRecording(recordingStoragePath);
-          console.log('[handleEndOfCallReport] Orphaned recording deleted successfully');
+          logger.info('Webhooks', 'Orphaned recording deleted successfully', {
+            storagePath: recordingStoragePath
+          });
         } catch (deleteError: any) {
-          console.error('[handleEndOfCallReport] Failed to delete orphaned recording:', {
+          logger.error('Webhooks', 'Failed to delete orphaned recording', {
             storagePath: recordingStoragePath,
             error: deleteError.message
           });
@@ -1255,11 +1282,34 @@ async function handleEndOfCallReport(event: VapiEvent) {
       // Throw error to indicate webhook processing failed
       throw new Error(`Failed to update calls table: ${callsError.message}`);
     } else {
-      console.log('[handleEndOfCallReport] Call report saved:', {
+      logger.info('Webhooks', 'Call report saved', {
         callId: call.id,
         callType,
         hasRecording: !!recordingStoragePath
       });
+
+      // Broadcast recording ready event to dashboard via WebSocket
+      if (recordingStoragePath && recordingSignedUrl) {
+        try {
+          await wsBroadcast({
+            type: 'recording_ready',
+            callId: call.id,
+            recordingUrl: recordingSignedUrl,
+            storagePath: recordingStoragePath,
+            expiresAt: new Date(Date.now() + 3600000).toISOString(),
+            timestamp: new Date().toISOString()
+          });
+
+          logger.info('Webhooks', 'Recording ready event broadcasted', {
+            callId: call.id
+          });
+        } catch (broadcastError: any) {
+          logger.warn('Webhooks', 'Failed to broadcast recording ready event (non-blocking)', {
+            callId: call.id,
+            error: broadcastError?.message
+          });
+        }
+      }
     }
 
     // Detect hallucinations in transcript
@@ -1274,7 +1324,9 @@ async function handleEndOfCallReport(event: VapiEvent) {
 
     // Lead/campaign follow-up automation intentionally disabled for this project.
   } catch (error) {
-    console.error('[handleEndOfCallReport] Error:', error);
+    logger.error('Webhooks', 'Error in handleEndOfCallReport', {
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 }
 

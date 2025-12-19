@@ -76,7 +76,6 @@ Remember: You're having a conversation, not delivering a pitch. Listen, ask ques
 - ✅ Identifies the pain point (missed calls)
 - ✅ Asks a yes/no question (easy to answer, keeps conversation going)
 - ✅ Opens the door for them to share their challenge
-
 ---
 
 ## Alternative First Messages (for different industries)
