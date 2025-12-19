@@ -18,7 +18,6 @@ import { WebSocketServer } from 'ws';
 import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
 import { supabase } from './services/supabase-client';
-import webTestDiagnosticsRouter from './routes/web-test-diagnostics';
 import inboundSetupRouter from './routes/inbound-setup';
 import knowledgeBaseRouter from './routes/knowledge-base';
 import { ragRouter } from './routes/knowledge-base-rag';
