@@ -39,7 +39,10 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     let query = supabase
       .from('calls')
       .select('*', { count: 'exact' })
-      .eq('org_id', orgId);
+      .eq('org_id', orgId)
+      .not('caller_name', 'ilike', '%demo%')
+      .not('caller_name', 'ilike', '%test%')
+      .not('phone_number', 'ilike', '%test%');
 
     // Apply filters
     if (parsed.call_type) {
