@@ -210,6 +210,14 @@ interface VapiEvent {
 
 webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
   try {
+    // Log every webhook call for debugging
+    logger.info('Vapi Webhook', 'Webhook received', {
+      ip: req.ip,
+      timestamp: new Date().toISOString(),
+      eventType: req.body?.type,
+      callId: req.body?.call?.id
+    });
+
     // ===== CRITICAL FIX #9: Enforce webhook signature verification =====
     try {
       const isValid = await verifyVapiSignature(req);
