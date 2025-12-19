@@ -63,28 +63,33 @@
 
 ---
 
-## In Progress 🔄
+## Completed (Continued) ✅
 
-### 8. Add Download Tracking (Recording Audit Trail)
-- **Status:** Starting
-- **Files to modify:**
-  - `backend/src/routes/calls.ts` - Add logging to GET /recording endpoint
-  - Create migration for `recording_downloads` table
-- **Expected:** 30 minutes
+### 8. Add Download Tracking (Recording Audit Trail) ✅
+- **File:** `backend/src/routes/calls.ts`
+- **Changes:**
+  - Added download logging to GET /api/calls/{callId}/recording endpoint
+  - Captures: user_id, timestamp, IP address, user_agent
+  - Non-blocking: doesn't affect response time
+- **Impact:** Can now audit who downloaded what when
 
-### 9. Add Orphan Detection and Cleanup Job
-- **Status:** Pending
-- **Files to create:**
-  - `backend/src/jobs/orphan-recording-cleanup.ts`
-  - Migration for `orphaned_recordings` table
-- **Expected:** 1 hour
+### 9. Add Orphan Detection and Cleanup Job ✅
+- **File:** `backend/src/jobs/orphan-recording-cleanup.ts`
+- **Changes:**
+  - Detects recordings older than 7 days with no signed URL
+  - Runs daily at 2 AM UTC
+  - Cleans up orphaned files from storage
+  - Tracks deleted orphans in database
+- **Impact:** No more orphaned recordings wasting storage
 
-### 10. Implement Upload Retry Mechanism
-- **Status:** Pending
-- **Files to modify:**
-  - `backend/src/routes/webhooks.ts` - Add retry logic
-  - Create migration for `failed_recording_uploads` table
-- **Expected:** 1.5 hours
+### 10. Implement Upload Retry Mechanism ✅
+- **File:** `backend/src/services/recording-upload-retry.ts`
+- **Changes:**
+  - Logs failed uploads for automatic retry
+  - Exponential backoff: 5, 10, 20, 40 minutes
+  - Max 3 retry attempts per upload
+  - Runs every 5 minutes
+- **Impact:** Failed uploads automatically recovered
 
 ---
 
