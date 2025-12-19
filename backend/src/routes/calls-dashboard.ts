@@ -14,8 +14,9 @@ const callsRouter = Router();
 callsRouter.use(requireAuthOrDev);
 
 /**
- * GET /api/calls
+ * GET /api/calls-dashboard
  * Get paginated list of calls with filtering and sorting
+ * Inbound calls from call_logs, outbound calls from calls table
  */
 callsRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -35,72 +36,114 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
     const parsed = schema.parse(req.query);
     const offset = (parsed.page - 1) * parsed.limit;
+    const limit = parsed.limit;
 
-    let query = supabase
-      .from('calls')
-      .select('*', { count: 'exact' })
-      .eq('org_id', orgId)
-      .not('caller_name', 'ilike', '%demo%')
-      .not('caller_name', 'ilike', '%test%')
-      .not('phone_number', 'ilike', '%test%');
+    let allCalls: any[] = [];
+    let totalCount = 0;
 
-    // Apply filters
-    if (parsed.call_type) {
-      query = query.eq('call_type', parsed.call_type);
-    }
-    if (parsed.startDate) {
-      query = query.gte('call_date', new Date(parsed.startDate).toISOString());
-    }
-    if (parsed.endDate) {
-      query = query.lte('call_date', new Date(parsed.endDate).toISOString());
-    }
-    if (parsed.status) {
-      query = query.eq('status', parsed.status);
-    }
-    if (parsed.search) {
-      query = query.or(`caller_name.ilike.%${parsed.search}%,phone_number.ilike.%${parsed.search}%`);
+    // Fetch inbound calls from call_logs
+    if (!parsed.call_type || parsed.call_type === 'inbound') {
+      let inboundQuery = supabase
+        .from('call_logs')
+        .select('*', { count: 'exact' })
+        .eq('call_type', 'inbound')
+        .not('null', 'recording_storage_path');
+
+      if (parsed.startDate) {
+        inboundQuery = inboundQuery.gte('created_at', new Date(parsed.startDate).toISOString());
+      }
+      if (parsed.endDate) {
+        inboundQuery = inboundQuery.lte('created_at', new Date(parsed.endDate).toISOString());
+      }
+      if (parsed.search) {
+        inboundQuery = inboundQuery.or(`caller_name.ilike.%${parsed.search}%,phone_number.ilike.%${parsed.search}%`);
+      }
+
+      inboundQuery = inboundQuery.order('created_at', { ascending: false });
+
+      const { data: inboundCalls, error: inboundError, count: inboundCount } = await inboundQuery;
+
+      if (inboundError) {
+        log.warn('Calls', 'Failed to fetch inbound calls', { error: inboundError.message });
+      } else {
+        allCalls = allCalls.concat((inboundCalls || []).map((call: any) => ({
+          id: call.id,
+          phone_number: call.phone_number || 'Unknown',
+          caller_name: call.caller_name || 'Unknown',
+          call_date: call.created_at,
+          duration_seconds: call.duration_seconds || 0,
+          status: call.status || 'completed',
+          has_recording: !!call.recording_storage_path,
+          has_transcript: !!call.transcript,
+          sentiment_score: call.sentiment_score,
+          sentiment_label: call.sentiment_label,
+          call_type: 'inbound'
+        })));
+        totalCount += (inboundCount || 0);
+      }
     }
 
-    // Apply sorting
-    if (parsed.sortBy === 'date') {
-      query = query.order('call_date', { ascending: false });
-    } else if (parsed.sortBy === 'duration') {
-      query = query.order('duration_seconds', { ascending: false });
-    } else if (parsed.sortBy === 'name') {
-      query = query.order('caller_name', { ascending: true });
+    // Fetch outbound calls from calls table
+    if (!parsed.call_type || parsed.call_type === 'outbound') {
+      let outboundQuery = supabase
+        .from('calls')
+        .select('*', { count: 'exact' })
+        .eq('org_id', orgId)
+        .eq('call_type', 'outbound')
+        .not('caller_name', 'ilike', '%demo%')
+        .not('caller_name', 'ilike', '%test%')
+        .not('phone_number', 'ilike', '%test%');
+
+      if (parsed.startDate) {
+        outboundQuery = outboundQuery.gte('call_date', new Date(parsed.startDate).toISOString());
+      }
+      if (parsed.endDate) {
+        outboundQuery = outboundQuery.lte('call_date', new Date(parsed.endDate).toISOString());
+      }
+      if (parsed.status) {
+        outboundQuery = outboundQuery.eq('status', parsed.status);
+      }
+      if (parsed.search) {
+        outboundQuery = outboundQuery.or(`caller_name.ilike.%${parsed.search}%,phone_number.ilike.%${parsed.search}%`);
+      }
+
+      outboundQuery = outboundQuery.order('call_date', { ascending: false });
+
+      const { data: outboundCalls, error: outboundError, count: outboundCount } = await outboundQuery;
+
+      if (outboundError) {
+        log.warn('Calls', 'Failed to fetch outbound calls', { error: outboundError.message });
+      } else {
+        allCalls = allCalls.concat((outboundCalls || []).map((call: any) => ({
+          id: call.id,
+          phone_number: call.phone_number,
+          caller_name: call.caller_name || 'Unknown',
+          call_date: call.call_date,
+          duration_seconds: call.duration_seconds,
+          status: call.status,
+          has_recording: !!call.recording_url,
+          has_transcript: !!call.transcript,
+          sentiment_score: call.sentiment_score,
+          sentiment_label: call.sentiment_label,
+          call_type: 'outbound'
+        })));
+        totalCount += (outboundCount || 0);
+      }
     }
+
+    // Sort all calls by date
+    allCalls.sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime());
 
     // Apply pagination
-    query = query.range(offset, offset + parsed.limit - 1);
-
-    const { data: calls, error, count } = await query;
-
-    if (error) {
-      log.error('Calls', 'Failed to fetch calls', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
-    }
-
-    // Format response
-    const formattedCalls = (calls || []).map((call: any) => ({
-      id: call.id,
-      phone_number: call.phone_number,
-      caller_name: call.caller_name || 'Unknown',
-      call_date: call.call_date,
-      duration_seconds: call.duration_seconds,
-      status: call.status,
-      has_recording: !!call.recording_url,
-      has_transcript: !!call.transcript,
-      sentiment_score: call.sentiment_score,
-      sentiment_label: call.sentiment_label
-    }));
+    const paginatedCalls = allCalls.slice(offset, offset + limit);
 
     return res.json({
-      calls: formattedCalls,
+      calls: paginatedCalls,
       pagination: {
         page: parsed.page,
         limit: parsed.limit,
-        total: count || 0,
-        pages: Math.ceil((count || 0) / parsed.limit)
+        total: totalCount,
+        pages: Math.ceil(totalCount / parsed.limit)
       }
     });
   } catch (e: any) {
