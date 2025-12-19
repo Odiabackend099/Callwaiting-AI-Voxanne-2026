@@ -139,7 +139,6 @@ app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
 app.use('/api/founder-console', agentSyncRouter);
 // app.use('/api/founder-console/workspace', workspaceRouter);
-app.use('/', webTestDiagnosticsRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

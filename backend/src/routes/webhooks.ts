@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
-import { sendDemoEmail, sendDemoSms, sendDemoWhatsApp, DemoRecipient, DemoContext } from '../services/demo-service';
 import { wsBroadcast } from '../services/websocket';
 import { getIntegrationSettings } from './founder-console-settings';
 import { validateE164Format } from '../utils/phone-validation';
@@ -1354,52 +1353,11 @@ async function handleFunctionCall(event: any) {
       functionName: functionCall?.name
     });
 
-    // Handle specific function calls (e.g., create_lead, book_demo_call)
+    // Handle specific function calls
     const { name, parameters } = functionCall || {};
 
-    if (name === 'send_demo_email') {
-      console.log('[handleFunctionCall] Sending demo email to:', redactEmail(parameters.prospect_email));
-      const recipient: DemoRecipient = {
-        name: parameters.prospect_name,
-        email: parameters.prospect_email,
-        clinic_name: parameters.clinic_name
-      };
-      const context: DemoContext = {
-        demo_type: parameters.demo_type,
-        agent_id: parameters.agent_id,
-        call_id: call.id
-      };
-      await sendDemoEmail(recipient, context);
-      return { result: `Demo email sent to ${redactEmail(parameters.prospect_email)}` };
-    } else if (name === 'send_demo_whatsapp') {
-      console.log('[handleFunctionCall] Sending demo WhatsApp to:', redactPhone(parameters.prospect_phone));
-      const recipient: DemoRecipient = {
-        name: parameters.prospect_name,
-        phone: parameters.prospect_phone,
-        clinic_name: parameters.clinic_name
-      };
-      const context: DemoContext = {
-        demo_type: parameters.demo_type,
-        agent_id: parameters.agent_id,
-        call_id: call.id
-      };
-      await sendDemoWhatsApp(recipient, context);
-      return { result: `Demo WhatsApp sent to ${redactPhone(parameters.prospect_phone)}` };
-    } else if (name === 'send_demo_sms') {
-      console.log('[handleFunctionCall] Sending demo SMS to:', redactPhone(parameters.prospect_phone));
-      const recipient: DemoRecipient = {
-        name: parameters.prospect_name,
-        phone: parameters.prospect_phone,
-        clinic_name: parameters.clinic_name
-      };
-      const context: DemoContext = {
-        demo_type: parameters.demo_type,
-        agent_id: parameters.agent_id,
-        call_id: call.id
-      };
-      await sendDemoSms(recipient, context);
-      return { result: `Demo SMS sent to ${redactPhone(parameters.prospect_phone)}` };
-    }
+    // Production-only function handling
+    // Demo functions removed for production
 
     return { result: `Function ${name} executed` };
   } catch (error: any) {
