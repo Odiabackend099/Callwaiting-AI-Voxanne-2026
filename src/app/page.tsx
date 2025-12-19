@@ -7,7 +7,6 @@ import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import TrustedBy from "@/components/TrustedBy";
 import RevenueLeak from "@/components/RevenueLeak";
-import { MedicalAudioDemos } from "@/components/MedicalAudioDemos";
 import SafetySection from "@/components/SafetySection";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
 import HowItWorks from "@/components/HowItWorks";
@@ -68,10 +67,7 @@ export default function Home() {
                 {/* 2. PAIN: Make the problem hurt */}
                 <RevenueLeak />
 
-                {/* 3. PROOF: Show, don't just tell */}
-                <MedicalAudioDemos />
-
-                {/* 4. SOLUTION & SAFETY: The unique mechanism */}
+                {/* 3. SOLUTION & SAFETY: The unique mechanism */}
                 <SafetySection />
                 <PerformanceMetrics />
 
