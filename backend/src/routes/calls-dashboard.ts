@@ -153,8 +153,8 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/calls/:callId
- * Get full call details including transcript and recording
+ * GET /api/calls-dashboard/:callId
+ * Get full call details from either call_logs (inbound) or calls (outbound)
  */
 callsRouter.get('/:callId', async (req: Request, res: Response) => {
   try {
@@ -163,43 +163,82 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
 
     const { callId } = req.params;
 
-    const { data: call, error } = await supabase
+    // Try to fetch from call_logs first (inbound calls)
+    const { data: inboundCall, error: inboundError } = await supabase
+      .from('call_logs')
+      .select('*')
+      .eq('id', callId)
+      .eq('call_type', 'inbound')
+      .single();
+
+    if (inboundCall) {
+      // Format transcript with sentiment
+      const transcript = (inboundCall.transcript || []).map((segment: any) => ({
+        speaker: segment.speaker,
+        text: segment.text,
+        timestamp: segment.timestamp || 0,
+        sentiment: segment.sentiment || 'neutral'
+      }));
+
+      return res.json({
+        id: inboundCall.id,
+        phone_number: inboundCall.phone_number || 'Unknown',
+        caller_name: inboundCall.caller_name || 'Unknown',
+        call_date: inboundCall.created_at,
+        duration_seconds: inboundCall.duration_seconds || 0,
+        status: inboundCall.status || 'completed',
+        recording_url: inboundCall.recording_signed_url,
+        recording_storage_path: inboundCall.recording_storage_path,
+        transcript,
+        sentiment_score: inboundCall.sentiment_score,
+        sentiment_label: inboundCall.sentiment_label,
+        action_items: inboundCall.action_items || [],
+        vapi_call_id: inboundCall.vapi_call_id,
+        created_at: inboundCall.created_at,
+        call_type: 'inbound'
+      });
+    }
+
+    // Fall back to calls table (outbound calls)
+    const { data: outboundCall, error: outboundError } = await supabase
       .from('calls')
       .select('*')
       .eq('id', callId)
       .eq('org_id', orgId)
+      .eq('call_type', 'outbound')
       .not('caller_name', 'ilike', '%demo%')
       .not('caller_name', 'ilike', '%test%')
       .not('phone_number', 'ilike', '%test%')
       .single();
 
-    if (error || !call) {
-      return res.status(404).json({ error: 'Call not found' });
+    if (outboundCall) {
+      // Format transcript with sentiment
+      const transcript = (outboundCall.transcript || []).map((segment: any) => ({
+        speaker: segment.speaker,
+        text: segment.text,
+        timestamp: segment.timestamp || 0,
+        sentiment: segment.sentiment || 'neutral'
+      }));
+
+      return res.json({
+        id: outboundCall.id,
+        phone_number: outboundCall.phone_number,
+        caller_name: outboundCall.caller_name || 'Unknown',
+        call_date: outboundCall.call_date,
+        duration_seconds: outboundCall.duration_seconds,
+        status: outboundCall.status,
+        recording_url: outboundCall.recording_url,
+        transcript,
+        sentiment_score: outboundCall.sentiment_score,
+        sentiment_label: outboundCall.sentiment_label,
+        action_items: outboundCall.action_items || [],
+        vapi_call_id: outboundCall.vapi_call_id,
+        created_at: outboundCall.created_at,
+        call_type: 'outbound'
+      });
     }
 
-    // Format transcript with sentiment
-    const transcript = (call.transcript || []).map((segment: any) => ({
-      speaker: segment.speaker,
-      text: segment.text,
-      timestamp: segment.timestamp || 0,
-      sentiment: segment.sentiment || 'neutral'
-    }));
-
-    return res.json({
-      id: call.id,
-      phone_number: call.phone_number,
-      caller_name: call.caller_name || 'Unknown',
-      call_date: call.call_date,
-      duration_seconds: call.duration_seconds,
-      status: call.status,
-      recording_url: call.recording_url,
-      transcript,
-      sentiment_score: call.sentiment_score,
-      sentiment_label: call.sentiment_label,
-      action_items: call.action_items || [],
-      vapi_call_id: call.vapi_call_id,
-      created_at: call.created_at
-    });
+    return res.status(404).json({ error: 'Call not found' });
   } catch (e: any) {
     log.error('Calls', 'GET /:callId - Error', { error: e?.message });
     return res.status(500).json({ error: e?.message || 'Failed to fetch call' });
