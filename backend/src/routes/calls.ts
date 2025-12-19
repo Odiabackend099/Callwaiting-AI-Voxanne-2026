@@ -284,7 +284,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
     // Fetch call_logs to get recording_url or storage path
     const { data: callLog, error: callError } = await supabase
       .from('call_logs')
-      .select('recording_url, recording_storage_path, recording_signed_url_expires_at, vapi_call_id')
+      .select('id, recording_url, recording_storage_path, recording_signed_url_expires_at, vapi_call_id')
       .eq('vapi_call_id', callId)
       .maybeSingle();
 
@@ -303,6 +303,27 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'No recording available for this call' });
       return;
     }
+
+    // Log download access for audit trail (non-blocking)
+    const userId = (req as any).user?.id || 'anonymous';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+    
+    supabase
+      .from('recording_downloads')
+      .insert({
+        call_id: callLog.id,
+        user_id: userId !== 'anonymous' ? userId : null,
+        downloaded_at: new Date().toISOString(),
+        ip_address: ipAddress,
+        user_agent: userAgent
+      })
+      .then(() => {
+        console.log('[GET /calls/:callId/recording] Download logged:', { callId, userId });
+      })
+      .catch((err) => {
+        console.warn('[GET /calls/:callId/recording] Failed to log download (non-blocking):', err.message);
+      });
 
     // If it's a storage path, generate signed URL
     if (callLog.recording_storage_path) {
