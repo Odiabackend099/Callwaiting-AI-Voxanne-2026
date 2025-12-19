@@ -138,23 +138,34 @@ export async function pollVapiCalls(): Promise<void> {
         if (completeCall.artifact?.recording && !existing?.recording_storage_path) {
           try {
             // Handle both string URLs and object responses
-            let recordingUrl = completeCall.artifact.recording;
-            if (typeof recordingUrl === 'object') {
-              recordingUrl = recordingUrl.url || recordingUrl.recordingUrl || JSON.stringify(recordingUrl);
+            let recordingUrl: string | null = null;
+            const recording = completeCall.artifact.recording as any;
+            
+            if (typeof recording === 'string') {
+              recordingUrl = recording;
+            } else if (typeof recording === 'object' && recording !== null) {
+              recordingUrl = recording.url || recording.recordingUrl || null;
             }
             
-            logger.info('VapiPoller', 'Recording URL found', {
-              vapiCallId: call.id,
-              recordingUrl: typeof recordingUrl === 'string' ? recordingUrl.substring(0, 100) : 'object',
-              recordingType: typeof recordingUrl
-            });
-            
-            if (typeof recordingUrl === 'string' && recordingUrl.startsWith('http')) {
-              await uploadRecordingFromVapi(call.id, recordingUrl, callLogId);
-            } else {
-              logger.warn('VapiPoller', 'Invalid recording URL format', {
+            if (recordingUrl) {
+              logger.info('VapiPoller', 'Recording URL found', {
                 vapiCallId: call.id,
-                recordingUrl: typeof recordingUrl === 'string' ? recordingUrl : 'object'
+                recordingUrl: recordingUrl.substring(0, 100),
+                recordingType: typeof recording
+              });
+              
+              if (recordingUrl.startsWith('http')) {
+                await uploadRecordingFromVapi(call.id, recordingUrl, callLogId);
+              } else {
+                logger.warn('VapiPoller', 'Invalid recording URL format', {
+                  vapiCallId: call.id,
+                  recordingUrl: recordingUrl.substring(0, 100)
+                });
+              }
+            } else {
+              logger.warn('VapiPoller', 'Could not extract recording URL', {
+                vapiCallId: call.id,
+                recordingType: typeof recording
               });
             }
           } catch (recordingError: any) {
