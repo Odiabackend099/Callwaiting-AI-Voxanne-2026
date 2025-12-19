@@ -16,7 +16,7 @@ function getWebhookUrl(): string {
   }
   
   const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-  return `${baseUrl}/api/vapi/webhook`;
+  return `${baseUrl}/api/webhooks/vapi`;
 }
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
