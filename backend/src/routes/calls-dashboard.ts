@@ -47,7 +47,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
         .from('call_logs')
         .select('*', { count: 'exact' })
         .eq('call_type', 'inbound')
-        .not('null', 'recording_storage_path');
+        .not('recording_storage_path', 'is', null);
 
       if (parsed.startDate) {
         inboundQuery = inboundQuery.gte('created_at', new Date(parsed.startDate).toISOString());
