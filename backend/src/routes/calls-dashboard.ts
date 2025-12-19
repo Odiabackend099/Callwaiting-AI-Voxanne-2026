@@ -125,6 +125,9 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
       .select('*')
       .eq('id', callId)
       .eq('org_id', orgId)
+      .not('caller_name', 'ilike', '%demo%')
+      .not('caller_name', 'ilike', '%test%')
+      .not('phone_number', 'ilike', '%test%')
       .single();
 
     if (error || !call) {

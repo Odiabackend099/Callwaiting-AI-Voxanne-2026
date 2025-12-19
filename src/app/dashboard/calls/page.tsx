@@ -396,7 +396,14 @@ const CallsPageContent = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2">
                                                         {call.has_recording && (
-                                                            <button className="p-2 hover:bg-blue-50 rounded-lg transition-colors" title="Play recording">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    fetchCallDetail(call.id);
+                                                                }}
+                                                                className="p-2 hover:bg-blue-50 rounded-lg transition-colors" 
+                                                                title="Play recording"
+                                                            >
                                                                 <Volume2 className="w-4 h-4 text-blue-600" />
                                                             </button>
                                                         )}
