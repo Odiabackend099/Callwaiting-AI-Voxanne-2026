@@ -68,6 +68,31 @@ export async function pollVapiCalls(): Promise<void> {
     // Process each call
     for (const call of calls) {
       try {
+        // Fetch complete call details from Vapi API to get recording URL
+        let completeCall = call;
+        try {
+          const detailResponse = await axios.get(
+            `https://api.vapi.ai/call/${call.id}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${VAPI_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 10000
+            }
+          );
+          completeCall = detailResponse.data;
+          logger.info('VapiPoller', 'Fetched complete call details', {
+            vapiCallId: call.id,
+            hasRecording: !!completeCall.artifact?.recording
+          });
+        } catch (detailError: any) {
+          logger.warn('VapiPoller', 'Failed to fetch call details (using list data)', {
+            vapiCallId: call.id,
+            error: detailError?.message
+          });
+        }
+
         // Check if call_log already exists for this Vapi call ID
         const { data: existing } = await supabase
           .from('call_logs')
@@ -86,10 +111,10 @@ export async function pollVapiCalls(): Promise<void> {
               call_sid: `vapi-${call.id}`, // Generate a synthetic call_sid for Vapi calls
               call_type: 'inbound',
               status: 'completed',
-              duration_seconds: Math.round(call.duration / 1000) || 0,
-              created_at: new Date(call.startedAt).toISOString(),
-              started_at: new Date(call.startedAt).toISOString(),
-              ended_at: new Date(call.endedAt).toISOString()
+              duration_seconds: Math.round(completeCall.duration / 1000) || 0,
+              created_at: new Date(completeCall.startedAt).toISOString(),
+              started_at: new Date(completeCall.startedAt).toISOString(),
+              ended_at: new Date(completeCall.endedAt).toISOString()
             })
             .select('id')
             .single();
@@ -110,23 +135,23 @@ export async function pollVapiCalls(): Promise<void> {
         }
 
         // Upload recording if available and not already uploaded
-        if (call.artifact?.recording && !existing?.recording_storage_path) {
+        if (completeCall.artifact?.recording && !existing?.recording_storage_path) {
           try {
             logger.info('VapiPoller', 'Recording URL found', {
               vapiCallId: call.id,
-              recordingUrl: call.artifact.recording?.substring(0, 100)
+              recordingUrl: completeCall.artifact.recording?.substring(0, 100)
             });
-            await uploadRecordingFromVapi(call.id, call.artifact.recording, callLogId);
+            await uploadRecordingFromVapi(call.id, completeCall.artifact.recording, callLogId);
           } catch (recordingError: any) {
             logger.warn('VapiPoller', 'Failed to upload recording (non-blocking)', {
               vapiCallId: call.id,
               error: recordingError?.message
             });
           }
-        } else if (!call.artifact?.recording) {
+        } else if (!completeCall.artifact?.recording) {
           logger.warn('VapiPoller', 'No recording available for call', {
             vapiCallId: call.id,
-            hasArtifact: !!call.artifact
+            hasArtifact: !!completeCall.artifact
           });
         }
       } catch (callError: any) {
