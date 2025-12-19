@@ -94,16 +94,14 @@ export async function pollTwilioCalls(): Promise<void> {
           callLogId: callLog?.id
         });
 
-        // Try to fetch recording from Twilio
-        if (call.recording) {
-          try {
-            await fetchAndUploadRecording(call.sid, call.recording, callLog?.id);
-          } catch (recordingError: any) {
-            logger.warn('TwilioPoller', 'Failed to fetch/upload recording (non-blocking)', {
-              callSid: call.sid,
-              error: recordingError?.message
-            });
-          }
+        // Fetch recordings for this call
+        try {
+          await fetchAndUploadRecordingsForCall(call.sid, callLog?.id);
+        } catch (recordingError: any) {
+          logger.warn('TwilioPoller', 'Failed to fetch/upload recordings (non-blocking)', {
+            callSid: call.sid,
+            error: recordingError?.message
+          });
         }
       } catch (callError: any) {
         logger.error('TwilioPoller', 'Error processing call', {
@@ -116,6 +114,52 @@ export async function pollTwilioCalls(): Promise<void> {
     logger.info('TwilioPoller', 'Twilio call poll completed', { processedCount: calls.length });
   } catch (error: any) {
     logger.error('TwilioPoller', 'Twilio call poll failed', {
+      error: error?.message
+    });
+  }
+}
+
+/**
+ * Fetch all recordings for a call from Twilio and upload to Supabase
+ */
+async function fetchAndUploadRecordingsForCall(
+  callSid: string,
+  callLogId?: string
+): Promise<void> {
+  try {
+    logger.info('TwilioPoller', 'Fetching recordings for call', { callSid });
+
+    // List all recordings for this call
+    const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+    const recordingsResponse = await axios.get(
+      `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls/${callSid}/Recordings.json`,
+      {
+        headers: {
+          'Authorization': `Basic ${auth}`
+        },
+        timeout: 10000
+      }
+    );
+
+    const recordings = recordingsResponse.data.recordings || [];
+    logger.info('TwilioPoller', `Found ${recordings.length} recordings for call`, {
+      callSid,
+      count: recordings.length
+    });
+
+    if (recordings.length === 0) {
+      logger.warn('TwilioPoller', 'No recordings found for call', { callSid });
+      return;
+    }
+
+    // Process the first recording
+    const recording = recordings[0];
+    const recordingUrl = `https://api.twilio.com${recording.uri.replace('.json', '')}.wav`;
+
+    await fetchAndUploadRecording(callSid, recordingUrl, callLogId);
+  } catch (error: any) {
+    logger.warn('TwilioPoller', 'Failed to fetch recordings list', {
+      callSid,
       error: error?.message
     });
   }
