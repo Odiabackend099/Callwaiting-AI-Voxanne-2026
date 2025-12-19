@@ -57,23 +57,41 @@ app.set('trust proxy', true);
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
-    const raw = (process.env.CORS_ORIGIN || '').trim();
-    if (!raw || raw === '*') {
-      return callback(null, true);
-    }
+    // Default allowed origins (always include these)
+    const defaultOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://callwaitingai.dev',
+      'https://www.callwaitingai.dev',
+      'https://voxanne-frontend-h0pv6jv68-odia-backends-projects.vercel.app'
+    ];
 
-    const allowed = raw
+    // Get additional origins from environment variable
+    const envOrigins = (process.env.CORS_ORIGIN || '')
+      .trim()
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean);
 
+    const allowed = [...defaultOrigins, ...envOrigins];
+
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) {
       return callback(null, true);
     }
 
-    return callback(null, allowed.includes(origin));
+    // Allow if origin is in allowed list
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Reject with error
+    return callback(new Error('CORS not allowed'));
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400 // 24 hours
 }));
 app.use(express.json({
   verify: (req, res, buf) => {
