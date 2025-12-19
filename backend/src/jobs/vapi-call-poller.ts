@@ -83,6 +83,7 @@ export async function pollVapiCalls(): Promise<void> {
             .from('call_logs')
             .insert({
               vapi_call_id: call.id,
+              call_sid: `vapi-${call.id}`, // Generate a synthetic call_sid for Vapi calls
               call_type: 'inbound',
               status: 'completed',
               duration_seconds: Math.round(call.duration / 1000) || 0,
