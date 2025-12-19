@@ -16,8 +16,8 @@ const logger = createLogger('OrphanCleanup');
 
 interface OrphanedRecording {
   id: string;
-  recording_storage_path: string;
-  recording_uploaded_at: string;
+  recording_storage_path: string | null;
+  recording_uploaded_at: string | null;
   created_at: string;
 }
 

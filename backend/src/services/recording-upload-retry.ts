@@ -12,10 +12,10 @@ const logger = createLogger('RecordingUploadRetry');
 interface FailedUpload {
   id: string;
   call_id: string;
-  vapi_recording_url: string;
-  error_message: string;
+  vapi_recording_url: string | null;
+  error_message: string | null;
   retry_count: number;
-  next_retry_at: string;
+  next_retry_at: string | null;
   created_at: string;
 }
 
