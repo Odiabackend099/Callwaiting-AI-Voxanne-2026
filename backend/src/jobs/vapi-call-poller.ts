@@ -165,7 +165,9 @@ export async function pollVapiCalls(): Promise<void> {
             } else {
               logger.warn('VapiPoller', 'Could not extract recording URL', {
                 vapiCallId: call.id,
-                recordingType: typeof recording
+                recordingType: typeof recording,
+                recordingKeys: typeof recording === 'object' ? Object.keys(recording) : 'n/a',
+                recordingValue: typeof recording === 'object' ? JSON.stringify(recording).substring(0, 200) : recording
               });
             }
           } catch (recordingError: any) {
