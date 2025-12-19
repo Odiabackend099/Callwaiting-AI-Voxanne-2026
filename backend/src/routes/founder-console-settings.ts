@@ -320,6 +320,37 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
         const ensuredInboundAssistantId = await ensureVapiAssistant(inboundAgent, 'inbound');
         const ensuredOutboundAssistantId = await ensureVapiAssistant(outboundAgent, 'outbound');
 
+        // Configure webhooks and recording for both assistants
+        if (safeVapiKey && ensuredInboundAssistantId) {
+          try {
+            const inboundWebhookResult = await configureVapiWebhook(safeVapiKey, ensuredInboundAssistantId);
+            log.info('Settings', 'Inbound assistant webhook configured', {
+              assistantId: ensuredInboundAssistantId,
+              success: inboundWebhookResult.success
+            });
+          } catch (e: any) {
+            log.warn('Settings', 'Failed to configure inbound assistant webhook (non-blocking)', {
+              assistantId: ensuredInboundAssistantId,
+              error: e?.message
+            });
+          }
+        }
+
+        if (safeVapiKey && ensuredOutboundAssistantId) {
+          try {
+            const outboundWebhookResult = await configureVapiWebhook(safeVapiKey, ensuredOutboundAssistantId);
+            log.info('Settings', 'Outbound assistant webhook configured', {
+              assistantId: ensuredOutboundAssistantId,
+              success: outboundWebhookResult.success
+            });
+          } catch (e: any) {
+            log.warn('Settings', 'Failed to configure outbound assistant webhook (non-blocking)', {
+              assistantId: ensuredOutboundAssistantId,
+              error: e?.message
+            });
+          }
+        }
+
         // Get Twilio inbound credentials from integrations (if different from outbound)
         const { data: twilioInbound } = await supabase
           .from('integrations')
