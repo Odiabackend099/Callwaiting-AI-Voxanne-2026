@@ -170,7 +170,7 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
           error_message: uploadResult.error || 'Unknown error',
           next_retry_at: nextRetryAt
         })
-        .eq('id', failedUpload.id);
+        .eq('id', failedUpload.id) as any;
 
       if (updateError) {
         logger.error('RecordingUploadRetry', 'Failed to update retry count', {

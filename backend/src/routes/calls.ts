@@ -310,7 +310,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
     
     // Log download access for audit trail (non-blocking, fire and forget)
-    supabase
+    (supabase
       .from('recording_downloads')
       .insert({
         call_id: callLog.id,
@@ -318,7 +318,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
         downloaded_at: new Date().toISOString(),
         ip_address: ipAddress,
         user_agent: userAgent
-      })
+      }) as any)
       .then(() => {
         console.log('[GET /calls/:callId/recording] Download logged:', { callId, userId });
       })
