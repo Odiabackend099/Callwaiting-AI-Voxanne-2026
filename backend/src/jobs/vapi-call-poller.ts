@@ -144,7 +144,8 @@ export async function pollVapiCalls(): Promise<void> {
             if (typeof recording === 'string') {
               recordingUrl = recording;
             } else if (typeof recording === 'object' && recording !== null) {
-              recordingUrl = recording.url || recording.recordingUrl || null;
+              // Vapi returns recording as object with stereoUrl and mono properties
+              recordingUrl = (recording as any).stereoUrl || (recording as any).url || (recording as any).recordingUrl || null;
             }
             
             if (recordingUrl) {
