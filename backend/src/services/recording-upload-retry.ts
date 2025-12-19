@@ -5,9 +5,7 @@
 
 import { supabase } from './supabase-client';
 import { uploadCallRecording } from './call-recording-storage';
-import { createLogger } from './logger';
-
-const logger = createLogger('RecordingUploadRetry');
+import { log as logger } from './logger';
 
 interface FailedUpload {
   id: string;
@@ -36,10 +34,7 @@ export async function logFailedUpload(params: {
       .maybeSingle();
 
     if (callError || !callLog) {
-      logger.error('RecordingUploadRetry', 'Failed to find call log for failed upload', {
-        callId: params.callId,
-        error: callError?.message
-      });
+      logger.error('RecordingUploadRetry', `Failed to find call log: ${callError?.message || 'Not found'}`);
       return;
     }
 

@@ -309,6 +309,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
     const userAgent = req.headers['user-agent'] || 'unknown';
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
     
+    // Log download access for audit trail (non-blocking, fire and forget)
     supabase
       .from('recording_downloads')
       .insert({
@@ -321,7 +322,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
       .then(() => {
         console.log('[GET /calls/:callId/recording] Download logged:', { callId, userId });
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.warn('[GET /calls/:callId/recording] Failed to log download (non-blocking):', err.message);
       });
 

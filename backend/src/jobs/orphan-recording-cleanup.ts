@@ -10,9 +10,7 @@
 
 import { supabase } from '../services/supabase-client';
 import { deleteRecording } from '../services/call-recording-storage';
-import { createLogger } from '../services/logger';
-
-const logger = createLogger('OrphanCleanup');
+import { log as logger } from '../services/logger';
 
 interface OrphanedRecording {
   id: string;
@@ -35,9 +33,7 @@ async function detectOrphanedRecordings(): Promise<OrphanedRecording[]> {
     .lt('recording_uploaded_at', sevenDaysAgo);   // Older than 7 days
 
   if (error) {
-    logger.error('OrphanCleanup', 'Failed to detect orphaned recordings', {
-      error: error.message
-    });
+    logger.error('OrphanCleanup', `Failed to detect orphaned recordings: ${error.message}`);
     return [];
   }
 
@@ -114,9 +110,7 @@ export async function runOrphanCleanupJob(): Promise<void> {
   try {
     // 1. Detect orphaned recordings
     const orphans = await detectOrphanedRecordings();
-    logger.info('OrphanCleanup', 'Detected orphaned recordings', {
-      count: orphans.length
-    });
+    logger.info('OrphanCleanup', `Detected ${orphans.length} orphaned recordings`);
 
     if (orphans.length === 0) {
       logger.info('OrphanCleanup', 'No orphaned recordings found');
@@ -130,47 +124,35 @@ export async function runOrphanCleanupJob(): Promise<void> {
     for (const orphan of orphans) {
       try {
         // Mark as detected
-        await markOrphanDetected(orphan.id, orphan.recording_storage_path);
+        if (orphan.recording_storage_path) {
+          await markOrphanDetected(orphan.id, orphan.recording_storage_path);
 
-        // Delete from storage
-        const deleted = await deleteOrphanedRecording(orphan.recording_storage_path);
+          // Delete from storage
+          const deleted = await deleteOrphanedRecording(orphan.recording_storage_path);
 
-        if (deleted) {
-          // Mark as deleted in database
-          await markOrphanDeleted(orphan.recording_storage_path);
-          deletedCount++;
-        } else {
-          failedCount++;
+          if (deleted) {
+            // Mark as deleted in database
+            await markOrphanDeleted(orphan.recording_storage_path);
+            deletedCount++;
+          } else {
+            failedCount++;
+          }
         }
       } catch (error: any) {
-        logger.error('OrphanCleanup', 'Error processing orphan', {
-          orphanId: orphan.id,
-          storagePath: orphan.recording_storage_path,
-          error: error.message
-        });
+        logger.error('OrphanCleanup', `Error processing orphan ${orphan.id}: ${error.message}`);
         failedCount++;
       }
     }
 
     const duration = Date.now() - startTime;
-    logger.info('OrphanCleanup', 'Orphan cleanup job completed', {
-      totalOrphans: orphans.length,
-      deletedCount,
-      failedCount,
-      duration
-    });
+    logger.info('OrphanCleanup', `Orphan cleanup completed: ${deletedCount} deleted, ${failedCount} failed in ${duration}ms`);
 
     // Alert if too many failures
     if (failedCount > 0) {
-      logger.warn('OrphanCleanup', 'Some orphaned recordings failed to delete', {
-        failedCount,
-        totalOrphans: orphans.length
-      });
+      logger.warn('OrphanCleanup', `${failedCount} orphaned recordings failed to delete`);
     }
   } catch (error: any) {
-    logger.error('OrphanCleanup', 'Orphan cleanup job failed', {
-      error: error.message
-    });
+    logger.error('OrphanCleanup', `Orphan cleanup job failed: ${error.message}`);
   }
 }
 
