@@ -29,6 +29,7 @@ import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
 import agentSyncRouter from './routes/agent-sync';
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
+import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -425,6 +426,13 @@ try {
   console.log('Recording upload retry job scheduled');
 } catch (error: any) {
   console.warn('Failed to schedule recording upload retry job:', error.message);
+}
+
+try {
+  scheduleTwilioCallPoller();
+  console.log('Twilio call poller scheduled');
+} catch (error: any) {
+  console.warn('Failed to schedule Twilio call poller:', error.message);
 }
 });
 
