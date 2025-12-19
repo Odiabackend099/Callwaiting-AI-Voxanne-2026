@@ -53,6 +53,7 @@ export type WSEventType = (
   | { type: 'transcript_delta'; vapiCallId: string; trackingId: string; userId: string; speaker: 'agent' | 'customer'; text: string; ts: number }
   | { type: 'call_ended'; vapiCallId: string; trackingId: string; userId: string; durationSeconds?: number; reason?: string }
   | { type: 'metrics_update'; metrics: UsageMetrics }
+  | { type: 'recording_ready'; callId: string; recordingUrl: string; storagePath: string; expiresAt: string; timestamp: string }
 );
 
 // WebSocket client with user context
