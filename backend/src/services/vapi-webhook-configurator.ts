@@ -101,25 +101,28 @@ If no KB information is provided, use your general knowledge.
     
     // Check if webhook already configured via assistant.server.url
     const webhookExists = assistant.server?.url === webhookUrl;
+    const recordingEnabled = assistant.recordingEnabled === true;
 
-    // Only update if webhook URL is different or not set
-    if (webhookExists) {
-      log.info('VapiConfigurator', 'Webhook already configured, no update needed', {
+    // Only update if webhook URL is different or not set, or recording is not enabled
+    if (webhookExists && recordingEnabled) {
+      log.info('VapiConfigurator', 'Webhook and recording already configured, no update needed', {
         assistantId: vapiAssistantId,
-        webhookUrl
+        webhookUrl,
+        recordingEnabled: true
       });
       return {
         success: true,
-        message: 'Webhook already configured',
+        message: 'Webhook and recording already configured',
         assistantId: vapiAssistantId
       };
     }
 
-    // Build update payload with server.url (correct Vapi API structure)
+    // Build update payload with server.url and recording enabled (correct Vapi API structure)
     const updatePayload = {
       server: {
         url: webhookUrl
-      }
+      },
+      recordingEnabled: true
     };
 
     // Send update to Vapi
@@ -135,9 +138,10 @@ If no KB information is provided, use your general knowledge.
       throw new Error(`Failed to update assistant: ${error?.response?.data?.message || error?.message}`);
     }
 
-    log.info('VapiConfigurator', 'Webhook configured successfully', {
+    log.info('VapiConfigurator', 'Webhook and recording configured successfully', {
       assistantId: vapiAssistantId,
       webhookUrl: webhookUrl,
+      recordingEnabled: true,
       systemPromptUpdated: true
     });
 
