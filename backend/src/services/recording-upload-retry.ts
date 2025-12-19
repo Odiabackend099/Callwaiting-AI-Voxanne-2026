@@ -127,6 +127,13 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
     });
 
     // Attempt upload
+    if (!failedUpload.vapi_recording_url) {
+      logger.error('RecordingUploadRetry', 'No recording URL for retry', {
+        failedUploadId: failedUpload.id
+      });
+      return false;
+    }
+
     const uploadResult = await uploadCallRecording({
       orgId: callLog.org_id,
       callId: callLog.vapi_call_id,
