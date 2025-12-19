@@ -30,6 +30,7 @@ import agentSyncRouter from './routes/agent-sync';
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
+import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -433,6 +434,13 @@ try {
   console.log('Twilio call poller scheduled');
 } catch (error: any) {
   console.warn('Failed to schedule Twilio call poller:', error.message);
+}
+
+try {
+  scheduleVapiCallPoller();
+  console.log('Vapi call poller scheduled');
+} catch (error: any) {
+  console.warn('Failed to schedule Vapi call poller:', error.message);
 }
 });
 
