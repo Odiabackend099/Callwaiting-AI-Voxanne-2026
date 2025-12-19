@@ -208,7 +208,11 @@ async function uploadRecordingFromVapi(
   callLogId?: string
 ): Promise<void> {
   try {
-    logger.info('VapiPoller', 'Downloading recording from Vapi', { vapiCallId });
+    logger.info('VapiPoller', 'Starting recording upload', {
+      vapiCallId,
+      callLogId,
+      recordingUrl: recordingUrl.substring(0, 80)
+    });
 
     // Download recording from Vapi
     const recordingResponse = await axios.get(recordingUrl, {
@@ -224,6 +228,12 @@ async function uploadRecordingFromVapi(
 
     // Upload to Supabase Storage
     const storagePath = `calls/inbound/${vapiCallId}/${Date.now()}.wav`;
+    logger.info('VapiPoller', 'Uploading to Supabase Storage', {
+      vapiCallId,
+      storagePath,
+      size: recordingBuffer.length
+    });
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('call-recordings')
       .upload(storagePath, recordingBuffer, {
@@ -241,7 +251,8 @@ async function uploadRecordingFromVapi(
 
     logger.info('VapiPoller', 'Recording uploaded to storage', {
       vapiCallId,
-      storagePath
+      storagePath,
+      uploadData
     });
 
     // Generate signed URL
