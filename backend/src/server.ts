@@ -27,7 +27,7 @@ import { vapiWebhookRouter } from './routes/vapi-webhook';
 import { vapiSetupRouter } from './routes/vapi-setup';
 import vapiDiscoveryRouter from './routes/vapi-discovery';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
-import outboundAgentConfigRouter from './routes/outbound-agent-config';
+import agentSyncRouter from './routes/agent-sync';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -118,8 +118,8 @@ app.use('/api/vapi', vapiSetupRouter);
 app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
+app.use('/api/founder-console', agentSyncRouter);
 // app.use('/api/founder-console/workspace', workspaceRouter);
-app.use('/api/founder-console/outbound-agent-config', outboundAgentConfigRouter);
 app.use('/', webTestDiagnosticsRouter);
 
 // Health check endpoint

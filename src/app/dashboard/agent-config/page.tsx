@@ -146,24 +146,39 @@ export default function AgentConfigPage() {
         }
     }, [user, loading, router, loadData]);
 
-    const hasChanges = () => {
-        const inboundChanged = originalInboundConfig && (
-            inboundConfig.systemPrompt !== originalInboundConfig.systemPrompt ||
-            inboundConfig.firstMessage !== originalInboundConfig.firstMessage ||
-            inboundConfig.voice !== originalInboundConfig.voice ||
-            inboundConfig.language !== originalInboundConfig.language ||
-            inboundConfig.maxDuration !== originalInboundConfig.maxDuration
+    // Helper: Check if a single agent config has changed
+    const hasAgentChanged = (current: AgentConfig, original: AgentConfig | null): boolean => {
+        if (!original) return false;
+        return (
+            current.systemPrompt !== original.systemPrompt ||
+            current.firstMessage !== original.firstMessage ||
+            current.voice !== original.voice ||
+            current.language !== original.language ||
+            current.maxDuration !== original.maxDuration
         );
+    };
 
-        const outboundChanged = originalOutboundConfig && (
-            outboundConfig.systemPrompt !== originalOutboundConfig.systemPrompt ||
-            outboundConfig.firstMessage !== originalOutboundConfig.firstMessage ||
-            outboundConfig.voice !== originalOutboundConfig.voice ||
-            outboundConfig.language !== originalOutboundConfig.language ||
-            outboundConfig.maxDuration !== originalOutboundConfig.maxDuration
-        );
+    const inboundChanged = hasAgentChanged(inboundConfig, originalInboundConfig);
+    const outboundChanged = hasAgentChanged(outboundConfig, originalOutboundConfig);
 
-        return inboundChanged || outboundChanged;
+    const hasChanges = () => inboundChanged || outboundChanged;
+
+    // Validate agent config before save
+    const validateAgentConfig = (config: AgentConfig, agentType: 'inbound' | 'outbound'): string | null => {
+        if (!config.systemPrompt || config.systemPrompt.trim() === '') {
+            return `${agentType} agent system prompt is required`;
+        }
+        if (!config.firstMessage || config.firstMessage.trim() === '') {
+            return `${agentType} agent first message is required`;
+        }
+        if (!config.voice) {
+            return `${agentType} agent voice must be selected`;
+        }
+        if (config.maxDuration < AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS || 
+            config.maxDuration > AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS) {
+            return `${agentType} agent duration must be between ${AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS} and ${AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS} seconds`;
+        }
+        return null;
     };
 
     const handleSave = async () => {
@@ -177,17 +192,19 @@ export default function AgentConfigPage() {
         setError(null);
 
         try {
-            // Build independent payloads for each agent
+            // Build independent payloads for each agent that has changes
             const payload: any = {};
 
             // Only include inbound config if it has changes
-            if (originalInboundConfig && (
-                inboundConfig.systemPrompt !== originalInboundConfig.systemPrompt ||
-                inboundConfig.firstMessage !== originalInboundConfig.firstMessage ||
-                inboundConfig.voice !== originalInboundConfig.voice ||
-                inboundConfig.language !== originalInboundConfig.language ||
-                inboundConfig.maxDuration !== originalInboundConfig.maxDuration
-            )) {
+            if (inboundChanged) {
+                // Validate inbound config
+                const inboundError = validateAgentConfig(inboundConfig, 'inbound');
+                if (inboundError) {
+                    setError(inboundError);
+                    setIsSaving(false);
+                    return;
+                }
+
                 payload.inbound = {
                     systemPrompt: inboundConfig.systemPrompt,
                     firstMessage: inboundConfig.firstMessage,
@@ -198,13 +215,15 @@ export default function AgentConfigPage() {
             }
 
             // Only include outbound config if it has changes
-            if (originalOutboundConfig && (
-                outboundConfig.systemPrompt !== originalOutboundConfig.systemPrompt ||
-                outboundConfig.firstMessage !== originalOutboundConfig.firstMessage ||
-                outboundConfig.voice !== originalOutboundConfig.voice ||
-                outboundConfig.language !== originalOutboundConfig.language ||
-                outboundConfig.maxDuration !== originalOutboundConfig.maxDuration
-            )) {
+            if (outboundChanged) {
+                // Validate outbound config
+                const outboundError = validateAgentConfig(outboundConfig, 'outbound');
+                if (outboundError) {
+                    setError(outboundError);
+                    setIsSaving(false);
+                    return;
+                }
+
                 payload.outbound = {
                     systemPrompt: outboundConfig.systemPrompt,
                     firstMessage: outboundConfig.firstMessage,
@@ -214,14 +233,14 @@ export default function AgentConfigPage() {
                 };
             }
 
-            // If no changes, don't send
+            // If no changes, don't send (this shouldn't happen due to button disabled state)
             if (!payload.inbound && !payload.outbound) {
                 setError('No changes to save');
                 setIsSaving(false);
                 return;
             }
 
-            // Save both agents independently
+            // Save agents independently - each agent can be saved without the other
             const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -233,8 +252,14 @@ export default function AgentConfigPage() {
                 throw new Error(result?.error || 'Failed to sync agent configuration to Vapi');
             }
 
-            setOriginalInboundConfig(inboundConfig);
-            setOriginalOutboundConfig(outboundConfig);
+            // Update original configs only for agents that were saved
+            if (inboundChanged) {
+                setOriginalInboundConfig(inboundConfig);
+            }
+            if (outboundChanged) {
+                setOriginalOutboundConfig(outboundConfig);
+            }
+
             setSaveSuccess(true);
 
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -316,7 +341,7 @@ export default function AgentConfigPage() {
                             ) : (
                                 <>
                                     <Save className="w-5 h-5" />
-                                    Save Both Agents
+                                    Save Changes
                                 </>
                             )}
                         </button>

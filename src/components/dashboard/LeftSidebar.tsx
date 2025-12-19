@@ -23,11 +23,34 @@ export default function LeftSidebar() {
     ]), []);
 
     const handleNavigate = (href: string) => {
+        try {
+            const isVoiceActive = typeof window !== 'undefined' && window.sessionStorage.getItem('voice_session_active') === 'true';
+
+            // Voice session is persisted across dashboard routes, so do not warn when navigating within /dashboard.
+            const leavingDashboard = !href.startsWith('/dashboard');
+            if (isVoiceActive && leavingDashboard) {
+                const ok = window.confirm('A voice session is currently active. Leaving the dashboard may stop the call. Continue?');
+                if (!ok) return;
+            }
+        } catch {
+            // ignore
+        }
+
         router.push(href);
         setMobileOpen(false);
     };
 
     const handleLogout = () => {
+        try {
+            const isVoiceActive = typeof window !== 'undefined' && window.sessionStorage.getItem('voice_session_active') === 'true';
+            if (isVoiceActive) {
+                const ok = window.confirm('A voice session is currently active. Logging out may stop the call. Continue?');
+                if (!ok) return;
+            }
+        } catch {
+            // ignore
+        }
+
         signOut();
         router.push('/login');
         setMobileOpen(false);

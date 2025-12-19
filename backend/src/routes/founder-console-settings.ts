@@ -11,6 +11,7 @@ import express, { Request, Response } from 'express';
 import { supabase } from '../services/supabase-client';
 import { configureVapiWebhook, verifyWebhookConfiguration } from '../services/vapi-webhook-configurator';
 import { log } from '../services/logger';
+import { VapiClient } from '../services/vapi-client';
 
 const router = express.Router();
 
@@ -40,7 +41,7 @@ router.get('/settings', async (req: Request, res: Response): Promise<void> => {
       .eq('org_id', ORG_ID)
       .maybeSingle();
 
-    if (error) {
+    if (error && error.code !== 'PGRST116') {
       console.error('[Settings] Error fetching integration settings', error);
       res.status(500).json({ error: 'Internal server error' });
       return;
@@ -88,15 +89,21 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
 
     // Resolve the actual org UUID used by call/web-test flows.
     // This keeps the "save in frontend" workflow functional for all call routes.
-    const { data: org } = await supabase
+    const { data: org, error: orgError } = await supabase
       .from('organizations')
       .select('id')
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (orgError && orgError.code !== 'PGRST116') {
+      console.error('[Settings] Error fetching organization', orgError);
+      res.status(500).json({ error: 'Internal server error' });
+      return;
+    }
 
     const orgUuid = org?.id;
     if (!orgUuid) {
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'No organization found' });
       return;
     }
 
@@ -203,30 +210,352 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    // ========== CRITICAL FIX: Populate agent config tables ==========
+    // When user saves API keys, also populate inbound_agent_config and outbound_agent_config
+    // This ensures webhook can load credentials for Twilio calls
+    if (vapi_api_key || twilio_account_sid) {
+      try {
+        // Get both inbound and outbound agents
+        const { data: inboundAgent } = await supabase
+          .from('agents')
+          .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
+          .eq('role', 'inbound')
+          .eq('org_id', orgUuid)
+          .maybeSingle();
+
+        const { data: outboundAgent } = await supabase
+          .from('agents')
+          .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
+          .eq('role', 'outbound')
+          .eq('org_id', orgUuid)
+          .maybeSingle();
+
+        const hasVapiKey = typeof vapi_api_key === 'string' && vapi_api_key.trim().length > 0;
+        const safeVapiKey = hasVapiKey ? vapi_api_key.trim().replace(/[^\x20-\x7E]/g, '') : null;
+        const vapi = safeVapiKey ? new VapiClient(safeVapiKey) : null;
+
+        const ensureVapiAssistant = async (agentRow: any, role: 'inbound' | 'outbound'): Promise<string | null> => {
+          if (!vapi || !agentRow) return null;
+
+          const existingId = agentRow?.vapi_assistant_id ? String(agentRow.vapi_assistant_id) : null;
+
+          if (existingId) {
+            try {
+              await vapi.getAssistant(existingId);
+              return existingId;
+            } catch (e: any) {
+              const status = e?.response?.status;
+              if (status !== 404) {
+                log.error('Settings', 'Failed to validate assistant in Vapi (non-blocking)', {
+                  orgId: orgUuid,
+                  role,
+                  assistantId: existingId,
+                  status,
+                  error: e?.message
+                });
+                return existingId;
+              }
+            }
+          }
+
+          try {
+            // CRITICAL: Ensure system prompt is never empty - Vapi defaults to silence if empty
+            const defaultSystemPrompt = role === 'inbound'
+              ? 'You are a professional clinic coordinator. You are helpful, friendly, and professional. Answer questions about our clinic services and schedule appointments.'
+              : 'You are a professional sales development representative. You are persuasive, friendly, and professional. Your goal is to schedule consultations.';
+
+            const created = await vapi.createAssistant({
+              name: role === 'inbound' ? 'Voxanne (Inbound Coordinator)' : 'Voxanne (Outbound SDR)',
+              systemPrompt: agentRow?.system_prompt?.trim() || defaultSystemPrompt,
+              voiceProvider: 'vapi',
+              voiceId: agentRow?.voice || (role === 'inbound' ? 'Kylie' : 'Paige'),
+              language: agentRow?.language || 'en',
+              firstMessage: agentRow?.first_message || 'Hello! How can I help you today?',
+              maxDurationSeconds: agentRow?.max_call_duration || 600
+            });
+
+            const newId = created?.id ? String(created.id) : null;
+            if (!newId) {
+              log.error('Settings', 'Vapi createAssistant returned no id (non-blocking)', {
+                orgId: orgUuid,
+                role
+              });
+              return null;
+            }
+
+            const { error: updateAgentError } = await supabase
+              .from('agents')
+              .update({
+                vapi_assistant_id: newId,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', agentRow.id);
+
+            if (updateAgentError) {
+              log.error('Settings', 'Failed to persist newly created assistant id (non-blocking)', {
+                orgId: orgUuid,
+                role,
+                error: updateAgentError.message
+              });
+            }
+
+            log.info('Settings', 'Created Vapi assistant for role', {
+              orgId: orgUuid,
+              role,
+              assistantId: newId.slice(0, 20) + '...'
+            });
+
+            return newId;
+          } catch (e: any) {
+            log.error('Settings', 'Failed to create assistant in Vapi (non-blocking)', {
+              orgId: orgUuid,
+              role,
+              error: e?.message,
+              status: e?.response?.status
+            });
+            return null;
+          }
+        };
+
+        const ensuredInboundAssistantId = await ensureVapiAssistant(inboundAgent, 'inbound');
+        const ensuredOutboundAssistantId = await ensureVapiAssistant(outboundAgent, 'outbound');
+
+        // Get Twilio inbound credentials from integrations (if different from outbound)
+        const { data: twilioInbound } = await supabase
+          .from('integrations')
+          .select('config')
+          .eq('provider', 'twilio_inbound')
+          .eq('org_id', orgUuid)
+          .maybeSingle();
+
+        // Populate inbound_agent_config
+        if (inboundAgent) {
+          await supabase
+            .from('inbound_agent_config')
+            .upsert({
+              org_id: orgUuid,
+              vapi_api_key: vapi_api_key || null,
+              vapi_assistant_id: ensuredInboundAssistantId || inboundAgent.vapi_assistant_id,
+              twilio_account_sid: twilioInbound?.config?.accountSid || twilio_account_sid || null,
+              twilio_auth_token: twilioInbound?.config?.authToken || twilio_auth_token || null,
+              twilio_phone_number: twilioInbound?.config?.phoneNumber || twilio_from_number || null,
+              system_prompt: inboundAgent.system_prompt,
+              first_message: inboundAgent.first_message,
+              voice_id: inboundAgent.voice,
+              language: inboundAgent.language,
+              max_call_duration: inboundAgent.max_call_duration,
+              is_active: true,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'org_id' });
+
+          log.info('Settings', 'Populated inbound_agent_config', {
+            orgId: orgUuid,
+            assistantId: (ensuredInboundAssistantId || inboundAgent.vapi_assistant_id || '').slice(0, 20) + '...'
+          });
+        }
+
+        // Populate outbound_agent_config (only update Vapi credentials, preserve personality settings)
+        if (outboundAgent) {
+          // First, check if outbound_agent_config already exists
+          const { data: existingOutboundConfig } = await supabase
+            .from('outbound_agent_config')
+            .select('id, system_prompt, first_message, voice_id, language, max_call_duration')
+            .eq('org_id', orgUuid)
+            .maybeSingle();
+
+          // Only use agents table values if config doesn't exist yet
+          const systemPrompt = existingOutboundConfig?.system_prompt || outboundAgent.system_prompt;
+          const firstMessage = existingOutboundConfig?.first_message || outboundAgent.first_message;
+          const voiceId = existingOutboundConfig?.voice_id || outboundAgent.voice;
+          const language = existingOutboundConfig?.language || outboundAgent.language;
+          const maxDuration = existingOutboundConfig?.max_call_duration || outboundAgent.max_call_duration;
+
+          await supabase
+            .from('outbound_agent_config')
+            .upsert({
+              org_id: orgUuid,
+              vapi_api_key: vapi_api_key || null,
+              vapi_assistant_id: ensuredOutboundAssistantId || outboundAgent.vapi_assistant_id,
+              twilio_account_sid: twilio_account_sid || null,
+              twilio_auth_token: twilio_auth_token || null,
+              twilio_phone_number: twilio_from_number || null,
+              system_prompt: systemPrompt,
+              first_message: firstMessage,
+              voice_id: voiceId,
+              language: language,
+              max_call_duration: maxDuration,
+              is_active: true,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'org_id' });
+
+          log.info('Settings', 'Populated outbound_agent_config', {
+            orgId: orgUuid,
+            assistantId: (ensuredOutboundAssistantId || outboundAgent.vapi_assistant_id || '').slice(0, 20) + '...',
+            preservedExistingConfig: Boolean(existingOutboundConfig)
+          });
+        }
+
+        const hasAllTwilio = Boolean(twilio_account_sid && twilio_auth_token && twilio_from_number);
+        const inboundAssistantId = ensuredInboundAssistantId || inboundAgent?.vapi_assistant_id;
+
+        if (hasVapiKey && hasAllTwilio && inboundAssistantId && vapi) {
+          let vapiPhoneNumberId: string | null = null;
+          try {
+            const existingNumbers = await vapi.listPhoneNumbers();
+            const normalized = String(twilio_from_number).trim();
+            const existing = Array.isArray(existingNumbers)
+              ? existingNumbers.find((p: any) => p?.number === normalized || p?.phoneNumber === normalized)
+              : null;
+
+            if (existing?.id) {
+              vapiPhoneNumberId = existing.id;
+            } else {
+              const imported = await vapi.importTwilioNumber({
+                phoneNumber: normalized,
+                twilioAccountSid: String(twilio_account_sid),
+                twilioAuthToken: String(twilio_auth_token)
+              });
+              if (imported?.id) {
+                vapiPhoneNumberId = imported.id;
+              }
+            }
+          } catch (e: any) {
+            log.error('Settings', 'Failed to import/find Vapi phone number (non-blocking)', {
+              orgId: orgUuid,
+              error: e?.message
+            });
+          }
+
+          if (vapiPhoneNumberId) {
+            try {
+              const { data: currentVapiIntegration } = await supabase
+                .from('integrations')
+                .select('config')
+                .eq('provider', 'vapi')
+                .eq('org_id', orgUuid)
+                .maybeSingle();
+
+              const now = new Date().toISOString();
+              const merged = {
+                ...((currentVapiIntegration as any)?.config || {}),
+                vapi_phone_number_id: vapiPhoneNumberId,
+                vapi_phone_numberId: vapiPhoneNumberId
+              };
+
+              const { error: upsertPhoneIdError } = await supabase
+                .from('integrations')
+                .upsert(
+                  {
+                    org_id: orgUuid,
+                    provider: 'vapi',
+                    connected: true,
+                    last_checked_at: now,
+                    config: merged,
+                    updated_at: now
+                  },
+                  { onConflict: 'org_id,provider' }
+                );
+
+              if (upsertPhoneIdError) {
+                log.error('Settings', 'Failed to persist vapi_phone_number_id (non-blocking)', {
+                  orgId: orgUuid,
+                  error: upsertPhoneIdError.message
+                });
+              }
+            } catch (e: any) {
+              log.error('Settings', 'Failed to upsert vapi_phone_number_id (non-blocking)', {
+                orgId: orgUuid,
+                error: e?.message
+              });
+            }
+
+            try {
+              await vapi.updatePhoneNumber(vapiPhoneNumberId, {
+                assistantId: inboundAssistantId
+              });
+              log.info('Settings', 'Linked Vapi phone number to inbound assistant', {
+                orgId: orgUuid,
+                phoneNumberId: vapiPhoneNumberId,
+                assistantId: inboundAssistantId.slice(0, 20) + '...'
+              });
+            } catch (e: any) {
+              log.error('Settings', 'Failed to link Vapi phone number to inbound assistant (non-blocking)', {
+                orgId: orgUuid,
+                error: e?.message
+              });
+            }
+          }
+        }
+      } catch (configError: any) {
+        // Log but don't fail the request - config tables are secondary
+        log.error('Settings', 'Failed to populate agent config tables (non-blocking)', {
+          error: configError.message,
+          orgId: orgUuid
+        });
+      }
+    }
+
     log.info('Settings', 'Integration settings saved', {
       vapiConfigured: !!vapi_api_key,
       twilioConfigured: !!twilio_account_sid,
       testDestination: test_destination_number
     });
 
+    // ========== CRITICAL: Sync agents from dashboard (single source of truth) ==========
+    // After saving API keys, sync inbound and outbound agents from dashboard configs
+    // This ensures agents table is always in sync with dashboard configuration
+    try {
+      log.info('Settings', 'Triggering agent sync from dashboard', { orgId: orgUuid });
+      
+      // Call the agent sync endpoint internally
+      const syncResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:3001'}/api/founder-console/sync-agents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (syncResponse.ok) {
+        const syncResult: any = await syncResponse.json();
+        log.info('Settings', 'Agent sync completed successfully', {
+          orgId: orgUuid,
+          inboundAgentId: syncResult?.inboundAgentId,
+          outboundAgentId: syncResult?.outboundAgentId
+        });
+      } else {
+        log.warn('Settings', 'Agent sync returned non-200 status (non-blocking)', {
+          orgId: orgUuid,
+          status: syncResponse.status
+        });
+      }
+    } catch (syncError: any) {
+      log.warn('Settings', 'Failed to trigger agent sync (non-blocking)', {
+        orgId: orgUuid,
+        error: syncError?.message
+      });
+      // Don't fail the request - agent sync is secondary to settings save
+    }
+
     // Auto-configure Vapi webhook if API key and assistant ID were provided
     let webhookConfigResult = null;
     if (vapi_api_key && vapi_assistant_id) {
       log.info('Settings', 'Auto-configuring Vapi webhook', { assistantId: vapi_assistant_id });
       webhookConfigResult = await configureVapiWebhook(vapi_api_key, vapi_assistant_id);
-      
+
       if (webhookConfigResult.success) {
         log.info('Settings', 'Webhook configured automatically', { assistantId: vapi_assistant_id });
       } else {
-        log.warn('Settings', 'Webhook configuration failed', { 
-          error: webhookConfigResult.message 
+        log.warn('Settings', 'Webhook configuration failed', {
+          error: webhookConfigResult.message
         });
       }
     } else if (vapi_api_key && !vapi_assistant_id) {
       log.warn('Settings', 'Vapi API key provided but no assistant ID, skipping webhook configuration');
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       success: true,
       webhookConfigured: webhookConfigResult?.success || false,
       webhookMessage: webhookConfigResult?.message

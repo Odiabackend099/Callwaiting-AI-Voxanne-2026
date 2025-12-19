@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import DashboardGate from './DashboardGate';
+import { VoiceAgentProvider } from '@/contexts/VoiceAgentContext';
 
 export const metadata: Metadata = {
     title: "Call Waiting AI AI - Voice Agent Dashboard",
@@ -13,7 +14,9 @@ export default function DashboardLayout({
 }>) {
     return (
         <div className="min-h-screen bg-black text-white">
-            <DashboardGate>{children}</DashboardGate>
+            <DashboardGate>
+                <VoiceAgentProvider>{children}</VoiceAgentProvider>
+            </DashboardGate>
         </div>
     );
 }

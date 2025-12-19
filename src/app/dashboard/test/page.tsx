@@ -6,7 +6,7 @@ import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle,
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
-import { useVoiceAgent } from '@/hooks/useVoiceAgent';
+import { useVoiceAgentContext } from '@/contexts/VoiceAgentContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -23,6 +23,19 @@ interface InboundStatus {
     configured: boolean;
     inboundNumber?: string;
     vapiPhoneNumberId?: string;
+}
+
+function setVoiceSessionActiveFlag(active: boolean) {
+    if (typeof window === 'undefined') return;
+    try {
+        if (active) {
+            window.sessionStorage.setItem('voice_session_active', 'true');
+        } else {
+            window.sessionStorage.removeItem('voice_session_active');
+        }
+    } catch {
+        // ignore
+    }
 }
 
 interface CachedConfig {
@@ -77,7 +90,7 @@ const TestAgentPageContent = () => {
         stopCall,
         startRecording,
         stopRecording
-    } = useVoiceAgent();
+    } = useVoiceAgentContext();
 
     const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
     const [callInitiating, setCallInitiating] = useState(false);
@@ -150,6 +163,13 @@ const TestAgentPageContent = () => {
         }
     };
 
+    useEffect(() => {
+        setVoiceSessionActiveFlag(isConnected || isRecording);
+        return () => {
+            setVoiceSessionActiveFlag(false);
+        };
+    }, [isConnected, isRecording]);
+
     // --- Phone Test Effects ---
     const getAuthToken = async () => {
         return (await supabase.auth.getSession()).data.session?.access_token;
@@ -189,7 +209,9 @@ const TestAgentPageContent = () => {
 
             setOutboundConfigLoading(true);
             try {
-                const config = await authedBackendFetch<any>('/api/founder-console/outbound-agent-config');
+                const agentData = await authedBackendFetch<any>('/api/founder-console/agent/config');
+                const outboundAgent = agentData?.agents?.find((a: any) => a.role === 'outbound');
+                const config = outboundAgent || {};
                 const missingFields = [];
                 if (!config.system_prompt) missingFields.push('System Prompt');
 
@@ -558,10 +580,10 @@ const TestAgentPageContent = () => {
                                                 </div>
                                             </div>
                                             <button
-                                                onClick={() => router.push('/dashboard/outbound-agent-config')}
+                                                onClick={() => router.push('/dashboard/agent-config')}
                                                 className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
                                             >
-                                                Go to Outbound Agent Config
+                                                Go to Agent Configuration
                                             </button>
                                         </div>
                                     )}

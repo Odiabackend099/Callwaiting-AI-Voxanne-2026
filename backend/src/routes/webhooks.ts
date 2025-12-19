@@ -79,7 +79,7 @@ async function injectRagContextIntoAgent(params: {
 
     const vapi = new VapiClient(params.vapiApiKey);
     const assistant = await vapi.getAssistant(params.assistantId);
-    
+
     if (!assistant) {
       logger.warn('Webhooks', 'Assistant not found for RAG injection', { assistantId: params.assistantId });
       return;
@@ -87,7 +87,7 @@ async function injectRagContextIntoAgent(params: {
 
     // Get current system prompt
     const currentSystemPrompt = assistant.firstMessage || '';
-    
+
     // Store RAG context in assistant metadata instead of modifying system prompt
     // This prevents prompt bloat after multiple calls
     const metadata = assistant.metadata || {};
@@ -394,7 +394,7 @@ async function handleCallStarted(event: VapiEvent) {
         // Add jitter to prevent thundering herd
         const jitter = Math.random() * 100;
         const delayMs = RETRY_DELAYS[attempt] + jitter;
-        
+
         logger.warn('handleCallStarted', 'Call tracking not found, retrying', {
           vapiCallId: call.id,
           attempt: attempt + 1,
@@ -402,7 +402,7 @@ async function handleCallStarted(event: VapiEvent) {
           delayMs: Math.round(delayMs),
           totalDelayMs: RETRY_DELAYS.slice(0, attempt + 1).reduce((a, b) => a + b, 0)
         });
-        
+
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
@@ -560,6 +560,67 @@ async function handleCallStarted(event: VapiEvent) {
       lead = leadData;
     }
 
+    // ========== CRITICAL FIX: Load agent config and credentials from config tables ==========
+    // Determine call type and load appropriate config
+    let agentConfig: any = null;
+    let vapiApiKey: string | null = null;
+
+    try {
+      const callType = isInboundCall ? 'inbound' : 'outbound';
+      const configTableName = callType === 'inbound' ? 'inbound_agent_config' : 'outbound_agent_config';
+
+      logger.info('handleCallStarted', `Loading ${callType} agent config`, {
+        vapiCallId: call.id,
+        orgId: callTracking.org_id,
+        tableName: configTableName
+      });
+
+      const { data: config, error: configError } = await supabase
+        .from(configTableName)
+        .select('*')
+        .eq('org_id', callTracking.org_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (configError) {
+        logger.error('handleCallStarted', `Failed to load ${callType} config`, {
+          vapiCallId: call.id,
+          orgId: callTracking.org_id,
+          error: configError.message
+        });
+      } else if (!config) {
+        logger.warn('handleCallStarted', `No ${callType} config found, falling back to env vars`, {
+          vapiCallId: call.id,
+          orgId: callTracking.org_id
+        });
+      } else {
+        agentConfig = config;
+        vapiApiKey = config.vapi_api_key;
+
+        logger.info('handleCallStarted', `Loaded ${callType} agent config`, {
+          vapiCallId: call.id,
+          orgId: callTracking.org_id,
+          hasVapiKey: Boolean(vapiApiKey),
+          assistantId: config.vapi_assistant_id?.slice(0, 20) + '...',
+          twilioNumber: config.twilio_phone_number
+        });
+      }
+    } catch (configLoadError: any) {
+      logger.error('handleCallStarted', 'Error loading agent config (non-blocking)', {
+        vapiCallId: call.id,
+        error: configLoadError.message
+      });
+    }
+
+    // Fallback to environment variable if config table doesn't have the key
+    if (!vapiApiKey) {
+      vapiApiKey = process.env.VAPI_API_KEY || null;
+      logger.warn('handleCallStarted', 'Using VAPI_API_KEY from environment', {
+        vapiCallId: call.id,
+        hasEnvKey: Boolean(vapiApiKey)
+      });
+    }
+
     // Fetch RAG context from knowledge base and inject into agent
     let ragContext = '';
     try {
@@ -573,16 +634,13 @@ async function handleCallStarted(event: VapiEvent) {
         });
 
         // Inject RAG context into agent's system prompt for this call
-        if (call.assistantId) {
+        if (call.assistantId && vapiApiKey) {
           try {
-            const vapiKey = process.env.VAPI_API_KEY;
-            if (vapiKey) {
-              await injectRagContextIntoAgent({
-                vapiApiKey: vapiKey,
-                assistantId: call.assistantId,
-                ragContext: context
-              });
-            }
+            await injectRagContextIntoAgent({
+              vapiApiKey: vapiApiKey,
+              assistantId: call.assistantId,
+              ragContext: context
+            });
           } catch (injectErr: any) {
             logger.warn('handleCallStarted', 'Failed to inject RAG context into agent', {
               vapiCallId: call.id,

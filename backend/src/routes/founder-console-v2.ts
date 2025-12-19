@@ -1486,6 +1486,95 @@ router.post(
         }
       }
 
+      // ========== POPULATE AGENT CONFIG TABLES ==========
+      // CRITICAL FIX: Populate inbound_agent_config and outbound_agent_config tables
+      // with credentials and link to agents.vapi_assistant_id
+      try {
+        // Get both inbound and outbound agents
+        const { data: inboundAgent } = await supabase
+          .from('agents')
+          .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
+          .eq('role', AGENT_ROLES.INBOUND)
+          .eq('org_id', orgId)
+          .maybeSingle();
+
+        const { data: outboundAgent } = await supabase
+          .from('agents')
+          .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
+          .eq('role', AGENT_ROLES.OUTBOUND)
+          .eq('org_id', orgId)
+          .maybeSingle();
+
+        // Get Twilio inbound credentials from integrations
+        const { data: twilioInbound } = await supabase
+          .from('integrations')
+          .select('config')
+          .eq('provider', 'twilio_inbound')
+          .eq('org_id', orgId)
+          .maybeSingle();
+
+        // Populate inbound_agent_config
+        if (inboundAgent) {
+          await supabase
+            .from('inbound_agent_config')
+            .upsert({
+              org_id: orgId,
+              vapi_api_key: vapiApiKey,
+              vapi_assistant_id: inboundAgent.vapi_assistant_id,
+              twilio_account_sid: twilioInbound?.config?.accountSid || twilioBody.accountSid,
+              twilio_auth_token: twilioInbound?.config?.authToken || twilioBody.authToken,
+              twilio_phone_number: twilioInbound?.config?.phoneNumber || twilioBody.fromNumber,
+              system_prompt: inboundAgent.system_prompt,
+              first_message: inboundAgent.first_message,
+              voice_id: inboundAgent.voice,
+              language: inboundAgent.language,
+              max_call_duration: inboundAgent.max_call_duration,
+              is_active: true,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'org_id' });
+
+          logger.info('Populated inbound_agent_config', {
+            orgId,
+            assistantId: inboundAgent.vapi_assistant_id?.slice(0, 20) + '...'
+          });
+        }
+
+        // Populate outbound_agent_config
+        if (outboundAgent) {
+          await supabase
+            .from('outbound_agent_config')
+            .upsert({
+              org_id: orgId,
+              vapi_api_key: vapiApiKey,
+              vapi_assistant_id: outboundAgent.vapi_assistant_id,
+              twilio_account_sid: twilioBody.accountSid,
+              twilio_auth_token: twilioBody.authToken,
+              twilio_phone_number: twilioBody.fromNumber,
+              system_prompt: outboundAgent.system_prompt,
+              first_message: outboundAgent.first_message,
+              voice_id: outboundAgent.voice,
+              language: outboundAgent.language,
+              max_call_duration: outboundAgent.max_call_duration,
+              is_active: true,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'org_id' });
+
+          logger.info('Populated outbound_agent_config', {
+            orgId,
+            assistantId: outboundAgent.vapi_assistant_id?.slice(0, 20) + '...'
+          });
+        }
+      } catch (configError: any) {
+        // Log but don't fail the request - config tables are secondary
+        logger.error('Failed to populate agent config tables (non-blocking)', {
+          error: configError.message,
+          orgId
+        });
+      }
+
+
       res.status(200).json({
         ready: Boolean(steps.vapiValidated && steps.twilioValidated && steps.phoneNumberImported && steps.assistantSynced),
         steps,
@@ -1753,8 +1842,8 @@ router.post(
       }
 
       // Parallel Vapi Sync for updated agents
-      logger.info('Syncing agents to Vapi', { 
-        agentIds: agentIdsToSync, 
+      logger.info('Syncing agents to Vapi', {
+        agentIds: agentIdsToSync,
         requestId,
         inboundUpdated: Boolean(inboundPayload),
         outboundUpdated: Boolean(outboundPayload)
@@ -1774,9 +1863,9 @@ router.post(
           errors: errorMessages,
           requestId
         });
-        res.status(500).json({ 
+        res.status(500).json({
           error: `Failed to sync agents to Vapi: ${errorMessages}`,
-          requestId 
+          requestId
         });
         return;
       }
@@ -1789,8 +1878,8 @@ router.post(
           requestId
         });
       } else {
-        logger.info('All agents synced successfully to Vapi', { 
-          count: successfulSyncs.length, 
+        logger.info('All agents synced successfully to Vapi', {
+          count: successfulSyncs.length,
           requestId,
           assistantIds: successfulSyncs
         });

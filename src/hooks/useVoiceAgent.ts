@@ -16,6 +16,7 @@ interface UseVoiceAgentOptions {
     onConnected?: () => void;
     onDisconnected?: () => void;
     onError?: (error: string) => void;
+    preventAutoDisconnectOnUnmount?: boolean;
 }
 
 interface WebTestResponse {
@@ -599,12 +600,30 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
     }, [stopRecording, session, user]);
 
-    // Cleanup on unmount
+    // Attempt to recover audio on tab/app foreground
     useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    playerRef.current?.resume();
+                } catch {
+                    // ignore
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        };
+    }, []);
+
+    // Cleanup on unmount (default behavior)
+    useEffect(() => {
+        if (options.preventAutoDisconnectOnUnmount) return;
         return () => {
             disconnect();
         };
-    }, [disconnect]);
+    }, [disconnect, options.preventAutoDisconnectOnUnmount]);
 
     return {
         ...state,
