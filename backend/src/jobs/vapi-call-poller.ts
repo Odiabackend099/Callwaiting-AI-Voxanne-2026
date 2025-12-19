@@ -112,6 +112,10 @@ export async function pollVapiCalls(): Promise<void> {
         // Upload recording if available and not already uploaded
         if (call.artifact?.recording && !existing?.recording_storage_path) {
           try {
+            logger.info('VapiPoller', 'Recording URL found', {
+              vapiCallId: call.id,
+              recordingUrl: call.artifact.recording?.substring(0, 100)
+            });
             await uploadRecordingFromVapi(call.id, call.artifact.recording, callLogId);
           } catch (recordingError: any) {
             logger.warn('VapiPoller', 'Failed to upload recording (non-blocking)', {
@@ -119,6 +123,11 @@ export async function pollVapiCalls(): Promise<void> {
               error: recordingError?.message
             });
           }
+        } else if (!call.artifact?.recording) {
+          logger.warn('VapiPoller', 'No recording available for call', {
+            vapiCallId: call.id,
+            hasArtifact: !!call.artifact
+          });
         }
       } catch (callError: any) {
         logger.error('VapiPoller', 'Error processing call', {
