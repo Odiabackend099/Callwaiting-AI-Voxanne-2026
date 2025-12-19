@@ -137,11 +137,26 @@ export async function pollVapiCalls(): Promise<void> {
         // Upload recording if available and not already uploaded
         if (completeCall.artifact?.recording && !existing?.recording_storage_path) {
           try {
+            // Handle both string URLs and object responses
+            let recordingUrl = completeCall.artifact.recording;
+            if (typeof recordingUrl === 'object') {
+              recordingUrl = recordingUrl.url || recordingUrl.recordingUrl || JSON.stringify(recordingUrl);
+            }
+            
             logger.info('VapiPoller', 'Recording URL found', {
               vapiCallId: call.id,
-              recordingUrl: completeCall.artifact.recording?.substring(0, 100)
+              recordingUrl: typeof recordingUrl === 'string' ? recordingUrl.substring(0, 100) : 'object',
+              recordingType: typeof recordingUrl
             });
-            await uploadRecordingFromVapi(call.id, completeCall.artifact.recording, callLogId);
+            
+            if (typeof recordingUrl === 'string' && recordingUrl.startsWith('http')) {
+              await uploadRecordingFromVapi(call.id, recordingUrl, callLogId);
+            } else {
+              logger.warn('VapiPoller', 'Invalid recording URL format', {
+                vapiCallId: call.id,
+                recordingUrl: typeof recordingUrl === 'string' ? recordingUrl : 'object'
+              });
+            }
           } catch (recordingError: any) {
             logger.warn('VapiPoller', 'Failed to upload recording (non-blocking)', {
               vapiCallId: call.id,
