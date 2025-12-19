@@ -74,65 +74,93 @@ export default function AgentConfigPage() {
             setIsLoading(true);
             setError(null);
 
-            const [voicesData, settingsData, agentData, inboundStatusData] = await Promise.all([
+            const results = await Promise.allSettled([
                 authedBackendFetch<any>('/api/assistants/voices/available'),
                 authedBackendFetch<any>('/api/founder-console/settings'),
                 authedBackendFetch<any>('/api/founder-console/agent/config'),
                 authedBackendFetch<any>('/api/inbound/status'),
             ]);
 
-            setVoices(Array.isArray(voicesData) ? voicesData : (voicesData?.voices || []));
-            setVapiConfigured(Boolean(settingsData?.vapiConfigured));
-            setInboundStatus({
-                configured: Boolean(inboundStatusData?.configured),
-                inboundNumber: inboundStatusData?.inboundNumber
-            });
+            const [voicesResult, settingsResult, agentResult, inboundResult] = results;
 
-            // Load both inbound and outbound agent configs from unified endpoint
-            if (agentData?.agents) {
-                // agentData.agents is an array with inbound and outbound agents
-                const inboundAgent = agentData.agents.find((a: any) => a.role === 'inbound');
-                const outboundAgent = agentData.agents.find((a: any) => a.role === 'outbound');
+            if (voicesResult.status === 'fulfilled') {
+                const voicesData = voicesResult.value;
+                setVoices(Array.isArray(voicesData) ? voicesData : (voicesData?.voices || []));
+            } else {
+                console.error('Failed to load voices:', voicesResult.reason);
+                setError('Failed to load available voices. Please refresh the page.');
+                setIsLoading(false);
+                return;
+            }
 
-                if (inboundAgent) {
+            if (settingsResult.status === 'fulfilled') {
+                setVapiConfigured(Boolean(settingsResult.value?.vapiConfigured));
+            } else {
+                console.error('Failed to load settings:', settingsResult.reason);
+                setError('Failed to load integration settings. Please refresh the page.');
+                setIsLoading(false);
+                return;
+            }
+
+            if (agentResult.status === 'fulfilled') {
+                const agentData = agentResult.value;
+                if (agentData?.agents) {
+                    const inboundAgent = agentData.agents.find((a: any) => a.role === 'inbound');
+                    const outboundAgent = agentData.agents.find((a: any) => a.role === 'outbound');
+
+                    if (inboundAgent) {
+                        const loadedConfig = {
+                            systemPrompt: inboundAgent.system_prompt || '',
+                            firstMessage: inboundAgent.first_message || '',
+                            voice: inboundAgent.voice || '',
+                            language: inboundAgent.language || 'en-US',
+                            maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                        };
+                        setInboundConfig(loadedConfig);
+                        setOriginalInboundConfig(loadedConfig);
+                    }
+
+                    if (outboundAgent) {
+                        const loadedConfig = {
+                            systemPrompt: outboundAgent.system_prompt || '',
+                            firstMessage: outboundAgent.first_message || '',
+                            voice: outboundAgent.voice || '',
+                            language: outboundAgent.language || 'en-US',
+                            maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                        };
+                        setOutboundConfig(loadedConfig);
+                        setOriginalOutboundConfig(loadedConfig);
+                    }
+                } else if (agentData?.vapi) {
+                    const vapi = agentData.vapi;
                     const loadedConfig = {
-                        systemPrompt: inboundAgent.system_prompt || '',
-                        firstMessage: inboundAgent.first_message || '',
-                        voice: inboundAgent.voice || '',
-                        language: inboundAgent.language || 'en-US',
-                        maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                        systemPrompt: vapi.systemPrompt || '',
+                        firstMessage: vapi.firstMessage || '',
+                        voice: vapi.voice || '',
+                        language: vapi.language || 'en-US',
+                        maxDuration: vapi.maxCallDuration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                     };
                     setInboundConfig(loadedConfig);
                     setOriginalInboundConfig(loadedConfig);
                 }
+            } else {
+                console.error('Failed to load agent config:', agentResult.reason);
+                setError('Failed to load agent configuration. Please refresh the page.');
+                setIsLoading(false);
+                return;
+            }
 
-                if (outboundAgent) {
-                    const loadedConfig = {
-                        systemPrompt: outboundAgent.system_prompt || '',
-                        firstMessage: outboundAgent.first_message || '',
-                        voice: outboundAgent.voice || '',
-                        language: outboundAgent.language || 'en-US',
-                        maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                    };
-                    setOutboundConfig(loadedConfig);
-                    setOriginalOutboundConfig(loadedConfig);
-                }
-            } else if (agentData?.vapi) {
-                // Fallback for old response format
-                const vapi = agentData.vapi;
-                const loadedConfig = {
-                    systemPrompt: vapi.systemPrompt || '',
-                    firstMessage: vapi.firstMessage || '',
-                    voice: vapi.voice || '',
-                    language: vapi.language || 'en-US',
-                    maxDuration: vapi.maxCallDuration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                };
-                setInboundConfig(loadedConfig);
-                setOriginalInboundConfig(loadedConfig);
+            if (inboundResult.status === 'fulfilled') {
+                setInboundStatus({
+                    configured: Boolean(inboundResult.value?.configured),
+                    inboundNumber: inboundResult.value?.inboundNumber
+                });
+            } else {
+                console.warn('Failed to load inbound status:', inboundResult.reason);
             }
         } catch (err) {
-            console.error('Error loading configuration:', err);
-            setError('Failed to load configuration. Please refresh the page.');
+            console.error('Unexpected error loading configuration:', err);
+            setError('An unexpected error occurred. Please refresh the page.');
         } finally {
             setIsLoading(false);
         }
@@ -146,9 +174,20 @@ export default function AgentConfigPage() {
         }
     }, [user, loading, router, loadData]);
 
-    // Helper: Check if a single agent config has changed
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const hasValidConfig = (config: AgentConfig): boolean => {
+        return !!(config.systemPrompt?.trim() && config.firstMessage?.trim() && config.voice && config.language);
+    };
+
     const hasAgentChanged = (current: AgentConfig, original: AgentConfig | null): boolean => {
-        if (!original) return false;
+        if (!original) return hasValidConfig(current);
         return (
             current.systemPrompt !== original.systemPrompt ||
             current.firstMessage !== original.firstMessage ||
@@ -277,6 +316,12 @@ export default function AgentConfigPage() {
 
     const handleTestInbound = async () => {
         try {
+            setError(null);
+            const inboundError = validateAgentConfig(inboundConfig, 'inbound');
+            if (inboundError) {
+                setError(inboundError);
+                return;
+            }
             await authedBackendFetch<any>('/api/founder-console/agent/web-test', {
                 method: 'POST',
                 timeoutMs: 30000,
@@ -284,15 +329,23 @@ export default function AgentConfigPage() {
             });
             router.push('/dashboard/test?tab=web');
         } catch (err) {
-            setError('Failed to start web test');
+            console.error('Failed to start web test:', err);
+            setError(err instanceof Error ? err.message : 'Failed to start web test');
         }
     };
 
     const handleTestOutbound = async () => {
         try {
+            setError(null);
+            const outboundError = validateAgentConfig(outboundConfig, 'outbound');
+            if (outboundError) {
+                setError(outboundError);
+                return;
+            }
             router.push('/dashboard/test?tab=phone');
         } catch (err) {
-            setError('Failed to start outbound test');
+            console.error('Failed to start outbound test:', err);
+            setError(err instanceof Error ? err.message : 'Failed to start outbound test');
         }
     };
 
@@ -372,7 +425,7 @@ export default function AgentConfigPage() {
                                     Inbound Agent
                                 </h2>
                                 <p className="text-sm text-blue-700">Receives incoming calls</p>
-                                {inboundStatus?.configured && (
+                                {inboundStatus?.configured && inboundStatus?.inboundNumber && (
                                     <p className="text-xs text-blue-600 mt-2">📱 {inboundStatus.inboundNumber}</p>
                                 )}
                             </div>
@@ -484,7 +537,7 @@ export default function AgentConfigPage() {
                                     📤 Outbound Agent
                                 </h2>
                                 <p className="text-sm text-emerald-700">Makes outgoing calls</p>
-                                {inboundStatus?.configured && (
+                                {inboundStatus?.configured && inboundStatus?.inboundNumber && (
                                     <p className="text-xs text-emerald-600 mt-2">Caller ID: {inboundStatus.inboundNumber}</p>
                                 )}
                             </div>
