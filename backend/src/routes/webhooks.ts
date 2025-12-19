@@ -13,6 +13,7 @@ import { getCachedIntegrationSettings } from '../services/settings-cache';
 import { computeVapiSignature } from '../utils/vapi-webhook-signature';
 import { log as logger } from '../services/logger';
 import { getRagContext } from '../services/rag-context-provider';
+import { logFailedUpload } from '../services/recording-upload-retry';
 import VapiClient from '../services/vapi-client';
 
 export const webhooksRouter = express.Router();
@@ -1211,6 +1212,15 @@ async function handleEndOfCallReport(event: VapiEvent) {
           callId: call.id,
           error: uploadResult.error
         });
+
+        // Log failed upload for retry
+        if (artifact?.recording) {
+          await logFailedUpload({
+            callId: call.id,
+            vapiRecordingUrl: artifact.recording,
+            errorMessage: uploadResult.error || 'Unknown error'
+          });
+        }
       }
     } else {
       logger.warn('Webhooks', 'No recording available for call', {

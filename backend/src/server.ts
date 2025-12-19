@@ -28,6 +28,8 @@ import { vapiSetupRouter } from './routes/vapi-setup';
 import vapiDiscoveryRouter from './routes/vapi-discovery';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
 import agentSyncRouter from './routes/agent-sync';
+import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
+import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -411,6 +413,21 @@ Endpoints:
 
 Ready to accept requests!
 `);
+
+// Schedule background jobs
+try {
+  scheduleOrphanCleanup();
+  console.log('Orphan recording cleanup job scheduled');
+} catch (error: any) {
+  console.warn('Failed to schedule orphan cleanup job:', error.message);
+}
+
+try {
+  scheduleRecordingUploadRetry();
+  console.log('Recording upload retry job scheduled');
+} catch (error: any) {
+  console.warn('Failed to schedule recording upload retry job:', error.message);
+}
 });
 
 // Graceful shutdown
