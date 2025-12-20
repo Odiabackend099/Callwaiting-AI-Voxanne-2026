@@ -47,16 +47,11 @@ async function deleteOrphanedRecording(storagePath: string): Promise<boolean> {
   try {
     const success = await deleteRecording(storagePath);
     if (success) {
-      logger.info('Deleted orphaned recording', {
-        storagePath
-      });
+      logger.info('OrphanCleanup', `Deleted orphaned recording: ${storagePath}`);
     }
     return success;
   } catch (error: any) {
-    logger.error('Failed to delete orphaned recording', {
-      storagePath,
-      error: error.message
-    });
+    logger.error('OrphanCleanup', `Failed to delete orphaned recording: ${error.message}`);
     return false;
   }
 }
@@ -74,10 +69,7 @@ async function markOrphanDetected(callLogId: string, storagePath: string): Promi
     });
 
   if (error) {
-    logger.warn('Failed to record orphan detection', {
-      callLogId,
-      error: error.message
-    });
+    logger.warn('OrphanCleanup', `Failed to record orphan detection: ${error.message}`);
   }
 }
 
@@ -93,10 +85,7 @@ async function markOrphanDeleted(storagePath: string): Promise<void> {
     .eq('storage_path', storagePath);
 
   if (error) {
-    logger.warn('Failed to mark orphan as deleted', {
-      storagePath,
-      error: error.message
-    });
+    logger.warn('OrphanCleanup', `Failed to mark orphan as deleted: ${error.message}`);
   }
 }
 
@@ -105,7 +94,7 @@ async function markOrphanDeleted(storagePath: string): Promise<void> {
  */
 export async function runOrphanCleanupJob(): Promise<void> {
   const startTime = Date.now();
-  logger.info('Starting orphan recording cleanup job');
+  logger.info('OrphanCleanup', 'Starting orphan recording cleanup job');
 
   try {
     // 1. Detect orphaned recordings
@@ -113,7 +102,7 @@ export async function runOrphanCleanupJob(): Promise<void> {
     logger.info('OrphanCleanup', `Detected ${orphans.length} orphaned recordings`);
 
     if (orphans.length === 0) {
-      logger.info('No orphaned recordings found');
+        logger.info('OrphanCleanup', 'No orphaned recordings found');
       return;
     }
 
@@ -171,10 +160,7 @@ export function scheduleOrphanCleanup(): void {
 
   const timeUntilNext = next2AM.getTime() - now.getTime();
 
-  logger.info('Scheduling orphan cleanup job', {
-    nextRun: next2AM.toISOString(),
-    hoursUntilRun: Math.round(timeUntilNext / (60 * 60 * 1000))
-  });
+  logger.info('OrphanCleanup', `Scheduling orphan cleanup job for ${next2AM.toISOString()}`);
 
   // Schedule first run
   setTimeout(() => {

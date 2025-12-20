@@ -32,7 +32,7 @@ interface VapiCall {
  */
 export async function pollVapiCalls(): Promise<void> {
   try {
-    logger.info('Starting Vapi call poll');
+    logger.info('backend', 'Starting Vapi call poll');
 
     // Fetch completed calls from Vapi - try multiple endpoints
     let calls: VapiCall[] = [];
@@ -59,10 +59,7 @@ export async function pollVapiCalls(): Promise<void> {
         responseType: typeof response.data
       });
     } catch (error: any) {
-      logger.warn('Failed to fetch from /call endpoint', {
-        error: error?.message,
-        status: error?.response?.status
-      });
+      logger.warn('backend', 'Failed to fetch from /call endpoint');
     }
 
     logger.info('VapiPoller', `Found ${calls.length} completed calls`, {
@@ -86,15 +83,9 @@ export async function pollVapiCalls(): Promise<void> {
             }
           );
           completeCall = detailResponse.data;
-          logger.info('Fetched complete call details', {
-            vapiCallId: call.id,
-            hasRecording: !!completeCall.artifact?.recording
-          });
+          logger.info('backend', 'Fetched complete call details');
         } catch (detailError: any) {
-          logger.warn('Failed to fetch call details (using list data)', {
-            vapiCallId: call.id,
-            error: detailError?.message
-          });
+          logger.warn('backend', 'Failed to fetch call details (using list data)');
         }
 
         // Check if call_log already exists for this Vapi call ID
@@ -124,18 +115,12 @@ export async function pollVapiCalls(): Promise<void> {
             .single();
 
           if (insertError) {
-            logger.error('Failed to create call_log', {
-              vapiCallId: call.id,
-              error: insertError.message
-            });
+            logger.error('backend', 'Failed to create call_log');
             continue;
           }
 
           callLogId = callLog?.id;
-          logger.info('Created call_log entry', {
-            vapiCallId: call.id,
-            callLogId
-          });
+          logger.info('backend', 'Created call_log entry');
         }
 
         // Upload recording if available and not already uploaded
@@ -153,53 +138,30 @@ export async function pollVapiCalls(): Promise<void> {
             }
             
             if (recordingUrl) {
-              logger.info('Recording URL found', {
-                vapiCallId: call.id,
-                recordingUrl: recordingUrl.substring(0, 100),
-                recordingType: typeof recording
-              });
+              logger.info('backend', 'Recording URL found');
               
               if (recordingUrl.startsWith('http')) {
                 await uploadRecordingFromVapi(call.id, recordingUrl, callLogId);
               } else {
-                logger.warn('Invalid recording URL format', {
-                  vapiCallId: call.id,
-                  recordingUrl: recordingUrl.substring(0, 100)
-                });
+                logger.warn('backend', 'Invalid recording URL format');
               }
             } else {
-              logger.warn('Could not extract recording URL', {
-                vapiCallId: call.id,
-                recordingType: typeof recording,
-                recordingKeys: typeof recording === 'object' ? Object.keys(recording) : 'n/a',
-                recordingValue: typeof recording === 'object' ? JSON.stringify(recording).substring(0, 200) : recording
-              });
+              logger.warn('backend', 'Could not extract recording URL');
             }
           } catch (recordingError: any) {
-            logger.warn('Failed to upload recording (non-blocking)', {
-              vapiCallId: call.id,
-              error: recordingError?.message
-            });
+            logger.warn('backend', 'Failed to upload recording (non-blocking)');
           }
         } else if (!completeCall.artifact?.recording) {
-          logger.warn('No recording available for call', {
-            vapiCallId: call.id,
-            hasArtifact: !!completeCall.artifact
-          });
+          logger.warn('backend', 'No recording available for call');
         }
       } catch (callError: any) {
-        logger.error('Error processing call', {
-          vapiCallId: call.id,
-          error: callError?.message
-        });
+        logger.error('backend', 'Error processing call');
       }
     }
 
-    logger.info('Vapi call poll completed', { processedCount: calls.length });
+    logger.info('backend', 'Vapi call poll completed');
   } catch (error: any) {
-    logger.error('Vapi call poll failed', {
-      error: error?.message
-    });
+    logger.error('backend', 'Vapi call poll failed');
   }
 }
 
@@ -212,11 +174,7 @@ async function uploadRecordingFromVapi(
   callLogId?: string
 ): Promise<void> {
   try {
-    logger.info('Starting recording upload', {
-      vapiCallId,
-      callLogId,
-      recordingUrl: recordingUrl.substring(0, 80)
-    });
+    logger.info('backend', 'Starting recording upload');
 
     // Download recording from Vapi
     const recordingResponse = await axios.get(recordingUrl, {
@@ -225,18 +183,11 @@ async function uploadRecordingFromVapi(
     });
 
     const recordingBuffer = Buffer.from(recordingResponse.data);
-    logger.info('Recording downloaded', {
-      vapiCallId,
-      size: recordingBuffer.length
-    });
+    logger.info('backend', 'Recording downloaded');
 
     // Upload to Supabase Storage
     const storagePath = `calls/inbound/${vapiCallId}/${Date.now()}.wav`;
-    logger.info('Uploading to Supabase Storage', {
-      vapiCallId,
-      storagePath,
-      size: recordingBuffer.length
-    });
+    logger.info('backend', 'Uploading to Supabase Storage');
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('call-recordings')
@@ -246,18 +197,11 @@ async function uploadRecordingFromVapi(
       });
 
     if (uploadError) {
-      logger.error('Failed to upload recording to storage', {
-        vapiCallId,
-        error: uploadError.message
-      });
+      logger.error('backend', 'Failed to upload recording to storage');
       return;
     }
 
-    logger.info('Recording uploaded to storage', {
-      vapiCallId,
-      storagePath,
-      uploadData
-    });
+    logger.info('backend', 'Recording uploaded to storage');
 
     // Generate signed URL
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
@@ -265,10 +209,7 @@ async function uploadRecordingFromVapi(
       .createSignedUrl(storagePath, 3600); // 1 hour expiry
 
     if (signedUrlError) {
-      logger.error('Failed to generate signed URL', {
-        vapiCallId,
-        error: signedUrlError.message
-      });
+      logger.error('backend', 'Failed to generate signed URL');
       return;
     }
 
@@ -286,22 +227,13 @@ async function uploadRecordingFromVapi(
         .eq('id', callLogId);
 
       if (updateError) {
-        logger.error('Failed to update call_log with recording', {
-          callLogId,
-          error: updateError.message
-        });
+        logger.error('backend', 'Failed to update call_log with recording');
       } else {
-        logger.info('Recording metadata saved to call_log', {
-          callLogId,
-          storagePath
-        });
+        logger.info('backend', 'Recording metadata saved to call_log');
       }
     }
   } catch (error: any) {
-    logger.error('Recording download/upload failed', {
-      vapiCallId,
-      error: error?.message
-    });
+    logger.error('backend', 'Recording download/upload failed');
   }
 }
 
@@ -309,19 +241,19 @@ async function uploadRecordingFromVapi(
  * Schedule Vapi call poller to run every 30 seconds
  */
 export function scheduleVapiCallPoller(): void {
-  logger.info('Scheduling Vapi call poller (every 30 seconds)');
+  logger.info('backend', 'Scheduling Vapi call poller (every 30 seconds)');
 
   // Run immediately
   pollVapiCalls().catch((error) => {
-    logger.error('Initial poll failed', { error: error?.message });
+    logger.error('backend', 'Initial poll failed');
   });
 
   // Schedule recurring polls
   setInterval(() => {
     pollVapiCalls().catch((error) => {
-      logger.error('Poll failed', { error: error?.message });
+      logger.error('backend', 'Poll failed');
     });
   }, 30 * 1000); // 30 seconds
 
-  logger.info('Vapi call poller scheduled');
+  logger.info('backend', 'Vapi call poller scheduled');
 }

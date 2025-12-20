@@ -4,9 +4,9 @@
   "description": "Voxanne AI backend for Vapi integration",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "ts-node --transpile-only src/server.ts",
+    "dev": "ts-node --transpile-only --skip-project src/server.ts",
+    "build": "tsc --skipLibCheck true --noEmit false",
     "start": "node dist/server.js",
-    "build": "tsc",
     "test": "jest",
     "watch": "tsc --watch",
     "send:test-email": "ts-node scripts/send-test-email.ts",
