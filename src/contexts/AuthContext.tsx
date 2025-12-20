@@ -49,33 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         let isMounted = true;
 
-        // Dev-only E2E auth bypass for automated browser testing
-        const isE2EBypass = process.env.NODE_ENV !== 'production' &&
-            process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true';
-
-        if (isE2EBypass) {
-            // Synthetic dev user for browser automation
-            const syntheticUser = {
-                id: 'dev-user',
-                email: 'dev@local',
-                aud: 'authenticated',
-                role: 'authenticated',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                app_metadata: {},
-                user_metadata: {}
-            } as any;
-
-            setUser(syntheticUser);
-            setSession(null); // Session not needed for bypass
-            setLoading(false);
-
-            if (process.env.NODE_ENV !== 'production') {
-                console.log('[E2E Auth Bypass] Synthetic dev user enabled');
-            }
-            return; // Skip normal auth flow
-        }
-
         const initializeAuth = async () => {
             try {
                 // Get current session with timeout
@@ -119,11 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         initializeAuth();
 
-        // Listen for auth changes (skip if E2E bypass enabled)
-        if (isE2EBypass) {
-            return () => { isMounted = false; };
-        }
-
         const { data } = supabase.auth.onAuthStateChange(
             async (event, session) => {
                 if (!isMounted) return;
@@ -151,10 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 } else if (event === 'SIGNED_OUT') {
                     setUserSettings(null);
                     setLoading(false);
-                    // Don't redirect to login if E2E bypass is enabled
-                    if (!isE2EBypass) {
-                        router.push('/login');
-                    }
+                    router.push('/login');
                 }
             }
         );

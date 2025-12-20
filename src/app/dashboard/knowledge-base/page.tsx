@@ -95,16 +95,7 @@ export default function KnowledgeBasePage() {
 
       reader.onload = async (event) => {
         try {
-          let content = event.target?.result as string;
-
-          // Handle different file types
-          if (file.type === 'application/pdf') {
-            // For PDF, we'll need backend to parse it
-            content = `[PDF File: ${file.name}]\n\nPlease upload as text or use our PDF parser.`;
-          } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/msword') {
-            // For DOCX/DOC, we'll need backend to parse it
-            content = `[Word Document: ${file.name}]\n\nPlease upload as text or use our document parser.`;
-          }
+          const content = event.target?.result as string;
 
           setDraft({
             id: null,
@@ -467,11 +458,11 @@ export default function KnowledgeBasePage() {
                       type="file"
                       aria-label="Upload knowledge base document"
                       onChange={handleFileUpload}
-                      accept=".txt,.pdf,.doc,.docx,.md"
+                      accept=".txt,.md"
                       className="hidden"
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Supports: TXT, PDF, DOCX, DOC, MD (max 5MB)</p>
+                  <p className="text-xs text-gray-500 mt-1">Supports: TXT, Markdown (max 5MB)</p>
                 </div>
 
                 <div>

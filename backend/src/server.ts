@@ -31,6 +31,8 @@ import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
+import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
+import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -430,18 +432,40 @@ try {
 }
 
 try {
-  scheduleTwilioCallPoller();
-  console.log('Twilio call poller scheduled');
+  scheduleRecordingMetricsMonitor();
+  console.log('Recording metrics monitor job scheduled');
 } catch (error: any) {
-  console.warn('Failed to schedule Twilio call poller:', error.message);
+  console.warn('Failed to schedule recording metrics monitor job:', error.message);
 }
 
 try {
-  scheduleVapiCallPoller();
-  console.log('Vapi call poller scheduled');
+  scheduleRecordingQueueWorker();
+  console.log('Recording queue worker job scheduled');
 } catch (error: any) {
-  console.warn('Failed to schedule Vapi call poller:', error.message);
+  console.warn('Failed to schedule recording queue worker job:', error.message);
 }
+
+// DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
+// Reason: Polling caused race conditions with webhook handlers and wasted bandwidth
+// Webhooks are more reliable (immediate notification) and prevent duplicate processing
+// Keep poller functions in codebase for emergency manual recovery only
+// See: /Users/mac/.claude/plans/streamed-swinging-ullman.md for details
+
+// try {
+//   scheduleTwilioCallPoller();
+//   console.log('Twilio call poller scheduled');
+// } catch (error: any) {
+//   console.warn('Failed to schedule Twilio call poller:', error.message);
+// }
+
+// try {
+//   scheduleVapiCallPoller();
+//   console.log('Vapi call poller scheduled');
+// } catch (error: any) {
+//   console.warn('Failed to schedule Vapi call poller:', error.message);
+// }
+
+console.log('✅ Recording pollers disabled - using webhook-only architecture');
 });
 
 // Graceful shutdown

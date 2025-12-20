@@ -117,24 +117,24 @@ Voxanne MVP is **production-ready and deployed**. All 10 critical features are i
 **What it does:** Agent answers questions using uploaded documents (pricing, services, FAQs)
 
 **Implementation:**
-- Document upload (TXT, MD, PDF, DOCX)
-- Auto-chunking on save (1000 char chunks, 200 char overlap)
-- Embedding generation (OpenAI API)
-- Vector storage in Supabase
-- Vector similarity search at call time
-- RAG context injection into agent system prompt
+- Document upload (TXT, Markdown)
+- Auto-chunking on save (1000 token chunks ≈4000 chars, 200 token overlap)
+- Embedding generation (OpenAI text-embedding-3-small, 1536 dimensions)
+- Vector storage in Supabase (pgvector)
+- Vector similarity search at call time (threshold: 0.6, top 5 results)
+- RAG context injection into agent system prompt (with idempotency markers)
 
 **How it works:**
 1. Clinic uploads document: "BBL costs £99,999"
-2. Document auto-chunked and embedded
+2. Document auto-chunked and embedded synchronously
 3. Customer calls and asks: "How much is a BBL?"
-4. Backend searches vector DB for similar chunks
-5. Finds: "BBL costs £99,999"
-6. Injects into agent system prompt
+4. Backend searches vector DB for similar chunks using cosine similarity
+5. Finds: "BBL costs £99,999" (similarity > 0.6)
+6. Injects into agent's system prompt at call time
 7. Agent responds: "A BBL costs £99,999 at our clinic"
 
-**Tested:** ✅ KB context injected into agent responses
-**Lessons learned:** Synchronous chunking is critical - async delays cause silent failures. Vector search is fast and accurate.
+**Tested:** ✅ KB context injected into agent system prompts (FIXED in Phase 1)
+**Lessons learned:** RAG context must be injected into system prompts, not metadata. Synchronous chunking is critical - async delays cause silent failures. Vector search is fast and accurate. Idempotency markers prevent prompt duplication.
 
 ---
 

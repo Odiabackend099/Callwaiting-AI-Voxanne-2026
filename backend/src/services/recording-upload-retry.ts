@@ -53,18 +53,18 @@ export async function logFailedUpload(params: {
       });
 
     if (insertError) {
-      logger.error('RecordingUploadRetry', 'Failed to log failed upload', {
+      logger.error('Failed to log failed upload', {
         callId: params.callId,
         error: insertError.message
       });
     } else {
-      logger.info('RecordingUploadRetry', 'Failed upload logged for retry', {
+      logger.info('Failed upload logged for retry', {
         callId: params.callId,
         nextRetryAt
       });
     }
   } catch (error: any) {
-    logger.error('RecordingUploadRetry', 'Error logging failed upload', {
+    logger.error('Error logging failed upload', {
       error: error.message
     });
   }
@@ -82,7 +82,7 @@ async function getFailedUploadsForRetry(): Promise<FailedUpload[]> {
     .lt('retry_count', 3);  // Less than 3 retries
 
   if (error) {
-    logger.error('RecordingUploadRetry', 'Failed to fetch failed uploads', {
+    logger.error('Failed to fetch failed uploads', {
       error: error.message
     });
     return [];
@@ -104,7 +104,7 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
       .maybeSingle();
 
     if (callError || !callLog) {
-      logger.error('RecordingUploadRetry', 'Failed to find call log for retry', {
+      logger.error('Failed to find call log for retry', {
         failedUploadId: failedUpload.id,
         error: callError?.message
       });
@@ -120,7 +120,7 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
 
     const callType = (callDetails?.call_type || 'outbound') as 'inbound' | 'outbound';
 
-    logger.info('RecordingUploadRetry', 'Retrying failed upload', {
+    logger.info('Retrying failed upload', {
       failedUploadId: failedUpload.id,
       callId: callLog.vapi_call_id,
       retryCount: failedUpload.retry_count + 1
@@ -128,7 +128,7 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
 
     // Attempt upload
     if (!failedUpload.vapi_recording_url) {
-      logger.error('RecordingUploadRetry', 'No recording URL for retry', {
+      logger.error('No recording URL for retry', {
         failedUploadId: failedUpload.id
       });
       return false;
@@ -152,12 +152,12 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
         .eq('id', failedUpload.id);
 
       if (updateError) {
-        logger.warn('RecordingUploadRetry', 'Failed to mark upload as resolved', {
+        logger.warn('Failed to mark upload as resolved', {
           failedUploadId: failedUpload.id,
           error: updateError.message
         });
       } else {
-        logger.info('RecordingUploadRetry', 'Failed upload retry succeeded', {
+        logger.info('Failed upload retry succeeded', {
           failedUploadId: failedUpload.id,
           callId: callLog.vapi_call_id
         });
@@ -180,12 +180,12 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
         .eq('id', failedUpload.id) as any;
 
       if (updateError) {
-        logger.error('RecordingUploadRetry', 'Failed to update retry count', {
+        logger.error('Failed to update retry count', {
           failedUploadId: failedUpload.id,
           error: updateError.message
         });
       } else {
-        logger.warn('RecordingUploadRetry', 'Failed upload retry failed, scheduled next retry', {
+        logger.warn('Failed upload retry failed, scheduled next retry', {
           failedUploadId: failedUpload.id,
           retryCount: nextRetryCount,
           nextRetryAt,
@@ -196,7 +196,7 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
       return false;
     }
   } catch (error: any) {
-    logger.error('RecordingUploadRetry', 'Error retrying failed upload', {
+    logger.error('Error retrying failed upload', {
       failedUploadId: failedUpload.id,
       error: error.message
     });
@@ -209,12 +209,12 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
  */
 export async function runRecordingUploadRetryJob(): Promise<void> {
   const startTime = Date.now();
-  logger.info('RecordingUploadRetry', 'Starting recording upload retry job');
+  logger.info('Starting recording upload retry job');
 
   try {
     // Get failed uploads ready for retry
     const failedUploads = await getFailedUploadsForRetry();
-    logger.info('RecordingUploadRetry', 'Found failed uploads ready for retry', {
+    logger.info('Found failed uploads ready for retry', {
       count: failedUploads.length
     });
 
@@ -236,7 +236,7 @@ export async function runRecordingUploadRetryJob(): Promise<void> {
     }
 
     const duration = Date.now() - startTime;
-    logger.info('RecordingUploadRetry', 'Recording upload retry job completed', {
+    logger.info('Recording upload retry job completed', {
       totalFailed: failedUploads.length,
       successCount,
       failureCount,
@@ -245,13 +245,13 @@ export async function runRecordingUploadRetryJob(): Promise<void> {
 
     // Alert if too many failures
     if (failureCount > 0) {
-      logger.warn('RecordingUploadRetry', 'Some recording upload retries failed', {
+      logger.warn('Some recording upload retries failed', {
         failureCount,
         totalFailed: failedUploads.length
       });
     }
   } catch (error: any) {
-    logger.error('RecordingUploadRetry', 'Recording upload retry job failed', {
+    logger.error('Recording upload retry job failed', {
       error: error.message
     });
   }
@@ -261,7 +261,7 @@ export async function runRecordingUploadRetryJob(): Promise<void> {
  * Schedule retry job to run every 5 minutes
  */
 export function scheduleRecordingUploadRetry(): void {
-  logger.info('RecordingUploadRetry', 'Scheduling recording upload retry job (every 5 minutes)');
+  logger.info('Scheduling recording upload retry job (every 5 minutes)');
 
   // Run immediately
   runRecordingUploadRetryJob();

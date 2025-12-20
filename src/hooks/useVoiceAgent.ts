@@ -217,9 +217,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             }
 
             const token = session?.access_token;
-            const isDevBypass = !token && user?.id === 'dev-user';
 
-            if (!token && !isDevBypass) {
+            if (!token) {
                 throw new Error('Not authenticated. Please log in first.');
             }
 
@@ -230,7 +229,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 body: JSON.stringify({}),
                 timeoutMs: 30000,
                 retries: 2,
-                requireAuth: !isDevBypass,
+                requireAuth: true,
             }).catch((err: any) => {
                 if (err?.status === 401) {
                     throw new Error('Not authenticated. Please log in first.');
@@ -563,13 +562,13 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         if (trackingIdRef.current) {
             try {
                 const token = session?.access_token;
-                if (token || user?.id === 'dev-user') {
+                if (token) {
                     await authedBackendFetch('/api/founder-console/agent/web-test/end', {
                         method: 'POST',
                         body: JSON.stringify({ trackingId: trackingIdRef.current }),
                         timeoutMs: 20000,
                         retries: 1,
-                        requireAuth: token ? true : false,
+                        requireAuth: true,
                     });
                     if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Web test session ended');
                 }

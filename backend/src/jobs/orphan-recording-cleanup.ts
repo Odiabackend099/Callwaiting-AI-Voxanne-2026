@@ -47,13 +47,13 @@ async function deleteOrphanedRecording(storagePath: string): Promise<boolean> {
   try {
     const success = await deleteRecording(storagePath);
     if (success) {
-      logger.info('OrphanCleanup', 'Deleted orphaned recording', {
+      logger.info('Deleted orphaned recording', {
         storagePath
       });
     }
     return success;
   } catch (error: any) {
-    logger.error('OrphanCleanup', 'Failed to delete orphaned recording', {
+    logger.error('Failed to delete orphaned recording', {
       storagePath,
       error: error.message
     });
@@ -74,7 +74,7 @@ async function markOrphanDetected(callLogId: string, storagePath: string): Promi
     });
 
   if (error) {
-    logger.warn('OrphanCleanup', 'Failed to record orphan detection', {
+    logger.warn('Failed to record orphan detection', {
       callLogId,
       error: error.message
     });
@@ -93,7 +93,7 @@ async function markOrphanDeleted(storagePath: string): Promise<void> {
     .eq('storage_path', storagePath);
 
   if (error) {
-    logger.warn('OrphanCleanup', 'Failed to mark orphan as deleted', {
+    logger.warn('Failed to mark orphan as deleted', {
       storagePath,
       error: error.message
     });
@@ -105,7 +105,7 @@ async function markOrphanDeleted(storagePath: string): Promise<void> {
  */
 export async function runOrphanCleanupJob(): Promise<void> {
   const startTime = Date.now();
-  logger.info('OrphanCleanup', 'Starting orphan recording cleanup job');
+  logger.info('Starting orphan recording cleanup job');
 
   try {
     // 1. Detect orphaned recordings
@@ -113,7 +113,7 @@ export async function runOrphanCleanupJob(): Promise<void> {
     logger.info('OrphanCleanup', `Detected ${orphans.length} orphaned recordings`);
 
     if (orphans.length === 0) {
-      logger.info('OrphanCleanup', 'No orphaned recordings found');
+      logger.info('No orphaned recordings found');
       return;
     }
 
@@ -171,7 +171,7 @@ export function scheduleOrphanCleanup(): void {
 
   const timeUntilNext = next2AM.getTime() - now.getTime();
 
-  logger.info('OrphanCleanup', 'Scheduling orphan cleanup job', {
+  logger.info('Scheduling orphan cleanup job', {
     nextRun: next2AM.toISOString(),
     hoursUntilRun: Math.round(timeUntilNext / (60 * 60 * 1000))
   });

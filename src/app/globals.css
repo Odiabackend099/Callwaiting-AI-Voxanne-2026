@@ -7,11 +7,25 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #0f172a;
+  --primary-light: #1e293b;
+  --accent: #06b6d4;
+  --accent-light: #22d3ee;
+  --border-light: #e2e8f0;
+  --bg-light: #f8fafc;
+  --card-light: #ffffff;
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #ffffff;
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --primary: #1e293b;
+  --primary-light: #334155;
+  --accent: #06b6d4;
+  --accent-light: #22d3ee;
+  --border-dark: #1e293b;
+  --bg-dark: #0f172a;
+  --card-dark: #1e293b;
 }
 
 /* @theme {
@@ -27,7 +41,7 @@ body {
   background-attachment: fixed;
   background-position: center;
   font-family: var(--font-lato), sans-serif;
-  transition: background-image 0.3s ease-in-out;
+  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
 }
 
 /* Ensure all form inputs have proper text color */
@@ -36,6 +50,7 @@ textarea,
 select {
   color: #171717 !important;
   background-color: #ffffff;
+  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
 }
 
 input::placeholder,
@@ -43,9 +58,21 @@ textarea::placeholder {
   color: #9ca3af !important;
 }
 
+.dark input,
+.dark textarea,
+.dark select {
+  color: #f1f5f9 !important;
+  background-color: #1e293b;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
 .dark body {
   background-image: none;
-  background: #000000;
+  background: var(--background);
 }
 
 @keyframes aurora {

@@ -17,7 +17,7 @@ export default function Hero({
     onBookDemo,
     title,
     subtitle,
-    badgeText = "#1 AI Receptionist for Aesthetic Clinics, Med Spas & Plastic Surgeons",
+    badgeText = "Attract More Clients, The AI Receptionist Aesthetic Clinics Trust",
     ctaText = "Book a Demo"
 }: HeroProps) {
     const [isPlaying, setIsPlaying] = useState(false);
@@ -70,12 +70,10 @@ export default function Hero({
                 >
                     {title || (
                         <>
-                            Every Missed Call <br className="hidden md:block" />
+                            Turn Every Call <br className="hidden md:block" />
                             <span className="text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">
-                                Is a Patient Who Chose
+                                Into a Booking
                             </span>
-                            <br />
-                            <span className="text-red-500">Your Competitor.</span>
                         </>
                     )}
                 </motion.h1>
@@ -92,8 +90,9 @@ export default function Hero({
                 >
                     {subtitle || (
                         <>
-                            Call Waiting AI captures every lead, 24/7. Your competition already installed her.
-                            She&apos;s <strong className="text-white font-semibold">safe</strong>, compliant, and books revenue for your aesthetic practice while you sleep.
+                            24/7 availability, seamless booking, and a professional first impression.
+                            <br className="hidden sm:block" />
+                            Without the cost of a full-time receptionist.
                         </>
                     )}
                 </motion.p>

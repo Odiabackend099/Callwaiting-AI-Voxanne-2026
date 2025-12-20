@@ -27,7 +27,7 @@ interface TwilioCall {
  */
 export async function pollTwilioCalls(): Promise<void> {
   try {
-    logger.info('TwilioPoller', 'Starting Twilio call poll');
+    logger.info('Starting Twilio call poll');
 
     // Get last poll time from cache (or use 5 minutes ago)
     const lastPollTime = new Date(Date.now() - 5 * 60 * 1000);
@@ -80,7 +80,7 @@ export async function pollTwilioCalls(): Promise<void> {
             .single();
 
           if (insertError) {
-            logger.error('TwilioPoller', 'Failed to create call_log', {
+            logger.error('Failed to create call_log', {
               callSid: call.sid,
               error: insertError.message
             });
@@ -88,7 +88,7 @@ export async function pollTwilioCalls(): Promise<void> {
           }
 
           callLogId = callLog?.id;
-          logger.info('TwilioPoller', 'Created call_log entry', {
+          logger.info('Created call_log entry', {
             callSid: call.sid,
             callLogId
           });
@@ -99,23 +99,23 @@ export async function pollTwilioCalls(): Promise<void> {
           try {
             await fetchAndUploadRecordingsForCall(call.sid, callLogId);
           } catch (recordingError: any) {
-            logger.warn('TwilioPoller', 'Failed to fetch/upload recordings (non-blocking)', {
+            logger.warn('Failed to fetch/upload recordings (non-blocking)', {
               callSid: call.sid,
               error: recordingError?.message
             });
           }
         }
       } catch (callError: any) {
-        logger.error('TwilioPoller', 'Error processing call', {
+        logger.error('Error processing call', {
           callSid: call.sid,
           error: callError?.message
         });
       }
     }
 
-    logger.info('TwilioPoller', 'Twilio call poll completed', { processedCount: calls.length });
+    logger.info('Twilio call poll completed', { processedCount: calls.length });
   } catch (error: any) {
-    logger.error('TwilioPoller', 'Twilio call poll failed', {
+    logger.error('Twilio call poll failed', {
       error: error?.message
     });
   }
@@ -129,7 +129,7 @@ async function fetchAndUploadRecordingsForCall(
   callLogId?: string
 ): Promise<void> {
   try {
-    logger.info('TwilioPoller', 'Fetching recordings for call', { callSid });
+    logger.info('Fetching recordings for call', { callSid });
 
     // List all recordings for this call
     const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
@@ -150,7 +150,7 @@ async function fetchAndUploadRecordingsForCall(
     });
 
     if (recordings.length === 0) {
-      logger.warn('TwilioPoller', 'No recordings found for call', { callSid });
+      logger.warn('No recordings found for call', { callSid });
       return;
     }
 
@@ -160,7 +160,7 @@ async function fetchAndUploadRecordingsForCall(
 
     await fetchAndUploadRecording(callSid, recordingUrl, callLogId);
   } catch (error: any) {
-    logger.warn('TwilioPoller', 'Failed to fetch recordings list', {
+    logger.warn('Failed to fetch recordings list', {
       callSid,
       error: error?.message
     });
@@ -176,7 +176,7 @@ async function fetchAndUploadRecording(
   callLogId?: string
 ): Promise<void> {
   try {
-    logger.info('TwilioPoller', 'Fetching recording from Twilio', { callSid });
+    logger.info('Fetching recording from Twilio', { callSid });
 
     // Fetch recording from Twilio
     const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
@@ -189,7 +189,7 @@ async function fetchAndUploadRecording(
     });
 
     const recordingBuffer = Buffer.from(recordingResponse.data);
-    logger.info('TwilioPoller', 'Recording fetched', {
+    logger.info('Recording fetched', {
       callSid,
       size: recordingBuffer.length
     });
@@ -204,14 +204,14 @@ async function fetchAndUploadRecording(
       });
 
     if (uploadError) {
-      logger.error('TwilioPoller', 'Failed to upload recording to storage', {
+      logger.error('Failed to upload recording to storage', {
         callSid,
         error: uploadError.message
       });
       return;
     }
 
-    logger.info('TwilioPoller', 'Recording uploaded to storage', {
+    logger.info('Recording uploaded to storage', {
       callSid,
       storagePath
     });
@@ -222,7 +222,7 @@ async function fetchAndUploadRecording(
       .createSignedUrl(storagePath, 3600); // 1 hour expiry
 
     if (signedUrlError) {
-      logger.error('TwilioPoller', 'Failed to generate signed URL', {
+      logger.error('Failed to generate signed URL', {
         callSid,
         error: signedUrlError.message
       });
@@ -243,19 +243,19 @@ async function fetchAndUploadRecording(
         .eq('id', callLogId);
 
       if (updateError) {
-        logger.error('TwilioPoller', 'Failed to update call_log with recording', {
+        logger.error('Failed to update call_log with recording', {
           callLogId,
           error: updateError.message
         });
       } else {
-        logger.info('TwilioPoller', 'Recording metadata saved to call_log', {
+        logger.info('Recording metadata saved to call_log', {
           callLogId,
           storagePath
         });
       }
     }
   } catch (error: any) {
-    logger.error('TwilioPoller', 'Recording fetch/upload failed', {
+    logger.error('Recording fetch/upload failed', {
       callSid,
       error: error?.message
     });
@@ -266,19 +266,19 @@ async function fetchAndUploadRecording(
  * Schedule Twilio call poller to run every 30 seconds
  */
 export function scheduleTwilioCallPoller(): void {
-  logger.info('TwilioPoller', 'Scheduling Twilio call poller (every 30 seconds)');
+  logger.info('Scheduling Twilio call poller (every 30 seconds)');
 
   // Run immediately
   pollTwilioCalls().catch((error) => {
-    logger.error('TwilioPoller', 'Initial poll failed', { error: error?.message });
+    logger.error('Initial poll failed', { error: error?.message });
   });
 
   // Schedule recurring polls
   setInterval(() => {
     pollTwilioCalls().catch((error) => {
-      logger.error('TwilioPoller', 'Poll failed', { error: error?.message });
+      logger.error('Poll failed', { error: error?.message });
     });
   }, 30 * 1000); // 30 seconds
 
-  logger.info('TwilioPoller', 'Twilio call poller scheduled');
+  logger.info('Twilio call poller scheduled');
 }

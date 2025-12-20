@@ -169,11 +169,11 @@ export const log = {
  */
 export function createLogger(module: string) {
   return {
-    debug: (message: string, context?: LogContext) => log.debug(module, message, context),
-    info: (message: string, context?: LogContext) => log.info(module, message, context),
-    warn: (message: string, context?: LogContext) => log.warn(module, message, context),
-    error: (message: string, context?: LogContext) => log.error(module, message, context),
-    exception: (message: string, error: Error, context?: LogContext) => 
+    debug: (message: string, context?: any) => log.debug(module, message, context),
+    info: (message: string, context?: any) => log.info(module, message, context),
+    warn: (message: string, context?: any) => log.warn(module, message, context),
+    error: (message: string, context?: any) => log.error(module, message, context),
+    exception: (message: string, error: Error, context?: any) => 
       log.exception(module, message, error, context)
   };
 }

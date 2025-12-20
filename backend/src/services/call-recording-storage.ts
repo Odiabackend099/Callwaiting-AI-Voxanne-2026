@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase-client';
 import { createLogger } from './logger';
+import { recordUploadSuccess, recordUploadFailure } from './recording-metrics';
 import axios from 'axios';
 import path from 'path';
 
@@ -36,6 +37,88 @@ interface RecordingUploadResult {
 }
 
 /**
+ * Validate audio file format by checking magic bytes (file headers)
+ * Supports: WAV (RIFF), MP3 (ID3/FF), M4A (ftyp)
+ */
+function validateAudioFormat(buffer: Buffer, fileName?: string): { valid: boolean; format?: string; error?: string } {
+  if (buffer.length < 4) {
+    return { valid: false, error: 'File too small to validate' };
+  }
+
+  // Check for WAV (RIFF header)
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
+    if (buffer.length >= 12) {
+      const wave = buffer.toString('ascii', 8, 12);
+      if (wave === 'WAVE') {
+        return { valid: true, format: 'wav' };
+      }
+    }
+  }
+
+  // Check for MP3 (ID3 tag or MPEG frame sync)
+  if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
+    // ID3 tag
+    return { valid: true, format: 'mp3' };
+  }
+
+  // Check for MP3 frame sync (FF FB or FF FA)
+  if (buffer[0] === 0xff && (buffer[1] === 0xfb || buffer[1] === 0xfa)) {
+    return { valid: true, format: 'mp3' };
+  }
+
+  // Check for M4A (ftyp atom, typically at offset 4)
+  if (buffer.length >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp') {
+    const brand = buffer.toString('ascii', 8, 12);
+    if (['mp42', 'isom', 'm4a '].includes(brand)) {
+      return { valid: true, format: 'm4a' };
+    }
+  }
+
+  return { valid: false, error: 'Unrecognized audio format (must be WAV, MP3, or M4A)' };
+}
+
+/**
+ * Validate recording URL for security (prevent SSRF)
+ */
+function validateRecordingUrl(url: string): { valid: boolean; error?: string } {
+  try {
+    const recordingUrl = new URL(url);
+
+    // Whitelist allowed domains
+    const allowedDomains = [
+      'api.vapi.ai',
+      'storage.vapi.ai',
+      'vapi.ai',
+      'api.twilio.com',
+      'twilio.com',
+      's3.amazonaws.com',
+      '*.s3.amazonaws.com'
+    ];
+
+    const isAllowed = allowedDomains.some(domain => {
+      if (domain.includes('*')) {
+        const pattern = domain.replace('*', '.*');
+        return new RegExp(`^${pattern}$`).test(recordingUrl.hostname);
+      }
+      return recordingUrl.hostname === domain || recordingUrl.hostname.endsWith('.' + domain);
+    });
+
+    if (!isAllowed) {
+      return { valid: false, error: `Recording URL from untrusted domain: ${recordingUrl.hostname}` };
+    }
+
+    // Ensure HTTPS (except for localhost)
+    if (!recordingUrl.hostname.includes('localhost') && recordingUrl.protocol !== 'https:') {
+      return { valid: false, error: 'Recording URL must use HTTPS' };
+    }
+
+    return { valid: true };
+  } catch (error: any) {
+    return { valid: false, error: `Invalid URL format: ${error.message}` };
+  }
+}
+
+/**
  * Download recording from Vapi/Twilio and upload to Supabase Storage
  * @param params - Upload parameters
  * @returns Upload result with storage path and signed URL
@@ -44,6 +127,7 @@ export async function uploadCallRecording(
   params: UploadRecordingParams
 ): Promise<RecordingUploadResult> {
   const { orgId, callId, callType, recordingUrl, vapiCallId } = params;
+  const startTime = Date.now();
 
   try {
     if (!recordingUrl) {
@@ -51,7 +135,33 @@ export async function uploadCallRecording(
         callId,
         vapiCallId
       });
+      // Record validation failure metric
+      const durationMs = Date.now() - startTime;
+      await recordUploadFailure({
+        callId,
+        callType,
+        durationMs,
+        errorMessage: 'No recording URL provided'
+      });
       return { success: false, error: 'No recording URL provided' };
+    }
+
+    // Validate URL security (prevent SSRF)
+    const urlValidation = validateRecordingUrl(recordingUrl);
+    if (!urlValidation.valid) {
+      logger.warn('Invalid recording URL', {
+        callId,
+        error: urlValidation.error
+      });
+      // Record validation failure metric
+      const durationMs = Date.now() - startTime;
+      await recordUploadFailure({
+        callId,
+        callType,
+        durationMs,
+        errorMessage: urlValidation.error || 'Invalid recording URL'
+      });
+      return { success: false, error: urlValidation.error };
     }
 
     logger.info('Starting download', {
@@ -84,8 +194,19 @@ export async function uploadCallRecording(
           throw new Error(`Recording too small: ${recordingBuffer.length} bytes`);
         }
 
+        // Validate audio format (WAV, MP3, M4A)
+        const formatValidation = validateAudioFormat(recordingBuffer);
+        if (!formatValidation.valid) {
+          logger.warn('Invalid audio format', {
+            callId,
+            error: formatValidation.error
+          });
+          throw new Error(formatValidation.error);
+        }
+
         logger.info('Download successful', {
           callId,
+          format: formatValidation.format,
           size: recordingBuffer.length,
           attempt: attempt + 1
         });
@@ -129,21 +250,34 @@ export async function uploadCallRecording(
       throw new Error('Failed to download recording after all retries');
     }
 
-    // Generate storage path: calls/{org_id}/{call_type}/{call_id}/{timestamp}.wav
+    // Detect format and use correct extension
+    const formatValidation = validateAudioFormat(recordingBuffer);
+    const extension = formatValidation.format || 'wav';
+
+    // Generate storage path: calls/{org_id}/{call_type}/{call_id}/{timestamp}.{ext}
     const timestamp = Date.now();
-    const storagePath = `calls/${orgId}/${callType}/${callId}/${timestamp}.wav`;
+    const storagePath = `calls/${orgId}/${callType}/${callId}/${timestamp}.${extension}`;
 
     logger.info('Uploading to Supabase Storage', {
       callId,
       storagePath,
+      format: extension,
       size: recordingBuffer.length
     });
+
+    // Map detected format to proper MIME type
+    const mimeTypes: Record<string, string> = {
+      wav: 'audio/wav',
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4'
+    };
+    const contentType = mimeTypes[extension] || 'audio/wav';
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('call-recordings')
       .upload(storagePath, recordingBuffer, {
-        contentType: 'audio/wav',
+        contentType,
         upsert: false // Prevent overwriting
       });
 
@@ -151,6 +285,14 @@ export async function uploadCallRecording(
       logger.error('Upload failed', {
         callId,
         error: uploadError.message
+      });
+      // Record storage upload failure metric
+      const durationMs = Date.now() - startTime;
+      await recordUploadFailure({
+        callId,
+        callType,
+        durationMs,
+        errorMessage: `Storage upload failed: ${uploadError.message}`
       });
       return { success: false, error: uploadError.message };
     }
@@ -166,14 +308,36 @@ export async function uploadCallRecording(
       .createSignedUrl(storagePath, RECORDING_CONFIG.SIGNED_URL_EXPIRY_SECONDS);
 
     if (signedUrlError) {
-      logger.error('Failed to generate signed URL', {
+      logger.error('Failed to generate signed URL - rolling back upload', {
         callId,
-        error: signedUrlError.message
+        error: signedUrlError.message,
+        storagePath
       });
+
+      // CRITICAL: Delete the uploaded file since it's not accessible without signed URL
+      try {
+        await deleteRecording(storagePath);
+        logger.info('Uploaded file deleted after signed URL failure', { storagePath });
+      } catch (deleteError: any) {
+        logger.error('Failed to cleanup uploaded file after signed URL failure', {
+          storagePath,
+          error: deleteError.message
+        });
+        // Don't throw - we already have an error to report
+      }
+
+      // Record signed URL generation failure metric
+      const durationMs = Date.now() - startTime;
+      await recordUploadFailure({
+        callId,
+        callType,
+        durationMs,
+        errorMessage: `Failed to generate signed URL: ${signedUrlError.message}`
+      });
+
       return {
-        success: true,
-        storagePath,
-        error: 'Signed URL generation failed'
+        success: false,
+        error: `Failed to generate signed URL: ${signedUrlError.message}`
       };
     }
 
@@ -181,6 +345,15 @@ export async function uploadCallRecording(
       callId,
       callType,
       storagePath
+    });
+
+    // Record success metric
+    const durationMs = Date.now() - startTime;
+    await recordUploadSuccess({
+      callId,
+      callType,
+      durationMs,
+      fileSizeBytes: recordingBuffer.length
     });
 
     return {
@@ -193,6 +366,16 @@ export async function uploadCallRecording(
       callId,
       error: error.message
     });
+
+    // Record failure metric
+    const durationMs = Date.now() - startTime;
+    await recordUploadFailure({
+      callId,
+      callType,
+      durationMs,
+      errorMessage: error.message
+    });
+
     return { success: false, error: error.message };
   }
 }

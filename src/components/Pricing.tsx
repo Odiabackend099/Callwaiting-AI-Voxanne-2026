@@ -15,16 +15,16 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                         </span>
-                        ROI Positive from Day 1
+                        Transparent Pricing, No Hidden Fees
                     </div>
                     <h2 className="text-3xl md:text-5xl font-bold mb-6 text-white leading-tight">
-                        Cheaper than a Receptionist. <br />
+                        Simple, Affordable Plans <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">
-                            More Reliable than Software.
+                            For Every Practice Size
                         </span>
                     </h2>
                     <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-                        One missed rhinoplasty covers Call Waiting AI for 5 years. Stop stepping over dollars to pick up pennies.
+                        Start with a one-time setup, then pay a monthly subscription. Scale as you grow.
                     </p>
                 </div>
 
@@ -36,10 +36,16 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                     >
                         <div className="mb-8">
                             <h3 className="text-xl font-semibold text-slate-300 mb-2">Starter</h3>
-                            <div className="flex items-baseline gap-1 mb-2">
-                                <span className="text-sm font-medium text-slate-500 align-top mt-2">£</span>
-                                <span className="text-5xl font-bold text-white tracking-tight">497</span>
-                                <span className="text-slate-500">/mo</span>
+                            <div className="mb-4">
+                                <div className="flex items-baseline gap-1 mb-1">
+                                    <span className="text-sm font-medium text-slate-500">Setup:</span>
+                                    <span className="text-3xl font-bold text-white tracking-tight">$2,000</span>
+                                </div>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-sm font-medium text-slate-500">Then:</span>
+                                    <span className="text-3xl font-bold text-white tracking-tight">$500</span>
+                                    <span className="text-slate-500">/mo</span>
+                                </div>
                             </div>
                             <p className="text-sm text-slate-400 mb-6">
                                 Perfect for solo injectors or boutique aesthetic clinics.
@@ -56,11 +62,11 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">What you get</div>
                             {[
                                 "24/7 Call Answering",
-                                "Basic Appointment Booking",
-                                "Medical Disclaimer Shield",
-                                "Email Notifications",
+                                "Lead Qualification",
+                                "Appointment Booking",
                                 "Call Transcripts",
-                                "150 Included Minutes"
+                                "Email Notifications",
+                                "Basic Analytics"
                             ].map((feature, i) => (
                                 <div key={i} className="flex items-start gap-3 text-sm text-slate-300">
                                     <Check className="w-5 h-5 text-green-500 shrink-0" />
@@ -82,33 +88,39 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                         </div>
 
                         <div className="mb-8">
-                            <h3 className="text-xl font-semibold text-cyan-400 mb-2">Growth</h3>
-                            <div className="flex items-baseline gap-1 mb-2">
-                                <span className="text-sm font-medium text-slate-500 align-top mt-2">£</span>
-                                <span className="text-5xl font-bold text-white tracking-tight">997</span>
-                                <span className="text-slate-500">/mo</span>
+                            <h3 className="text-xl font-semibold text-cyan-400 mb-2">Professional</h3>
+                            <div className="mb-4">
+                                <div className="flex items-baseline gap-1 mb-1">
+                                    <span className="text-sm font-medium text-slate-300">Setup:</span>
+                                    <span className="text-3xl font-bold text-white tracking-tight">$5,000</span>
+                                </div>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-sm font-medium text-slate-300">Then:</span>
+                                    <span className="text-3xl font-bold text-white tracking-tight">$1,200</span>
+                                    <span className="text-slate-300">/mo</span>
+                                </div>
                             </div>
                             <p className="text-sm text-slate-300 mb-6">
-                                The full AI receptionist. Optimized for high-volume Med Spas & Plastic Surgeons.
+                                For growing practices. Advanced features and priority support.
                             </p>
                             <button
                                 onClick={onBookDemo}
                                 className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
                             >
-                                Start 14-Day Free Trial
+                                Book a Demo
                             </button>
-                            <p className="text-center text-[10px] text-slate-500 mt-3">Risk-free. Cancel anytime.</p>
+                            <p className="text-center text-[10px] text-slate-500 mt-3">Custom setup included</p>
                         </div>
 
                         <div className="space-y-4 pt-8 border-t border-white/10 flex-grow">
                             <div className="text-xs font-bold text-cyan-500 uppercase tracking-wider mb-2">Everything in Starter, plus:</div>
                             {[
-                                "Unlimited Minutes (No Overage)",
-                                "CRM Integration (Salesforce, HubSpot etc.)",
-                                "Emergency Triage Routing",
-                                "Outbound Lead Follow-up (SMS/Call)",
-                                "Custom Trained Knowledge Base",
-                                "Priority Support Line"
+                                "Advanced Lead Qualification",
+                                "CRM Integration (Salesforce, HubSpot)",
+                                "Multi-location Support",
+                                "Custom Workflows",
+                                "Priority Support",
+                                "Advanced Analytics & Reporting"
                             ].map((feature, i) => (
                                 <div key={i} className="flex items-start gap-3 text-sm text-white font-medium">
                                     <div className="bg-cyan-500/20 rounded-full p-0.5 mt-0.5">
@@ -120,18 +132,18 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                         </div>
                     </motion.div>
 
-                    {/* SCALE TIER */}
+                    {/* ENTERPRISE TIER */}
                     <motion.div
                         whileHover={{ y: -5 }}
                         className="bg-slate-900/50 border border-white/10 rounded-3xl p-8 flex flex-col h-full hover:border-white/20 transition-all duration-300 relative"
                     >
                         <div className="mb-8">
-                            <h3 className="text-xl font-semibold text-slate-300 mb-2">Scale</h3>
+                            <h3 className="text-xl font-semibold text-slate-300 mb-2">Enterprise</h3>
                             <div className="flex items-baseline gap-1 mb-2">
                                 <span className="text-4xl font-bold text-white tracking-tight">Custom</span>
                             </div>
                             <p className="text-sm text-slate-400 mb-6">
-                                For multi-location aesthetic brands and franchise groups.
+                                For multi-location practices and franchise groups. Custom pricing and features.
                             </p>
                             <button
                                 onClick={onBookDemo}
@@ -142,12 +154,12 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                         </div>
 
                         <div className="space-y-4 pt-8 border-t border-white/5 flex-grow">
-                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Everything in Growth, plus:</div>
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Everything in Professional, plus:</div>
                             {[
                                 "White Label Options",
-                                "Multi-location Admin Dashboard",
+                                "Multi-location Dashboard",
                                 "Dedicated Success Manager",
-                                "Custom VoIP SIP Trunking",
+                                "Custom Integrations",
                                 "HIPAA BAA Contract",
                                 "SLA Guarantees"
                             ].map((feature, i) => (

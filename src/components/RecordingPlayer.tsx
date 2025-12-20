@@ -76,7 +76,7 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+      <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded text-red-700 dark:text-red-400 text-sm">
         {error}
       </div>
     );
@@ -84,18 +84,18 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
 
   if (loading) {
     return (
-      <div className="p-4 bg-gray-50 border border-gray-200 rounded text-gray-600 text-sm">
+      <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-gray-600 dark:text-slate-400 text-sm">
         Loading recording...
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-white border border-gray-200 rounded-lg">
+    <div className="p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg">
       <div className="flex items-center gap-4">
         <button
           onClick={handlePlayPause}
-          className="p-2 hover:bg-gray-100 rounded-full transition"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition"
           title={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
@@ -123,9 +123,9 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
                 audioRef.current.currentTime = Number(e.target.value);
               }
             }}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
           />
-          <div className="flex justify-between text-xs text-gray-600 mt-1">
+          <div className="flex justify-between text-xs text-gray-600 dark:text-slate-400 mt-1">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(audioRef.current?.duration || 0)}</span>
           </div>
@@ -133,10 +133,10 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
 
         <button
           onClick={handleDownload}
-          className="p-2 hover:bg-gray-100 rounded-full transition"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition"
           title="Download"
         >
-          <Download className="w-5 h-5 text-gray-600" />
+          <Download className="w-5 h-5 text-gray-600 dark:text-slate-400" />
         </button>
       </div>
     </div>

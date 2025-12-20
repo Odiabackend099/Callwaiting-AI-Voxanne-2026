@@ -43,7 +43,7 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
     return (
         <div
             ref={scrollRef}
-            className={`overflow-y-auto space-y-4 px-4 scroll-smooth ${className}`}
+            className={`overflow-y-auto space-y-4 px-4 scroll-smooth pb-20 ${className}`}
         >
             <AnimatePresence initial={false}>
                 {transcripts.map((transcript, index) => {

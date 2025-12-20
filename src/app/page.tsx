@@ -9,6 +9,8 @@ import TrustedBy from "@/components/TrustedBy";
 import RevenueLeak from "@/components/RevenueLeak";
 import SafetySection from "@/components/SafetySection";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
+import BenefitsSection from "@/components/BenefitsSection";
+import HowItWorksSection from "@/components/HowItWorksSection";
 import HowItWorks from "@/components/HowItWorks";
 import TestimonialCarousel from "@/components/TestimonialCarousel";
 import Pricing from "@/components/Pricing";
@@ -71,7 +73,11 @@ export default function Home() {
                 <SafetySection />
                 <PerformanceMetrics />
 
+                {/* 3.5 KEY BENEFITS: Why choose us */}
+                <BenefitsSection />
+
                 {/* 5. PROCESS: Simplicity */}
+                <HowItWorksSection />
                 <HowItWorks />
 
                 {/* 6. SOCIAL PROOF: Reinforce the decision */}

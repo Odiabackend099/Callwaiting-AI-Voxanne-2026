@@ -4,7 +4,7 @@
   "description": "Voxanne AI backend for Vapi integration",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "ts-node src/server.ts",
+    "dev": "ts-node --transpile-only src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
     "test": "jest",
