@@ -73,7 +73,7 @@ async function injectRagContextIntoAgent(params: {
 }): Promise<void> {
   try {
     if (!params.ragContext || params.ragContext.trim().length === 0) {
-      logger.debug('Webhooks', 'No RAG context to inject', { assistantId: params.assistantId });
+      logger.debug('No RAG context to inject', { assistantId: params.assistantId });
       return;
     }
 
@@ -81,30 +81,53 @@ async function injectRagContextIntoAgent(params: {
     const assistant = await vapi.getAssistant(params.assistantId);
 
     if (!assistant) {
-      logger.warn('Webhooks', 'Assistant not found for RAG injection', { assistantId: params.assistantId });
+      logger.warn('Assistant not found for RAG injection', { assistantId: params.assistantId });
       return;
     }
 
-    // Get current system prompt
-    const currentSystemPrompt = assistant.firstMessage || '';
+    // CRITICAL FIX: Inject RAG context directly into system prompt
+    // This was previously stored in metadata but NEVER USED by the agent
+    // Now the context is directly available to the LLM during response generation
 
-    // Store RAG context in assistant metadata instead of modifying system prompt
-    // This prevents prompt bloat after multiple calls
-    const metadata = assistant.metadata || {};
-    metadata.rag_context = params.ragContext;
-    metadata.rag_context_updated_at = new Date().toISOString();
+    // Get current system prompt (prefer systemPrompt, fall back to firstMessage)
+    let currentSystemPrompt = assistant.systemPrompt || assistant.firstMessage || '';
 
-    // Update assistant with RAG context in metadata
+    // IDEMPOTENCY: Remove any previously injected RAG context to avoid duplication
+    // RAG context is wrapped with unique markers for easy removal/replacement
+    const RAG_MARKER_START = '\n\n---BEGIN KNOWLEDGE BASE CONTEXT---\n';
+    const RAG_MARKER_END = '\n---END KNOWLEDGE BASE CONTEXT---\n';
+
+    // Strip any existing RAG context
+    const ragStartIndex = currentSystemPrompt.indexOf(RAG_MARKER_START);
+    if (ragStartIndex !== -1) {
+      const ragEndIndex = currentSystemPrompt.indexOf(RAG_MARKER_END, ragStartIndex);
+      if (ragEndIndex !== -1) {
+        currentSystemPrompt =
+          currentSystemPrompt.substring(0, ragStartIndex) +
+          currentSystemPrompt.substring(ragEndIndex + RAG_MARKER_END.length);
+      }
+    }
+
+    // CRITICAL: Inject RAG context into system prompt with clear markers
+    // This makes the context available to the LLM immediately
+    const systemPromptWithRag = currentSystemPrompt.trim() +
+      RAG_MARKER_START +
+      params.ragContext +
+      RAG_MARKER_END;
+
+    // Update assistant with RAG context injected into system prompt
     await vapi.updateAssistant(params.assistantId, {
-      metadata: metadata
+      systemPrompt: systemPromptWithRag
     });
 
-    logger.info('Webhooks', 'RAG context stored in assistant metadata', {
+    logger.info('RAG context injected into assistant system prompt', {
       assistantId: params.assistantId,
-      contextLength: params.ragContext.length
+      originalPromptLength: currentSystemPrompt.length,
+      contextLength: params.ragContext.length,
+      newPromptLength: systemPromptWithRag.length
     });
   } catch (error: any) {
-    logger.warn('Webhooks', 'Failed to store RAG context in assistant metadata (non-blocking)', {
+    logger.warn('Failed to inject RAG context into system prompt (non-blocking)', {
       error: error?.message
     });
     // Don't throw - RAG injection failure shouldn't block call
@@ -126,11 +149,15 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
   if (!secret) {
     // In production, this is a critical security issue
     if (nodeEnv === 'production') {
-      console.error('[Webhook] CRITICAL: Vapi webhook secret not configured in production! Rejecting all webhooks.');
+      logger.error('CRITICAL: Vapi webhook secret not configured in production! Rejecting all webhooks.', {
+        nodeEnv
+      });
       return false;
     }
     // In development/test, allow unsigned webhooks
-    console.warn('[Webhook] Vapi webhook secret not configured, accepting all webhooks (development mode)');
+    logger.warn('Vapi webhook secret not configured, accepting all webhooks (development mode)', {
+      nodeEnv
+    });
     return true;
   }
 
@@ -139,7 +166,11 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
   const timestamp = req.headers['x-vapi-timestamp'] as string;
 
   if (!signature || !timestamp) {
-    console.error('[Webhook] Missing signature or timestamp headers');
+    logger.error('Missing signature or timestamp headers', {
+      ip: req.ip,
+      hasSignature: !!signature,
+      hasTimestamp: !!timestamp
+    });
     return false;
   }
 
@@ -148,7 +179,7 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
     // Accept both seconds and milliseconds epoch formats.
     const tsNum = Number(timestamp);
     if (!Number.isFinite(tsNum)) {
-      console.error('[Webhook] Invalid timestamp header');
+      logger.error('Invalid timestamp header', { timestamp });
       return false;
     }
 
@@ -156,7 +187,12 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
     const nowMs = Date.now();
     const maxSkewMs = 5 * 60 * 1000; // 5 minutes (allows for provider retries + queue delays)
     if (Math.abs(nowMs - tsMs) > maxSkewMs) {
-      console.error('[Webhook] Timestamp outside allowed skew window');
+      logger.error('Timestamp outside allowed skew window', {
+        timestamp,
+        now: nowMs,
+        skewMs: Math.abs(nowMs - tsMs),
+        maxSkewMs
+      });
       return false;
     }
 
@@ -172,7 +208,10 @@ async function verifyVapiSignature(req: express.Request): Promise<boolean> {
     if (a.length !== b.length) return false;
     return crypto.timingSafeEqual(a, b);
   } catch (error: any) {
-    console.error('[Webhook] Error verifying signature:', error.message);
+    logger.error('Error verifying signature', {
+      error: error.message,
+      ip: req.ip
+    });
     return false;
   }
 }
@@ -210,8 +249,11 @@ interface VapiEvent {
 
 webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
   try {
+    // Track webhook receipt time for latency monitoring
+    (req as any).webhookReceivedAt = Date.now();
+
     // Log every webhook call for debugging
-    logger.info('Vapi Webhook', 'Webhook received', {
+    logger.info('Webhook received', {
       ip: req.ip,
       timestamp: new Date().toISOString(),
       eventType: req.body?.type,
@@ -222,7 +264,7 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
     try {
       const isValid = await verifyVapiSignature(req);
       if (!isValid) {
-        logger.error('Vapi Webhook', 'Invalid webhook signature', {
+        logger.error('Invalid webhook signature', {
           ip: req.ip,
           timestamp: new Date().toISOString(),
           path: req.path
@@ -230,9 +272,9 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
         res.status(401).json({ error: 'Invalid webhook signature' });
         return;
       }
-      logger.debug('Vapi Webhook', 'Signature verified', { ip: req.ip });
+      logger.debug('Signature verified', { ip: req.ip });
     } catch (verifyError: any) {
-      logger.error('Vapi Webhook', 'Signature verification failed', {
+      logger.error('Signature verification failed', {
         error: verifyError.message,
         ip: req.ip,
         timestamp: new Date().toISOString()
@@ -245,12 +287,12 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
     let event: VapiEvent;
     try {
       event = VapiEventValidationSchema.parse(req.body) as VapiEvent;
-      logger.debug('Vapi Webhook', 'Event validated', {
+      logger.debug('Event validated', {
         type: event.type,
         callId: event.call?.id
       });
     } catch (parseError: any) {
-      logger.error('Vapi Webhook', 'Invalid event structure', {
+      logger.error('Invalid event structure', {
         error: parseError.message,
         receivedData: JSON.stringify(req.body).substring(0, 200),
         ip: req.ip
@@ -259,7 +301,7 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
       return;
     }
 
-    logger.debug('Vapi Webhook', 'Event received', {
+    logger.debug('Event received', {
       type: event.type,
       callId: event.call?.id
     });
@@ -289,10 +331,14 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
           return;
 
         default:
-          logger.warn('Vapi Webhook', 'Unhandled event type', { type: event.type });
+          logger.warn('Unhandled event type', { type: event.type });
       }
     } catch (handlerError) {
-      console.error('[Vapi Webhook] Handler error:', handlerError);
+      logger.error('Handler error', {
+        error: handlerError instanceof Error ? handlerError.message : String(handlerError),
+        eventType: event.type,
+        callId: event.call?.id
+      });
       handlerSuccess = false;
     }
 
@@ -304,7 +350,10 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
 
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error('[Webhook Error]', error);
+    logger.error('Webhook processing failed', {
+      error: error instanceof Error ? error.message : String(error),
+      ip: req.ip
+    });
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
@@ -313,7 +362,7 @@ async function handleCallStarted(event: VapiEvent) {
   const { call } = event;
 
   if (!call || !call.id) {
-    logger.error('handleCallStarted', 'Missing call data', {
+    logger.error('Missing call data', {
       vapiCallId: call?.id,
       hasCall: Boolean(call),
       hasCallId: Boolean(call?.id)
@@ -333,7 +382,7 @@ async function handleCallStarted(event: VapiEvent) {
       .maybeSingle();
 
     if (checkError && checkError.code !== 'PGRST116') {
-      logger.error('handleCallStarted', 'CRITICAL: Idempotency check failed', {
+      logger.error('CRITICAL: Idempotency check failed', {
         vapiCallId: call.id,
         eventId,
         errorMessage: checkError.message,
@@ -343,7 +392,7 @@ async function handleCallStarted(event: VapiEvent) {
     }
 
     if (existing) {
-      logger.info('handleCallStarted', 'Duplicate event detected, skipping', {
+      logger.info('Duplicate event detected, skipping', {
         vapiCallId: call.id,
         eventId
       });
@@ -360,7 +409,7 @@ async function handleCallStarted(event: VapiEvent) {
       });
 
     if (markError) {
-      logger.error('handleCallStarted', 'CRITICAL: Failed to mark event as processed', {
+      logger.error('CRITICAL: Failed to mark event as processed', {
         vapiCallId: call.id,
         eventId,
         errorMessage: markError.message
@@ -368,7 +417,7 @@ async function handleCallStarted(event: VapiEvent) {
       throw new Error(`Failed to mark event as processed: ${markError.message}`);
     }
 
-    logger.info('handleCallStarted', 'Event marked as processed', {
+    logger.info('Event marked as processed', {
       vapiCallId: call.id,
       eventId
     });
@@ -390,7 +439,7 @@ async function handleCallStarted(event: VapiEvent) {
       callTrackingError = result.error;
 
       if (existingCallTracking) {
-        logger.info('handleCallStarted', 'Found existing call_tracking', {
+        logger.info('Found existing call_tracking', {
           vapiCallId: call.id,
           trackingId: existingCallTracking.id,
           attempt: attempt + 1
@@ -403,7 +452,7 @@ async function handleCallStarted(event: VapiEvent) {
         const jitter = Math.random() * 100;
         const delayMs = RETRY_DELAYS[attempt] + jitter;
 
-        logger.warn('handleCallStarted', 'Call tracking not found, retrying', {
+        logger.warn('Call tracking not found, retrying', {
           vapiCallId: call.id,
           attempt: attempt + 1,
           maxAttempts: MAX_RETRIES,
@@ -416,7 +465,7 @@ async function handleCallStarted(event: VapiEvent) {
     }
 
     if (callTrackingError && callTrackingError.code !== 'PGRST116') {
-      logger.error('handleCallStarted', 'Error fetching call tracking', {
+      logger.error('Error fetching call tracking', {
         vapiCallId: call.id,
         errorMessage: callTrackingError.message,
         errorCode: callTrackingError.code
@@ -428,7 +477,7 @@ async function handleCallStarted(event: VapiEvent) {
     const isInboundCall = Boolean(call.assistantId);
     const isOutboundCall = Boolean(existingCallTracking);
 
-    logger.info('handleCallStarted', 'Call type detected', {
+    logger.info('Call type detected', {
       vapiCallId: call.id,
       isInboundCall,
       isOutboundCall,
@@ -440,7 +489,7 @@ async function handleCallStarted(event: VapiEvent) {
 
     if (isInboundCall) {
       // PRIMARY PATH: Handle inbound call
-      logger.info('handleCallStarted', 'Processing inbound call', {
+      logger.info('Processing inbound call', {
         vapiCallId: call.id,
         vapiAssistantId: call.assistantId
       });
@@ -454,7 +503,7 @@ async function handleCallStarted(event: VapiEvent) {
         .maybeSingle();
 
       if (agentError) {
-        logger.error('handleCallStarted', 'CRITICAL: Agent lookup failed', {
+        logger.error('CRITICAL: Agent lookup failed', {
           vapiCallId: call.id,
           vapiAssistantId: call.assistantId,
           errorMessage: agentError.message,
@@ -464,7 +513,7 @@ async function handleCallStarted(event: VapiEvent) {
       }
 
       if (!agent) {
-        logger.error('handleCallStarted', 'CRITICAL: No active agent found', {
+        logger.error('CRITICAL: No active agent found', {
           vapiCallId: call.id,
           vapiAssistantId: call.assistantId,
           searchCriteria: 'active=true AND vapi_assistant_id=' + call.assistantId
@@ -472,7 +521,7 @@ async function handleCallStarted(event: VapiEvent) {
         throw new Error(`No active agent found for vapi_assistant_id: ${call.assistantId}`);
       }
 
-      logger.info('handleCallStarted', 'Agent found', {
+      logger.info('Agent found', {
         vapiCallId: call.id,
         agentId: agent.id,
         agentName: agent.name,
@@ -484,7 +533,7 @@ async function handleCallStarted(event: VapiEvent) {
       if (phoneNumber) {
         const phoneValidation = validateE164Format(phoneNumber);
         if (!phoneValidation.valid) {
-          logger.warn('handleCallStarted', 'Invalid phone number format, using original', {
+          logger.warn('Invalid phone number format, using original', {
             vapiCallId: call.id,
             providedNumber: phoneNumber,
             error: phoneValidation.error
@@ -516,7 +565,7 @@ async function handleCallStarted(event: VapiEvent) {
         .single();
 
       if (insertError) {
-        logger.error('handleCallStarted', 'Failed to insert call_tracking for inbound call', {
+        logger.error('Failed to insert call_tracking for inbound call', {
           vapiCallId: call.id,
           agentId: agent.id,
           errorMessage: insertError.message,
@@ -526,7 +575,7 @@ async function handleCallStarted(event: VapiEvent) {
         throw new Error(`Failed to create call_tracking: ${insertError.message}`);
       }
 
-      logger.info('handleCallStarted', 'Created call_tracking for inbound call', {
+      logger.info('Created call_tracking for inbound call', {
         trackingId: newTracking.id,
         vapiCallId: call.id
       });
@@ -535,13 +584,13 @@ async function handleCallStarted(event: VapiEvent) {
       callTracking = newTracking;
     } else if (isOutboundCall && existingCallTracking) {
       // SECONDARY PATH: Handle outbound call
-      logger.info('handleCallStarted', 'Processing outbound call', {
+      logger.info('Processing outbound call', {
         vapiCallId: call.id,
         trackingId: existingCallTracking.id
       });
     } else {
       // ERROR PATH: Unknown call type
-      logger.error('handleCallStarted', 'CRITICAL: Cannot determine call type', {
+      logger.error('CRITICAL: Cannot determine call type', {
         vapiCallId: call.id,
         hasAssistantId: Boolean(call.assistantId),
         hasCallTracking: Boolean(existingCallTracking)
@@ -550,7 +599,7 @@ async function handleCallStarted(event: VapiEvent) {
     }
 
     if (!callTracking) {
-      logger.error('handleCallStarted', 'CRITICAL: No call tracking available', {
+      logger.error('CRITICAL: No call tracking available', {
         vapiCallId: call.id
       });
       throw new Error('No call tracking available');
@@ -614,7 +663,7 @@ async function handleCallStarted(event: VapiEvent) {
         });
       }
     } catch (configLoadError: any) {
-      logger.error('handleCallStarted', 'Error loading agent config (non-blocking)', {
+      logger.error('Error loading agent config (non-blocking)', {
         vapiCallId: call.id,
         error: configLoadError.message
       });
@@ -623,7 +672,7 @@ async function handleCallStarted(event: VapiEvent) {
     // Fallback to environment variable if config table doesn't have the key
     if (!vapiApiKey) {
       vapiApiKey = process.env.VAPI_API_KEY || null;
-      logger.warn('handleCallStarted', 'Using VAPI_API_KEY from environment', {
+      logger.warn('Using VAPI_API_KEY from environment', {
         vapiCallId: call.id,
         hasEnvKey: Boolean(vapiApiKey)
       });
@@ -636,7 +685,7 @@ async function handleCallStarted(event: VapiEvent) {
       const { context, hasContext } = await getRagContext('customer inquiry', callTracking.org_id);
       if (hasContext) {
         ragContext = context;
-        logger.info('handleCallStarted', 'RAG context retrieved', {
+        logger.info('RAG context retrieved', {
           vapiCallId: call.id,
           contextLength: context.length
         });
@@ -650,7 +699,7 @@ async function handleCallStarted(event: VapiEvent) {
               ragContext: context
             });
           } catch (injectErr: any) {
-            logger.warn('handleCallStarted', 'Failed to inject RAG context into agent', {
+            logger.warn('Failed to inject RAG context into agent', {
               vapiCallId: call.id,
               error: injectErr?.message
             });
@@ -659,7 +708,7 @@ async function handleCallStarted(event: VapiEvent) {
         }
       }
     } catch (ragErr: any) {
-      logger.warn('handleCallStarted', 'Failed to retrieve RAG context (non-blocking)', {
+      logger.warn('Failed to retrieve RAG context (non-blocking)', {
         vapiCallId: call.id,
         error: ragErr?.message
       });
@@ -681,7 +730,7 @@ async function handleCallStarted(event: VapiEvent) {
     }, { onConflict: 'vapi_call_id' });
 
     if (logError) {
-      logger.error('handleCallStarted', 'Failed to insert call log', {
+      logger.error('Failed to insert call log', {
         vapiCallId: call.id,
         errorMessage: logError.message,
         errorCode: logError.code,
@@ -690,7 +739,7 @@ async function handleCallStarted(event: VapiEvent) {
       throw new Error(`Failed to create call log: ${logError.message}`);
     }
 
-    logger.info('handleCallStarted', 'Call log created', { vapiCallId: call.id });
+    logger.info('Call log created', { vapiCallId: call.id });
 
     // Update call_tracking status
     const { error: updateError } = await supabase
@@ -699,7 +748,7 @@ async function handleCallStarted(event: VapiEvent) {
       .eq('id', callTracking.id);
 
     if (updateError) {
-      logger.error('handleCallStarted', 'Failed to update call_tracking status', {
+      logger.error('Failed to update call_tracking status', {
         vapiCallId: call.id,
         error: updateError.message
       });
@@ -718,19 +767,19 @@ async function handleCallStarted(event: VapiEvent) {
         status: 'ringing'
       });
     } catch (broadcastError: any) {
-      logger.warn('handleCallStarted', 'WebSocket broadcast failed', {
+      logger.warn('WebSocket broadcast failed', {
         vapiCallId: call.id,
         error: broadcastError.message
       });
     }
 
-    logger.info('handleCallStarted', 'Call started successfully', {
+    logger.info('Call started successfully', {
       vapiCallId: call.id,
       trackingId: callTracking.id,
       channel: metadata?.channel
     });
   } catch (error: any) {
-    logger.error('handleCallStarted', 'Unhandled error in webhook handler', {
+    logger.error('Unhandled error in webhook handler', {
       vapiCallId: call?.id,
       errorMessage: error?.message,
       errorStack: error?.stack?.split('\n').slice(0, 3).join('\n')
@@ -743,7 +792,7 @@ async function handleCallEnded(event: VapiEvent) {
   const { call } = event;
 
   if (!call || !call.id) {
-    logger.error('handleCallEnded', 'Missing call data', {
+    logger.error('Missing call data', {
       vapiCallId: call?.id,
       hasCall: Boolean(call),
       hasCallId: Boolean(call?.id)
@@ -763,12 +812,12 @@ async function handleCallEnded(event: VapiEvent) {
       .maybeSingle();
 
     if (checkError && checkError.code !== 'PGRST116') {
-      logger.error('handleCallEnded', 'Error checking idempotency', {
+      logger.error('Error checking idempotency', {
         vapiCallId: call.id,
         error: checkError.message
       });
     } else if (existing) {
-      logger.info('handleCallEnded', 'Duplicate event, skipping', {
+      logger.info('Duplicate event, skipping', {
         eventId,
         vapiCallId: call.id
       });
@@ -793,12 +842,12 @@ async function handleCallEnded(event: VapiEvent) {
       .eq('vapi_call_id', call.id);
 
     if (error) {
-      logger.error('handleCallEnded', 'Failed to update call log', {
+      logger.error('Failed to update call log', {
         vapiCallId: call.id,
         error: error.message
       });
     } else {
-      logger.info('handleCallEnded', 'Call log updated', { vapiCallId: call.id });
+      logger.info('Call log updated', { vapiCallId: call.id });
     }
 
     // Update lead status only if this is not a test call
@@ -816,7 +865,7 @@ async function handleCallEnded(event: VapiEvent) {
           .eq('org_id', callLog.org_id);
 
         if (leadError) {
-          console.error('[handleCallEnded] Failed to update lead:', leadError);
+          logger.error('Failed to update lead:', leadError);
         }
       } else if (call.customer?.number && callLog?.org_id) {
         // Fallback: scope by org_id + phone
@@ -830,7 +879,7 @@ async function handleCallEnded(event: VapiEvent) {
           .eq('org_id', callLog.org_id);
 
         if (leadError) {
-          logger.error('handleCallEnded', 'Failed to update lead (fallback)', {
+          logger.error('Failed to update lead (fallback)', {
             vapiCallId: call.id,
             phone: call.customer?.number,
             errorMessage: leadError.message,
@@ -848,7 +897,7 @@ async function handleCallEnded(event: VapiEvent) {
       .maybeSingle();
 
     if (callTrackingError && callTrackingError.code !== 'PGRST116') {
-      logger.error('handleCallEnded', 'Failed to fetch call_tracking', {
+      logger.error('Failed to fetch call_tracking', {
         vapiCallId: call.id,
         errorMessage: callTrackingError.message,
         errorCode: callTrackingError.code
@@ -876,7 +925,7 @@ async function handleCallEnded(event: VapiEvent) {
         });
 
       if (markError) {
-        console.warn('[handleCallEnded] Failed to mark event as processed:', markError);
+        logger.warn('Failed to mark event as processed:', markError);
         // Continue anyway (state was updated)
       }
 
@@ -893,7 +942,9 @@ async function handleCallEnded(event: VapiEvent) {
       });
     }
   } catch (error) {
-    console.error('[handleCallEnded] Error:', error);
+    logger.error('Error handling call ended event', {
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 }
 
@@ -901,7 +952,10 @@ async function handleTranscript(event: any) {
   const { call, transcript, message } = event;
 
   if (!call || !call.id) {
-    console.error('[handleTranscript] Missing call data');
+    logger.error('Missing call data', {
+      hasCall: !!call,
+      hasCallId: !!call?.id
+    });
     return;
   }
 
@@ -909,7 +963,7 @@ async function handleTranscript(event: any) {
     // Validate transcript
     const cleanTranscript = (transcript || '').trim();
     if (!cleanTranscript) {
-      console.log('[handleTranscript] Empty transcript, skipping', { vapiCallId: call.id });
+      logger.info('Empty transcript, skipping', { vapiCallId: call.id });
       return;
     }
 
@@ -927,10 +981,10 @@ async function handleTranscript(event: any) {
       .maybeSingle();
 
     if (checkError) {
-      console.error('[handleTranscript] Error checking idempotency:', checkError);
+      logger.error('Error checking idempotency:', checkError);
       // Continue anyway (idempotency is best-effort)
     } else if (existing) {
-      console.log('[handleTranscript] Duplicate event, skipping', { eventId, vapiCallId: call.id });
+      logger.info('Duplicate event, skipping', { eventId, vapiCallId: call.id });
       return;
     }
 
@@ -966,7 +1020,7 @@ async function handleTranscript(event: any) {
       });
 
       if (insertError) {
-        console.error('[handleTranscript] Failed to insert transcript:', insertError);
+        logger.error('Failed to insert transcript:', insertError);
         // Don't mark as processed if insert failed
         return;
       }
@@ -981,7 +1035,7 @@ async function handleTranscript(event: any) {
         });
 
       if (markError) {
-        console.warn('[handleTranscript] Failed to mark event as processed:', markError);
+        logger.warn('Failed to mark event as processed:', markError);
         // Continue anyway (transcript was inserted)
       }
 
@@ -993,7 +1047,12 @@ async function handleTranscript(event: any) {
       // We use empty string as fallback if userId is missing/invalid type
       const safeUserId = (userId && typeof userId === 'string') ? userId : '';
 
-      // Broadcast transcript
+      // Track timing for monitoring latency
+      const broadcastTime = Date.now();
+      const webhookReceiveTime = (req as any).webhookReceivedAt || broadcastTime;
+      const latencyMs = broadcastTime - webhookReceiveTime;
+
+      // Broadcast transcript with timing metadata
       wsBroadcast({
         type: 'transcript',
         vapiCallId: call.id,
@@ -1003,21 +1062,30 @@ async function handleTranscript(event: any) {
         text: cleanTranscript,
         is_final: true,
         confidence: 0.95,
-        ts: Date.now()
+        ts: broadcastTime,
+        // Timing metadata for debugging and monitoring
+        latency_ms: latencyMs,
+        webhook_receive_time: webhookReceiveTime,
+        broadcast_time: broadcastTime
       });
 
-      console.log('[handleTranscript] Broadcast transcript to UI', {
+      logger.info('Broadcast transcript to UI', {
         vapiCallId: call.id,
         trackingId: callTracking.id,
         userId: userId,
         speaker,
-        textLength: cleanTranscript.length
+        textLength: cleanTranscript.length,
+        latency_ms: latencyMs,
+        webhook_receive_time: webhookReceiveTime,
+        broadcast_time: broadcastTime
       });
     } else {
-      console.warn('[handleTranscript] Call tracking not found after retries', { vapiCallId: call.id });
+      logger.warn('Call tracking not found after retries', { vapiCallId: call.id });
     }
   } catch (error) {
-    console.error('[handleTranscript] Error:', error);
+    logger.error('Error processing transcript', {
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 }
 
@@ -1046,7 +1114,7 @@ async function detectHallucinations(
   try {
     const MAX_TRANSCRIPT_FOR_DETECTION = 2000; // Reduced from 10000 to prevent DoS
     if (transcript.length > MAX_TRANSCRIPT_FOR_DETECTION) {
-      console.warn('[detectHallucinations] Transcript too long for hallucination detection, skipping', {
+      logger.warn('Transcript too long for hallucination detection, skipping', {
         callId,
         transcriptLength: transcript.length,
         maxLength: MAX_TRANSCRIPT_FOR_DETECTION
@@ -1077,7 +1145,7 @@ async function detectHallucinations(
     // OPTIMIZATION: Do NOT load full KB content.
     // This is a placeholder for a proper vector similarity check.
     // Loading all KBs into memory is too dangerous for production.
-    console.warn('[detectHallucinations] Skipping deep check to prevent OOM. Implement Vector Check here.');
+    logger.warn('Skipping deep check to prevent OOM. Implement Vector Check here.');
 
     /*
     // Original dangerous logic commented out for production safety:
@@ -1126,7 +1194,9 @@ async function detectHallucinations(
     */
 
   } catch (error) {
-    console.error('[detectHallucinations] Error:', error);
+    logger.error('Error detecting hallucinations', {
+      error: error instanceof Error ? error.message : String(error)
+    });
     // Don't throw - hallucination detection shouldn't break webhook processing
   }
 }
@@ -1135,7 +1205,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
   const { call, artifact } = event;
 
   if (!call || !call.id) {
-    logger.error('Webhooks', 'Missing call data in end-of-call-report');
+    logger.error('Missing call data in end-of-call-report');
     return;
   }
 
@@ -1149,12 +1219,12 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .maybeSingle();
 
     if (checkError) {
-      logger.error('Webhooks', 'Error checking idempotency', {
+      logger.error('Error checking idempotency', {
         callId: call.id,
         error: checkError.message
       });
     } else if (existing) {
-      logger.info('Webhooks', 'Duplicate event, skipping', { eventId, vapiCallId: call.id });
+      logger.info('Duplicate event, skipping', { eventId, vapiCallId: call.id });
       return;
     }
 
@@ -1166,7 +1236,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .single();
 
     if (!callLog) {
-      logger.error('Webhooks', 'Call log not found', { callId: call.id });
+      logger.error('Call log not found', { callId: call.id });
       return;
     }
 
@@ -1179,58 +1249,72 @@ async function handleEndOfCallReport(event: VapiEvent) {
 
     const callType = callTypeResult?.callType || 'outbound';
 
-    logger.info('Webhooks', 'Call type detected', {
+    logger.info('Call type detected', {
       callId: call.id,
       callType,
       reason: callTypeResult?.reason
     });
 
-    // Handle recording upload to Supabase Storage
+    // Handle recording upload via background queue (non-blocking)
+    // Instead of waiting for upload (can take 180+ seconds), queue it for async processing
     let recordingStoragePath: string | null = null;
     let recordingSignedUrl: string | null = null;
     let recordingUploadedAt: string | null = null;
 
     if (artifact?.recording) {
-      logger.info('Webhooks', 'Uploading recording to storage', {
+      logger.info('Queueing recording for async upload', {
         callId: call.id,
-        callType
+        callType,
+        recordingUrl: typeof artifact.recording === 'string'
+          ? artifact.recording.substring(0, 100)
+          : 'object'
       });
 
-      const uploadResult = await uploadCallRecording({
-        orgId: callLog.org_id,
-        callId: call.id,
-        callType: callType as 'inbound' | 'outbound',
-        recordingUrl: artifact.recording,
-        vapiCallId: call.id
-      });
+      // Queue the recording for background processing (non-blocking)
+      try {
+        const { error: queueError } = await supabase
+          .from('recording_upload_queue')
+          .insert({
+            call_id: call.id,
+            vapi_call_id: call.id,
+            org_id: callLog.org_id,
+            recording_url: typeof artifact.recording === 'string'
+              ? artifact.recording
+              : JSON.stringify(artifact.recording),
+            call_type: callType,
+            priority: 'normal',
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
 
-      if (uploadResult.success) {
-        recordingStoragePath = uploadResult.storagePath || null;
-        recordingSignedUrl = uploadResult.signedUrl || null;
-        recordingUploadedAt = new Date().toISOString();
+        if (queueError) {
+          logger.error('Failed to queue recording for upload', {
+            callId: call.id,
+            error: queueError.message
+          });
 
-        logger.info('Webhooks', 'Recording uploaded successfully', {
-          callId: call.id,
-          storagePath: recordingStoragePath,
-          uploadedAt: recordingUploadedAt
-        });
-      } else {
-        logger.error('Webhooks', 'Recording upload failed', {
-          callId: call.id,
-          error: uploadResult.error
-        });
-
-        // Log failed upload for retry
-        if (artifact?.recording) {
+          // Fallback: Log to failed_upload table for manual retry
           await logFailedUpload({
             callId: call.id,
-            vapiRecordingUrl: artifact.recording,
-            errorMessage: uploadResult.error || 'Unknown error'
+            vapiRecordingUrl: artifact.recording as string,
+            errorMessage: `Queue error: ${queueError.message}`
           });
+        } else {
+          logger.info('Recording queued for async upload', {
+            callId: call.id,
+            status: 'pending'
+          });
+          // Mark in call_logs that recording is "processing"
+          recordingStoragePath = 'processing'; // Placeholder - will be updated by background worker
         }
+      } catch (queueError: any) {
+        logger.error('Exception while queueing recording', {
+          callId: call.id,
+          error: queueError.message
+        });
       }
     } else {
-      logger.warn('Webhooks', 'No recording available for call', {
+      logger.warn('No recording available for call', {
         callId: call.id,
         callType,
         hasArtifact: !!artifact
@@ -1253,7 +1337,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .eq('vapi_call_id', call.id);
 
     if (callLogsError) {
-      logger.error('Webhooks', 'Failed to update call log', {
+      logger.error('Failed to update call log', {
         callId: call.id,
         error: callLogsError.message
       });
@@ -1270,25 +1354,25 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .eq('vapi_call_id', call.id);
 
     if (callsError) {
-      logger.error('Webhooks', 'Failed to update calls table', {
+      logger.error('Failed to update calls table', {
         callId: call.id,
         error: callsError.message
       });
 
       // CRITICAL: If calls table update fails, clean up orphaned recording
       if (recordingStoragePath) {
-        logger.warn('Webhooks', 'Cleaning up orphaned recording due to DB error', {
+        logger.warn('Cleaning up orphaned recording due to DB error', {
           callId: call.id,
           storagePath: recordingStoragePath
         });
 
         try {
           await deleteRecording(recordingStoragePath);
-          logger.info('Webhooks', 'Orphaned recording deleted successfully', {
+          logger.info('Orphaned recording deleted successfully', {
             storagePath: recordingStoragePath
           });
         } catch (deleteError: any) {
-          logger.error('Webhooks', 'Failed to delete orphaned recording', {
+          logger.error('Failed to delete orphaned recording', {
             storagePath: recordingStoragePath,
             error: deleteError.message
           });
@@ -1299,7 +1383,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
       // Throw error to indicate webhook processing failed
       throw new Error(`Failed to update calls table: ${callsError.message}`);
     } else {
-      logger.info('Webhooks', 'Call report saved', {
+      logger.info('Call report saved', {
         callId: call.id,
         callType,
         hasRecording: !!recordingStoragePath
@@ -1317,11 +1401,11 @@ async function handleEndOfCallReport(event: VapiEvent) {
             timestamp: new Date().toISOString()
           });
 
-          logger.info('Webhooks', 'Recording ready event broadcasted', {
+          logger.info('Recording ready event broadcasted', {
             callId: call.id
           });
         } catch (broadcastError: any) {
-          logger.warn('Webhooks', 'Failed to broadcast recording ready event (non-blocking)', {
+          logger.warn('Failed to broadcast recording ready event (non-blocking)', {
             callId: call.id,
             error: broadcastError?.message
           });
@@ -1341,7 +1425,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
 
     // Lead/campaign follow-up automation intentionally disabled for this project.
   } catch (error) {
-    logger.error('Webhooks', 'Error in handleEndOfCallReport', {
+    logger.error('Error in handleEndOfCallReport', {
       error: error instanceof Error ? error.message : String(error)
     });
   }
@@ -1351,12 +1435,12 @@ async function handleFunctionCall(event: any) {
   const { call, functionCall } = event;
 
   if (!call || !call.id) {
-    console.error('[handleFunctionCall] Missing call data');
+    logger.error('Missing call data');
     return { result: 'Error: Missing call data' };
   }
 
   try {
-    console.log('[handleFunctionCall] Function called:', {
+    logger.info('Function called', {
       callId: call.id,
       functionName: functionCall?.name
     });
@@ -1369,7 +1453,9 @@ async function handleFunctionCall(event: any) {
 
     return { result: `Function ${name} executed` };
   } catch (error: any) {
-    console.error('[handleFunctionCall] Error:', error);
+    logger.error('Error executing function', {
+      error: error instanceof Error ? error.message : String(error)
+    });
     return { error: error.message || 'Function execution failed' };
   }
 }
