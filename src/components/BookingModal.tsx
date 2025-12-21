@@ -62,12 +62,15 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
         setIsLoading(true);
 
         try {
-            // Determine API URL at runtime based on current hostname
-            let apiUrl = 'https://voxanne-backend.onrender.com';
-            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-                apiUrl = 'http://localhost:3000';
-            }
-            const response = await fetch(`${apiUrl}/api/book-demo`, {
+            // Use environment variable for API URL, with fallback
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://voxanne-backend.onrender.com';
+
+            // For local development, allow localhost
+            const isDevelopment = typeof window !== 'undefined' &&
+                                  (window.location.hostname === 'localhost' ||
+                                   window.location.hostname === '127.0.0.1');
+            const finalApiUrl = isDevelopment ? 'http://localhost:3000' : apiUrl;
+            const response = await fetch(`${finalApiUrl}/api/book-demo`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
