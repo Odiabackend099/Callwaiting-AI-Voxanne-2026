@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Loader2, Calendar, User, Building2, Phone, ArrowRight } from "lucide-react";
+import { X, Check, Loader2, Calendar, User, Building2, Phone, ArrowRight, AlertCircle } from "lucide-react";
+import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
 
 interface BookingModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface BookingModalProps {
 export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [phoneError, setPhoneError] = useState("");
     const [formState, setFormState] = useState({
         name: "",
         clinicName: "",
@@ -29,8 +31,34 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
         setStep(step - 1);
     };
 
+    const validatePhone = (phone: string): boolean => {
+        if (!phone.trim()) {
+            setPhoneError("Phone number is required");
+            return false;
+        }
+
+        if (!isValidPhoneNumber(phone, "US")) {
+            // Try to parse to provide better error message
+            try {
+                parsePhoneNumber(phone, "US");
+            } catch {
+                setPhoneError("Please enter a valid phone number (e.g., +1 (555) 000-0000)");
+                return false;
+            }
+        }
+
+        setPhoneError("");
+        return true;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validate phone before submitting
+        if (!validatePhone(formState.phone)) {
+            return;
+        }
+
         setIsLoading(true);
 
         try {
@@ -224,9 +252,23 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
                                                 type="tel"
                                                 placeholder="(555) 000-0000"
                                                 value={formState.phone}
-                                                onChange={e => updateForm("phone", e.target.value)}
-                                                className="w-full px-5 py-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all font-medium"
+                                                onChange={e => {
+                                                    updateForm("phone", e.target.value);
+                                                    if (phoneError) setPhoneError(""); // Clear error on change
+                                                }}
+                                                onBlur={() => validatePhone(formState.phone)}
+                                                className={`w-full px-5 py-4 rounded-xl bg-slate-50 dark:bg-slate-900 border transition-all font-medium outline-none focus:ring-2 ${
+                                                    phoneError
+                                                        ? "border-red-300 dark:border-red-700 focus:ring-red-500 focus:border-transparent"
+                                                        : "border-slate-200 dark:border-slate-800 focus:ring-cyan-500 focus:border-transparent"
+                                                }`}
                                             />
+                                            {phoneError && (
+                                                <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm mt-1">
+                                                    <AlertCircle className="w-4 h-4" />
+                                                    <span>{phoneError}</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="flex gap-3 mt-8">
