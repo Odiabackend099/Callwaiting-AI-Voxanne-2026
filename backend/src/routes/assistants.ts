@@ -335,8 +335,15 @@ assistantsRouter.get('/', async (req: Request, res: Response) => {
     const vapi = requireVapi(res);
     if (!vapi) return;
 
-    const assistants = await vapi.listAssistants();
-    res.json(assistants);
+    try {
+      const assistants = await vapi.listAssistants();
+      res.json(assistants);
+    } catch (vapiError: any) {
+      // If Vapi fails, return empty list instead of 500 error
+      // This prevents cascading failures under load
+      console.warn('[GET /assistants] Vapi unavailable, returning empty list:', vapiError.message);
+      res.json({ assistants: [] });
+    }
   } catch (error: any) {
     console.error('[GET /assistants] Error:', error.message);
     res.status(500).json({

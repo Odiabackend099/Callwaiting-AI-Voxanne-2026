@@ -73,7 +73,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Trust reverse proxy headers (x-forwarded-proto/host). Required for correct absolute URL generation.
-app.set('trust proxy', true);
+// Set to 1 for single proxy (Render uses 1 proxy layer)
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
