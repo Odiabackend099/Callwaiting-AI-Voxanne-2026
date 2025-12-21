@@ -2,8 +2,9 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { FadeInOnScroll } from "./ParallaxSection";
-import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook } from "lucide-react";
+import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook, Lock } from "lucide-react";
 
 export default function FooterRedesigned() {
     const currentYear = new Date().getFullYear();
@@ -108,6 +109,44 @@ export default function FooterRedesigned() {
                         </FadeInOnScroll>
                     ))}
                 </div>
+
+                {/* Compliance Badges Strip */}
+                <FadeInOnScroll>
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        viewport={{ once: true }}
+                        className="py-12 border-t border-cream/10"
+                    >
+                        <div className="flex items-center justify-center gap-8 flex-wrap">
+                            <div className="flex flex-col items-center">
+                                <Image
+                                    src="/badges/hipaa-compliant.jpg"
+                                    alt="HIPAA Compliant - Full compliance with Business Associate Agreement"
+                                    width={100}
+                                    height={100}
+                                    className="w-20 h-20 md:w-24 md:h-24 object-contain opacity-80 hover:opacity-100 transition-opacity"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <Image
+                                    src="/badges/gdpr-ready.png"
+                                    alt="GDPR Ready - EU data protection standards compliance"
+                                    width={100}
+                                    height={100}
+                                    className="w-20 h-20 md:w-24 md:h-24 object-contain opacity-80 hover:opacity-100 transition-opacity"
+                                    loading="lazy"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-cream/5 border border-cream/10 hover:border-cream/20 transition-colors">
+                                <Lock className="w-4 h-4 text-cream/60" />
+                                <span className="text-xs text-cream/60 font-medium">SOC 2 Type II</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                </FadeInOnScroll>
 
                 {/* Divider */}
                 <div className="border-t border-cream/10" />

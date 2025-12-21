@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Play, Pause } from "lucide-react";
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { SafetyDisclaimer } from "./SafetyDisclaimer";
 
 interface HeroProps {
@@ -129,6 +130,44 @@ export default function Hero({
                         <Play className="w-3 h-3 fill-current" />
                         Listen to difficult caller recording
                     </span>
+                </motion.div>
+
+                {/* Compliance Badges Strip */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.8 }}
+                    className="mt-12 flex items-center justify-center gap-6 flex-wrap"
+                >
+                    <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/15 transition-all">
+                        <Image
+                            src="/badges/hipaa-compliant.jpg"
+                            alt="HIPAA Compliant"
+                            width={40}
+                            height={40}
+                            className="w-10 h-10 object-contain"
+                            loading="lazy"
+                        />
+                        <div>
+                            <p className="text-xs font-bold text-white">HIPAA</p>
+                            <p className="text-[10px] text-white/70">Compliant</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/15 transition-all">
+                        <Image
+                            src="/badges/gdpr-ready.png"
+                            alt="GDPR Ready"
+                            width={40}
+                            height={40}
+                            className="w-10 h-10 object-contain"
+                            loading="lazy"
+                        />
+                        <div>
+                            <p className="text-xs font-bold text-white">GDPR</p>
+                            <p className="text-[10px] text-white/70">Ready</p>
+                        </div>
+                    </div>
                 </motion.div>
 
             </div>

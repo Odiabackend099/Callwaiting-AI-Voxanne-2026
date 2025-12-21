@@ -61,7 +61,7 @@ export default function Navbar() {
                                     Login
                                 </Link>
                                 <a
-                                    href="https://calendly.com/callwaitingai/demo"
+                                    href="https://calendly.com/austyn-callwaitingai/30min"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="px-5 py-2.5 rounded-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-bold hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
@@ -119,7 +119,7 @@ export default function Navbar() {
                             ) : (
                                 <>
                                     <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>Login</Link>
-                                    <a href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer" onClick={() => setIsMobileMenuOpen(false)} className="text-cyan-400">Book Demo</a>
+                                    <a href="https://calendly.com/austyn-callwaitingai/30min" target="_blank" rel="noopener noreferrer" onClick={() => setIsMobileMenuOpen(false)} className="text-cyan-400">Book Demo</a>
                                 </>
                             )}
                         </div>

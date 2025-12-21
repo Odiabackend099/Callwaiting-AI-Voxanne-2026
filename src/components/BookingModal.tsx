@@ -70,7 +70,7 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
 
         // Local development - use localhost
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://localhost:3000';
+            return 'http://localhost:3001';
         }
 
         // Default fallback - use Render backend

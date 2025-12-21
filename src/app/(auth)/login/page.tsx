@@ -250,7 +250,7 @@ function LoginPageContent() {
                     <div className="mt-8 text-center">
                         <p className="text-slate-500 text-sm">
                             Not a member yet?{' '}
-                            <a href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer" className="text-white hover:text-purple-300 font-semibold transition-colors">
+                            <a href="https://calendly.com/austyn-callwaitingai/30min" target="_blank" rel="noopener noreferrer" className="text-white hover:text-purple-300 font-semibold transition-colors">
                                 Book a Demo
                             </a>
                         </p>

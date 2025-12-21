@@ -2,28 +2,35 @@
 
 import { motion } from "framer-motion";
 import { Shield, Lock, CheckCircle, Award } from "lucide-react";
+import Image from "next/image";
 
 const badges = [
     {
         name: "HIPAA Compliant",
+        type: "image",
+        imageSrc: "/badges/hipaa-compliant.jpg",
         icon: Shield,
         description: "Full HIPAA compliance with BAA",
         color: "cyan"
     },
     {
         name: "SOC 2 Type II",
+        type: "icon",
         icon: Lock,
         description: "Enterprise-grade security",
         color: "blue"
     },
     {
         name: "ISO 27001",
+        type: "icon",
         icon: CheckCircle,
         description: "Information security certified",
         color: "green"
     },
     {
         name: "GDPR Compliant",
+        type: "image",
+        imageSrc: "/badges/gdpr-ready.png",
         icon: Award,
         description: "EU data protection standards",
         color: "purple"
@@ -62,16 +69,29 @@ export default function SecurityBadges() {
                             className="group relative"
                         >
                             <div className="bg-slate-900/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-white/20 transition-all duration-300 hover:bg-slate-900/80 text-center">
-                                {/* Icon */}
-                                <div className={`
-                                    w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center
-                                    ${badge.color === 'cyan' ? 'bg-cyan-500/20 text-cyan-400' : ''}
-                                    ${badge.color === 'blue' ? 'bg-blue-500/20 text-blue-400' : ''}
-                                    ${badge.color === 'green' ? 'bg-green-500/20 text-green-400' : ''}
-                                    ${badge.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : ''}
-                                `}>
-                                    <badge.icon className="w-8 h-8" strokeWidth={1.5} />
-                                </div>
+                                {/* Icon or Image */}
+                                {badge.type === 'image' && badge.imageSrc ? (
+                                    <div className="w-20 h-20 mx-auto mb-4 rounded-lg overflow-hidden bg-white/5 p-2 flex items-center justify-center">
+                                        <Image
+                                            src={badge.imageSrc}
+                                            alt={badge.name}
+                                            width={80}
+                                            height={80}
+                                            className="w-full h-full object-contain"
+                                            priority={false}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className={`
+                                        w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center
+                                        ${badge.color === 'cyan' ? 'bg-cyan-500/20 text-cyan-400' : ''}
+                                        ${badge.color === 'blue' ? 'bg-blue-500/20 text-blue-400' : ''}
+                                        ${badge.color === 'green' ? 'bg-green-500/20 text-green-400' : ''}
+                                        ${badge.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : ''}
+                                    `}>
+                                        <badge.icon className="w-8 h-8" strokeWidth={1.5} />
+                                    </div>
+                                )}
 
                                 {/* Badge Name */}
                                 <h4 className="text-white font-bold mb-2">{badge.name}</h4>

@@ -18,7 +18,6 @@ import RiskReversal from "@/components/RiskReversal";
 import LimitedAvailability from "@/components/LimitedAvailability";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
-import { BookingModal } from "@/components/BookingModal";
 import { ChatWidget } from "@/components/ChatWidget";
 import LiveChatWidget from "@/components/LiveChatWidget";
 import PressMentions from "@/components/PressMentions";
@@ -47,9 +46,11 @@ function AuthCodeRedirector() {
 }
 
 export default function Home() {
-    const [isBookingOpen, setIsBookingOpen] = useState(false);
-
-    const openBooking = () => setIsBookingOpen(true);
+    const openBooking = () => {
+        if (typeof window !== 'undefined') {
+            window.location.href = 'https://calendly.com/austyn-callwaitingai/30min';
+        }
+    };
 
     return (
         <SmoothScroll>
@@ -105,7 +106,6 @@ export default function Home() {
                 <Footer />
                 <ChatWidget />
                 <LiveChatWidget />
-                <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} />
             </main>
         </SmoothScroll>
     );
