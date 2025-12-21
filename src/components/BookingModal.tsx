@@ -51,6 +51,32 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
         return true;
     };
 
+    const getApiUrl = (): string => {
+        if (typeof window === 'undefined') {
+            return 'https://voxanne-backend.onrender.com';
+        }
+
+        const hostname = window.location.hostname;
+
+        // Production domain - ALWAYS use Render backend
+        if (hostname === 'callwaitingai.dev') {
+            return 'https://voxanne-backend.onrender.com';
+        }
+
+        // Vercel preview deployments - use Render backend
+        if (hostname.includes('vercel.app')) {
+            return 'https://voxanne-backend.onrender.com';
+        }
+
+        // Local development - use localhost
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return 'http://localhost:3000';
+        }
+
+        // Default fallback - use Render backend
+        return 'https://voxanne-backend.onrender.com';
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -62,15 +88,9 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
         setIsLoading(true);
 
         try {
-            // Use environment variable for API URL, with fallback
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://voxanne-backend.onrender.com';
-
-            // For local development, allow localhost
-            const isDevelopment = typeof window !== 'undefined' &&
-                                  (window.location.hostname === 'localhost' ||
-                                   window.location.hostname === '127.0.0.1');
-            const finalApiUrl = isDevelopment ? 'http://localhost:3000' : apiUrl;
-            const response = await fetch(`${finalApiUrl}/api/book-demo`, {
+            // Determine API URL based on runtime hostname detection (no env var dependency)
+            const apiUrl = getApiUrl();
+            const response = await fetch(`${apiUrl}/api/book-demo`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
