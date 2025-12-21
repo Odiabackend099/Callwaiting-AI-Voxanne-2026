@@ -44,6 +44,7 @@ import { vapiSetupRouter } from './routes/vapi-setup';
 import vapiDiscoveryRouter from './routes/vapi-discovery';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
 import agentSyncRouter from './routes/agent-sync';
+import { bookDemoRouter } from './routes/book-demo';
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
@@ -166,9 +167,13 @@ app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
 app.use('/api/founder-console', agentSyncRouter);
+app.use('/api/book-demo', bookDemoRouter);
 // app.use('/api/founder-console/workspace', workspaceRouter);
 
 // Health check endpoint - comprehensive dependency verification
+// CRITICAL: Twilio webhook timeout = 15 seconds
+// Keep response <100ms; process heavy operations async via background queue
+// With UptimeRobot keep-alive every 10 min, spin-down is eliminated
 app.get('/health', async (req, res) => {
   const health = {
     status: 'ok' as 'ok' | 'degraded' | 'error',
@@ -178,7 +183,8 @@ app.get('/health', async (req, res) => {
       backgroundJobs: false
     },
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    database_size_mb: 0
   };
 
   try {
@@ -194,6 +200,37 @@ app.get('/health', async (req, res) => {
     } else {
       health.status = 'degraded';
       log.warn('Health', 'Database check failed', { error: error.message });
+    }
+
+    // Check database size (Supabase free tier limit: 500 MB)
+    // Alert if approaching limit to trigger upgrade planning
+    const { data: sizeData, error: sizeError } = await supabase.rpc('pg_database_size');
+    if (!sizeError && sizeData) {
+      // sizeData is in bytes, convert to MB
+      health.database_size_mb = Math.round((sizeData / 1024 / 1024) * 10) / 10;
+
+      // Log warnings if approaching limits
+      if (health.database_size_mb > 480) {
+        log.error('Health', 'CRITICAL: Database size approaching Supabase free tier limit', {
+          current_mb: health.database_size_mb,
+          limit_mb: 500,
+          action: 'UPGRADE to Supabase Pro immediately'
+        });
+        health.status = 'error';
+      } else if (health.database_size_mb > 400) {
+        log.warn('Health', 'WARNING: Database size approaching limit, plan upgrade soon', {
+          current_mb: health.database_size_mb,
+          limit_mb: 500,
+          threshold_warn_mb: 400
+        });
+        if (health.status === 'ok') {
+          health.status = 'degraded';
+        }
+      }
+    } else if (sizeError) {
+      // pg_database_size function may not exist; try alternative query
+      // This is non-critical, don't fail health check
+      log.warn('Health', 'Could not retrieve database size', { error: sizeError.message });
     }
   } catch (error: any) {
     health.status = 'error';

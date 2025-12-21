@@ -224,6 +224,17 @@ interface VapiEvent {
   };
 }
 
+/**
+ * CRITICAL: Webhook Handler for Vapi Events
+ *
+ * Timing & Infrastructure Notes:
+ * - Twilio webhook timeout: 15 seconds
+ * - Keep response <100ms; process heavy operations async via background queue
+ * - Render free tier with UptimeRobot keep-alive pinging every 10 min eliminates spin-down risk
+ * - Without mitigation: 15-min inactivity → 30-60s spin-up delay exceeds Twilio timeout
+ *
+ * See: /Users/mac/.claude/plans/mossy-wishing-pony.md for Render free tier scalability assessment
+ */
 webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
   try {
     // Track webhook receipt time for latency monitoring
@@ -570,10 +581,11 @@ async function handleCallStarted(event: VapiEvent) {
       // Don't throw - RAG context is optional
     }
 
-    // Create call log entry with metadata (including RAG context)
+    // Create call log entry with metadata (including RAG context and org_id)
     const { error: logError } = await supabase.from('call_logs').upsert({
       vapi_call_id: call.id,
       lead_id: lead?.id || null,
+      org_id: callTracking?.org_id || null, // CRITICAL: Include org_id for multi-tenant isolation
       to_number: call.customer?.number || null,
       status: 'in-progress',
       started_at: new Date().toISOString(),
@@ -636,7 +648,7 @@ async function handleCallEnded(event: VapiEvent) {
     // Generate idempotency key for this event
     const eventId = `ended:${call.id}`;
 
-    // Check if already processed
+    // CRITICAL FIX #4: Check if already processed (idempotency check first)
     const { data: existing, error: checkError } = await supabase
       .from('processed_webhook_events')
       .select('id')
@@ -646,10 +658,29 @@ async function handleCallEnded(event: VapiEvent) {
     if (checkError && checkError.code !== 'PGRST116') {
       logger.error('webhooks', 'Error checking idempotency');
     } else if (existing) {
-      logger.info('webhooks', 'Duplicate event, skipping');
+      logger.info('webhooks', 'Duplicate event, skipping', { vapiCallId: call.id });
       return;
     }
 
+    // CRITICAL FIX #2 (INVERTED SEQUENCE): Mark as processed IMMEDIATELY (before updates)
+    // This prevents duplicate processing if service crashes between updates and mark
+    const { error: markError } = await supabase
+      .from('processed_webhook_events')
+      .insert({
+        event_id: eventId,
+        call_id: call.id,
+        event_type: 'ended'
+      });
+
+    if (markError) {
+      logger.error('webhooks', 'CRITICAL: Failed to mark event as processed', {
+        vapiCallId: call.id,
+        errorMessage: markError.message
+      });
+      throw new Error(`Failed to mark event as processed: ${markError.message}`);
+    }
+
+    // Now safe to fetch and update, since event is marked as processed
     // Fetch call log to check if it's a test call
     const { data: callLog } = await supabase
       .from('call_logs')
@@ -658,6 +689,7 @@ async function handleCallEnded(event: VapiEvent) {
       .maybeSingle();
 
     // Update call log
+    // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error } = await supabase
       .from('call_logs')
       .update({
@@ -665,12 +697,20 @@ async function handleCallEnded(event: VapiEvent) {
         ended_at: new Date().toISOString(),
         duration_seconds: call.duration || 0
       })
-      .eq('vapi_call_id', call.id);
+      .eq('vapi_call_id', call.id)
+      .eq('org_id', callLog.org_id);
 
     if (error) {
-      logger.error('webhooks', 'Failed to update call log');
+      logger.error('webhooks', 'Failed to update call log', {
+        vapiCallId: call.id,
+        orgId: callLog.org_id,
+        errorMessage: error.message
+      });
     } else {
-      logger.info('webhooks', 'Call log updated');
+      logger.info('webhooks', 'Call log updated', {
+        vapiCallId: call.id,
+        orgId: callLog.org_id
+      });
     }
 
     // Update lead status only if this is not a test call
@@ -719,7 +759,7 @@ async function handleCallEnded(event: VapiEvent) {
     }
 
     if (callTracking) {
-      await supabase
+      const { error: trackingError } = await supabase
         .from('call_tracking')
         .update({
           status: 'completed',
@@ -729,19 +769,14 @@ async function handleCallEnded(event: VapiEvent) {
         })
         .eq('id', callTracking.id);
 
-      // Mark event as processed (idempotency)
-      const { error: markError } = await supabase
-        .from('processed_webhook_events')
-        .insert({
-          event_id: eventId,
-          call_id: call.id,
-          event_type: 'ended'
+      if (trackingError) {
+        logger.error('webhooks', 'Failed to update call_tracking', {
+          vapiCallId: call.id,
+          errorMessage: trackingError.message
         });
-
-      if (markError) {
-        logger.warn('webhooks', `Failed to mark event as processed: ${markError.message}`);
-        // Continue anyway (state was updated)
       }
+      // NOTE: Event was already marked as processed at beginning of handler
+      // (line 665-681), so no need to mark again
 
       // Broadcast WebSocket event with userId filter
       wsBroadcast({
@@ -1081,6 +1116,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
     }
 
     // Update call_logs with final data including recording metadata
+    // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callLogsError } = await supabase
       .from('call_logs')
       .update({
@@ -1093,13 +1129,21 @@ async function handleEndOfCallReport(event: VapiEvent) {
         transcript_only_fallback: !recordingStoragePath && !!artifact?.transcript,
         cost: call.cost || 0
       })
-      .eq('vapi_call_id', call.id);
+      .eq('vapi_call_id', call.id)
+      .eq('org_id', callLog.org_id);
 
     if (callLogsError) {
-      logger.error('webhooks', 'Failed to update call log');
+      logger.error('webhooks', 'Failed to update call log', {
+        vapiCallId: call.id,
+        orgId: callLog.org_id,
+        errorMessage: callLogsError.message
+      });
+      // CRITICAL: Throw to prevent cascading errors - both tables must update together
+      throw new Error(`Failed to update call_logs: ${callLogsError.message}`);
     }
 
     // Also update calls table with call_type and recording_storage_path
+    // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callsError } = await supabase
       .from('calls')
       .update({
@@ -1107,10 +1151,15 @@ async function handleEndOfCallReport(event: VapiEvent) {
         recording_storage_path: recordingStoragePath,
         status: 'completed'
       })
-      .eq('vapi_call_id', call.id);
+      .eq('vapi_call_id', call.id)
+      .eq('org_id', callLog.org_id);
 
     if (callsError) {
-      logger.error('webhooks', 'Failed to update calls table');
+      logger.error('webhooks', 'Failed to update calls table', {
+        vapiCallId: call.id,
+        orgId: callLog.org_id,
+        errorMessage: callsError.message
+      });
 
       // CRITICAL: If calls table update fails, clean up orphaned recording
       if (recordingStoragePath) {
