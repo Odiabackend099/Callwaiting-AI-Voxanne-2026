@@ -8,6 +8,7 @@ import nodemailer from 'nodemailer';
 interface SendEmailOptions {
   to: string;
   to_name?: string;
+  cc?: string;
   subject: string;
   html: string;
   text: string;
@@ -48,13 +49,17 @@ export async function sendEmailViaSmtp(
     const fromEmail = options.from || process.env.FROM_EMAIL || 'noreply@callwaitingai.dev';
     const fromName = options.from_name || 'Call Waiting AI by CallWaiting AI';
 
-    const mailOptions = {
+    const mailOptions: any = {
       from: `${fromName} <${fromEmail}>`,
       to: options.to_name ? `${options.to_name} <${options.to}>` : options.to,
       subject: options.subject,
       text: options.text,
       html: options.html
     };
+
+    if (options.cc) {
+      mailOptions.cc = options.cc;
+    }
 
     const info = await transporter.sendMail(mailOptions);
 
