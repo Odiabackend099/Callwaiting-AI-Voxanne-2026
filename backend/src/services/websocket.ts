@@ -96,11 +96,19 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
 
           const token = typeof data.token === 'string' ? data.token : undefined;
 
-          // Always require token in production, allow dev-only bypass with explicit flag
-          const isDev = process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_WS_BYPASS === 'true';
+          // CRITICAL SECURITY FIX: Require token in production (no dev bypass by default)
+          // Dev bypass requires BOTH NODE_ENV=development AND ALLOW_DEV_WS_BYPASS=true
+          const isProduction = process.env.NODE_ENV !== 'development';
+          const allowDevBypass = process.env.ALLOW_DEV_WS_BYPASS === 'true';
+          const isDev = !isProduction && allowDevBypass;
+
+          // If no token provided and not in dev mode, reject
           if (!token && !isDev) {
-            logger.warn('WebSocket subscription rejected: no token provided');
-            ws.close(1008, 'Unauthorized');
+            logger.warn('WebSocket subscription rejected: no token provided (production mode)', {
+              nodeEnv: process.env.NODE_ENV,
+              allowDevBypass
+            });
+            ws.close(1008, 'Unauthorized: Token required');
             return;
           }
 
@@ -117,7 +125,7 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
                 clearTimeout(authTimeout);
                 if (error || !authData?.user?.id) {
                   logger.warn('WebSocket auth failed', { error: error?.message });
-                  ws.close(1008, 'Unauthorized');
+                  ws.close(1008, 'Unauthorized: Invalid token');
                   return;
                 }
 
@@ -127,12 +135,12 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
               .catch((err) => {
                 clearTimeout(authTimeout);
                 logger.error('WebSocket auth error', { error: err?.message });
-                ws.close(1008, 'Unauthorized');
+                ws.close(1008, 'Unauthorized: Auth error');
               });
           } else if (isDev) {
-            // Dev-only: use hardcoded test userId
+            // DEVELOPMENT MODE ONLY: use hardcoded test userId (requires explicit env var)
             client.userId = 'dev-test-user';
-            if (DEBUG_WS) logger.debug('Dev-mode subscription accepted', { userId: client.userId });
+            if (DEBUG_WS) logger.debug('Dev-mode subscription accepted (ALLOW_DEV_WS_BYPASS=true)', { userId: client.userId });
           }
         }
         

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Lato, Playfair_Display, Poppins, Inter } from "next/font/google";
 import "./globals.css";
 import JsonLd from "@/components/JsonLd";
@@ -107,18 +106,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`dark ${lato.variable} ${playfair.variable} ${poppins.variable} ${inter.variable}`} suppressHydrationWarning>
-      <head>
-        <Script
-          id="apollo-tracking"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `function initApollo(){var n=Math.random().toString(36).substring(7),o=document.createElement("script");
-  o.src="https://assets.apollo.io/micro/website-tracker/tracker.iife.js?nocache="+n,o.async=!0,o.defer=!0,
-  o.onload=function(){window.trackingFunctions.onLoad({appId:"69470d1f2689ef001d90a89f"})},
-  document.head.appendChild(o)}initApollo();`,
-          }}
-        />
-      </head>
       <body
         className="antialiased font-sans bg-black text-white"
         suppressHydrationWarning

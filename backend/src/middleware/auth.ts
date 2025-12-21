@@ -28,12 +28,16 @@ declare global {
  * Require auth in production, but allow a dev-mode bypass so local dashboard usage
  * doesn't require manual token copy/paste.
  *
- * In dev mode (NODE_ENV=development), if no Authorization header is provided,
+ * CRITICAL SECURITY FIX: Default to PRODUCTION mode (NODE_ENV required to be explicitly set to 'development')
+ * In dev mode only (NODE_ENV=development), if no Authorization header is provided,
  * attach a synthetic user and proceed.
  */
 export async function requireAuthOrDev(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
+
+    // Determine if we're in dev mode (must be EXPLICITLY set, defaults to production)
+    const isProduction = process.env.NODE_ENV !== 'development';
 
     // If caller provided a token, try to validate it.
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -41,9 +45,8 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
       // Treat common "empty" token values as missing (prevents Bearer undefined/null)
       if (token && token !== 'undefined' && token !== 'null') {
         // In dev mode, try token auth but fall back to dev user on failure
-        const isDev = (process.env.NODE_ENV || 'development') === 'development';
-        if (isDev) {
-          // Attempt token validation, but don't block on failure in dev
+        if (!isProduction) {
+          // Development mode: Attempt token validation, but don't block on failure
           try {
             const { data: { user }, error } = await supabase.auth.getUser(token);
             if (!error && user) {
@@ -69,24 +72,24 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
             console.log('[AuthOrDev] Token validation error in dev mode, falling back to dev user');
           }
         } else {
-          // Production: strict token validation
+          // Production: strict token validation (no fallback)
           await requireAuth(req, res, next);
           return;
         }
       }
     }
 
-    // No token provided.
-    const isDev = (process.env.NODE_ENV || 'development') === 'development';
-    if (!isDev) {
+    // No token provided or token validation failed
+    if (isProduction) {
+      // PRODUCTION MODE: Always reject unauthenticated requests
       res.status(401).json({ error: 'Missing or invalid Authorization header' });
       return;
     }
 
-    // In dev mode, use hardcoded default org ID (matches KB uploads)
-    // This is the default org ID used throughout the system
+    // DEVELOPMENT MODE ONLY: Use hardcoded default org ID (matches KB uploads)
+    // This fallback is ONLY active when NODE_ENV=development is explicitly set
     const defaultOrgId = 'a0000000-0000-0000-0000-000000000001';
-    
+
     req.user = {
       id: process.env.DEV_USER_ID || 'dev-user',
       email: process.env.DEV_USER_EMAIL || 'dev@local',
