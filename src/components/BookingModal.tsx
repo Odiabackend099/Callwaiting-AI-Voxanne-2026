@@ -34,7 +34,8 @@ export const BookingModal = ({ isOpen, onClose }: BookingModalProps) => {
         setIsLoading(true);
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+            // Use production backend URL or fallback to localhost for development
+            const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://voxanne-backend.onrender.com';
             const response = await fetch(`${apiUrl}/api/book-demo`, {
                 method: 'POST',
                 headers: {
