@@ -2,10 +2,17 @@
 
 import { motion } from "framer-motion";
 import { Phone, Bot, CheckCircle, Calendar, ArrowRight, Zap, Brain } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function HowItWorks() {
     const [activeStep, setActiveStep] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setActiveStep((prev) => (prev + 1) % 5);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     const steps = [
         {

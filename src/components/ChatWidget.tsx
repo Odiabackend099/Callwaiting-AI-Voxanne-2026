@@ -8,11 +8,12 @@ import Image from "next/image";
 export const ChatWidget = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<{ role: "bot" | "user" | "system"; text: string }[]>([
-        { role: "bot", text: "Hi there! 👋 I'm Call Waiting AI. I can answer calls, book appointments, and handle FAQs for your clinic 24/7." },
-        { role: "bot", text: "How can I help you today?" }
+        { role: "bot", text: "👋 Hi! I'm Voxanne, your AI front desk assistant. I can help you with questions about Call Waiting AI, pricing, features, setup, or anything else you'd like to know!" },
+        { role: "bot", text: "Are you a prospect looking to learn more, or an existing customer needing support?" }
     ]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [hasInteracted, setHasInteracted] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -30,6 +31,7 @@ export const ChatWidget = () => {
         const userMessage = inputValue;
         setInputValue("");
         setMessages((prev) => [...prev, { role: "user", text: userMessage }]);
+        setHasInteracted(true);
         setIsLoading(true);
 
         try {
@@ -52,10 +54,15 @@ export const ChatWidget = () => {
             }
         } catch (error) {
             console.error("Chat error:", error);
-            setMessages((prev) => [...prev, { role: "bot", text: "Sorry, I'm having trouble connecting right now. Please try again later." }]);
+            setMessages((prev) => [...prev, { role: "bot", text: "Sorry, I'm having trouble connecting right now. Please try again later or contact support@callwaitingai.dev" }]);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleQuickAction = (action: string) => {
+        setInputValue(action);
+        setHasInteracted(true);
     };
 
     return (
@@ -76,10 +83,10 @@ export const ChatWidget = () => {
                                         <Image src="/callwaiting-ai-logo.png" alt="Call Waiting AI" width={40} height={40} className="object-contain" />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-white text-sm">Call Waiting AI</h3>
+                                        <h3 className="font-bold text-white text-sm font-display">Voxanne Support</h3>
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                            <span className="text-xs text-white/90">Online Now</span>
+                                            <span className="text-xs text-white/90">Always Available</span>
                                         </div>
                                     </div>
                                 </div>
@@ -93,7 +100,7 @@ export const ChatWidget = () => {
                         </div>
 
                         {/* Chat Messages */}
-                        <div className="h-[350px] bg-slate-50 dark:bg-slate-950/50 flex flex-col">
+                        <div className="h-[400px] bg-slate-50 dark:bg-slate-950/50 flex flex-col">
                             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                                 {messages.map((msg, idx) => (
                                     <div
@@ -111,6 +118,37 @@ export const ChatWidget = () => {
                                         </div>
                                     </div>
                                 ))}
+                                {!hasInteracted && messages.length === 2 && (
+                                    <div className="space-y-2 mt-4">
+                                        <p className="text-xs text-slate-500 font-semibold">Quick questions:</p>
+                                        <div className="space-y-2">
+                                            <button
+                                                onClick={() => handleQuickAction("What is Call Waiting AI and how does it work?")}
+                                                className="w-full text-left px-3 py-2 rounded-lg bg-cyan-50 dark:bg-slate-800/50 hover:bg-cyan-100 dark:hover:bg-slate-700 text-xs text-slate-700 dark:text-slate-300 transition-colors border border-cyan-200 dark:border-slate-700"
+                                            >
+                                                📱 How does it work?
+                                            </button>
+                                            <button
+                                                onClick={() => handleQuickAction("What are your pricing plans?")}
+                                                className="w-full text-left px-3 py-2 rounded-lg bg-cyan-50 dark:bg-slate-800/50 hover:bg-cyan-100 dark:hover:bg-slate-700 text-xs text-slate-700 dark:text-slate-300 transition-colors border border-cyan-200 dark:border-slate-700"
+                                            >
+                                                💰 Pricing & Plans
+                                            </button>
+                                            <button
+                                                onClick={() => handleQuickAction("Is it HIPAA compliant?")}
+                                                className="w-full text-left px-3 py-2 rounded-lg bg-cyan-50 dark:bg-slate-800/50 hover:bg-cyan-100 dark:hover:bg-slate-700 text-xs text-slate-700 dark:text-slate-300 transition-colors border border-cyan-200 dark:border-slate-700"
+                                            >
+                                                🔒 Security & Compliance
+                                            </button>
+                                            <button
+                                                onClick={() => handleQuickAction("How do I get started?")}
+                                                className="w-full text-left px-3 py-2 rounded-lg bg-cyan-50 dark:bg-slate-800/50 hover:bg-cyan-100 dark:hover:bg-slate-700 text-xs text-slate-700 dark:text-slate-300 transition-colors border border-cyan-200 dark:border-slate-700"
+                                            >
+                                                🚀 Getting Started
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                                 <div ref={messagesEndRef} />
                             </div>
 
