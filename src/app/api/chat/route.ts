@@ -3,8 +3,12 @@ import Groq from "groq-sdk";
 
 // Lazy-load Groq client to avoid build-time env issues
 function getGroqClient() {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+        throw new Error('GROQ_API_KEY environment variable is not set. Please configure it in your .env.local file.');
+    }
     return new Groq({
-        apiKey: process.env.GROQ_API_KEY,
+        apiKey: apiKey,
     });
 }
 
@@ -403,12 +407,25 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ reply });
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        // Only log in development
+        // Log detailed error information in development
         if (process.env.NODE_ENV === 'development') {
-            console.error("Chat API error:", error?.message);
+            console.error("Chat API error:", {
+                message: error?.message,
+                status: error?.status,
+                code: error?.code,
+                type: error?.type,
+                stack: error?.stack
+            });
         }
 
-        // Return appropriate error response
+        // Check for specific error types
+        if (error?.message?.includes('GROQ_API_KEY')) {
+            return NextResponse.json(
+                { error: "Chat service is not properly configured. Please contact support@callwaitingai.dev" },
+                { status: 503 }
+            );
+        }
+
         if (error?.status === 429) {
             return NextResponse.json(
                 { error: "API rate limit exceeded. Please try again later." },
@@ -416,8 +433,15 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        if (error?.status === 401 || error?.message?.includes('authentication') || error?.message?.includes('unauthorized')) {
+            return NextResponse.json(
+                { error: "Authentication failed. Please contact support@callwaitingai.dev" },
+                { status: 503 }
+            );
+        }
+
         return NextResponse.json(
-            { error: "Failed to generate response. Please try again." },
+            { error: "I'm having trouble connecting to my knowledge base. Please try again in a moment." },
             { status: 500 }
         );
     }
