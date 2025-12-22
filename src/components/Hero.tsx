@@ -98,22 +98,29 @@ export default function Hero({
                     )}
                 </motion.p>
 
-                {/* PRIMARY CTA - Visible Button */}
+                {/* PRIMARY CTA - Dual Buttons */}
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.6, delay: 0.5 }}
-                    className="flex flex-col sm:flex-row items-center gap-6 mb-12"
+                    className="flex flex-col sm:flex-row items-center gap-4 mb-12"
                 >
                     <button
                         onClick={onBookDemo}
                         className="group px-8 py-4 bg-white text-black rounded-full font-bold text-lg hover:bg-slate-200 transition-all duration-300 flex items-center gap-2 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]"
                     >
+                        Start Free Trial
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                    <button
+                        onClick={onBookDemo}
+                        className="group px-8 py-4 bg-transparent border-2 border-white text-white rounded-full font-bold text-lg hover:bg-white/10 transition-all duration-300 flex items-center gap-2"
+                    >
                         {ctaText}
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </button>
-                    <span className="text-slate-500 text-sm">No credit card required • Set up in 15 mins</span>
                 </motion.div>
+                <span className="text-slate-500 text-sm">Book your demo • 7-day free trial • No credit card required</span>
 
                 {/* Audio Demo Link */}
                 <motion.div

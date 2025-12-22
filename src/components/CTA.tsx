@@ -27,12 +27,20 @@ export default function CTA({ onBookDemo }: { onBookDemo?: () => void }) {
                         Stop losing £50K+ annually to unanswered calls. Deploy Call Waiting AI today and capture every lead, 24/7.
                     </p>
 
-                    <button
-                        onClick={onBookDemo}
-                        className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300 shadow-[0_0_40px_rgba(255,255,255,0.3)]"
-                    >
-                        Book Demo Now
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <button
+                            onClick={onBookDemo}
+                            className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300 shadow-[0_0_40px_rgba(255,255,255,0.3)]"
+                        >
+                            Start Free Trial
+                        </button>
+                        <button
+                            onClick={onBookDemo}
+                            className="px-10 py-5 bg-transparent border-2 border-white text-white text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300"
+                        >
+                            Book Demo Now
+                        </button>
+                    </div>
                 </motion.div>
             </div>
         </section>

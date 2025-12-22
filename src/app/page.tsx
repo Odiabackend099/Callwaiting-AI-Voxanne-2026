@@ -8,25 +8,17 @@ import Hero from "@/components/Hero";
 import TrustedBy from "@/components/TrustedBy";
 import RevenueLeak from "@/components/RevenueLeak";
 import SafetySection from "@/components/SafetySection";
-import PerformanceMetrics from "@/components/PerformanceMetrics";
-import BenefitsSection from "@/components/BenefitsSection";
-import HowItWorksSection from "@/components/HowItWorksSection";
 import HowItWorks from "@/components/HowItWorks";
 import TestimonialCarousel from "@/components/TestimonialCarousel";
 import Pricing from "@/components/Pricing";
 import RiskReversal from "@/components/RiskReversal";
-import LimitedAvailability from "@/components/LimitedAvailability";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
 import { ChatWidget } from "@/components/ChatWidget";
 import LiveChatWidget from "@/components/LiveChatWidget";
 import PressMentions from "@/components/PressMentions";
-import SecurityBadges from "@/components/SecurityBadges";
-import Comparison from "@/components/Comparison";
 import CompetitorComparison from "@/components/CompetitorComparison";
 import { MedicalFAQ } from "@/components/MedicalFAQ";
-import MobileShowcase from "@/components/MobileShowcase";
-import CampaignShowcase from "@/components/CampaignShowcase";
 import Team from "@/components/Team";
 import OfficeLocation from "@/components/OfficeLocation";
 
@@ -72,34 +64,23 @@ export default function Home() {
 
                 {/* 3. SOLUTION & SAFETY: The unique mechanism */}
                 <SafetySection />
-                <PerformanceMetrics />
 
-                {/* 3.5 KEY BENEFITS: Why choose us */}
-                <BenefitsSection />
-
-                {/* 5. PROCESS: Simplicity */}
-                <HowItWorksSection />
+                {/* 4. PROCESS: How It Works */}
                 <HowItWorks />
 
-                {/* 6. SOCIAL PROOF: Reinforce the decision */}
+                {/* 5. SOCIAL PROOF: Reinforce the decision */}
                 <TestimonialCarousel />
-                <Comparison />
                 <CompetitorComparison />
 
-                {/* 7. OFFER: The Pricing & Guarantee */}
+                {/* 6. OFFER: The Pricing & Guarantee */}
                 <Pricing onBookDemo={openBooking} />
                 <RiskReversal />
 
-                {/* 8. URGENCY & CLOSING */}
-                <LimitedAvailability />
+                {/* 7. CLOSING CTA */}
                 <CTA onBookDemo={openBooking} />
 
-                {/* Supporting Pillars (kept for SEO/Depth but lower priority) */}
-                <SecurityBadges />
+                {/* Supporting Content (SEO & Trust) */}
                 <MedicalFAQ />
-                <MobileShowcase />
-                <CampaignShowcase />
-                {/* <DemoSection />  Removed as we have demos in Hero & Proof section now */}
                 <Team />
                 <OfficeLocation />
 

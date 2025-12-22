@@ -50,12 +50,20 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                             <p className="text-sm text-slate-400 mb-6">
                                 Perfect for solo injectors or boutique aesthetic clinics.
                             </p>
-                            <button
-                                onClick={onBookDemo}
-                                className="w-full py-4 rounded-xl border border-white/20 text-white font-semibold hover:bg-white hover:text-black transition-all bg-transparent"
-                            >
-                                Get Started
-                            </button>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={onBookDemo}
+                                    className="w-full py-4 rounded-xl bg-white text-black font-semibold hover:bg-slate-200 transition-all"
+                                >
+                                    Start Free Trial
+                                </button>
+                                <button
+                                    onClick={onBookDemo}
+                                    className="w-full py-4 rounded-xl border border-white/20 text-white font-semibold hover:bg-white hover:text-black transition-all bg-transparent"
+                                >
+                                    Book Demo
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-4 pt-8 border-t border-white/5 flex-grow">
@@ -103,12 +111,20 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                             <p className="text-sm text-slate-300 mb-6">
                                 For growing practices. Advanced features and priority support.
                             </p>
-                            <button
-                                onClick={onBookDemo}
-                                className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
-                            >
-                                Book a Demo
-                            </button>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={onBookDemo}
+                                    className="w-full py-4 rounded-xl bg-white text-black font-bold hover:bg-slate-200 transition-all"
+                                >
+                                    Start Free Trial
+                                </button>
+                                <button
+                                    onClick={onBookDemo}
+                                    className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
+                                >
+                                    Book a Demo
+                                </button>
+                            </div>
                             <p className="text-center text-[10px] text-slate-500 mt-3">Custom setup included</p>
                         </div>
 
@@ -145,12 +161,20 @@ export default function Pricing({ onBookDemo }: { onBookDemo?: () => void }) {
                             <p className="text-sm text-slate-400 mb-6">
                                 For multi-location practices and franchise groups. Custom pricing and features.
                             </p>
-                            <button
-                                onClick={onBookDemo}
-                                className="w-full py-4 rounded-xl border border-white/20 text-white font-semibold hover:bg-white hover:text-black transition-all bg-transparent"
-                            >
-                                Contact Sales
-                            </button>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={onBookDemo}
+                                    className="w-full py-4 rounded-xl bg-white text-black font-semibold hover:bg-slate-200 transition-all"
+                                >
+                                    Start Free Trial
+                                </button>
+                                <button
+                                    onClick={onBookDemo}
+                                    className="w-full py-4 rounded-xl border border-white/20 text-white font-semibold hover:bg-white hover:text-black transition-all bg-transparent"
+                                >
+                                    Contact Sales
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-4 pt-8 border-t border-white/5 flex-grow">
