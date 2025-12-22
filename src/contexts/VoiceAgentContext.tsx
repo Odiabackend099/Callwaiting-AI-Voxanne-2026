@@ -14,7 +14,11 @@ interface VoiceAgentContextValue extends VoiceAgentState {
 const VoiceAgentContext = createContext<VoiceAgentContextValue | null>(null);
 
 export function VoiceAgentProvider({ children }: { children: React.ReactNode }) {
-  const agent = useVoiceAgent({ preventAutoDisconnectOnUnmount: true });
+  // **FIX**: Enable auto-start recording so recording starts immediately after connection
+  const agent = useVoiceAgent({ 
+    preventAutoDisconnectOnUnmount: true,
+    autoStartRecording: true 
+  });
 
   const value = useMemo<VoiceAgentContextValue>(() => {
     return {

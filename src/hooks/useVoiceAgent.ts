@@ -17,6 +17,7 @@ interface UseVoiceAgentOptions {
     onDisconnected?: () => void;
     onError?: (error: string) => void;
     preventAutoDisconnectOnUnmount?: boolean;
+    autoStartRecording?: boolean;
 }
 
 interface WebTestResponse {
@@ -51,6 +52,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
     const interimTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const manualDisconnectRef = useRef(false);
+    const isConnectingRef = useRef(false);
+    const isMountedRef = useRef(true);
 
     const MAX_RECONNECT_ATTEMPTS = 3;
     const RECONNECT_DELAY = 2000;
@@ -184,18 +187,55 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         }
     }, []);
 
-
-
-
-    const isConnectingRef = useRef(false);
-    const isMountedRef = useRef(true);
-
     // Track mount state
     useEffect(() => {
         isMountedRef.current = true;
         return () => {
             isMountedRef.current = false;
         };
+    }, []);
+
+    const startRecording = useCallback(async () => {
+        try {
+            // **FIX #1: Check WebSocket is actually open before starting recorder**
+            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+                throw new Error('Not connected to server. Please wait for connection to establish.');
+            }
+
+            // **FIX #2: Initialize AudioPlayer first if not already done**
+            if (!playerRef.current) {
+                playerRef.current = new AudioPlayer();
+                if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] AudioPlayer initialized');
+            }
+
+            // **FIX #3: Create and start AudioRecorder with proper error handling**
+            const recorder = new AudioRecorder(wsRef.current, (errorMsg: string) => {
+                // Propagate recorder errors to UI
+                setState(prev => ({ ...prev, error: errorMsg }));
+                options.onError?.(errorMsg);
+            });
+
+            await recorder.start();
+            recorderRef.current = recorder;
+
+            setState(prev => ({ ...prev, isRecording: true }));
+            if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Recording started');
+        } catch (error: unknown) {
+            console.error('[VoiceAgent] Failed to start recording:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to start recording';
+            setState(prev => ({ ...prev, error: errorMessage }));
+            options.onError?.(errorMessage);
+            throw error;  // Re-throw so caller knows it failed
+        }
+    }, [options]);
+
+    const stopRecording = useCallback(() => {
+        if (recorderRef.current) {
+            recorderRef.current.stop();
+            recorderRef.current = null;
+        }
+        setState(prev => ({ ...prev, isRecording: false }));
+        if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Recording stopped');
     }, []);
 
     const connect = useCallback(async () => {
@@ -223,6 +263,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             }
 
             if (!isMountedRef.current) return;
+
+            if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Initiating web test...');
 
             const data = await authedBackendFetch<WebTestResponse>('/api/founder-console/agent/web-test', {
                 method: 'POST',
@@ -259,6 +301,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 if (isLocal && parsed.port === '3000') {
                     parsed.port = '3001';
                     wsUrl = parsed.toString();
+                    if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Adjusted WebSocket URL for local dev:', wsUrl);
                 }
             } catch {
                 // If URL parsing fails, keep original value.
@@ -279,12 +322,13 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
             connectionTimeoutRef.current = setTimeout(() => {
                 if (ws.readyState === WebSocket.CONNECTING) {
-                    console.warn('[VoiceAgent] WebSocket connection timeout');
+                    console.warn('[VoiceAgent] WebSocket connection timeout (10s)');
                     ws.close();
                     if (isMountedRef.current) {
                         setState(prev => ({ ...prev, error: 'Connection timeout. Please try again.' }));
                         options.onError?.('Connection timeout');
                     }
+                    isConnectingRef.current = false;
                 }
             }, CONNECTION_TIMEOUT_MS);
 
@@ -295,6 +339,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 }
                 if (!isMountedRef.current) {
                     ws.close();
+                    isConnectingRef.current = false;
                     return;
                 }
 
@@ -303,8 +348,8 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     if (token) {
                         ws.send(JSON.stringify({ type: 'auth', token }));
                     }
-                } catch {
-                    // ignore
+                } catch (e) {
+                    console.error('[VoiceAgent] Failed to send auth token:', e);
                 }
 
                 isConnectingRef.current = false;
@@ -325,6 +370,14 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                     }
                 }));
                 options.onConnected?.();
+
+                // **FIX #4: Auto-start recording if enabled**
+                if (options.autoStartRecording) {
+                    startRecording().catch((err) => {
+                        console.error('[VoiceAgent] Auto-start recording failed:', err);
+                        // Error is already propagated by startRecording
+                    });
+                }
             };
 
             ws.onmessage = async (event) => {
@@ -437,7 +490,6 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                             if (wsRef.current) wsRef.current.close();
                             break;
 
-
                         case 'interrupt':
                             if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Agent interrupted');
                             playerRef.current?.stop();
@@ -453,10 +505,11 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 console.error('[VoiceAgent] WebSocket error:', error);
                 setState(prev => ({ ...prev, error: 'Connection error occurred' }));
                 isConnectingRef.current = false;
+                options.onError?.('Connection error occurred');
             };
 
             ws.onclose = (event) => {
-                console.log('[VoiceAgent] WebSocket closed:', event.code);
+                console.log('[VoiceAgent] WebSocket closed:', event.code, event.reason);
                 isConnectingRef.current = false;
                 setState(prev => ({
                     ...prev,
@@ -494,40 +547,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             }
             isConnectingRef.current = false;
         }
-    }, [user, session, options, handleTranscriptEvent, scheduleInterimTimeout, getReconnectDelayMs]);
-
-    const startRecording = useCallback(async () => {
-        try {
-            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-                throw new Error('Not connected to server');
-            }
-
-            if (!playerRef.current) {
-                playerRef.current = new AudioPlayer();
-            }
-
-            const recorder = new AudioRecorder(wsRef.current);
-            await recorder.start();
-            recorderRef.current = recorder;
-
-            setState(prev => ({ ...prev, isRecording: true }));
-            console.log('[VoiceAgent] Recording started');
-        } catch (error: unknown) {
-            console.error('[VoiceAgent] Failed to start recording:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            setState(prev => ({ ...prev, error: errorMessage }));
-            options.onError?.(errorMessage);
-        }
-    }, [options]);
-
-    const stopRecording = useCallback(() => {
-        if (recorderRef.current) {
-            recorderRef.current.stop();
-            recorderRef.current = null;
-        }
-        setState(prev => ({ ...prev, isRecording: false }));
-        console.log('[VoiceAgent] Recording stopped');
-    }, []);
+    }, [user, session, options, handleTranscriptEvent, scheduleInterimTimeout, getReconnectDelayMs, startRecording]);
 
     const disconnect = useCallback(async () => {
         manualDisconnectRef.current = true;
@@ -589,6 +609,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         setState(prev => ({
             ...prev,
             isConnected: false,
+            isRecording: false,
             session: prev.session ? {
                 ...prev.session,
                 status: 'disconnected',

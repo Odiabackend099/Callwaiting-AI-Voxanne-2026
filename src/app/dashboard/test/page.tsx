@@ -153,8 +153,6 @@ const TestAgentPageContent = () => {
             try {
                 await startCall();
                 // Wait a moment for connection to stabilize before recording
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                startRecording();
             } catch (err) {
                 console.error('Failed to start web call', err);
             } finally {
