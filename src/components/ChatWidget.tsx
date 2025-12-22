@@ -8,8 +8,8 @@ import Image from "next/image";
 export const ChatWidget = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<{ role: "bot" | "user" | "system"; text: string }[]>([
-        { role: "bot", text: "👋 Hi! I'm Voxanne, your AI front desk assistant. I can help you with questions about Call Waiting AI, pricing, features, setup, or anything else you'd like to know!" },
-        { role: "bot", text: "Are you a prospect looking to learn more, or an existing customer needing support?" }
+        { role: "bot", text: "👋 Hi there! I'm Voxanne, your AI front desk assistant for Call Waiting AI. I'm here to help you 24/7!" },
+        { role: "bot", text: "I can answer questions about our AI receptionist, pricing, features, integrations, security, setup, or anything else you'd like to know. Whether you're a prospect exploring options or an existing customer needing support, I'm here to help!" }
     ]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -54,7 +54,7 @@ export const ChatWidget = () => {
             }
         } catch (error) {
             console.error("Chat error:", error);
-            setMessages((prev) => [...prev, { role: "bot", text: "Sorry, I'm having trouble connecting right now. Please try again later or contact support@callwaitingai.dev" }]);
+            setMessages((prev) => [...prev, { role: "bot", text: "I'm having trouble connecting to my knowledge base right now. Please try again in a moment, or reach out to our team at support@callwaitingai.dev for immediate assistance. We're here to help! 🙏" }]);
         } finally {
             setIsLoading(false);
         }
