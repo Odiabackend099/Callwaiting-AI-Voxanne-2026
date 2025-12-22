@@ -53,16 +53,6 @@ export default function Footer() {
                         </ul>
                     </div>
 
-                    {/* Specialties */}
-                    <div>
-                        <h3 className="text-white font-semibold mb-4">Specialties</h3>
-                        <ul className="space-y-2">
-                            <li><Link href="/plastic-surgery" className="hover:text-white transition-colors">Plastic Surgery</Link></li>
-                            <li><Link href="/med-spa" className="hover:text-white transition-colors">Med Spas</Link></li>
-                            <li><Link href="/dermatology" className="hover:text-white transition-colors">Dermatology</Link></li>
-                            <li><Link href="/cosmetic-dentistry" className="hover:text-white transition-colors">Cosmetic Dentistry</Link></li>
-                        </ul>
-                    </div>
                 </div>
 
                 <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
