@@ -11,7 +11,6 @@ import SafetySection from "@/components/SafetySection";
 import HowItWorks from "@/components/HowItWorks";
 import TestimonialCarousel from "@/components/TestimonialCarousel";
 import Pricing from "@/components/Pricing";
-import RiskReversal from "@/components/RiskReversal";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
 import { ChatWidget } from "@/components/ChatWidget";
@@ -72,9 +71,8 @@ export default function Home() {
                 <TestimonialCarousel />
                 <CompetitorComparison />
 
-                {/* 6. OFFER: The Pricing & Guarantee */}
+                {/* 6. OFFER: The Pricing */}
                 <Pricing onBookDemo={openBooking} />
-                <RiskReversal />
 
                 {/* 7. CLOSING CTA */}
                 <CTA onBookDemo={openBooking} />
