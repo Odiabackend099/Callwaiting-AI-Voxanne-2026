@@ -98,6 +98,17 @@ export default function Hero({
                     )}
                 </motion.p>
 
+                {/* Specialty Line */}
+                <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.4 }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs sm:text-sm tracking-wide uppercase text-slate-200 mb-6"
+                >
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                    Built exclusively for Aesthetic Clinics, Plastic Surgeons, and Med Spas
+                </motion.div>
+
                 {/* PRIMARY CTA - Dual Buttons */}
                 <motion.div
                     initial={{ opacity: 0 }}

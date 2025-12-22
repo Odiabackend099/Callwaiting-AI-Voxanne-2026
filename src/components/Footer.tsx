@@ -11,7 +11,7 @@ export default function Footer() {
                     {/* Company Info */}
                     <div className="md:col-span-2">
                         <div className="mb-6 flex items-center gap-3">
-                            <Logo size="lg" showText={true} href="/" />
+                            <Logo size="lg" showText={false} href="/" />
                             <span className="text-white font-serif text-3xl font-bold">CallWaiting AI</span>
                         </div>
                         <p className="text-zinc-500 mb-6 leading-relaxed">
