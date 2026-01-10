@@ -14,6 +14,9 @@ import { log as logger } from '../services/logger';
 import { getRagContext } from '../services/rag-context-provider';
 import { logFailedUpload } from '../services/recording-upload-retry';
 import VapiClient from '../services/vapi-client';
+import { getAvailableSlots, checkAvailability, createCalendarEvent } from '../services/calendar-integration';
+import { sendAppointmentConfirmationSMS, sendHotLeadSMS } from '../services/sms-notifications';
+import { scoreLead } from '../services/lead-scoring';
 
 export const webhooksRouter = express.Router();
 
@@ -1208,33 +1211,668 @@ async function handleEndOfCallReport(event: VapiEvent) {
       );
     }
 
+    // ===== AUTOMATIC HOT LEAD DETECTION (Phase 2) =====
+    // Score the lead and send SMS alert if score >= 70
+    if (artifact?.transcript && callLog?.org_id) {
+      try {
+        // Score the lead based on full transcript
+        const leadScore = await scoreLead(
+          callLog.org_id,
+          artifact.transcript,
+          'neutral', // Sentiment analysis can be added later
+          { serviceType: 'unknown' }
+        );
+
+        logger.info('webhooks', 'Lead scored from transcript', {
+          callId: call.id,
+          score: leadScore.score,
+          tier: leadScore.tier
+        });
+
+        // If hot lead (score >= 70), send SMS alert
+        if (leadScore.tier === 'hot') {
+          // Get clinic manager alert phone
+          const { data: settings } = await supabase
+            .from('integration_settings')
+            .select('hot_lead_alert_phone')
+            .eq('org_id', callLog.org_id)
+            .maybeSingle();
+
+          if (settings?.hot_lead_alert_phone) {
+            // Check if alert already sent for this call (prevent duplicates)
+            const { data: existingAlert } = await supabase
+              .from('hot_lead_alerts')
+              .select('id')
+              .eq('call_id', call.id)
+              .eq('org_id', callLog.org_id)
+              .maybeSingle();
+
+            if (!existingAlert) {
+              // Extract customer info from call
+              const customerName = call.customer?.name || 'Unknown Customer';
+              const customerPhone = call.customer?.number || 'Not provided';
+
+              try {
+                const messageId = await sendHotLeadSMS(settings.hot_lead_alert_phone, {
+                  name: customerName,
+                  phone: customerPhone,
+                  service: 'Multiple services discussed',
+                  summary: `Lead score: ${leadScore.score}/100. ${leadScore.details}`
+                });
+
+                // Record alert
+                await supabase
+                  .from('hot_lead_alerts')
+                  .insert({
+                    org_id: callLog.org_id,
+                    call_id: call.id,
+                    lead_name: customerName,
+                    lead_phone: customerPhone,
+                    service_interest: 'Auto-detected from call',
+                    urgency_level: 'high',
+                    summary: leadScore.details,
+                    lead_score: leadScore.score,
+                    sms_message_id: messageId,
+                    alert_sent_at: new Date().toISOString(),
+                    created_at: new Date().toISOString()
+                  });
+
+                // Create dashboard notification
+                await supabase
+                  .from('notifications')
+                  .insert({
+                    org_id: callLog.org_id,
+                    type: 'hot_lead',
+                    title: `🔥 Hot Lead Detected: ${customerName}`,
+                    message: `Score: ${leadScore.score}/100. ${leadScore.details}`,
+                    metadata: {
+                      lead_phone: customerPhone,
+                      call_id: call.id,
+                      lead_score: leadScore.score
+                    },
+                    is_read: false,
+                    created_at: new Date().toISOString()
+                  });
+
+                logger.info('webhooks', 'Auto hot lead SMS sent', {
+                  callId: call.id,
+                  score: leadScore.score,
+                  messageId
+                });
+              } catch (smsError: any) {
+                logger.error('webhooks', 'Failed to send auto hot lead SMS', {
+                  error: smsError?.message
+                });
+              }
+            }
+          }
+        }
+      } catch (scoringError: any) {
+        logger.error('webhooks', 'Error in auto hot lead detection', {
+          error: scoringError?.message
+        });
+        // Continue - scoring failure shouldn't block other operations
+      }
+    }
+    // ===== END AUTOMATIC HOT LEAD DETECTION =====
+
     // Lead/campaign follow-up automation intentionally disabled for this project.
   } catch (error) {
     logger.error('webhooks', 'Error in handleEndOfCallReport');
   }
 }
 
+/**
+ * Route function calls from VAPI to appropriate handlers
+ * CRITICAL: Org context is resolved server-side from assistantId
+ */
 async function handleFunctionCall(event: any) {
   const { call, functionCall } = event;
 
   if (!call || !call.id) {
-    logger.error('webhooks', 'Missing call data');
-    return { result: 'Error: Missing call data' };
+    logger.error('webhooks', 'Missing call data in function call');
+    return { error: 'Missing call data' };
   }
 
   try {
-    logger.info('webhooks', 'Function called');
+    logger.info('webhooks', 'Function call received', {
+      callId: call.id,
+      functionName: functionCall?.name
+    });
 
-    // Handle specific function calls
+    // CRITICAL: Resolve org_id from assistantId (NEVER trust request body)
+    const orgId = await resolveOrgIdFromAssistant(call.assistantId);
+    if (!orgId) {
+      logger.error('webhooks', 'Failed to resolve org_id from assistantId', {
+        assistantId: call.assistantId
+      });
+      return { error: 'Unable to identify organization. Please contact support.' };
+    }
+
     const { name, parameters } = functionCall || {};
 
-    // Production-only function handling
-    // Demo functions removed for production
+    // Route to appropriate handler
+    switch (name) {
+      case 'book_appointment':
+        return await handleBookAppointment(orgId, call, parameters);
 
-    return { result: `Function ${name} executed` };
+      case 'check_availability':
+        return await handleCheckAvailability(orgId, parameters);
+
+      case 'notify_hot_lead':
+        return await handleNotifyHotLead(orgId, call, parameters);
+
+      default:
+        logger.warn('webhooks', 'Unknown function called', { functionName: name });
+        return {
+          error: `Function ${name} is not supported. Available functions: book_appointment, check_availability, notify_hot_lead`
+        };
+    }
   } catch (error: any) {
-    logger.error('webhooks', 'Error executing function');
-    return { error: error.message || 'Function execution failed' };
+    logger.error('webhooks', 'Error executing function', {
+      callId: call.id,
+      functionName: functionCall?.name,
+      error: error?.message,
+      stack: error?.stack
+    });
+    return {
+      error: 'Sorry, I encountered an error processing your request. Please try again or ask to speak with a representative.'
+    };
+  }
+}
+
+/**
+ * Resolve organization ID from VAPI assistant ID
+ * CRITICAL for multi-tenant security - prevents org_id spoofing
+ */
+async function resolveOrgIdFromAssistant(assistantId: string): Promise<string | null> {
+  if (!assistantId) return null;
+
+  try {
+    const { data: agent, error } = await supabase
+      .from('agents')
+      .select('org_id')
+      .eq('vapi_assistant_id', assistantId)
+      .eq('active', true)
+      .maybeSingle();
+
+    if (error || !agent) {
+      logger.error('webhooks', 'Agent lookup failed for assistantId', {
+        assistantId,
+        error: error?.message
+      });
+      return null;
+    }
+
+    return agent.org_id;
+  } catch (error: any) {
+    logger.error('webhooks', 'Error resolving org_id from assistantId', {
+      assistantId,
+      error: error?.message
+    });
+    return null;
+  }
+}
+
+/**
+ * Handle book_appointment function call from VAPI
+ * Checks Google Calendar availability and creates appointment
+ */
+async function handleBookAppointment(
+  orgId: string,
+  call: any,
+  parameters: any
+): Promise<{ result?: string; error?: string }> {
+  try {
+    const {
+      customerName,
+      customerPhone,
+      customerEmail,
+      serviceType,
+      preferredDate,
+      preferredTime,
+      durationMinutes = 45,
+      notes
+    } = parameters;
+
+    logger.info('webhooks', 'Processing appointment booking', {
+      orgId,
+      callId: call.id,
+      serviceType,
+      date: preferredDate,
+      time: preferredTime
+    });
+
+    // Validate date/time format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(preferredDate)) {
+      return { error: 'Invalid date format. Please provide date as YYYY-MM-DD.' };
+    }
+
+    if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(preferredTime)) {
+      return { error: 'Invalid time format. Please provide time as HH:MM in 24-hour format.' };
+    }
+
+    // Construct ISO datetime
+    const scheduledAt = new Date(`${preferredDate}T${preferredTime}:00`);
+
+    // Validate not in past
+    if (scheduledAt < new Date()) {
+      return { error: 'Cannot book appointments in the past. Please choose a future date and time.' };
+    }
+
+    const endTime = new Date(scheduledAt.getTime() + durationMinutes * 60 * 1000);
+
+    // CRITICAL: Check Google Calendar availability (if connected)
+    let calendarAvailable = false;
+    let calendarCheckPerformed = false;
+
+    try {
+      const available = await checkAvailability(
+        orgId,
+        scheduledAt.toISOString(),
+        endTime.toISOString()
+      );
+      calendarAvailable = available;
+      calendarCheckPerformed = true;
+
+      if (!available) {
+        logger.warn('webhooks', 'Requested time slot not available', {
+          orgId,
+          scheduledAt: scheduledAt.toISOString()
+        });
+        return {
+          error: `Unfortunately, ${preferredTime} on ${preferredDate} is not available. Let me check other available times. Please ask me to check availability for that date.`
+        };
+      }
+    } catch (calendarError: any) {
+      // Calendar not connected - proceed with "pending" appointment
+      logger.warn('webhooks', 'Google Calendar not connected, booking as pending', {
+        orgId,
+        error: calendarError?.message
+      });
+      calendarCheckPerformed = false;
+      // Continue with booking
+    }
+
+    // Find or create contact
+    let contactId: string | null = null;
+
+    const { data: existingContact } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('phone', customerPhone)
+      .maybeSingle();
+
+    if (existingContact) {
+      contactId = existingContact.id;
+    } else {
+      // Create new contact
+      const { data: newContact, error: contactError } = await supabase
+        .from('contacts')
+        .insert({
+          org_id: orgId,
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail || null,
+          lead_status: 'new',
+          created_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (contactError) {
+        logger.error('webhooks', 'Failed to create contact', {
+          error: contactError.message
+        });
+      } else {
+        contactId = newContact.id;
+      }
+    }
+
+    // Create appointment in database
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
+      .insert({
+        org_id: orgId,
+        contact_id: contactId,
+        service_type: serviceType,
+        scheduled_at: scheduledAt.toISOString(),
+        duration_minutes: durationMinutes,
+        contact_phone: customerPhone,
+        customer_name: customerName,
+        notes: notes || null,
+        status: calendarCheckPerformed && calendarAvailable ? 'scheduled' : 'pending',
+        confirmation_sent: false,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (appointmentError) {
+      logger.error('webhooks', 'Failed to create appointment', {
+        error: appointmentError.message
+      });
+      return { error: 'Sorry, I was unable to create the appointment. Please try again or contact us directly.' };
+    }
+
+    logger.info('webhooks', 'Appointment created', {
+      appointmentId: appointment.id,
+      status: appointment.status
+    });
+
+    // Create Google Calendar event (if calendar connected and available)
+    let calendarEventUrl: string | null = null;
+
+    if (calendarCheckPerformed && calendarAvailable) {
+      try {
+        const { eventUrl } = await createCalendarEvent(orgId, {
+          title: `${serviceType} - ${customerName}`,
+          description: `Customer: ${customerName}\nPhone: ${customerPhone}\nEmail: ${customerEmail || 'Not provided'}\nNotes: ${notes || 'None'}`,
+          startTime: scheduledAt.toISOString(),
+          endTime: endTime.toISOString(),
+          attendeeEmail: customerEmail || ''
+        });
+
+        calendarEventUrl = eventUrl;
+
+        // Update appointment with calendar link
+        await supabase
+          .from('appointments')
+          .update({ calendar_link: eventUrl })
+          .eq('id', appointment.id);
+
+        logger.info('webhooks', 'Google Calendar event created', {
+          appointmentId: appointment.id,
+          eventUrl
+        });
+      } catch (calendarError: any) {
+        logger.error('webhooks', 'Failed to create calendar event', {
+          error: calendarError?.message
+        });
+        // Continue - appointment is still created
+      }
+    }
+
+    // Send SMS confirmation
+    try {
+      await sendAppointmentConfirmationSMS(customerPhone, {
+        serviceType,
+        scheduledAt,
+        confirmationUrl: calendarEventUrl || undefined
+      });
+
+      // Mark confirmation sent
+      await supabase
+        .from('appointments')
+        .update({ confirmation_sent: true })
+        .eq('id', appointment.id);
+
+      logger.info('webhooks', 'Confirmation SMS sent', {
+        appointmentId: appointment.id,
+        phone: customerPhone
+      });
+    } catch (smsError: any) {
+      logger.error('webhooks', 'Failed to send confirmation SMS', {
+        error: smsError?.message
+      });
+      // Continue - appointment is still valid
+    }
+
+    // Return success message to VAPI (spoken to customer)
+    const confirmationMessage = calendarCheckPerformed && calendarAvailable
+      ? `Great! I've confirmed your ${serviceType} appointment for ${preferredDate} at ${preferredTime}. You'll receive a text message confirmation shortly with all the details.`
+      : `I've scheduled your ${serviceType} appointment for ${preferredDate} at ${preferredTime}. Our team will call you within 24 hours to confirm the final time. You'll also receive a text message confirmation.`;
+
+    return { result: confirmationMessage };
+  } catch (error: any) {
+    logger.error('webhooks', 'Error in handleBookAppointment', {
+      error: error?.message,
+      stack: error?.stack
+    });
+    return { error: 'Sorry, I encountered an error while booking your appointment. Please try again.' };
+  }
+}
+
+/**
+ * Handle check_availability function call from VAPI
+ * Returns available time slots for a given date
+ */
+async function handleCheckAvailability(
+  orgId: string,
+  parameters: any
+): Promise<{ result?: string; error?: string }> {
+  try {
+    const { date } = parameters;
+
+    logger.info('webhooks', 'Checking availability', { orgId, date });
+
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { error: 'Invalid date format. Please provide date as YYYY-MM-DD.' };
+    }
+
+    // Validate not in past
+    const requestedDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (requestedDate < today) {
+      return { error: 'Cannot check availability for past dates. Please choose a future date.' };
+    }
+
+    let availableSlots: string[];
+
+    try {
+      // Try Google Calendar API
+      availableSlots = await getAvailableSlots(orgId, date);
+      logger.info('webhooks', 'Retrieved availability from Google Calendar', {
+        orgId,
+        date,
+        slotsCount: availableSlots.length
+      });
+    } catch (calendarError: any) {
+      logger.warn('webhooks', 'Google Calendar not connected, using database fallback', {
+        orgId,
+        error: calendarError?.message
+      });
+
+      // Fallback: Check database appointments
+      const dateStart = `${date}T00:00:00Z`;
+      const dateEnd = `${date}T23:59:59Z`;
+
+      const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select('scheduled_at, duration_minutes')
+        .eq('org_id', orgId)
+        .gte('scheduled_at', dateStart)
+        .lte('scheduled_at', dateEnd)
+        .eq('status', 'scheduled');
+
+      if (error) {
+        throw new Error(`Database query failed: ${error.message}`);
+      }
+
+      // Generate available slots (9 AM - 6 PM, 45-min intervals)
+      const bookedTimes = new Set<string>();
+
+      if (appointments) {
+        for (const appt of appointments) {
+          const start = new Date(appt.scheduled_at);
+          const end = new Date(start.getTime() + (appt.duration_minutes || 45) * 60 * 1000);
+
+          let current = new Date(start);
+          while (current < end) {
+            const hour = String(current.getHours()).padStart(2, '0');
+            const minute = String(current.getMinutes()).padStart(2, '0');
+            bookedTimes.add(`${hour}:${minute}`);
+            current.setMinutes(current.getMinutes() + 15);
+          }
+        }
+      }
+
+      availableSlots = [];
+      for (let hour = 9; hour < 18; hour++) {
+        for (let minute = 0; minute < 60; minute += 45) {
+          const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+          if (!bookedTimes.has(timeStr)) {
+            availableSlots.push(timeStr);
+          }
+        }
+      }
+    }
+
+    if (availableSlots.length === 0) {
+      return {
+        result: `Unfortunately, ${date} is fully booked. Would you like to check another date?`
+      };
+    }
+
+    // Format slots for natural speech
+    const formattedSlots = availableSlots.slice(0, 5).map(slot => {
+      const [hour, minute] = slot.split(':');
+      const hourNum = parseInt(hour);
+      const ampm = hourNum >= 12 ? 'PM' : 'AM';
+      const displayHour = hourNum > 12 ? hourNum - 12 : (hourNum === 0 ? 12 : hourNum);
+      return `${displayHour}:${minute} ${ampm}`;
+    });
+
+    const slotsMessage = formattedSlots.length === availableSlots.length
+      ? formattedSlots.join(', ')
+      : `${formattedSlots.join(', ')}, and ${availableSlots.length - formattedSlots.length} more times`;
+
+    return {
+      result: `For ${date}, I have availability at: ${slotsMessage}. Which time works best for you?`
+    };
+  } catch (error: any) {
+    logger.error('webhooks', 'Error in handleCheckAvailability', {
+      error: error?.message,
+      stack: error?.stack
+    });
+    return { error: 'Sorry, I encountered an error checking availability. Please try again.' };
+  }
+}
+
+/**
+ * Handle notify_hot_lead function call from VAPI
+ * Triggered manually by AI when customer shows high buying intent
+ */
+async function handleNotifyHotLead(
+  orgId: string,
+  call: any,
+  parameters: any
+): Promise<{ result?: string; error?: string }> {
+  try {
+    const { leadName, leadPhone, serviceInterest, urgency, summary } = parameters;
+
+    logger.info('webhooks', 'Hot lead notification triggered', {
+      orgId,
+      callId: call.id,
+      leadName,
+      serviceInterest
+    });
+
+    // Get clinic manager alert phone from settings
+    const { data: settings, error: settingsError } = await supabase
+      .from('integration_settings')
+      .select('hot_lead_alert_phone')
+      .eq('org_id', orgId)
+      .maybeSingle();
+
+    if (settingsError || !settings?.hot_lead_alert_phone) {
+      logger.warn('webhooks', 'No hot lead alert phone configured', { orgId });
+      return {
+        result: 'I\'ve noted your interest and our team will follow up with you shortly.'
+      };
+    }
+
+    const alertPhone = settings.hot_lead_alert_phone;
+
+    // Check if we already sent alert for this call (prevent duplicates)
+    const { data: existingAlert, error: alertCheckError } = await supabase
+      .from('hot_lead_alerts')
+      .select('id')
+      .eq('call_id', call.id)
+      .eq('org_id', orgId)
+      .maybeSingle();
+
+    if (existingAlert) {
+      logger.info('webhooks', 'Hot lead alert already sent for this call', {
+        callId: call.id
+      });
+      return {
+        result: 'Thank you! Our team has been notified and will prioritize your request.'
+      };
+    }
+
+    // Send SMS alert
+    try {
+      const messageId = await sendHotLeadSMS(alertPhone, {
+        name: leadName,
+        phone: leadPhone,
+        service: serviceInterest,
+        summary: summary || 'High-value lead detected during call'
+      });
+
+      logger.info('webhooks', 'Hot lead SMS sent', {
+        messageId,
+        alertPhone,
+        leadName
+      });
+
+      // Record alert in database
+      await supabase
+        .from('hot_lead_alerts')
+        .insert({
+          org_id: orgId,
+          call_id: call.id,
+          lead_name: leadName,
+          lead_phone: leadPhone,
+          service_interest: serviceInterest,
+          urgency_level: urgency || 'high',
+          summary: summary || null,
+          sms_message_id: messageId,
+          alert_sent_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        });
+
+      // Create notification
+      await supabase
+        .from('notifications')
+        .insert({
+          org_id: orgId,
+          type: 'hot_lead',
+          title: `🔥 Hot Lead: ${leadName}`,
+          message: `${leadName} is interested in ${serviceInterest}. ${summary || 'Contact immediately!'}`,
+          metadata: {
+            lead_phone: leadPhone,
+            service_interest: serviceInterest,
+            call_id: call.id,
+            urgency
+          },
+          is_read: false,
+          created_at: new Date().toISOString()
+        });
+
+      return {
+        result: 'Perfect! I\'ve notified our team about your interest and someone will reach out to you very soon to discuss next steps.'
+      };
+    } catch (smsError: any) {
+      logger.error('webhooks', 'Failed to send hot lead SMS', {
+        error: smsError?.message
+      });
+      return {
+        result: 'Thank you for your interest! Our team will contact you soon to discuss your needs.'
+      };
+    }
+  } catch (error: any) {
+    logger.error('webhooks', 'Error in handleNotifyHotLead', {
+      error: error?.message,
+      stack: error?.stack
+    });
+    return {
+      result: 'Thank you! We\'ve noted your interest and will follow up with you shortly.'
+    };
   }
 }
 

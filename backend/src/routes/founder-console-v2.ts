@@ -1,6 +1,6 @@
 /**
- * Founder Console API Routes
- * Handles agent configuration, leads, and call management for the Voice AI Founder Console
+ * CallWaiting AI API Routes
+ * Handles agent configuration, leads, and call management for CallWaiting AI
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
@@ -329,7 +329,7 @@ router.get('/voices', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Protect all founder-console routes with authentication (Supabase JWT)
-// ALWAYS require auth - user must be signed in to access founder console
+// ALWAYS require auth - user must be signed in to access CallWaiting AI
 router.use(requireAuthOrDev);
 
 // Rate limiting - prevent abuse of expensive Vapi calls
@@ -795,7 +795,7 @@ router.get('/me', (req: Request, res: Response): void => {
 
 /**
  * GET /api/founder-console/agent/config
- * Returns the global agent configuration for the founder console
+ * Returns the global agent configuration for CallWaiting AI
  */
 router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1121,7 +1121,7 @@ async function syncAssistantPromptInBackground(
 
 /**
  * POST /api/founder-console/agent/config
- * Save agent configuration from founder console
+ * Save agent configuration for CallWaiting AI
  * Uses atomic RPC transaction for agents + integrations
  * Rate limited to 10 requests per minute
  */

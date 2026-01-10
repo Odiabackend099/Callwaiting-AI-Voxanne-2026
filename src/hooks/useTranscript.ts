@@ -69,9 +69,11 @@ export function useTranscript(trackingId: string | null) {
   useEffect(() => {
     if (!trackingId) return;
 
-    // Connect to WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+    // Connect to WebSocket on backend (port 3001)
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
+    const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;
     
     const ws = new WebSocket(wsUrl);
 

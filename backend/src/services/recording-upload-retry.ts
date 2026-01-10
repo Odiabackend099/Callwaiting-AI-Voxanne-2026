@@ -63,22 +63,57 @@ export async function logFailedUpload(params: {
 }
 
 /**
- * Get failed uploads ready for retry
+ * Get failed uploads ready for retry for a specific org
+ * CRITICAL SSOT FIX: Process per-org to maintain tenant isolation
  */
-async function getFailedUploadsForRetry(): Promise<FailedUpload[]> {
-  const { data: failedUploads, error } = await supabase
-    .from('failed_recording_uploads')
-    .select('id, call_id, vapi_recording_url, error_message, retry_count, next_retry_at, created_at')
-    .is('resolved_at', null)  // Not yet resolved
-    .lt('next_retry_at', new Date().toISOString())  // Ready for retry
-    .lt('retry_count', 3);  // Less than 3 retries
+async function getFailedUploadsForRetryForOrg(orgId: string): Promise<FailedUpload[]> {
+  try {
+    // Get call_ids for this org from call_logs
+    const { data: callLogs, error: callLogsError } = await supabase
+      .from('call_logs')
+      .select('id')
+      .eq('org_id', orgId);
 
-  if (error) {
-    logger.error('RecordingUploadRetry', `Failed to fetch failed uploads: ${error.message}`);
+    if (callLogsError) {
+      logger.error('RecordingUploadRetry', `Failed to fetch call logs for org ${orgId}: ${callLogsError.message}`);
+      return [];
+    }
+
+    if (!callLogs || callLogs.length === 0) {
+      return [];
+    }
+
+    const callIds = callLogs.map(cl => cl.id);
+
+    // Get failed uploads for these call_ids
+    const { data: failedUploads, error } = await supabase
+      .from('failed_recording_uploads')
+      .select('id, call_id, vapi_recording_url, error_message, retry_count, next_retry_at, created_at')
+      .in('call_id', callIds)
+      .is('resolved_at', null)  // Not yet resolved
+      .lt('next_retry_at', new Date().toISOString())  // Ready for retry
+      .lt('retry_count', 3);  // Less than 3 retries
+
+    if (error) {
+      logger.error('RecordingUploadRetry', `Failed to fetch failed uploads for org ${orgId}: ${error.message}`);
+      return [];
+    }
+
+    return failedUploads || [];
+  } catch (error: any) {
+    logger.error('RecordingUploadRetry', `Error fetching failed uploads for org ${orgId}: ${error.message}`);
     return [];
   }
+}
 
-  return failedUploads || [];
+/**
+ * Get failed uploads ready for retry (legacy function for backward compatibility)
+ * @deprecated Use getFailedUploadsForRetryForOrg instead
+ */
+async function getFailedUploadsForRetry(): Promise<FailedUpload[]> {
+  // This function is deprecated but kept for backward compatibility
+  // It will be called by runRecordingUploadRetryJob which now processes per-org
+  return [];
 }
 
 /**
@@ -169,22 +204,19 @@ async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
 }
 
 /**
- * Run retry job (should be called every 5 minutes)
+ * Process failed uploads for a specific org
+ * CRITICAL SSOT FIX: Process per-org to maintain tenant isolation
  */
-export async function runRecordingUploadRetryJob(): Promise<void> {
-  const startTime = Date.now();
-  logger.info('RecordingUploadRetry', 'Starting recording upload retry job');
-
+async function processFailedUploadsForOrg(orgId: string): Promise<{ successCount: number; failureCount: number }> {
   try {
-    // Get failed uploads ready for retry
-    const failedUploads = await getFailedUploadsForRetry();
-    logger.info('RecordingUploadRetry', `Found ${failedUploads.length} failed uploads ready for retry`);
-
+    const failedUploads = await getFailedUploadsForRetryForOrg(orgId);
+    
     if (failedUploads.length === 0) {
-      return;
+      return { successCount: 0, failureCount: 0 };
     }
 
-    // Process each failed upload
+    logger.info('RecordingUploadRetry', `Processing ${failedUploads.length} failed uploads for org ${orgId}`);
+
     let successCount = 0;
     let failureCount = 0;
 
@@ -197,12 +229,57 @@ export async function runRecordingUploadRetryJob(): Promise<void> {
       }
     }
 
+    logger.info('RecordingUploadRetry', `Org ${orgId} retry batch: ${successCount} succeeded, ${failureCount} failed`);
+    return { successCount, failureCount };
+  } catch (error: any) {
+    logger.error('RecordingUploadRetry', `Error processing failed uploads for org ${orgId}: ${error.message}`);
+    return { successCount: 0, failureCount: 0 };
+  }
+}
+
+/**
+ * Run retry job (should be called every 5 minutes)
+ * CRITICAL SSOT FIX: Process per-org in isolated batches for tenant isolation
+ */
+export async function runRecordingUploadRetryJob(): Promise<void> {
+  const startTime = Date.now();
+  logger.info('RecordingUploadRetry', 'Starting recording upload retry job');
+
+  try {
+    // Get all active organizations
+    const { data: orgs, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('status', 'active');
+
+    if (orgError) {
+      logger.error('RecordingUploadRetry', `Failed to fetch organizations: ${orgError.message}`);
+      return;
+    }
+
+    if (!orgs || orgs.length === 0) {
+      logger.debug('RecordingUploadRetry', 'No active organizations found');
+      return;
+    }
+
+    logger.info('RecordingUploadRetry', `Processing retry job for ${orgs.length} organizations`);
+
+    // Process each org separately (tenant isolation)
+    let totalSuccessCount = 0;
+    let totalFailureCount = 0;
+
+    for (const org of orgs) {
+      const { successCount, failureCount } = await processFailedUploadsForOrg(org.id);
+      totalSuccessCount += successCount;
+      totalFailureCount += failureCount;
+    }
+
     const duration = Date.now() - startTime;
-    logger.info('RecordingUploadRetry', `Job completed: ${successCount} succeeded, ${failureCount} failed in ${duration}ms`);
+    logger.info('RecordingUploadRetry', `Job completed: ${totalSuccessCount} succeeded, ${totalFailureCount} failed across ${orgs.length} orgs in ${duration}ms`);
 
     // Alert if too many failures
-    if (failureCount > 0) {
-      logger.warn('RecordingUploadRetry', `${failureCount} of ${failedUploads.length} retries failed`);
+    if (totalFailureCount > 0) {
+      logger.warn('RecordingUploadRetry', `${totalFailureCount} retries failed across all orgs`);
     }
   } catch (error: any) {
     logger.error('RecordingUploadRetry', `Recording upload retry job failed: ${error.message}`);

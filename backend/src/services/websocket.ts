@@ -1,5 +1,5 @@
 /**
- * WebSocket Service for Voice AI Founder Console
+ * WebSocket Service for CallWaiting AI
  * Handles real-time call monitoring and transcript streaming
  */
 
@@ -113,6 +113,28 @@ export function initWebSocket(wssInstance: WebSocketServer): WebSocketServer {
           }
 
           if (token) {
+            // Validate JWT format BEFORE calling Supabase
+            const jwtParts = token.split('.');
+            if (jwtParts.length !== 3) {
+              logger.warn('WebSocket auth failed: Invalid JWT format');
+              ws.close(1008, 'Unauthorized: Invalid token format');
+              return;
+            }
+
+            // CRITICAL: Check token expiry from decoded payload
+            try {
+              const payload = JSON.parse(Buffer.from(jwtParts[1], 'base64').toString());
+              if (payload.exp && payload.exp * 1000 < Date.now()) {
+                logger.warn('WebSocket auth failed: Token expired', { exp: payload.exp });
+                ws.close(1008, 'Unauthorized: Token expired');
+                return;
+              }
+            } catch (decodeErr) {
+              logger.warn('WebSocket auth failed: Could not decode JWT payload', { error: (decodeErr as any)?.message });
+              ws.close(1008, 'Unauthorized: Invalid token');
+              return;
+            }
+
             // Authenticate with timeout to prevent race conditions
             const authTimeout = setTimeout(() => {
               logger.warn('WebSocket auth timeout');

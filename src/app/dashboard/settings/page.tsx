@@ -45,6 +45,10 @@ export default function SettingsPage() {
   const [selectedAssistantId, setSelectedAssistantId] = useState('');
   const [showAssistantDropdown, setShowAssistantDropdown] = useState(false);
 
+  // Hot Lead SMS Alert state
+  const [hotLeadAlertPhone, setHotLeadAlertPhone] = useState('');
+  const [testingSMS, setTestingSMS] = useState(false);
+
   // Load current settings
   useEffect(() => {
     const loadSettings = async () => {
@@ -59,6 +63,9 @@ export default function SettingsPage() {
         }
         if (data.vapiAssistantId) {
           setSelectedAssistantId(data.vapiAssistantId);
+        }
+        if (data.hotLeadAlertPhone) {
+          setHotLeadAlertPhone(data.hotLeadAlertPhone);
         }
       } catch (err: any) {
         setError(`Failed to load settings: ${err?.message}`);
@@ -152,6 +159,41 @@ export default function SettingsPage() {
       setError(`Configuration failed: ${err?.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Handle test hot lead SMS
+  const handleTestHotLeadSMS = async () => {
+    try {
+      setTestingSMS(true);
+      setError(null);
+      setSuccess(null);
+
+      if (!hotLeadAlertPhone.trim()) {
+        setError('Please enter an alert phone number first');
+        setTestingSMS(false);
+        return;
+      }
+
+      // Validate E.164 format
+      if (!/^\+[1-9]\d{1,14}$/.test(hotLeadAlertPhone.trim())) {
+        setError('Invalid phone format. Use E.164 format (e.g., +12345678900)');
+        setTestingSMS(false);
+        return;
+      }
+
+      const response = await authedBackendFetch<any>('/api/founder-console/settings/test-hot-lead-sms', {
+        method: 'POST',
+        body: JSON.stringify({ alertPhone: hotLeadAlertPhone.trim() }),
+        timeoutMs: 15000,
+        retries: 1,
+      });
+
+      setSuccess('✅ Test SMS sent! Check your phone for the message.');
+    } catch (err: any) {
+      setError(`Failed to send test SMS: ${err?.message}`);
+    } finally {
+      setTestingSMS(false);
     }
   };
 
@@ -327,6 +369,66 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Hot Lead SMS Alerts Configuration */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="text-2xl">🔥</div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Hot Lead SMS Alerts</h2>
+                    <p className="text-sm text-gray-600">Receive instant SMS notifications for high-value leads</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="alertPhone" className="block text-sm font-medium text-gray-700 mb-2">
+                      Alert Phone Number
+                      <span className="text-xs text-gray-500 ml-2">(E.164 format: +1234567890)</span>
+                    </label>
+                    <input
+                      id="alertPhone"
+                      type="tel"
+                      placeholder="+12025551234"
+                      value={hotLeadAlertPhone}
+                      onChange={(e) => setHotLeadAlertPhone(e.target.value)}
+                      disabled={testingSMS}
+                      className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      This phone number will receive SMS alerts when:
+                    </p>
+                    <ul className="text-xs text-gray-500 mt-1 ml-4 space-y-0.5">
+                      <li>✓ AI calls the notify_hot_lead function during a call</li>
+                      <li>✓ Call ends with lead score 70+ (automatic detection)</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={handleTestHotLeadSMS}
+                    disabled={testingSMS || !hotLeadAlertPhone.trim()}
+                    className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+                  >
+                    {testingSMS ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending Test SMS...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Send Test SMS
+                      </>
+                    )}
+                  </button>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                    <p className="text-xs text-blue-900">
+                      <strong>How It Works:</strong> Every inbound call is scored for lead quality. High-value leads (score 70+) trigger instant SMS alerts so your team can follow up immediately. Higher conversion rates = More revenue.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               {/* How It Works */}
               <div className="bg-white rounded-lg shadow p-6">

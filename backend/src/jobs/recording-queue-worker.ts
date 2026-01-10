@@ -198,34 +198,36 @@ async function processQueueItem(item: QueueItem): Promise<boolean> {
 }
 
 /**
- * Process pending queue items
+ * Process pending queue items for a specific org
+ * CRITICAL SSOT FIX: Process per-org to maintain tenant isolation
  */
-export async function processRecordingQueue(): Promise<void> {
+async function processQueueForOrg(orgId: string): Promise<{ successCount: number; failureCount: number }> {
   try {
-    logger.info('Starting queue processing');
-
-    // Get pending items, prioritized by: priority, then created_at
+    // Get pending items for this org, prioritized by: priority, then created_at
     const { data: queueItems, error: fetchError } = await supabase
       .from('recording_upload_queue')
       .select('*')
+      .eq('org_id', orgId)  // CRITICAL: Filter by org_id for tenant isolation
       .eq('status', 'pending')
       .order('priority', { ascending: false }) // high first
       .order('created_at', { ascending: true }) // oldest first
       .limit(BATCH_SIZE);
 
     if (fetchError) {
-      logger.error('Failed to fetch queue items', {
+      logger.error('Failed to fetch queue items for org', {
+        orgId,
         error: fetchError.message
       });
-      return;
+      return { successCount: 0, failureCount: 0 };
     }
 
     if (!queueItems || queueItems.length === 0) {
-      logger.debug('No pending items in queue');
-      return;
+      logger.debug('No pending items in queue for org', { orgId });
+      return { successCount: 0, failureCount: 0 };
     }
 
-    logger.info('Found pending items', {
+    logger.info('Found pending items for org', {
+      orgId,
       count: queueItems.length
     });
 
@@ -245,10 +247,67 @@ export async function processRecordingQueue(): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    logger.info('Queue processing batch completed', {
+    logger.info('Queue processing batch completed for org', {
+      orgId,
       totalProcessed: queueItems.length,
       successCount,
       failureCount
+    });
+
+    return { successCount, failureCount };
+  } catch (error: any) {
+    logger.error('Error during queue processing for org', {
+      orgId,
+      error: error?.message
+    });
+    return { successCount: 0, failureCount: 0 };
+  }
+}
+
+/**
+ * Process pending queue items
+ * CRITICAL SSOT FIX: Process per-org in isolated batches for tenant isolation
+ */
+export async function processRecordingQueue(): Promise<void> {
+  try {
+    logger.info('Starting queue processing');
+
+    // Get all active organizations
+    const { data: orgs, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('status', 'active');  // Only process active orgs
+
+    if (orgError) {
+      logger.error('Failed to fetch organizations', {
+        error: orgError.message
+      });
+      return;
+    }
+
+    if (!orgs || orgs.length === 0) {
+      logger.debug('No active organizations found');
+      return;
+    }
+
+    logger.info('Processing queue for organizations', {
+      orgCount: orgs.length
+    });
+
+    // Process each org separately (tenant isolation)
+    let totalSuccessCount = 0;
+    let totalFailureCount = 0;
+
+    for (const org of orgs) {
+      const { successCount, failureCount } = await processQueueForOrg(org.id);
+      totalSuccessCount += successCount;
+      totalFailureCount += failureCount;
+    }
+
+    logger.info('Queue processing completed', {
+      totalSuccessCount,
+      totalFailureCount,
+      orgCount: orgs.length
     });
   } catch (error: any) {
     logger.error('Error during queue processing', {
@@ -258,9 +317,10 @@ export async function processRecordingQueue(): Promise<void> {
 }
 
 /**
- * Clean up stale processing items (stuck in processing state)
+ * Clean up stale processing items (stuck in processing state) for a specific org
+ * CRITICAL SSOT FIX: Process per-org to maintain tenant isolation
  */
-async function cleanupStaleProcessing(): Promise<void> {
+async function cleanupStaleProcessingForOrg(orgId: string): Promise<void> {
   try {
     const lockTimeoutMinutes = Math.ceil(LOCK_TIMEOUT_MS / 1000 / 60);
     const cutoffTime = new Date(Date.now() - LOCK_TIMEOUT_MS).toISOString();
@@ -271,16 +331,56 @@ async function cleanupStaleProcessing(): Promise<void> {
         status: 'pending',
         error_message: `Reset from processing state after ${lockTimeoutMinutes} minute timeout`
       })
+      .eq('org_id', orgId)  // CRITICAL FIX: Filter by org_id for tenant isolation
       .eq('status', 'processing')
       .lt('processing_started_at', cutoffTime);
 
     if (error) {
-      logger.warn('Failed to cleanup stale items', {
+      logger.warn('Failed to cleanup stale items for org', {
+        orgId,
         error: error.message
       });
     } else {
-      logger.info('Cleaned up stale processing items');
+      logger.debug('Cleaned up stale processing items for org', { orgId });
     }
+  } catch (error: any) {
+    logger.error('Error during stale cleanup for org', {
+      orgId,
+      error: error?.message
+    });
+  }
+}
+
+/**
+ * Clean up stale processing items across all orgs
+ * CRITICAL SSOT FIX: Process per-org in isolated batches for tenant isolation
+ */
+async function cleanupStaleProcessing(): Promise<void> {
+  try {
+    // Get all active organizations
+    const { data: orgs, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('status', 'active');  // Only process active orgs
+
+    if (orgError) {
+      logger.error('Failed to fetch organizations for stale cleanup', {
+        error: orgError.message
+      });
+      return;
+    }
+
+    if (!orgs || orgs.length === 0) {
+      logger.debug('No active organizations found for stale cleanup');
+      return;
+    }
+
+    // Process each org separately (tenant isolation)
+    for (const org of orgs) {
+      await cleanupStaleProcessingForOrg(org.id);
+    }
+
+    logger.info('Stale cleanup completed for all orgs', { orgCount: orgs.length });
   } catch (error: any) {
     logger.error('Error during stale cleanup', {
       error: error?.message

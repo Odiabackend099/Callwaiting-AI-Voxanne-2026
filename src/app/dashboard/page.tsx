@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Phone, TrendingUp, ArrowUpRight, ArrowDownRight, Clock, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
+import HotLeadDashboard from '@/components/dashboard/HotLeadDashboard';
 
 // Removed local LeftSidebar definition
 
@@ -22,12 +23,17 @@ interface DashboardStats {
 
 interface RecentCall {
     id: string;
-    vapi_call_id: string;
-    to_number: string;
-    started_at: string;
+    phone_number?: string;
+    caller_name?: string;
+    call_date?: string;
     duration_seconds: number | null;
     status: string;
-    metadata: {
+    call_type?: string;
+    // Legacy fields for backwards compatibility
+    vapi_call_id?: string;
+    to_number?: string;
+    started_at?: string;
+    metadata?: {
         channel?: 'inbound' | 'outbound';
     } | null;
 }
@@ -61,43 +67,33 @@ export default function CallWaitingAIDashboard() {
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
-            // Fetch all calls for stats
-            const { data: allCalls, error: callsError } = await supabase
-                .from('call_logs')
-                .select('*')
-                .order('started_at', { ascending: false });
+            // Fetch dashboard stats from backend API (replaces direct Supabase query)
+            const data = await authedBackendFetch<{
+                totalCalls: number;
+                inboundCalls: number;
+                outboundCalls: number;
+                completedCalls: number;
+                callsToday: number;
+                avgDuration: number;
+                recentCalls: RecentCall[];
+            }>('/api/calls-dashboard/stats');
 
-            if (callsError) {
-                console.error('Error fetching calls:', callsError);
-                return;
-            }
-
-            // Calculate stats
-            const calls = allCalls || [];
-            const today = new Date().toISOString().split('T')[0];
-            const callsToday = calls.filter(c => c.started_at?.startsWith(today));
-
-            const inbound = calls.filter(c => c.metadata?.channel === 'inbound');
-            const outbound = calls.filter(c => c.metadata?.channel === 'outbound' || !c.metadata?.channel);
-            const completed = calls.filter(c => c.status === 'completed');
-
-            const totalDuration = completed.reduce((sum, c) => sum + (c.duration_seconds || 0), 0);
-            const avgDuration = completed.length > 0 ? Math.round(totalDuration / completed.length) : 0;
-
+            // Set stats from backend response
             setStats({
-                totalCalls: calls.length,
-                inboundCalls: inbound.length,
-                outboundCalls: outbound.length,
-                completedCalls: completed.length,
-                callsToday: callsToday.length,
-                avgDuration
+                totalCalls: data.totalCalls,
+                inboundCalls: data.inboundCalls,
+                outboundCalls: data.outboundCalls,
+                completedCalls: data.completedCalls,
+                callsToday: data.callsToday,
+                avgDuration: data.avgDuration
             });
 
-            // Set recent calls (last 5)
-            setRecentCalls(calls.slice(0, 5));
+            // Set recent calls from backend response
+            setRecentCalls(data.recentCalls || []);
 
-        } catch (error) {
-            console.error('Error:', error);
+        } catch (error: any) {
+            console.error('Error fetching dashboard data:', error);
+            setError(error?.message || 'Failed to load dashboard data');
         } finally {
             setIsLoading(false);
         }
@@ -164,6 +160,9 @@ export default function CallWaitingAIDashboard() {
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
                         <p className="text-gray-700">Welcome back! Here&apos;s your system overview.</p>
                     </div>
+
+                    {/* Hot Lead Dashboard - Visible immediately on login */}
+                    <HotLeadDashboard />
 
                     {/* Key Metrics Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
@@ -289,10 +288,10 @@ export default function CallWaitingAIDashboard() {
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-gray-900">{call.to_number || 'Unknown'}</h4>
+                                                    <h4 className="font-bold text-gray-900">{call.to_number || call.phone_number || 'Unknown'}</h4>
                                                     <div className="flex items-center gap-2 text-xs text-gray-600 font-medium">
                                                         <Clock className="w-3 h-3" />
-                                                        {formatTimeAgo(call.started_at)} • {formatDuration(call.duration_seconds)}
+                                                        {formatTimeAgo(call.started_at || call.call_date || '')} • {formatDuration(call.duration_seconds)}
                                                     </div>
                                                 </div>
                                             </div>

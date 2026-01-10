@@ -1,36 +1,177 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CallWaiting AI - Voxanne
 
-## Getting Started
+**AI Voice Receptionist Platform for Medical Clinics**
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 20+
+- npm or yarn
+- Supabase account
+- Vapi API key
+- Twilio account
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Callwaiting-AI-Voxanne-2026
+   ```
+
+2. **Install dependencies**
+   ```bash
+   # Frontend
+   npm install
+   
+   # Backend
+   cd backend
+   npm install
+   ```
+
+3. **Set up environment variables**
+   - Frontend: Create `.env.local` in root (see `.env.local.example`)
+   - Backend: Create `.env` in `backend/` directory (see `backend/.env.example`)
+
+4. **Start development servers**
+   ```bash
+   # From root directory
+   ./scripts/shared/start-all-servers.sh
+   ```
+   
+   Or manually:
+   ```bash
+   # Terminal 1: Frontend (port 3000)
+   npm run dev
+   
+   # Terminal 2: Backend (port 3001)
+   cd backend && npm run dev
+   
+   # Terminal 3: Ngrok (for Vapi webhooks)
+   ngrok http 3001
+   ```
+
+---
+
+## 📁 Repository Structure
+
+```
+callwaiting-ai/
+├── backend/               # Backend source (single source of truth)
+│   ├── src/              # Source code
+│   ├── docs/             # Backend-specific documentation
+│   ├── config/           # Backend configuration files
+│   ├── scripts/          # Backend scripts
+│   └── migrations/       # Database migrations
+│
+├── src/                  # Frontend source (Next.js - single source of truth)
+│   ├── app/             # Next.js app router pages
+│   ├── components/      # React components
+│   ├── lib/             # Frontend utilities
+│   ├── hooks/           # React hooks
+│   └── contexts/        # React contexts
+│
+├── docs/                 # Project-wide documentation
+│   ├── architecture/    # Architecture decisions
+│   ├── deployment/      # Deployment guides
+│   ├── development/     # Development documentation
+│   ├── features/        # Feature documentation
+│   └── api/             # API documentation
+│
+├── infrastructure/       # Infrastructure configuration
+│   ├── render.yaml      # Render deployment config
+│   ├── vercel.json      # Vercel deployment config
+│   └── netlify.toml     # Netlify deployment config
+│
+├── scripts/              # Shared scripts
+│   └── shared/          # Shared utility scripts
+│
+└── public/               # Static assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📚 Documentation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **[Main Documentation Hub](./docs/README.md)** - Comprehensive documentation index
+- **[Architecture](./docs/architecture/)** - System design and architecture
+- **[Deployment Guide](./docs/deployment/)** - Deployment instructions
+- **[Development Guide](./docs/development/)** - Developer setup and guidelines
+- **[Features](./docs/features/)** - Feature documentation
+- **[API Documentation](./docs/api/)** - API endpoints and integration
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Technology Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Frontend
+- Next.js 14 (App Router)
+- React 18
+- TypeScript
+- TailwindCSS
+- Framer Motion
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Backend
+- Node.js 20
+- Express.js
+- TypeScript
+- Supabase (PostgreSQL)
+- WebSocket (ws)
 
-## Deploy on Vercel
+### Integrations
+- Vapi (AI Voice Agent)
+- Twilio (Telephony)
+- Supabase (Database, Auth, Storage)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🔧 Development
+
+### Backend Development
+```bash
+cd backend
+npm run dev          # Start development server
+npm run build        # Build for production
+npm test             # Run tests
+```
+
+### Frontend Development
+```bash
+npm run dev          # Start Next.js dev server
+npm run build        # Build for production
+npm run lint         # Run ESLint
+```
+
+---
+
+## 📝 Contributing
+
+1. Create a feature branch
+2. Make your changes
+3. Test thoroughly
+4. Submit a pull request
+
+---
+
+## 📄 License
+
+[Your License Here]
+
+---
+
+## 🆘 Support
+
+For issues and questions:
+- Check [Documentation](./docs/)
+- Open an issue on GitHub
+- Contact the development team
+
+---
+
+## 🔗 Links
+
+- **Website:** https://callwaitingai.dev
+- **Dashboard:** https://callwaitingai.dev/dashboard
+- **Documentation:** [./docs/README.md](./docs/README.md)

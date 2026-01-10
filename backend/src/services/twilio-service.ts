@@ -49,10 +49,19 @@ export async function sendSmsTwilio(
   }
 
   try {
+    // Add status callback for real delivery tracking
+    const statusCallbackUrl = process.env.BACKEND_URL 
+      ? `${process.env.BACKEND_URL}/api/webhooks/sms-status`
+      : undefined;
+
     const message = await client.messages.create({
       body: options.message,
       from: options.from || fromPhoneNumber,
-      to: options.to
+      to: options.to,
+      ...(statusCallbackUrl && {
+        statusCallback: statusCallbackUrl,
+        statusCallbackMethod: 'POST'
+      })
     });
 
     console.log(`[Twilio SMS] Message sent to ${options.to}`);

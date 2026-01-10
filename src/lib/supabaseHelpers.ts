@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { authedBackendFetch } from './authed-backend-fetch';
 
 // Helper to get current user
 export async function getCurrentUser() {
@@ -44,42 +45,45 @@ export async function saveUserSettings(userId: string, settings: {
 }
 
 // Helper to get knowledge base documents
+// Updated to use backend API instead of direct Supabase query
 export async function getKnowledgeBase(userId: string) {
-    const { data, error } = await supabase
-        .from('knowledge_base')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
+    try {
+        const data = await authedBackendFetch<{ items: any[] }>('/api/knowledge-base');
+        return data.items || [];
+    } catch (error: any) {
+        throw error;
+    }
 }
 
 // Helper to save knowledge base document
+// Updated to use backend API instead of direct Supabase query
 export async function saveKnowledgeBase(userId: string, content: string, filename: string = 'knowledge.txt') {
-    const { data, error } = await supabase
-        .from('knowledge_base')
-        .insert({
-            user_id: userId,
-            filename,
-            content,
-            file_type: 'txt',
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
-    return data;
+    try {
+        const data = await authedBackendFetch<any>('/api/knowledge-base', {
+            method: 'POST',
+            body: JSON.stringify({
+                filename,
+                content,
+                category: 'general',
+                active: true
+            })
+        });
+        return data;
+    } catch (error: any) {
+        throw error;
+    }
 }
 
 // Helper to delete knowledge base document
+// Updated to use backend API instead of direct Supabase query
 export async function deleteKnowledgeBase(id: string) {
-    const { error } = await supabase
-        .from('knowledge_base')
-        .delete()
-        .eq('id', id);
-
-    if (error) throw error;
+    try {
+        await authedBackendFetch(`/api/knowledge-base/${id}`, {
+            method: 'DELETE'
+        });
+    } catch (error: any) {
+        throw error;
+    }
 }
 
 // Helper to get voice sessions

@@ -4,7 +4,7 @@
   "description": "Voxanne AI backend for Vapi integration",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "ts-node --transpile-only --skip-project src/server.ts",
+    "dev": "tsx src/server.ts",
     "build": "tsc --skipLibCheck true --noEmit false",
     "start": "node dist/server.js",
     "test": "jest",
@@ -66,6 +66,7 @@
     "jest": "^30.2.0",
     "nodemon": "^3.0.1",
     "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "tsx": "^4.21.0"
   }
 }

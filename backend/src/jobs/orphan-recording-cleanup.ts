@@ -20,20 +20,22 @@ interface OrphanedRecording {
 }
 
 /**
- * Detect orphaned recordings (older than 7 days)
+ * Detect orphaned recordings (older than 7 days) for a specific org
+ * CRITICAL SSOT FIX: Process per-org to maintain tenant isolation
  */
-async function detectOrphanedRecordings(): Promise<OrphanedRecording[]> {
+async function detectOrphanedRecordingsForOrg(orgId: string): Promise<OrphanedRecording[]> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: orphans, error } = await supabase
     .from('call_logs')
-    .select('id, recording_storage_path, recording_uploaded_at, created_at')
+    .select('id, recording_storage_path, recording_uploaded_at, created_at, org_id')
+    .eq('org_id', orgId)  // CRITICAL: Filter by org_id for tenant isolation
     .not('recording_storage_path', 'is', null)  // Has storage path
     .is('recording_url', null)                    // But no signed URL
     .lt('recording_uploaded_at', sevenDaysAgo);   // Older than 7 days
 
   if (error) {
-    logger.error('OrphanCleanup', `Failed to detect orphaned recordings: ${error.message}`);
+    logger.error('OrphanCleanup', `Failed to detect orphaned recordings for org ${orgId}: ${error.message}`);
     return [];
   }
 
@@ -91,54 +93,89 @@ async function markOrphanDeleted(storagePath: string): Promise<void> {
 
 /**
  * Main cleanup job
+ * CRITICAL SSOT FIX: Process per-org in isolated batches for tenant isolation
  */
 export async function runOrphanCleanupJob(): Promise<void> {
   const startTime = Date.now();
   logger.info('OrphanCleanup', 'Starting orphan recording cleanup job');
 
   try {
-    // 1. Detect orphaned recordings
-    const orphans = await detectOrphanedRecordings();
-    logger.info('OrphanCleanup', `Detected ${orphans.length} orphaned recordings`);
+    // 1. Get all active organizations
+    const { data: orgs, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('status', 'active');  // Only process active orgs
 
-    if (orphans.length === 0) {
-        logger.info('OrphanCleanup', 'No orphaned recordings found');
+    if (orgError) {
+      logger.error('OrphanCleanup', `Failed to fetch organizations: ${orgError.message}`);
       return;
     }
 
-    // 2. Process each orphan
-    let deletedCount = 0;
-    let failedCount = 0;
+    if (!orgs || orgs.length === 0) {
+      logger.info('OrphanCleanup', 'No active organizations found');
+      return;
+    }
 
-    for (const orphan of orphans) {
+    logger.info('OrphanCleanup', `Processing ${orgs.length} organizations`);
+
+    // 2. Process each org separately (tenant isolation)
+    let totalDeletedCount = 0;
+    let totalFailedCount = 0;
+
+    for (const org of orgs) {
       try {
-        // Mark as detected
-        if (orphan.recording_storage_path) {
-          await markOrphanDetected(orphan.id, orphan.recording_storage_path);
+        // Detect orphaned recordings for this org
+        const orphans = await detectOrphanedRecordingsForOrg(org.id);
+        
+        if (orphans.length === 0) {
+          logger.debug('OrphanCleanup', `No orphaned recordings found for org ${org.id}`);
+          continue;
+        }
 
-          // Delete from storage
-          const deleted = await deleteOrphanedRecording(orphan.recording_storage_path);
+        logger.info('OrphanCleanup', `Detected ${orphans.length} orphaned recordings for org ${org.id}`);
 
-          if (deleted) {
-            // Mark as deleted in database
-            await markOrphanDeleted(orphan.recording_storage_path);
-            deletedCount++;
-          } else {
-            failedCount++;
+        // Process each orphan for this org
+        let orgDeletedCount = 0;
+        let orgFailedCount = 0;
+
+        for (const orphan of orphans) {
+          try {
+            // Mark as detected
+            if (orphan.recording_storage_path) {
+              await markOrphanDetected(orphan.id, orphan.recording_storage_path);
+
+              // Delete from storage
+              const deleted = await deleteOrphanedRecording(orphan.recording_storage_path);
+
+              if (deleted) {
+                // Mark as deleted in database
+                await markOrphanDeleted(orphan.recording_storage_path);
+                orgDeletedCount++;
+                totalDeletedCount++;
+              } else {
+                orgFailedCount++;
+                totalFailedCount++;
+              }
+            }
+          } catch (error: any) {
+            logger.error('OrphanCleanup', `Error processing orphan ${orphan.id} for org ${org.id}: ${error.message}`);
+            orgFailedCount++;
+            totalFailedCount++;
           }
         }
+
+        logger.info('OrphanCleanup', `Org ${org.id} cleanup: ${orgDeletedCount} deleted, ${orgFailedCount} failed`);
       } catch (error: any) {
-        logger.error('OrphanCleanup', `Error processing orphan ${orphan.id}: ${error.message}`);
-        failedCount++;
+        logger.error('OrphanCleanup', `Error processing org ${org.id}: ${error.message}`);
       }
     }
 
     const duration = Date.now() - startTime;
-    logger.info('OrphanCleanup', `Orphan cleanup completed: ${deletedCount} deleted, ${failedCount} failed in ${duration}ms`);
+    logger.info('OrphanCleanup', `Orphan cleanup completed: ${totalDeletedCount} deleted, ${totalFailedCount} failed across ${orgs.length} orgs in ${duration}ms`);
 
     // Alert if too many failures
-    if (failedCount > 0) {
-      logger.warn('OrphanCleanup', `${failedCount} orphaned recordings failed to delete`);
+    if (totalFailedCount > 0) {
+      logger.warn('OrphanCleanup', `${totalFailedCount} orphaned recordings failed to delete`);
     }
   } catch (error: any) {
     logger.error('OrphanCleanup', `Orphan cleanup job failed: ${error.message}`);

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2 } from 'lucide-react';
+import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2, Share2, UserPlus, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import { RecordingPlayer } from '@/components/RecordingPlayer';
@@ -52,6 +52,8 @@ const CallsPageContent = () => {
     const [error, setError] = useState<string | null>(null);
     const [analytics, setAnalytics] = useState<any>(null);
     const [filterDate, setFilterDate] = useState<string>(''); // 'today', 'week', 'month', or ''
+    const [showFollowupModal, setShowFollowupModal] = useState(false);
+    const [followupMessage, setFollowupMessage] = useState('');
     
     // Use transcript hook for live transcript display
     const { segments: liveTranscript, isConnected: wsConnected } = useTranscript(selectedCall?.id || null);
@@ -113,8 +115,11 @@ const CallsPageContent = () => {
 
     // Auto-refresh calls when new calls arrive via WebSocket
     useEffect(() => {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+        // Connect to WebSocket on backend (port 3001)
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
+        const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;
         
         const ws = new WebSocket(wsUrl);
 
@@ -165,6 +170,111 @@ const CallsPageContent = () => {
             setError(null);
         } catch (err: any) {
             setError(err?.message || 'Failed to delete call');
+        }
+    };
+
+    const handleDownloadRecording = async () => {
+        if (!selectedCall?.recording_url) {
+            alert('No recording available');
+            return;
+        }
+
+        try {
+            const link = document.createElement('a');
+            link.href = selectedCall.recording_url;
+            link.download = `call_${selectedCall.id}_${formatDateTime(selectedCall.call_date)}.mp3`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            alert('Failed to download recording');
+        }
+    };
+
+    const handleShareRecording = async () => {
+        if (!selectedCall) return;
+
+        try {
+            const response = await authedBackendFetch<any>(`/api/calls-dashboard/${selectedCall.id}/share`, {
+                method: 'POST'
+            });
+
+            const shareUrl = response.share_url;
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(shareUrl);
+                alert('Recording share link copied to clipboard');
+            } else {
+                alert(`Share URL: ${shareUrl}`);
+            }
+        } catch (err: any) {
+            alert(err?.message || 'Failed to generate share link');
+        }
+    };
+
+    const handleAddToCRM = async () => {
+        if (!selectedCall?.phone_number) {
+            alert('No phone number available');
+            return;
+        }
+
+        try {
+            const response = await authedBackendFetch<any>('/api/contacts', {
+                method: 'POST',
+                body: JSON.stringify({
+                    contact_name: selectedCall.caller_name || 'Unknown',
+                    phone_number: selectedCall.phone_number,
+                    source: 'call_recording',
+                    source_call_id: selectedCall.id
+                })
+            });
+
+            alert('Contact added to CRM successfully');
+            // Optionally redirect to contact profile
+            router.push(`/dashboard/leads?id=${response.id}`);
+        } catch (err: any) {
+            alert(err?.message || 'Failed to add contact to CRM');
+        }
+    };
+
+    const handleSendFollowup = async () => {
+        if (!selectedCall || !followupMessage.trim()) {
+            alert('Please enter a message');
+            return;
+        }
+
+        try {
+            await authedBackendFetch(`/api/calls-dashboard/${selectedCall.id}/followup`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    message: followupMessage,
+                    method: 'sms' // Default to SMS
+                })
+            });
+
+            alert('Follow-up sent successfully');
+            setShowFollowupModal(false);
+            setFollowupMessage('');
+        } catch (err: any) {
+            alert(err?.message || 'Failed to send follow-up');
+        }
+    };
+
+    const handleExportTranscript = async () => {
+        if (!selectedCall) return;
+
+        try {
+            const response = await authedBackendFetch<any>(`/api/calls-dashboard/${selectedCall.id}/transcript/export?format=pdf`, {
+                method: 'POST'
+            });
+
+            const link = document.createElement('a');
+            link.href = response.export_url;
+            link.download = `transcript_${selectedCall.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err: any) {
+            alert(err?.message || 'Failed to export transcript');
         }
     };
 
@@ -678,6 +788,59 @@ const CallsPageContent = () => {
                             )}
                         </div>
 
+                        {/* Action Buttons */}
+                        {selectedCall.has_recording && selectedCall.recording_status === 'completed' && (
+                            <div className="px-6 py-6 border-t border-gray-200 dark:border-slate-800">
+                                <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-4">Recording Actions</p>
+                                <div className="flex flex-wrap gap-3">
+                                    {/* Download Recording */}
+                                    <button
+                                        onClick={handleDownloadRecording}
+                                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-sm font-medium"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Download
+                                    </button>
+
+                                    {/* Share Recording */}
+                                    <button
+                                        onClick={handleShareRecording}
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-sm font-medium"
+                                    >
+                                        <Share2 className="w-4 h-4" />
+                                        Share
+                                    </button>
+
+                                    {/* Add to CRM */}
+                                    <button
+                                        onClick={handleAddToCRM}
+                                        className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors text-sm font-medium"
+                                    >
+                                        <UserPlus className="w-4 h-4" />
+                                        Add to CRM
+                                    </button>
+
+                                    {/* Send Follow-up */}
+                                    <button
+                                        onClick={() => setShowFollowupModal(true)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors text-sm font-medium"
+                                    >
+                                        <Mail className="w-4 h-4" />
+                                        Follow-up
+                                    </button>
+
+                                    {/* Export Transcript */}
+                                    <button
+                                        onClick={handleExportTranscript}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Export
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Modal Footer */}
                         <div className="border-t border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-end gap-3">
                             <button
@@ -685,6 +848,73 @@ const CallsPageContent = () => {
                                 className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                             >
                                 Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Follow-up Modal */}
+            {showFollowupModal && selectedCall && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full shadow-xl dark:shadow-2xl">
+                        {/* Modal Header */}
+                        <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Send Follow-up</h2>
+                            <button
+                                onClick={() => {
+                                    setShowFollowupModal(false);
+                                    setFollowupMessage('');
+                                }}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                <X className="w-6 h-6 text-gray-600 dark:text-slate-400" />
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-2">Contact</p>
+                                <p className="text-gray-700 dark:text-slate-300">{selectedCall.caller_name}</p>
+                                <p className="text-sm text-gray-600 dark:text-slate-400">{selectedCall.phone_number}</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-900 dark:text-slate-50 mb-2">
+                                    Follow-up Message
+                                </label>
+                                <textarea
+                                    value={followupMessage}
+                                    onChange={(e) => setFollowupMessage(e.target.value)}
+                                    placeholder="Enter your follow-up message..."
+                                    rows={5}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                            </div>
+
+                            <p className="text-xs text-gray-600 dark:text-slate-400">
+                                The follow-up will be sent via SMS to {selectedCall.phone_number}
+                            </p>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="border-t border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowFollowupModal(false);
+                                    setFollowupMessage('');
+                                }}
+                                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSendFollowup}
+                                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
+                            >
+                                <Mail className="w-4 h-4" />
+                                Send Follow-up
                             </button>
                         </div>
                     </div>

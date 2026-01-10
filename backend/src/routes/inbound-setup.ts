@@ -365,6 +365,11 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
     const orgId = req.user?.orgId;
 
     if (!orgId) {
+      console.error('[InboundSetup][status] Missing orgId', { 
+        user: req.user,
+        hasAuthHeader: !!req.headers.authorization,
+        nodeEnv: process.env.NODE_ENV
+      });
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -424,7 +429,14 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       lastAttemptedAt: cfg.last_attempted_at || null
     });
   } catch (error: any) {
-    console.error('[InboundSetup][status] error', error);
+    console.error('[InboundSetup][status] Unexpected error', {
+      error: error.message,
+      stack: error.stack,
+      orgId: req.user?.orgId,
+      user: req.user,
+      hasAuthHeader: !!req.headers.authorization,
+      nodeEnv: process.env.NODE_ENV
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

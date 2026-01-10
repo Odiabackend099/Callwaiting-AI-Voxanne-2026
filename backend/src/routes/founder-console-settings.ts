@@ -1,10 +1,10 @@
 /**
- * Founder Console Settings Routes
+ * CallWaiting AI Settings Routes
  * 
  * Manages Vapi/Twilio integration credentials and configuration.
  * Keys are stored encrypted in the database, never exposed to frontend.
  * 
- * Single-tenant founder console: you are the only user.
+ * Single-tenant organization: you are the only user.
  */
 
 import express, { Request, Response } from 'express';
@@ -12,11 +12,12 @@ import { supabase } from '../services/supabase-client';
 import { configureVapiWebhook, verifyWebhookConfiguration } from '../services/vapi-webhook-configurator';
 import { log } from '../services/logger';
 import { VapiClient } from '../services/vapi-client';
+import { requireAuthOrDev } from '../middleware/auth';
 
 const router = express.Router();
 
-// Constants
-const ORG_ID = 'founder-console'; // Legacy single-tenant org id used by integration_settings
+// Apply auth middleware to all routes (dev mode allows unauthenticated access)
+router.use(requireAuthOrDev);
 
 interface IntegrationSettings {
   vapi_api_key?: string;
@@ -35,10 +36,13 @@ interface IntegrationSettings {
  */
 router.get('/settings', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Use orgId from authenticated user (set by requireAuthOrDev middleware)
+    const orgId = req.user?.orgId || 'founder-console'; // Fallback to legacy org_id for backward compatibility
+    
     const { data: settings, error } = await supabase
       .from('integration_settings')
       .select('vapi_api_key, twilio_account_sid, test_destination_number, last_verified_at')
-      .eq('org_id', ORG_ID)
+      .eq('org_id', orgId)
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
@@ -87,23 +91,10 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       test_destination_number
     } = req.body;
 
-    // Resolve the actual org UUID used by call/web-test flows.
-    // This keeps the "save in frontend" workflow functional for all call routes.
-    const { data: org, error: orgError } = await supabase
-      .from('organizations')
-      .select('id')
-      .limit(1)
-      .maybeSingle();
-
-    if (orgError && orgError.code !== 'PGRST116') {
-      console.error('[Settings] Error fetching organization', orgError);
-      res.status(500).json({ error: 'Internal server error' });
-      return;
-    }
-
-    const orgUuid = org?.id;
-    if (!orgUuid) {
-      res.status(500).json({ error: 'No organization found' });
+    // Use orgId from authenticated user (set by requireAuthOrDev middleware)
+    const orgId = req.user?.orgId;
+    if (!orgId) {
+      res.status(401).json({ error: 'No organization ID found. Please authenticate.' });
       return;
     }
 
@@ -127,7 +118,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
     const { data: existing } = await supabase
       .from('integration_settings')
       .select('id')
-      .eq('org_id', ORG_ID)
+      .eq('org_id', orgId)
       .maybeSingle();
 
     const updateData: any = {
@@ -149,14 +140,14 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       const result = await supabase
         .from('integration_settings')
         .update(updateData)
-        .eq('org_id', ORG_ID);
+        .eq('org_id', orgId);
       error = result.error;
     } else {
       // Create new settings
       const result = await supabase
         .from('integration_settings')
         .insert({
-          org_id: ORG_ID,
+          org_id: orgId,
           ...updateData
         });
       error = result.error;
@@ -175,7 +166,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
         .from('integrations')
         .select('config')
         .eq('provider', 'vapi')
-        .eq('org_id', orgUuid)
+        .eq('org_id', orgId)
         .maybeSingle();
 
       if (existingVapiIntegrationError) {
@@ -194,7 +185,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
         .from('integrations')
         .upsert(
           {
-            org_id: orgUuid,
+            org_id: orgId,
             provider: 'vapi',
             connected: true,
             last_checked_at: new Date().toISOString(),
@@ -206,7 +197,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       if (upsertError) {
         log.error('Settings', 'Failed to upsert Vapi integration from settings save', { error: upsertError.message });
       } else {
-        log.info('Settings', 'Vapi integration updated from settings save', { orgId: orgUuid });
+        log.info('Settings', 'Vapi integration updated from settings save', { orgId: orgId });
       }
     }
 
@@ -220,14 +211,14 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
           .from('agents')
           .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
           .eq('role', 'inbound')
-          .eq('org_id', orgUuid)
+          .eq('org_id', orgId)
           .maybeSingle();
 
         const { data: outboundAgent } = await supabase
           .from('agents')
           .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
           .eq('role', 'outbound')
-          .eq('org_id', orgUuid)
+          .eq('org_id', orgId)
           .maybeSingle();
 
         const hasVapiKey = typeof vapi_api_key === 'string' && vapi_api_key.trim().length > 0;
@@ -247,7 +238,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
               const status = e?.response?.status;
               if (status !== 404) {
                 log.error('Settings', 'Failed to validate assistant in Vapi (non-blocking)', {
-                  orgId: orgUuid,
+                  orgId: orgId,
                   role,
                   assistantId: existingId,
                   status,
@@ -277,7 +268,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
             const newId = created?.id ? String(created.id) : null;
             if (!newId) {
               log.error('Settings', 'Vapi createAssistant returned no id (non-blocking)', {
-                orgId: orgUuid,
+                orgId: orgId,
                 role
               });
               return null;
@@ -293,14 +284,14 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
 
             if (updateAgentError) {
               log.error('Settings', 'Failed to persist newly created assistant id (non-blocking)', {
-                orgId: orgUuid,
+                orgId: orgId,
                 role,
                 error: updateAgentError.message
               });
             }
 
             log.info('Settings', 'Created Vapi assistant for role', {
-              orgId: orgUuid,
+              orgId: orgId,
               role,
               assistantId: newId.slice(0, 20) + '...'
             });
@@ -308,7 +299,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
             return newId;
           } catch (e: any) {
             log.error('Settings', 'Failed to create assistant in Vapi (non-blocking)', {
-              orgId: orgUuid,
+              orgId: orgId,
               role,
               error: e?.message,
               status: e?.response?.status
@@ -356,7 +347,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
           .from('integrations')
           .select('config')
           .eq('provider', 'twilio_inbound')
-          .eq('org_id', orgUuid)
+          .eq('org_id', orgId)
           .maybeSingle();
 
         // Populate inbound_agent_config
@@ -364,7 +355,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
           await supabase
             .from('inbound_agent_config')
             .upsert({
-              org_id: orgUuid,
+              org_id: orgId,
               vapi_api_key: vapi_api_key || null,
               vapi_assistant_id: ensuredInboundAssistantId || inboundAgent.vapi_assistant_id,
               twilio_account_sid: twilioInbound?.config?.accountSid || twilio_account_sid || null,
@@ -381,7 +372,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
             }, { onConflict: 'org_id' });
 
           log.info('Settings', 'Populated inbound_agent_config', {
-            orgId: orgUuid,
+            orgId: orgId,
             assistantId: (ensuredInboundAssistantId || inboundAgent.vapi_assistant_id || '').slice(0, 20) + '...'
           });
         }
@@ -392,7 +383,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
           const { data: existingOutboundConfig } = await supabase
             .from('outbound_agent_config')
             .select('id, system_prompt, first_message, voice_id, language, max_call_duration')
-            .eq('org_id', orgUuid)
+            .eq('org_id', orgId)
             .maybeSingle();
 
           // Only use agents table values if config doesn't exist yet
@@ -405,7 +396,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
           await supabase
             .from('outbound_agent_config')
             .upsert({
-              org_id: orgUuid,
+              org_id: orgId,
               vapi_api_key: vapi_api_key || null,
               vapi_assistant_id: ensuredOutboundAssistantId || outboundAgent.vapi_assistant_id,
               twilio_account_sid: twilio_account_sid || null,
@@ -422,7 +413,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
             }, { onConflict: 'org_id' });
 
           log.info('Settings', 'Populated outbound_agent_config', {
-            orgId: orgUuid,
+            orgId: orgId,
             assistantId: (ensuredOutboundAssistantId || outboundAgent.vapi_assistant_id || '').slice(0, 20) + '...',
             preservedExistingConfig: Boolean(existingOutboundConfig)
           });
@@ -454,7 +445,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
             }
           } catch (e: any) {
             log.error('Settings', 'Failed to import/find Vapi phone number (non-blocking)', {
-              orgId: orgUuid,
+              orgId: orgId,
               error: e?.message
             });
           }
@@ -465,7 +456,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
                 .from('integrations')
                 .select('config')
                 .eq('provider', 'vapi')
-                .eq('org_id', orgUuid)
+                .eq('org_id', orgId)
                 .maybeSingle();
 
               const now = new Date().toISOString();
@@ -479,7 +470,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
                 .from('integrations')
                 .upsert(
                   {
-                    org_id: orgUuid,
+                    org_id: orgId,
                     provider: 'vapi',
                     connected: true,
                     last_checked_at: now,
@@ -491,13 +482,13 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
 
               if (upsertPhoneIdError) {
                 log.error('Settings', 'Failed to persist vapi_phone_number_id (non-blocking)', {
-                  orgId: orgUuid,
+                  orgId: orgId,
                   error: upsertPhoneIdError.message
                 });
               }
             } catch (e: any) {
               log.error('Settings', 'Failed to upsert vapi_phone_number_id (non-blocking)', {
-                orgId: orgUuid,
+                orgId: orgId,
                 error: e?.message
               });
             }
@@ -507,13 +498,13 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
                 assistantId: inboundAssistantId
               });
               log.info('Settings', 'Linked Vapi phone number to inbound assistant', {
-                orgId: orgUuid,
+                orgId: orgId,
                 phoneNumberId: vapiPhoneNumberId,
                 assistantId: inboundAssistantId.slice(0, 20) + '...'
               });
             } catch (e: any) {
               log.error('Settings', 'Failed to link Vapi phone number to inbound assistant (non-blocking)', {
-                orgId: orgUuid,
+                orgId: orgId,
                 error: e?.message
               });
             }
@@ -523,7 +514,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
         // Log but don't fail the request - config tables are secondary
         log.error('Settings', 'Failed to populate agent config tables (non-blocking)', {
           error: configError.message,
-          orgId: orgUuid
+          orgId: orgId
         });
       }
     }
@@ -538,7 +529,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
     // After saving API keys, sync inbound and outbound agents from dashboard configs
     // This ensures agents table is always in sync with dashboard configuration
     try {
-      log.info('Settings', 'Triggering agent sync from dashboard', { orgId: orgUuid });
+      log.info('Settings', 'Triggering agent sync from dashboard', { orgId: orgId });
       
       // Call the agent sync endpoint internally
       const syncResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:3001'}/api/founder-console/sync-agents`, {
@@ -551,19 +542,19 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       if (syncResponse.ok) {
         const syncResult: any = await syncResponse.json();
         log.info('Settings', 'Agent sync completed successfully', {
-          orgId: orgUuid,
+          orgId: orgId,
           inboundAgentId: syncResult?.inboundAgentId,
           outboundAgentId: syncResult?.outboundAgentId
         });
       } else {
         log.warn('Settings', 'Agent sync returned non-200 status (non-blocking)', {
-          orgId: orgUuid,
+          orgId: orgId,
           status: syncResponse.status
         });
       }
     } catch (syncError: any) {
       log.warn('Settings', 'Failed to trigger agent sync (non-blocking)', {
-        orgId: orgUuid,
+        orgId: orgId,
         error: syncError?.message
       });
       // Don't fail the request - agent sync is secondary to settings save
@@ -600,13 +591,14 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
 /**
  * Internal helper: Get integration settings for backend use
  * This is NOT exposed via HTTP; used by other backend routes
+ * @param orgId Optional org ID (defaults to 'founder-console' for backward compatibility)
  */
-export async function getIntegrationSettings(): Promise<IntegrationSettings | null> {
+export async function getIntegrationSettings(orgId: string = 'founder-console'): Promise<IntegrationSettings | null> {
   try {
     const { data, error } = await supabase
       .from('integration_settings')
       .select('vapi_api_key, vapi_webhook_secret, twilio_account_sid, twilio_auth_token, twilio_from_number, test_destination_number')
-      .eq('org_id', ORG_ID)
+      .eq('org_id', orgId)
       .maybeSingle();
 
     if (error) {
@@ -620,5 +612,58 @@ export async function getIntegrationSettings(): Promise<IntegrationSettings | nu
     return null;
   }
 }
+
+/**
+ * POST /api/founder-console/settings/test-hot-lead-sms
+ * Send test SMS to verify hot lead alert configuration
+ */
+router.post('/settings/test-hot-lead-sms', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.user?.orgId || 'founder-console';
+    const { alertPhone } = req.body;
+
+    if (!alertPhone) {
+      res.status(400).json({ error: 'Alert phone number required' });
+      return;
+    }
+
+    // Validate E.164 format
+    if (!/^\+[1-9]\d{1,14}$/.test(alertPhone)) {
+      res.status(400).json({ error: 'Invalid phone format. Use E.164 (e.g., +12345678900)' });
+      return;
+    }
+
+    // Import sendHotLeadSMS
+    const { sendHotLeadSMS } = await import('../services/sms-notifications');
+
+    // Send test SMS
+    const messageId = await sendHotLeadSMS(alertPhone, {
+      name: 'Test Customer',
+      phone: '+12345678900',
+      service: 'Botox Consultation',
+      summary: 'This is a test alert. Your hot lead SMS notifications are configured correctly!'
+    });
+
+    log('Settings', 'Test hot lead SMS sent', {
+      orgId,
+      alertPhone,
+      messageId
+    });
+
+    res.json({
+      success: true,
+      messageId,
+      message: 'Test SMS sent successfully'
+    });
+  } catch (error: any) {
+    log('Settings', 'Failed to send test hot lead SMS', {
+      error: error?.message
+    });
+    res.status(500).json({
+      error: 'Failed to send test SMS',
+      message: error?.message || 'Unknown error'
+    });
+  }
+});
 
 export default router;

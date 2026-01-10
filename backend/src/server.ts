@@ -1,5 +1,10 @@
 // Load environment variables FIRST before any other imports
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+// Use process.cwd() which is reliable with tsx
+// @ts-ignore
+const path = require('path');
+const envPath = path.join(process.cwd(), '.env');
+// @ts-ignore
+require('dotenv').config({ path: envPath });
 
 // CRITICAL: Initialize Sentry BEFORE other imports if in production
 import * as Sentry from '@sentry/node';
@@ -24,6 +29,8 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit'; // Add express-rate-limit import
 import { createServer } from 'http';
 import { webhooksRouter } from './routes/webhooks';
+import smsStatusWebhookRouter from './routes/sms-status-webhook';
+import googleOAuthRouter from './routes/google-oauth';
 import { callsRouter } from './routes/calls';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
@@ -44,6 +51,7 @@ import { vapiSetupRouter } from './routes/vapi-setup';
 import vapiDiscoveryRouter from './routes/vapi-discovery';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
 import agentSyncRouter from './routes/agent-sync';
+import dashboardLeadsRouter from './routes/dashboard-leads';
 import { bookDemoRouter } from './routes/book-demo';
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
@@ -152,6 +160,7 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
 
 // Routes
 app.use('/api/webhooks', webhooksRouter);
+app.use('/api/webhooks', smsStatusWebhookRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/calls-dashboard', callsDashboardRouter);
 app.use('/api/assistants', assistantsRouter);
@@ -167,7 +176,12 @@ app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
 app.use('/api/founder-console', agentSyncRouter);
+app.use('/api/dashboard', dashboardLeadsRouter);
 app.use('/api/book-demo', bookDemoRouter);
+
+// Google Calendar OAuth routes
+app.use('/api/google-oauth', googleOAuthRouter);
+log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
 // app.use('/api/founder-console/workspace', workspaceRouter);
 
 // Health check endpoint - comprehensive dependency verification
@@ -301,7 +315,7 @@ initWebSocket(liveCallsWss);
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url || '';
   const origin = request.headers.origin || 'unknown';
-  
+
   console.log('[WebSocket] Upgrade request received', {
     pathname,
     origin,
@@ -325,7 +339,7 @@ server.on('upgrade', (request, socket, head) => {
   ].filter(Boolean);
 
   const isOriginAllowed = !origin || origin === 'unknown' || allowedOrigins.some(allowed => origin === allowed);
-  
+
   if (!isOriginAllowed) {
     console.error('[WebSocket] Origin not allowed', { origin, allowedOrigins });
     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
@@ -378,10 +392,15 @@ webTestWss.on('connection', (ws, req) => {
     const url = new URL(req.url || '', 'http://localhost');
     const trackingId = url.pathname.replace('/api/web-voice/', '').split('?')[0];
     const isDev = (process.env.NODE_ENV || 'development') === 'development';
-    const userIdParam = url.searchParams.get('userId') || '';
 
-    const attach = (effectiveUserId: string) => {
-      console.log('[WebVoice] WS connection attempt', { trackingId, userId: effectiveUserId, path: req.url });
+    // CRITICAL SSOT FIX: Removed userIdParam - no query param fallback allowed
+    const attach = (effectiveUserId: string, effectiveOrgId?: string) => {
+      console.log('[WebVoice] WS connection attempt', {
+        trackingId,
+        userId: effectiveUserId,
+        orgId: effectiveOrgId || 'unknown',
+        path: req.url
+      });
 
       const attached = attachClientWebSocket(trackingId, ws, effectiveUserId);
       if (!attached) {
@@ -399,14 +418,14 @@ webTestWss.on('connection', (ws, req) => {
         return;
       }
 
-      console.log('[WebVoice] ✅ Client attached to session', { trackingId });
+      console.log('[WebVoice] ✅ Client attached to session', { trackingId, userId: effectiveUserId, orgId: effectiveOrgId });
     };
 
-    // Require auth message in prod; allow dev fallback if no token (E2E/dev).
+    // CRITICAL SSOT FIX: Always require auth message (even in dev mode, use a dev JWT token)
     const authTimeout = setTimeout(() => {
       try {
-        if (!isDev) {
-          ws.close(1008, 'Unauthorized');
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(1008, 'Unauthorized: No auth message received');
         }
       } catch {
         // ignore
@@ -421,43 +440,58 @@ webTestWss.on('connection', (ws, req) => {
 
         const token = typeof msg.token === 'string' ? msg.token : '';
         if (!token) {
-          if (!isDev) {
-            ws.close(1008, 'Unauthorized');
-            return;
+          // CRITICAL SSOT FIX: No query param fallback - always require token
+          // In dev mode, use DEV_JWT_TOKEN env var if available (for testing)
+          if (isDev && process.env.DEV_JWT_TOKEN) {
+            supabase.auth.getUser(process.env.DEV_JWT_TOKEN)
+              .then(({ data, error }) => {
+                if (error || !data?.user) {
+                  ws.close(1008, 'Unauthorized: Invalid dev token');
+                  return;
+                }
+                // CRITICAL SSOT: Extract org_id from app_metadata
+                const orgId = (data.user.app_metadata?.org_id || data.user.user_metadata?.org_id) as string;
+                attach(data.user.id, orgId);
+              })
+              .catch(() => {
+                ws.close(1008, 'Unauthorized: Dev token validation failed');
+              });
+          } else {
+            ws.close(1008, 'Unauthorized: No token provided');
           }
-          attach(userIdParam || process.env.DEV_USER_ID || 'dev-user');
           return;
         }
 
+        // CRITICAL SSOT: Always validate JWT token (even in dev mode)
         supabase.auth.getUser(token)
           .then(({ data, error }) => {
             const uid = data?.user?.id;
             if (error || !uid) {
-              ws.close(1008, 'Unauthorized');
+              ws.close(1008, 'Unauthorized: Invalid or expired token');
               return;
             }
-            attach(uid);
+            // CRITICAL SSOT: Extract org_id from app_metadata (admin-set, immutable)
+            // Fallback to user_metadata for backward compatibility during migration
+            const orgId = (data.user.app_metadata?.org_id || data.user.user_metadata?.org_id) as string;
+
+            if (!orgId) {
+              ws.close(1008, 'Forbidden: User not assigned to organization');
+              return;
+            }
+
+            attach(uid, orgId);
           })
           .catch(() => {
-            ws.close(1008, 'Unauthorized');
+            ws.close(1008, 'Unauthorized: Token validation failed');
           });
       } catch {
         // ignore
       }
     });
 
-    // Dev fallback: if no auth message is sent, still allow attachment via query param.
-    if (isDev) {
-      setTimeout(() => {
-        try {
-          if (ws.readyState === WebSocket.OPEN) {
-            attach(userIdParam || process.env.DEV_USER_ID || 'dev-user');
-          }
-        } catch {
-          // ignore
-        }
-      }, 100);
-    }
+    // CRITICAL SSOT FIX: Removed query param fallback entirely
+    // No fallback means: if auth message not received within 3 seconds, connection is closed
+    // This prevents unauthorized access via query params
 
     ws.on('close', (code, reason) => {
       console.log('[WebVoice] WS closed', { trackingId, code, reason: reason.toString() });
@@ -499,7 +533,7 @@ Endpoints:
   GET  /api/phone-numbers
   GET  /api/phone-numbers/:phoneNumberId
 
-  Founder Console:
+  CallWaiting AI:
   GET  /api/founder-console/agent/config
   POST /api/founder-console/agent/config
   GET  /api/founder-console/leads
@@ -515,56 +549,56 @@ Endpoints:
 Ready to accept requests!
 `);
 
-// Schedule background jobs
-try {
-  scheduleOrphanCleanup();
-  console.log('Orphan recording cleanup job scheduled');
-} catch (error: any) {
-  console.warn('Failed to schedule orphan cleanup job:', error.message);
-}
+  // Schedule background jobs
+  try {
+    scheduleOrphanCleanup();
+    console.log('Orphan recording cleanup job scheduled');
+  } catch (error: any) {
+    console.warn('Failed to schedule orphan cleanup job:', error.message);
+  }
 
-try {
-  scheduleRecordingUploadRetry();
-  console.log('Recording upload retry job scheduled');
-} catch (error: any) {
-  console.warn('Failed to schedule recording upload retry job:', error.message);
-}
+  try {
+    scheduleRecordingUploadRetry();
+    console.log('Recording upload retry job scheduled');
+  } catch (error: any) {
+    console.warn('Failed to schedule recording upload retry job:', error.message);
+  }
 
-try {
-  scheduleRecordingMetricsMonitor();
-  console.log('Recording metrics monitor job scheduled');
-} catch (error: any) {
-  console.warn('Failed to schedule recording metrics monitor job:', error.message);
-}
+  try {
+    scheduleRecordingMetricsMonitor();
+    console.log('Recording metrics monitor job scheduled');
+  } catch (error: any) {
+    console.warn('Failed to schedule recording metrics monitor job:', error.message);
+  }
 
-try {
-  scheduleRecordingQueueWorker();
-  console.log('Recording queue worker job scheduled');
-} catch (error: any) {
-  console.warn('Failed to schedule recording queue worker job:', error.message);
-}
+  try {
+    scheduleRecordingQueueWorker();
+    console.log('Recording queue worker job scheduled');
+  } catch (error: any) {
+    console.warn('Failed to schedule recording queue worker job:', error.message);
+  }
 
-// DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
-// Reason: Polling caused race conditions with webhook handlers and wasted bandwidth
-// Webhooks are more reliable (immediate notification) and prevent duplicate processing
-// Keep poller functions in codebase for emergency manual recovery only
-// See: /Users/mac/.claude/plans/streamed-swinging-ullman.md for details
+  // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
+  // Reason: Polling caused race conditions with webhook handlers and wasted bandwidth
+  // Webhooks are more reliable (immediate notification) and prevent duplicate processing
+  // Keep poller functions in codebase for emergency manual recovery only
+  // See: /Users/mac/.claude/plans/streamed-swinging-ullman.md for details
 
-// try {
-//   scheduleTwilioCallPoller();
-//   console.log('Twilio call poller scheduled');
-// } catch (error: any) {
-//   console.warn('Failed to schedule Twilio call poller:', error.message);
-// }
+  // try {
+  //   scheduleTwilioCallPoller();
+  //   console.log('Twilio call poller scheduled');
+  // } catch (error: any) {
+  //   console.warn('Failed to schedule Twilio call poller:', error.message);
+  // }
 
-// try {
-//   scheduleVapiCallPoller();
-//   console.log('Vapi call poller scheduled');
-// } catch (error: any) {
-//   console.warn('Failed to schedule Vapi call poller:', error.message);
-// }
+  // try {
+  //   scheduleVapiCallPoller();
+  //   console.log('Vapi call poller scheduled');
+  // } catch (error: any) {
+  //   console.warn('Failed to schedule Vapi call poller:', error.message);
+  // }
 
-console.log('✅ Recording pollers disabled - using webhook-only architecture');
+  console.log('✅ Recording pollers disabled - using webhook-only architecture');
 });
 
 // Graceful shutdown

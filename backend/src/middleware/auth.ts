@@ -51,7 +51,9 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
             const { data: { user }, error } = await supabase.auth.getUser(token);
             if (!error && user) {
               // Token is valid, resolve org
-              let orgId: string = user.user_metadata?.org_id || 'default';
+              // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
+              // Fallback to user_metadata.org_id for backward compatibility during migration
+              let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
               if (orgId === 'default') {
                 const { data: org } = await supabase
                   .from('organizations')
@@ -127,7 +129,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     // Attach user info to request
-    let orgId: string = user.user_metadata?.org_id || 'default';
+    // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
+    // Fallback to user_metadata.org_id for backward compatibility during migration
+    let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
     if (orgId === 'default') {
       try {
         const { data: org } = await supabase
@@ -198,7 +202,9 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
       const { data: { user }, error } = await supabase.auth.getUser(token);
 
       if (!error && user) {
-        let orgId: string = user.user_metadata?.org_id || 'default';
+        // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
+        // Fallback to user_metadata.org_id for backward compatibility during migration
+        let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
         if (orgId === 'default') {
           try {
             const { data: org } = await supabase

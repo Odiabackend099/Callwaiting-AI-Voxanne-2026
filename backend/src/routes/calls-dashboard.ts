@@ -46,6 +46,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       let inboundQuery = supabase
         .from('call_logs')
         .select('*', { count: 'exact' })
+        .eq('org_id', orgId)  // CRITICAL FIX: Filter by org_id for tenant isolation
         .eq('call_type', 'inbound')
         .not('recording_storage_path', 'is', null);
 
@@ -54,6 +55,9 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       }
       if (parsed.endDate) {
         inboundQuery = inboundQuery.lte('created_at', new Date(parsed.endDate).toISOString());
+      }
+      if (parsed.status) {
+        inboundQuery = inboundQuery.eq('status', parsed.status);  // Also add status filter if provided
       }
       if (parsed.search) {
         inboundQuery = inboundQuery.or(`caller_name.ilike.%${parsed.search}%,phone_number.ilike.%${parsed.search}%`);
@@ -153,8 +157,147 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/calls-dashboard/stats
+ * Get dashboard statistics (totalCalls, inboundCalls, outboundCalls, completedCalls, callsToday, avgDuration, recentCalls)
+ * This endpoint matches the frontend dashboard page requirements
+ * IMPORTANT: Must be defined BEFORE /:callId route (Express route order matters)
+ */
+callsRouter.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Fetch all call_logs for this org (for dashboard stats)
+    const { data: allCalls, error: callsError } = await supabase
+      .from('call_logs')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('started_at', { ascending: false });
+
+    if (callsError) {
+      log.error('Calls', 'GET /stats - Database error', { orgId, error: callsError.message });
+      return res.status(500).json({ error: callsError.message });
+    }
+
+    const calls = allCalls || [];
+    
+    // Calculate stats (matching frontend logic)
+    const today = new Date().toISOString().split('T')[0];
+    const callsToday = calls.filter((c: any) => c.started_at?.startsWith(today));
+    
+    const inbound = calls.filter((c: any) => c.metadata?.channel === 'inbound');
+    const outbound = calls.filter((c: any) => c.metadata?.channel === 'outbound' || !c.metadata?.channel);
+    const completed = calls.filter((c: any) => c.status === 'completed');
+    
+    const totalDuration = completed.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0);
+    const avgDuration = completed.length > 0 ? Math.round(totalDuration / completed.length) : 0;
+    
+    // Get recent calls (last 5) - format for frontend (include both old and new field names for compatibility)
+    const recentCalls = calls.slice(0, 5).map((c: any) => ({
+      id: c.id,
+      // New field names
+      phone_number: c.phone_number || c.to_number || 'Unknown',
+      caller_name: c.caller_name || 'Unknown',
+      call_date: c.started_at || c.created_at,
+      call_type: c.call_type || (c.metadata?.channel === 'inbound' ? 'inbound' : 'outbound'),
+      // Legacy field names (for backwards compatibility with frontend)
+      to_number: c.to_number || c.phone_number || 'Unknown',
+      started_at: c.started_at || c.created_at,
+      duration_seconds: c.duration_seconds || 0,
+      status: c.status || 'completed',
+      metadata: {
+        channel: c.metadata?.channel || (c.call_type === 'inbound' ? 'inbound' : 'outbound')
+      }
+    }));
+
+    return res.json({
+      totalCalls: calls.length,
+      inboundCalls: inbound.length,
+      outboundCalls: outbound.length,
+      completedCalls: completed.length,
+      callsToday: callsToday.length,
+      avgDuration,
+      recentCalls
+    });
+  } catch (e: any) {
+    log.error('Calls', 'GET /stats - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to fetch dashboard stats' });
+  }
+});
+
+/**
+ * GET /api/calls-dashboard/analytics/summary
+ * Get call analytics summary
+ * IMPORTANT: Must be defined BEFORE /:callId route (Express route order matters)
+ */
+callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Get all calls
+    const { data: allCalls } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('org_id', orgId);
+
+    const calls = allCalls || [];
+
+    // Get today's calls
+    const { data: todayCalls } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('org_id', orgId)
+      .gte('call_date', today.toISOString());
+
+    // Get week's calls
+    const { data: weekCalls } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('org_id', orgId)
+      .gte('call_date', weekAgo.toISOString());
+
+    // Get month's calls
+    const { data: monthCalls } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('org_id', orgId)
+      .gte('call_date', monthAgo.toISOString());
+
+    const completedCalls = calls.filter((c: any) => c.status === 'completed');
+    const missedCalls = calls.filter((c: any) => c.status === 'missed');
+    const avgDuration = completedCalls.length > 0
+      ? Math.round(completedCalls.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0) / completedCalls.length)
+      : 0;
+    const avgSentiment = calls.filter((c: any) => c.sentiment_score).length > 0
+      ? calls.filter((c: any) => c.sentiment_score).reduce((sum: number, c: any) => sum + c.sentiment_score, 0) / calls.filter((c: any) => c.sentiment_score).length
+      : 0;
+
+    return res.json({
+      total_calls: calls.length,
+      completed_calls: completedCalls.length,
+      missed_calls: missedCalls.length,
+      average_duration: avgDuration,
+      average_sentiment: Math.round(avgSentiment * 100) / 100,
+      calls_today: todayCalls?.length || 0,
+      calls_this_week: weekCalls?.length || 0,
+      calls_this_month: monthCalls?.length || 0
+    });
+  } catch (e: any) {
+    log.error('Calls', 'GET /analytics/summary - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to fetch analytics' });
+  }
+});
+
+/**
  * GET /api/calls-dashboard/:callId
  * Get full call details from either call_logs (inbound) or calls (outbound)
+ * IMPORTANT: Must be defined AFTER all specific routes (/:callId is a catch-all)
  */
 callsRouter.get('/:callId', async (req: Request, res: Response) => {
   try {
@@ -168,6 +311,7 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
       .from('call_logs')
       .select('*')
       .eq('id', callId)
+      .eq('org_id', orgId)  // CRITICAL FIX: Filter by org_id for tenant isolation
       .eq('call_type', 'inbound')
       .single();
 
@@ -340,74 +484,6 @@ callsRouter.delete('/:callId', async (req: Request, res: Response) => {
   } catch (e: any) {
     log.error('Calls', 'DELETE /:callId - Error', { error: e?.message });
     return res.status(500).json({ error: e?.message || 'Failed to delete call' });
-  }
-});
-
-/**
- * GET /api/calls/analytics/summary
- * Get call analytics summary
- */
-callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
-  try {
-    const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    // Get all calls
-    const { data: allCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId);
-
-    const calls = allCalls || [];
-
-    // Get today's calls
-    const { data: todayCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('call_date', today.toISOString());
-
-    // Get week's calls
-    const { data: weekCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('call_date', weekAgo.toISOString());
-
-    // Get month's calls
-    const { data: monthCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('call_date', monthAgo.toISOString());
-
-    const completedCalls = calls.filter((c: any) => c.status === 'completed');
-    const missedCalls = calls.filter((c: any) => c.status === 'missed');
-    const avgDuration = completedCalls.length > 0
-      ? Math.round(completedCalls.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0) / completedCalls.length)
-      : 0;
-    const avgSentiment = calls.filter((c: any) => c.sentiment_score).length > 0
-      ? calls.filter((c: any) => c.sentiment_score).reduce((sum: number, c: any) => sum + c.sentiment_score, 0) / calls.filter((c: any) => c.sentiment_score).length
-      : 0;
-
-    return res.json({
-      total_calls: calls.length,
-      completed_calls: completedCalls.length,
-      missed_calls: missedCalls.length,
-      average_duration: avgDuration,
-      average_sentiment: Math.round(avgSentiment * 100) / 100,
-      calls_today: todayCalls?.length || 0,
-      calls_this_week: weekCalls?.length || 0,
-      calls_this_month: monthCalls?.length || 0
-    });
-  } catch (e: any) {
-    log.error('Calls', 'GET /analytics/summary - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch analytics' });
   }
 });
 

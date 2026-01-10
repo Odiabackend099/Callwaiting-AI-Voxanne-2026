@@ -234,7 +234,11 @@ knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     if (!orgId) {
-      log.error('KnowledgeBase', 'GET / - Missing orgId', { user: req.user });
+      log.error('KnowledgeBase', 'GET / - Missing orgId', { 
+        user: req.user,
+        hasAuthHeader: !!req.headers.authorization,
+        nodeEnv: process.env.NODE_ENV
+      });
       return res.status(401).json({ error: 'Unauthorized - missing organization' });
     }
 
@@ -245,12 +249,25 @@ knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      log.error('KnowledgeBase', 'GET / - Database error', { orgId, error: error.message });
+      log.error('KnowledgeBase', 'GET / - Database error', { 
+        orgId, 
+        error: error.message,
+        errorCode: error.code,
+        errorDetails: error.details,
+        errorHint: error.hint
+      });
       return res.status(500).json({ error: error.message });
     }
     return res.json({ items: data || [] });
   } catch (err: any) {
-    log.error('KnowledgeBase', 'GET / - Unexpected error', { error: err?.message });
+    log.error('KnowledgeBase', 'GET / - Unexpected error', { 
+      error: err?.message,
+      stack: err?.stack,
+      orgId: req.user?.orgId,
+      user: req.user,
+      hasAuthHeader: !!req.headers.authorization,
+      nodeEnv: process.env.NODE_ENV
+    });
     return res.status(500).json({ error: err?.message || 'Failed to fetch documents' });
   }
 });
