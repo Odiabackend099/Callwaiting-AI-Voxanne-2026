@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Key, Save, CheckCircle, AlertCircle, Eye, EyeOff, Loader2, Phone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import LeftSidebar from '@/components/dashboard/LeftSidebar';
+// LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface IntegrationStatus {
@@ -115,208 +115,202 @@ export default function ApiKeysPage() {
     if (!user) return null;
 
     return (
-        <div className="flex h-screen bg-white">
-            <LeftSidebar />
+        <div className="max-w-4xl mx-auto px-6 py-8">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">API Keys & Integrations</h1>
+                <p className="text-gray-600">Manage your Vapi and Twilio credentials securely.</p>
+            </div>
 
-            <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
-                <div className="max-w-4xl mx-auto px-6 py-8">
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">API Keys & Integrations</h1>
-                        <p className="text-gray-600">Manage your Vapi and Twilio credentials securely.</p>
-                    </div>
-
-                    <div className="space-y-8">
-                        {/* Vapi Configuration */}
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                                        <Key className="w-5 h-5 text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold text-gray-900">Vapi Configuration</h2>
-                                        <p className="text-sm text-gray-700">Configure your Vapi.ai credentials</p>
-                                    </div>
-                                </div>
-                                <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-full ${status.vapiConfigured
-                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                    }`}>
-                                    {status.vapiConfigured ? (
-                                        <>
-                                            <CheckCircle className="w-4 h-4" />
-                                            Active
-                                        </>
-                                    ) : (
-                                        <>
-                                            <AlertCircle className="w-4 h-4" />
-                                            Not Configured
-                                        </>
-                                    )}
-                                </div>
+            <div className="space-y-8">
+                {/* Vapi Configuration */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                <Key className="w-5 h-5 text-blue-600" />
                             </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Private API Key
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showVapiKey ? "text" : "password"}
-                                            value={vapiApiKey}
-                                            onChange={(e) => setVapiApiKey(e.target.value)}
-                                            placeholder={status.vapiConfigured ? "•••••••••••••••• (Stored securely)" : "Enter your Vapi Private Key"}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowVapiKey(!showVapiKey)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            {showVapiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
-                                    </div>
-                                    <p className="text-xs text-gray-600 mt-1">
-                                        Leave blank to keep existing key. Providing a new key will overwrite the current one.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Twilio Configuration */}
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
-                                        <Phone className="w-5 h-5 text-red-600" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold text-gray-900">Twilio Configuration</h2>
-                                        <p className="text-sm text-gray-700">Configure your Twilio phone setup</p>
-                                    </div>
-                                </div>
-                                <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-full ${status.twilioConfigured
-                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                    }`}>
-                                    {status.twilioConfigured ? (
-                                        <>
-                                            <CheckCircle className="w-4 h-4" />
-                                            Active
-                                        </>
-                                    ) : (
-                                        <>
-                                            <AlertCircle className="w-4 h-4" />
-                                            Not Configured
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Account SID
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showTwilioSid ? "text" : "password"}
-                                            value={twilioAccountSid}
-                                            onChange={(e) => setTwilioAccountSid(e.target.value)}
-                                            placeholder={status.twilioConfigured ? "•••••••••••••••• (Stored securely)" : "AC..."}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowTwilioSid(!showTwilioSid)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            {showTwilioSid ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Auth Token
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showTwilioToken ? "text" : "password"}
-                                            value={twilioAuthToken}
-                                            onChange={(e) => setTwilioAuthToken(e.target.value)}
-                                            placeholder={status.twilioConfigured ? "•••••••••••••••• (Stored securely)" : "Enter Auth Token"}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowTwilioToken(!showTwilioToken)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            {showTwilioToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Twilio Phone Number
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        value={twilioPhoneNumber}
-                                        onChange={(e) => setTwilioPhoneNumber(e.target.value)}
-                                        placeholder="+1234567890"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
-                                    />
-                                    <p className="text-xs text-gray-600 mt-1">
-                                        Must be in E.164 format (e.g., +15551234567)
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Common Settings */}
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4">Testing Defaults</h2>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Default Test Phone Number
-                                </label>
+                                <h2 className="text-lg font-bold text-gray-900">Vapi Configuration</h2>
+                                <p className="text-sm text-gray-700">Configure your Vapi.ai credentials</p>
+                            </div>
+                        </div>
+                        <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-full ${status.vapiConfigured
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                            }`}>
+                            {status.vapiConfigured ? (
+                                <>
+                                    <CheckCircle className="w-4 h-4" />
+                                    Active
+                                </>
+                            ) : (
+                                <>
+                                    <AlertCircle className="w-4 h-4" />
+                                    Not Configured
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Private API Key
+                            </label>
+                            <div className="relative">
                                 <input
-                                    type="tel"
-                                    value={testDestination}
-                                    onChange={(e) => setTestDestination(e.target.value)}
-                                    placeholder="+1234567890"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                                    type={showVapiKey ? "text" : "password"}
+                                    value={vapiApiKey}
+                                    onChange={(e) => setVapiApiKey(e.target.value)}
+                                    placeholder={status.vapiConfigured ? "•••••••••••••••• (Stored securely)" : "Enter your Vapi Private Key"}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12"
                                 />
-                                <p className="text-xs text-gray-600 mt-1">
-                                    Used for &quot;Test Live&quot; calls from the dashboard.
-                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowVapiKey(!showVapiKey)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    {showVapiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1">
+                                Leave blank to keep existing key. Providing a new key will overwrite the current one.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Twilio Configuration */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
+                                <Phone className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Twilio Configuration</h2>
+                                <p className="text-sm text-gray-700">Configure your Twilio phone setup</p>
+                            </div>
+                        </div>
+                        <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-full ${status.twilioConfigured
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                            }`}>
+                            {status.twilioConfigured ? (
+                                <>
+                                    <CheckCircle className="w-4 h-4" />
+                                    Active
+                                </>
+                            ) : (
+                                <>
+                                    <AlertCircle className="w-4 h-4" />
+                                    Not Configured
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Account SID
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showTwilioSid ? "text" : "password"}
+                                    value={twilioAccountSid}
+                                    onChange={(e) => setTwilioAccountSid(e.target.value)}
+                                    placeholder={status.twilioConfigured ? "•••••••••••••••• (Stored securely)" : "AC..."}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all pr-12"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTwilioSid(!showTwilioSid)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    {showTwilioSid ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
                         </div>
 
-                        <div className="flex justify-end pt-4">
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-5 h-5" />
-                                        Save Changes
-                                    </>
-                                )}
-                            </button>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Auth Token
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showTwilioToken ? "text" : "password"}
+                                    value={twilioAuthToken}
+                                    onChange={(e) => setTwilioAuthToken(e.target.value)}
+                                    placeholder={status.twilioConfigured ? "•••••••••••••••• (Stored securely)" : "Enter Auth Token"}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all pr-12"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTwilioToken(!showTwilioToken)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    {showTwilioToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Twilio Phone Number
+                            </label>
+                            <input
+                                type="tel"
+                                value={twilioPhoneNumber}
+                                onChange={(e) => setTwilioPhoneNumber(e.target.value)}
+                                placeholder="+1234567890"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
+                            />
+                            <p className="text-xs text-gray-600 mt-1">
+                                Must be in E.164 format (e.g., +15551234567)
+                            </p>
                         </div>
                     </div>
+                </div>
+
+                {/* Common Settings */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4">Testing Defaults</h2>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Default Test Phone Number
+                        </label>
+                        <input
+                            type="tel"
+                            value={testDestination}
+                            onChange={(e) => setTestDestination(e.target.value)}
+                            placeholder="+1234567890"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                        />
+                        <p className="text-xs text-gray-600 mt-1">
+                            Used for &quot;Test Live&quot; calls from the dashboard.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSaving ? (
+                            <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save className="w-5 h-5" />
+                                Save Changes
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
         </div>

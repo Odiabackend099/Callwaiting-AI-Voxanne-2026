@@ -1,29 +1,29 @@
 /**
  * Secrets Manager Service
- * Handles encryption/decryption of API keys using pgcrypto or Supabase Vault
+ * Handles encryption/decryption of API keys using EncryptionService (AES-256-GCM)
+ * or Supabase Vault (if enabled)
  */
 
 import { supabase } from './supabase-client';
+import { EncryptionService } from './encryption';
 
 /**
  * Store API key securely
- * Uses Supabase Vault if available, falls back to pgcrypto encryption
+ * Uses Supabase Vault if available, otherwise uses application-level AES-256-GCM encryption
  */
 export async function storeApiKey(
-  provider: 'vapi' | 'twilio' | 'resend',
+  provider: 'vapi' | 'twilio' | 'resend' | 'google',
   orgId: string,
   keyData: Record<string, string>
 ): Promise<boolean> {
   try {
-    const encryptionKey = process.env.ENCRYPTION_KEY || 'default-unsafe-key-change-me';
-
     // Try to use Supabase Vault (recommended for production)
     if (process.env.USE_SUPABASE_VAULT === 'true') {
       return await storeInVault(provider, orgId, keyData);
     }
 
-    // Fall back to pgcrypto encryption
-    return await storeEncrypted(provider, orgId, keyData, encryptionKey);
+    // Fall back to application-level encryption
+    return await storeEncrypted(provider, orgId, keyData);
   } catch (error) {
     console.error('[SecretsManager] Failed to store API key:', error);
     return false;
@@ -34,7 +34,7 @@ export async function storeApiKey(
  * Retrieve API key securely
  */
 export async function getApiKey(
-  provider: 'vapi' | 'twilio' | 'resend',
+  provider: 'vapi' | 'twilio' | 'resend' | 'google',
   orgId: string
 ): Promise<Record<string, string> | null> {
   try {
@@ -50,15 +50,17 @@ export async function getApiKey(
 }
 
 /**
- * Store using pgcrypto encryption (database-level)
+ * Store using AES-256-GCM encryption and save to DB
  */
 async function storeEncrypted(
   provider: string,
   orgId: string,
-  keyData: Record<string, string>,
-  encryptionKey: string
+  keyData: Record<string, string>
 ): Promise<boolean> {
   try {
+    // Encrypt the entire config object
+    const encryptedConfig = EncryptionService.encryptObject(keyData);
+
     const { error } = await supabase
       .from('integrations')
       .upsert(
@@ -67,7 +69,7 @@ async function storeEncrypted(
           provider,
           connected: true,
           last_checked_at: new Date().toISOString(),
-          config: keyData // Store in plain for now, will be encrypted at DB level
+          config: encryptedConfig // Stored as iv:authTag:content string
         },
         { onConflict: 'org_id,provider' }
       );
@@ -75,9 +77,6 @@ async function storeEncrypted(
     if (error) {
       throw error;
     }
-
-    // Note: In production, use Supabase RLS policies to prevent unauthorized access
-    // and ensure the application can only decrypt with the correct key
 
     return true;
   } catch (error) {
@@ -87,7 +86,7 @@ async function storeEncrypted(
 }
 
 /**
- * Retrieve using pgcrypto decryption
+ * Retrieve and decrypt from DB
  */
 async function getEncrypted(
   provider: string,
@@ -105,7 +104,26 @@ async function getEncrypted(
       return null;
     }
 
-    return data.config as Record<string, string>;
+    // Decrypt the config string
+    // Data in DB is "iv:authTag:content" (string) if it was stored by this service
+    // But it might be raw JSON if stored by legacy code/manual insert.
+    // We should handle both, or enforce migration.
+    // For now, assume if it looks like JSON object, it's plaintext (LEGACY fallback),
+    // if string with colons, it's encrypted.
+
+    const configRaw = data.config;
+
+    if (typeof configRaw === 'object' && configRaw !== null) {
+      // Legacy: Plain JSON in DB
+      // console.warn('[SecretsManager] Found legacy plaintext config, consider migrating to encrypted.');
+      return configRaw as Record<string, string>;
+    }
+
+    if (typeof configRaw === 'string') {
+      return EncryptionService.decryptObject(configRaw);
+    }
+
+    return null;
   } catch (error) {
     console.error('[SecretsManager] Failed to retrieve encrypted key:', error);
     return null;
@@ -141,8 +159,7 @@ async function storeInVault(
   } catch (error) {
     // Fall back to encrypted storage if Vault not available
     console.warn('[SecretsManager] Vault not available, falling back to encrypted storage');
-    const encryptionKey = process.env.ENCRYPTION_KEY || 'default-unsafe-key-change-me';
-    return storeEncrypted(provider, orgId, keyData, encryptionKey);
+    return storeEncrypted(provider, orgId, keyData);
   }
 }
 
@@ -178,14 +195,11 @@ async function getFromVault(
  * Safely replace old key with new one
  */
 export async function rotateApiKey(
-  provider: 'vapi' | 'twilio' | 'resend',
+  provider: 'vapi' | 'twilio' | 'resend' | 'google',
   orgId: string,
   newKeyData: Record<string, string>
 ): Promise<boolean> {
   try {
-    // Verify new key is valid before storing
-    // (You would add validation logic here based on provider)
-
     // Store new key
     const stored = await storeApiKey(provider, orgId, newKeyData);
 
@@ -193,7 +207,6 @@ export async function rotateApiKey(
       throw new Error('Failed to store new key');
     }
 
-    // Log the rotation for audit purposes
     console.log(`[SecretsManager] API key rotated for ${provider} in org ${orgId}`);
 
     return true;
@@ -207,7 +220,7 @@ export async function rotateApiKey(
  * Delete API key (revoke access)
  */
 export async function deleteApiKey(
-  provider: 'vapi' | 'twilio' | 'resend',
+  provider: 'vapi' | 'twilio' | 'resend' | 'google',
   orgId: string
 ): Promise<boolean> {
   try {

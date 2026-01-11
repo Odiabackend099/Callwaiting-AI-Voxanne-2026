@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import LeftSidebar from '@/components/dashboard/LeftSidebar';
+// LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
+import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
 
 const AGENT_CONFIG_CONSTRAINTS = {
     MIN_DURATION_SECONDS: 60,
@@ -36,7 +38,13 @@ interface InboundStatus {
 
 export default function AgentConfigPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, loading } = useAuth();
+
+    // Tab navigation with URL param support
+    const tabParam = searchParams.get('agent');
+    const initialTab = (tabParam === 'inbound' || tabParam === 'outbound') ? tabParam : 'inbound';
+    const [activeTab, setActiveTab] = useState<'inbound' | 'outbound'>(initialTab as 'inbound' | 'outbound');
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -47,23 +55,25 @@ export default function AgentConfigPage() {
     const [vapiConfigured, setVapiConfigured] = useState(false);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
 
-    // Inbound agent config
-    const [inboundConfig, setInboundConfig] = useState<AgentConfig>({
-        systemPrompt: '',
-        firstMessage: '',
-        voice: '',
-        language: 'en-US',
-        maxDuration: AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-    });
 
-    // Outbound agent config
-    const [outboundConfig, setOutboundConfig] = useState<AgentConfig>({
-        systemPrompt: '',
-        firstMessage: '',
-        voice: '',
-        language: 'en-US',
-        maxDuration: AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-    });
+
+    // Global Store State
+    const { inboundConfig, outboundConfig, setInboundConfig, setOutboundConfig } = useAgentStore();
+
+    // Server state for draft comparison
+    const [serverInbound, setServerInbound] = useState<AgentConfig | null>(null);
+    const [serverOutbound, setServerOutbound] = useState<AgentConfig | null>(null);
+    const [hasDraft, setHasDraft] = useState(false);
+
+    // Helper to check equality
+    const areConfigsEqual = (a: AgentConfig, b: AgentConfig) => {
+        return a.systemPrompt === b.systemPrompt &&
+            a.firstMessage === b.firstMessage &&
+            a.voice === b.voice &&
+            a.language === b.language &&
+            a.maxDuration === b.maxDuration;
+    };
+
 
     const [originalInboundConfig, setOriginalInboundConfig] = useState<AgentConfig | null>(null);
     const [originalOutboundConfig, setOriginalOutboundConfig] = useState<AgentConfig | null>(null);
@@ -116,8 +126,24 @@ export default function AgentConfigPage() {
                             language: inboundAgent.language || 'en-US',
                             maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                         };
-                        setInboundConfig(loadedConfig);
-                        setOriginalInboundConfig(loadedConfig);
+
+                        // Check for drafts
+                        const currentStore = useAgentStore.getState().inboundConfig;
+                        if (!areConfigsEqual(currentStore, loadedConfig)) {
+                            // If store is default/empty, just overwrite
+                            if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
+                                setInboundConfig(loadedConfig);
+                                setOriginalInboundConfig(loadedConfig);
+                            } else {
+                                // Real draft exists
+                                setHasDraft(true);
+                                setServerInbound(loadedConfig);
+                                setOriginalInboundConfig(loadedConfig); // Original is server state
+                            }
+                        } else {
+                            setInboundConfig(loadedConfig);
+                            setOriginalInboundConfig(loadedConfig);
+                        }
                     }
 
                     if (outboundAgent) {
@@ -128,10 +154,27 @@ export default function AgentConfigPage() {
                             language: outboundAgent.language || 'en-US',
                             maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                         };
-                        setOutboundConfig(loadedConfig);
-                        setOriginalOutboundConfig(loadedConfig);
+
+                        // Check for drafts
+                        const currentStore = useAgentStore.getState().outboundConfig;
+                        if (!areConfigsEqual(currentStore, loadedConfig)) {
+                            // If store is default/empty, just overwrite
+                            if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
+                                setOutboundConfig(loadedConfig);
+                                setOriginalOutboundConfig(loadedConfig);
+                            } else {
+                                // Real draft exists
+                                setHasDraft(true);
+                                setServerOutbound(loadedConfig);
+                                setOriginalOutboundConfig(loadedConfig);
+                            }
+                        } else {
+                            setOutboundConfig(loadedConfig);
+                            setOriginalOutboundConfig(loadedConfig);
+                        }
                     }
                 } else if (agentData?.vapi) {
+                    // Legacy single Vapi config handling (treat as inbound)
                     const vapi = agentData.vapi;
                     const loadedConfig = {
                         systemPrompt: vapi.systemPrompt || '',
@@ -140,8 +183,21 @@ export default function AgentConfigPage() {
                         language: vapi.language || 'en-US',
                         maxDuration: vapi.maxCallDuration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                     };
-                    setInboundConfig(loadedConfig);
-                    setOriginalInboundConfig(loadedConfig);
+
+                    const currentStore = useAgentStore.getState().inboundConfig;
+                    if (!areConfigsEqual(currentStore, loadedConfig)) {
+                        if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
+                            setInboundConfig(loadedConfig);
+                            setOriginalInboundConfig(loadedConfig);
+                        } else {
+                            setHasDraft(true);
+                            setServerInbound(loadedConfig);
+                            setOriginalInboundConfig(loadedConfig);
+                        }
+                    } else {
+                        setInboundConfig(loadedConfig);
+                        setOriginalInboundConfig(loadedConfig);
+                    }
                 }
             } else {
                 console.error('Failed to load agent config:', agentResult.reason);
@@ -202,7 +258,24 @@ export default function AgentConfigPage() {
 
     const hasChanges = () => inboundChanged || outboundChanged;
 
+    const hasActiveTabChanges = () => {
+        if (activeTab === 'inbound') return inboundChanged;
+        if (activeTab === 'outbound') return outboundChanged;
+        return false;
+    };
+
     // Validate agent config before save
+    const restoreDraft = () => {
+        setHasDraft(false);
+        // Store already has the draft, so we just clear the banner
+    };
+
+    const discardDraft = () => {
+        if (serverInbound) setInboundConfig(serverInbound);
+        if (serverOutbound) setOutboundConfig(serverOutbound);
+        setHasDraft(false);
+    };
+
     const validateAgentConfig = (config: AgentConfig, agentType: 'inbound' | 'outbound'): string | null => {
         if (!config.systemPrompt || config.systemPrompt.trim() === '') {
             return `${agentType} agent system prompt is required`;
@@ -213,7 +286,7 @@ export default function AgentConfigPage() {
         if (!config.voice) {
             return `${agentType} agent voice must be selected`;
         }
-        if (config.maxDuration < AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS || 
+        if (config.maxDuration < AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS ||
             config.maxDuration > AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS) {
             return `${agentType} agent duration must be between ${AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS} and ${AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS} seconds`;
         }
@@ -231,11 +304,11 @@ export default function AgentConfigPage() {
         setError(null);
 
         try {
-            // Build independent payloads for each agent that has changes
+            // Build payload for ONLY the active tab
             const payload: any = {};
 
-            // Only include inbound config if it has changes
-            if (inboundChanged) {
+            // Save only the ACTIVE tab's agent
+            if (activeTab === 'inbound' && inboundChanged) {
                 // Validate inbound config
                 const inboundError = validateAgentConfig(inboundConfig, 'inbound');
                 if (inboundError) {
@@ -253,8 +326,7 @@ export default function AgentConfigPage() {
                 };
             }
 
-            // Only include outbound config if it has changes
-            if (outboundChanged) {
+            if (activeTab === 'outbound' && outboundChanged) {
                 // Validate outbound config
                 const outboundError = validateAgentConfig(outboundConfig, 'outbound');
                 if (outboundError) {
@@ -279,7 +351,7 @@ export default function AgentConfigPage() {
                 return;
             }
 
-            // Save agents independently - each agent can be saved without the other
+            // Save to backend
             const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -291,11 +363,10 @@ export default function AgentConfigPage() {
                 throw new Error(result?.error || 'Failed to sync agent configuration to Vapi');
             }
 
-            // Update original configs only for agents that were saved
-            if (inboundChanged) {
+            // Update original config for ACTIVE tab only
+            if (activeTab === 'inbound') {
                 setOriginalInboundConfig(inboundConfig);
-            }
-            if (outboundChanged) {
+            } else {
                 setOriginalOutboundConfig(outboundConfig);
             }
 
@@ -312,7 +383,17 @@ export default function AgentConfigPage() {
         } finally {
             setIsSaving(false);
         }
+
     };
+
+    // When save is successful, update server baseline to current config (which is now synced)
+    useEffect(() => {
+        if (saveSuccess) {
+            setServerInbound(inboundConfig);
+            setServerOutbound(outboundConfig);
+            setHasDraft(false); // Changes are now saved
+        }
+    }, [saveSuccess, inboundConfig, outboundConfig]);
 
     const handleTestInbound = async () => {
         try {
@@ -349,6 +430,23 @@ export default function AgentConfigPage() {
         }
     };
 
+    const applyTemplate = (templateId: string, type: 'inbound' | 'outbound') => {
+        const template = PROMPT_TEMPLATES.find(t => t.id === templateId);
+        if (!template) return;
+
+        if (type === 'inbound') {
+            setInboundConfig({
+                systemPrompt: template.systemPrompt,
+                firstMessage: template.firstMessage
+            });
+        } else {
+            setOutboundConfig({
+                systemPrompt: template.systemPrompt,
+                firstMessage: template.firstMessage
+            });
+        }
+    };
+
     if (loading || isLoading) {
         return (
             <div className="min-h-screen bg-white flex items-center justify-center">
@@ -360,290 +458,375 @@ export default function AgentConfigPage() {
     if (!user) return null;
 
     return (
-        <div className="flex h-screen bg-white">
-            <LeftSidebar />
+        <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="mb-8 flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Agent Configuration</h1>
+                    <p className="text-gray-600">Configure both inbound and outbound agents. Settings sync to Vapi automatically.</p>
+                </div>
 
-            <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
-                <div className="max-w-6xl mx-auto px-6 py-8">
-                    <div className="mb-8 flex justify-between items-start">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Agent Configuration</h1>
-                            <p className="text-gray-600">Configure both inbound and outbound agents. Settings sync to Vapi automatically.</p>
+                <button
+                    onClick={handleSave}
+                    disabled={!hasActiveTabChanges() || isSaving || !vapiConfigured}
+                    className={`px-6 py-3 rounded-xl font-medium shadow-lg transition-all flex items-center gap-2 ${saveSuccess
+                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        : hasActiveTabChanges() && vapiConfigured
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                        }`}
+                >
+                    {isSaving ? (
+                        <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Saving {activeTab === 'inbound' ? 'Inbound' : 'Outbound'} Agent...
+                        </>
+                    ) : saveSuccess ? (
+                        <>
+                            <Check className="w-5 h-5" />
+                            Saved!
+                        </>
+                    ) : (
+                        <>
+                            <Save className="w-5 h-5" />
+                            Save {activeTab === 'inbound' ? 'Inbound' : 'Outbound'} Agent
+                        </>
+                    )}
+                </button>
+            </div>
+
+            {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    {error}
+                </div>
+            )}
+
+            {!vapiConfigured && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    <span>
+                        Your Vapi API key is not configured. Please go to the <a href="/dashboard/api-keys" className="font-bold underline">API Keys</a> page to set it up.
+                    </span>
+                </div>
+            )}
+
+            {/* Draft Restoration Banner */}
+            {hasDraft && (
+                <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <Save className="w-5 h-5 text-indigo-600" />
                         </div>
-
+                        <div>
+                            <h3 className="font-bold text-indigo-900">Unsaved Changes Found</h3>
+                            <p className="text-sm text-indigo-700">We restored your unsaved changes from your last session.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
                         <button
-                            onClick={handleSave}
-                            disabled={!hasChanges() || isSaving || !vapiConfigured}
-                            className={`px-6 py-3 rounded-xl font-medium shadow-lg transition-all flex items-center gap-2 ${saveSuccess
-                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                    : hasChanges() && vapiConfigured
-                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl'
-                                        : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                }`}
+                            onClick={discardDraft}
+                            className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
                         >
-                            {isSaving ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Saving...
-                                </>
-                            ) : saveSuccess ? (
-                                <>
-                                    <Check className="w-5 h-5" />
-                                    Saved!
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="w-5 h-5" />
-                                    Save Changes
-                                </>
-                            )}
+                            Discard Draft
+                        </button>
+                        <button
+                            onClick={restoreDraft}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm"
+                        >
+                            Keep Draft
                         </button>
                     </div>
+                </div>
+            )}
 
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-3">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            {error}
-                        </div>
+            {/* Tab Navigation */}
+            <div className="bg-gray-100 dark:bg-slate-800 p-1 rounded-xl inline-flex mb-8">
+                <button
+                    onClick={() => {
+                        setActiveTab('inbound');
+                        router.push('/dashboard/agent-config?agent=inbound');
+                    }}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                        activeTab === 'inbound'
+                            ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm'
+                            : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
+                    }`}
+                >
+                    <Phone className="w-4 h-4" />
+                    Inbound Agent
+                    {inboundStatus?.inboundNumber && (
+                        <span className="text-xs opacity-70">({inboundStatus.inboundNumber})</span>
                     )}
-
-                    {!vapiConfigured && (
-                        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 flex items-center gap-3">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            <span>
-                                Your Vapi API key is not configured. Please go to the <a href="/dashboard/api-keys" className="font-bold underline">API Keys</a> page to set it up.
-                            </span>
-                        </div>
+                </button>
+                <button
+                    onClick={() => {
+                        setActiveTab('outbound');
+                        router.push('/dashboard/agent-config?agent=outbound');
+                    }}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                        activeTab === 'outbound'
+                            ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                            : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
+                    }`}
+                >
+                    <Phone className="w-4 h-4" />
+                    Outbound Agent
+                    {inboundStatus?.inboundNumber && (
+                        <span className="text-xs opacity-70">(Caller ID: {inboundStatus.inboundNumber})</span>
                     )}
+                </button>
+            </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* INBOUND AGENT */}
-                        <div className="space-y-6">
-                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl p-6">
-                                <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2 mb-1">
-                                    <Phone className="w-6 h-6" />
-                                    Inbound Agent
-                                </h2>
-                                <p className="text-sm text-blue-700">Receives incoming calls</p>
-                                {inboundStatus?.configured && inboundStatus?.inboundNumber && (
-                                    <p className="text-xs text-blue-600 mt-2">📱 {inboundStatus.inboundNumber}</p>
-                                )}
-                            </div>
+            {/* INBOUND AGENT TAB */}
+            {activeTab === 'inbound' && (
+            <div className="space-y-6 max-w-3xl">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl p-6">
+                        <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2 mb-1">
+                            <Phone className="w-6 h-6" />
+                            Inbound Agent
+                        </h2>
+                        <p className="text-sm text-blue-700">Receives incoming calls</p>
+                        {inboundStatus?.configured && inboundStatus?.inboundNumber && (
+                            <p className="text-xs text-blue-600 mt-2">📱 {inboundStatus.inboundNumber}</p>
+                        )}
+                    </div>
 
-                            {/* System Prompt */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <Bot className="w-5 h-5 text-purple-600" />
-                                    System Prompt
-                                </h3>
-                                <textarea
-                                    value={inboundConfig.systemPrompt}
-                                    onChange={(e) => setInboundConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                                    placeholder="You are a helpful AI assistant..."
-                                    className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm leading-relaxed"
-                                />
-                            </div>
+                    {/* Template Selector */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Bot className="w-5 h-5 text-indigo-600" />
+                            Prompt Template
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">Auto-fill the system prompt and first message with industry best practices.</p>
+                        <select
+                            onChange={(e) => applyTemplate(e.target.value, 'inbound')}
+                            className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            defaultValue=""
+                        >
+                            <option value="" disabled>Select a template...</option>
+                            {PROMPT_TEMPLATES.map((template) => (
+                                <option key={template.id} value={template.id}>
+                                    {template.name} - {template.description}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                            {/* First Message */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <MessageSquare className="w-5 h-5 text-blue-600" />
-                                    First Message
-                                </h3>
-                                <textarea
-                                    value={inboundConfig.firstMessage}
-                                    onChange={(e) => setInboundConfig(prev => ({ ...prev, firstMessage: e.target.value }))}
-                                    placeholder="Hello, thanks for calling!"
-                                    className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                                />
-                            </div>
+                    {/* System Prompt */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Bot className="w-5 h-5 text-purple-600" />
+                            System Prompt
+                        </h3>
+                        <textarea
+                            value={inboundConfig.systemPrompt}
+                            onChange={(e) => setInboundConfig({ systemPrompt: e.target.value })}
+                            placeholder="You are a helpful AI assistant..."
+                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                        />
+                    </div>
 
-                            {/* Voice & Language */}
-                            <div className="space-y-4">
-                                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                        <Volume2 className="w-5 h-5 text-blue-600" />
-                                        Voice
-                                    </h3>
-                                    <select
-                                        value={inboundConfig.voice}
-                                        onChange={(e) => setInboundConfig(prev => ({ ...prev, voice: e.target.value }))}
-                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                    >
-                                        <option value="">Select a voice...</option>
-                                        {voices.map((voice) => (
-                                            <option key={voice.id} value={voice.id}>
-                                                {voice.name} ({voice.gender}) - {voice.provider}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                    {/* First Message */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <MessageSquare className="w-5 h-5 text-blue-600" />
+                            First Message
+                        </h3>
+                        <textarea
+                            value={inboundConfig.firstMessage}
+                            onChange={(e) => setInboundConfig({ firstMessage: e.target.value })}
+                            placeholder="Hello, thanks for calling!"
+                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                        />
+                    </div>
 
-                                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                        <Globe className="w-5 h-5 text-cyan-600" />
-                                        Language
-                                    </h3>
-                                    <select
-                                        value={inboundConfig.language}
-                                        onChange={(e) => setInboundConfig(prev => ({ ...prev, language: e.target.value }))}
-                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                    >
-                                        <option value="en-US">English (US)</option>
-                                        <option value="en-GB">English (UK)</option>
-                                        <option value="es-ES">Spanish (Spain)</option>
-                                        <option value="es-MX">Spanish (Mexico)</option>
-                                        <option value="fr-FR">French</option>
-                                        <option value="de-DE">German</option>
-                                        <option value="it-IT">Italian</option>
-                                        <option value="pt-BR">Portuguese (Brazil)</option>
-                                        <option value="pt-PT">Portuguese (Portugal)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Max Duration */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <Clock className="w-5 h-5 text-amber-600" />
-                                    Max Call Duration
-                                </h3>
-                                <div className="flex items-center gap-4">
-                                    <input
-                                        type="number"
-                                        value={inboundConfig.maxDuration}
-                                        onChange={(e) => setInboundConfig(prev => ({ ...prev, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS }))}
-                                        min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                        max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                    />
-                                    <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
-                                </div>
-                            </div>
-
-                            {/* Test Button */}
-                            <button
-                                onClick={handleTestInbound}
-                                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    {/* Voice & Language */}
+                    <div className="space-y-4">
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Volume2 className="w-5 h-5 text-blue-600" />
+                                Voice
+                            </h3>
+                            <select
+                                value={inboundConfig.voice}
+                                onChange={(e) => setInboundConfig({ voice: e.target.value })}
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             >
-                                🌐 Test Web (Browser)
-                            </button>
+                                <option value="">Select a voice...</option>
+                                {voices.map((voice) => (
+                                    <option key={voice.id} value={voice.id}>
+                                        {voice.name} ({voice.gender}) - {voice.provider}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
-                        {/* OUTBOUND AGENT */}
-                        <div className="space-y-6">
-                            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 rounded-2xl p-6">
-                                <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-2 mb-1">
-                                    📤 Outbound Agent
-                                </h2>
-                                <p className="text-sm text-emerald-700">Makes outgoing calls</p>
-                                {inboundStatus?.configured && inboundStatus?.inboundNumber && (
-                                    <p className="text-xs text-emerald-600 mt-2">Caller ID: {inboundStatus.inboundNumber}</p>
-                                )}
-                            </div>
-
-                            {/* System Prompt */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <Bot className="w-5 h-5 text-purple-600" />
-                                    System Prompt
-                                </h3>
-                                <textarea
-                                    value={outboundConfig.systemPrompt}
-                                    onChange={(e) => setOutboundConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                                    placeholder="You are a professional outbound sales representative..."
-                                    className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
-                                />
-                            </div>
-
-                            {/* First Message */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <MessageSquare className="w-5 h-5 text-blue-600" />
-                                    First Message
-                                </h3>
-                                <textarea
-                                    value={outboundConfig.firstMessage}
-                                    onChange={(e) => setOutboundConfig(prev => ({ ...prev, firstMessage: e.target.value }))}
-                                    placeholder="Hello! This is an outbound call from..."
-                                    className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
-                                />
-                            </div>
-
-                            {/* Voice & Language */}
-                            <div className="space-y-4">
-                                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                        <Volume2 className="w-5 h-5 text-emerald-600" />
-                                        Voice
-                                    </h3>
-                                    <select
-                                        value={outboundConfig.voice}
-                                        onChange={(e) => setOutboundConfig(prev => ({ ...prev, voice: e.target.value }))}
-                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                                    >
-                                        <option value="">Select a voice...</option>
-                                        {voices.map((voice) => (
-                                            <option key={voice.id} value={voice.id}>
-                                                {voice.name} ({voice.gender}) - {voice.provider}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                        <Globe className="w-5 h-5 text-cyan-600" />
-                                        Language
-                                    </h3>
-                                    <select
-                                        value={outboundConfig.language}
-                                        onChange={(e) => setOutboundConfig(prev => ({ ...prev, language: e.target.value }))}
-                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                                    >
-                                        <option value="en-US">English (US)</option>
-                                        <option value="en-GB">English (UK)</option>
-                                        <option value="es-ES">Spanish (Spain)</option>
-                                        <option value="es-MX">Spanish (Mexico)</option>
-                                        <option value="fr-FR">French</option>
-                                        <option value="de-DE">German</option>
-                                        <option value="it-IT">Italian</option>
-                                        <option value="pt-BR">Portuguese (Brazil)</option>
-                                        <option value="pt-PT">Portuguese (Portugal)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Max Duration */}
-                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <Clock className="w-5 h-5 text-amber-600" />
-                                    Max Call Duration
-                                </h3>
-                                <div className="flex items-center gap-4">
-                                    <input
-                                        type="number"
-                                        value={outboundConfig.maxDuration}
-                                        onChange={(e) => setOutboundConfig(prev => ({ ...prev, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS }))}
-                                        min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                        max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                        className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                                    />
-                                    <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
-                                </div>
-                            </div>
-
-                            {/* Test Button */}
-                            <button
-                                onClick={handleTestOutbound}
-                                className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Globe className="w-5 h-5 text-cyan-600" />
+                                Language
+                            </h3>
+                            <select
+                                value={inboundConfig.language}
+                                onChange={(e) => setInboundConfig({ language: e.target.value })}
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             >
-                                ☎️ Test Live Call
-                            </button>
+                                <option value="en-US">English (US)</option>
+                                <option value="en-GB">English (UK)</option>
+                                <option value="es-ES">Spanish (Spain)</option>
+                                <option value="es-MX">Spanish (Mexico)</option>
+                                <option value="fr-FR">French</option>
+                                <option value="de-DE">German</option>
+                                <option value="it-IT">Italian</option>
+                                <option value="pt-BR">Portuguese (Brazil)</option>
+                                <option value="pt-PT">Portuguese (Portugal)</option>
+                            </select>
                         </div>
                     </div>
-                </div>
+
+                    {/* Max Duration */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-amber-600" />
+                            Max Call Duration
+                        </h3>
+                        <div className="flex items-center gap-4">
+                            <input
+                                type="number"
+                                value={inboundConfig.maxDuration}
+                                onChange={(e) => setInboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
+                                min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
+                                max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            />
+                            <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
+                        </div>
+                    </div>
+
+                    {/* Test Button */}
+                    <button
+                        onClick={handleTestInbound}
+                        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                        🌐 Test Web (Browser)
+                    </button>
             </div>
+            )}
+
+            {/* OUTBOUND AGENT TAB */}
+            {activeTab === 'outbound' && (
+            <div className="space-y-6 max-w-3xl">
+                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 rounded-2xl p-6">
+                        <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-2 mb-1">
+                            📤 Outbound Agent
+                        </h2>
+                        <p className="text-sm text-emerald-700">Makes outgoing calls</p>
+                        {inboundStatus?.configured && inboundStatus?.inboundNumber && (
+                            <p className="text-xs text-emerald-600 mt-2">Caller ID: {inboundStatus.inboundNumber}</p>
+                        )}
+                    </div>
+
+                    {/* System Prompt */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Bot className="w-5 h-5 text-purple-600" />
+                            System Prompt
+                        </h3>
+                        <textarea
+                            value={outboundConfig.systemPrompt}
+                            onChange={(e) => setOutboundConfig({ systemPrompt: e.target.value })}
+                            placeholder="You are a professional outbound sales representative..."
+                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                        />
+                    </div>
+
+                    {/* First Message */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <MessageSquare className="w-5 h-5 text-blue-600" />
+                            First Message
+                        </h3>
+                        <textarea
+                            value={outboundConfig.firstMessage}
+                            onChange={(e) => setOutboundConfig({ firstMessage: e.target.value })}
+                            placeholder="Hello! This is an outbound call from..."
+                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
+                        />
+                    </div>
+
+                    {/* Voice & Language */}
+                    <div className="space-y-4">
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Volume2 className="w-5 h-5 text-emerald-600" />
+                                Voice
+                            </h3>
+                            <select
+                                value={outboundConfig.voice}
+                                onChange={(e) => setOutboundConfig({ voice: e.target.value })}
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            >
+                                <option value="">Select a voice...</option>
+                                {voices.map((voice) => (
+                                    <option key={voice.id} value={voice.id}>
+                                        {voice.name} ({voice.gender}) - {voice.provider}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Globe className="w-5 h-5 text-cyan-600" />
+                                Language
+                            </h3>
+                            <select
+                                value={outboundConfig.language}
+                                onChange={(e) => setOutboundConfig({ language: e.target.value })}
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            >
+                                <option value="en-US">English (US)</option>
+                                <option value="en-GB">English (UK)</option>
+                                <option value="es-ES">Spanish (Spain)</option>
+                                <option value="es-MX">Spanish (Mexico)</option>
+                                <option value="fr-FR">French</option>
+                                <option value="de-DE">German</option>
+                                <option value="it-IT">Italian</option>
+                                <option value="pt-BR">Portuguese (Brazil)</option>
+                                <option value="pt-PT">Portuguese (Portugal)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Max Duration */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-amber-600" />
+                            Max Call Duration
+                        </h3>
+                        <div className="flex items-center gap-4">
+                            <input
+                                type="number"
+                                value={outboundConfig.maxDuration}
+                                onChange={(e) => setOutboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
+                                min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
+                                max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            />
+                            <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
+                        </div>
+                    </div>
+
+                    {/* Test Button */}
+                    <button
+                        onClick={handleTestOutbound}
+                        className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                    >
+                        ☎️ Test Live Call
+                    </button>
+            </div>
+            )}
         </div>
+
     );
 }

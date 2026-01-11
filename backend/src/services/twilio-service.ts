@@ -1,27 +1,24 @@
 /**
  * Twilio Service
  * Handles SMS and WhatsApp messaging via Twilio
+ * Supports multi-tenant credential injection
  */
 
 import twilio from 'twilio';
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
-const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155552671'; // Twilio sandbox by default
-
-if (!accountSid || !authToken || !fromPhoneNumber) {
-  console.warn(
-    '[Twilio Service] Missing Twilio credentials. SMS/WhatsApp will not work.'
-  );
+// Interface for dynamic credentials
+export interface TwilioCredentials {
+  accountSid: string;
+  authToken: string;
+  phoneNumber: string;
+  whatsappNumber?: string;
 }
 
-const client = accountSid && authToken ? twilio(accountSid, authToken) : null;
-
+// Basic message options
 interface SendSmsOptions {
   to: string;
   message: string;
-  from?: string;
+  from?: string; // Optional override
 }
 
 interface SendWhatsAppOptions {
@@ -36,12 +33,50 @@ interface TwilioResult {
 }
 
 /**
+ * Get a Twilio client instance
+ * Uses provided credentials or falls back to environment variables
+ */
+function getClient(creds?: TwilioCredentials) {
+  if (creds) {
+    return twilio(creds.accountSid, creds.authToken);
+  }
+
+  // Fallback to env vars (Legacy/Dev mode)
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (accountSid && authToken) {
+    return twilio(accountSid, authToken);
+  }
+
+  return null;
+}
+
+/**
+ * Get sender number
+ */
+function getFromNumber(creds?: TwilioCredentials): string | undefined {
+  if (creds) return creds.phoneNumber;
+  return process.env.TWILIO_PHONE_NUMBER;
+}
+
+function getWhatsappNumber(creds?: TwilioCredentials): string {
+  if (creds?.whatsappNumber) return creds.whatsappNumber;
+  return process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155552671';
+}
+
+/**
  * Send SMS via Twilio
  */
 export async function sendSmsTwilio(
-  options: SendSmsOptions
+  options: SendSmsOptions,
+  credentials?: TwilioCredentials
 ): Promise<TwilioResult> {
-  if (!client) {
+  const client = getClient(credentials);
+  const fromNumber = options.from || getFromNumber(credentials);
+
+  if (!client || !fromNumber) {
+    console.error('[Twilio SMS] Missing credentials or phone number');
     return {
       success: false,
       error: 'Twilio not configured'
@@ -50,13 +85,14 @@ export async function sendSmsTwilio(
 
   try {
     // Add status callback for real delivery tracking
-    const statusCallbackUrl = process.env.BACKEND_URL 
+    // Note: Callbacks need a publicly accessible URL
+    const statusCallbackUrl = process.env.BACKEND_URL
       ? `${process.env.BACKEND_URL}/api/webhooks/sms-status`
       : undefined;
 
     const message = await client.messages.create({
       body: options.message,
-      from: options.from || fromPhoneNumber,
+      from: fromNumber,
       to: options.to,
       ...(statusCallbackUrl && {
         statusCallback: statusCallbackUrl,
@@ -85,8 +121,12 @@ export async function sendSmsTwilio(
  * Send WhatsApp message via Twilio
  */
 export async function sendWhatsAppTwilio(
-  options: SendWhatsAppOptions
+  options: SendWhatsAppOptions,
+  credentials?: TwilioCredentials
 ): Promise<TwilioResult> {
+  const client = getClient(credentials);
+  const fromNumber = getWhatsappNumber(credentials);
+
   if (!client) {
     return {
       success: false,
@@ -102,7 +142,7 @@ export async function sendWhatsAppTwilio(
 
     const message = await client.messages.create({
       body: options.message,
-      from: whatsappNumber,
+      from: fromNumber,
       to: toNumber
     });
 
@@ -129,14 +169,15 @@ export async function sendWhatsAppTwilio(
 export async function sendDemoSmSTemplate(
   to: string,
   clinic_name: string,
-  demo_url: string
+  demo_url: string,
+  credentials?: TwilioCredentials
 ): Promise<TwilioResult> {
   const message = `Hi! 👋 Watch your Call Waiting AI AI demo for ${clinic_name}: ${demo_url} - See how we answer 100% of calls 24/7! 📞✨`;
 
   return sendSmsTwilio({
     to,
     message
-  });
+  }, credentials);
 }
 
 /**
@@ -145,14 +186,15 @@ export async function sendDemoSmSTemplate(
 export async function sendDemoWhatsAppTemplate(
   to: string,
   clinic_name: string,
-  demo_url: string
+  demo_url: string,
+  credentials?: TwilioCredentials
 ): Promise<TwilioResult> {
   const message = `Hi! 👋\n\nHere's your personalized Call Waiting AI AI demo for ${clinic_name}:\n\n${demo_url}\n\nSee how we answer 100% of calls 24/7! 📞✨\n\nQuestions? Just reply here!`;
 
   return sendWhatsAppTwilio({
     to,
     message
-  });
+  }, credentials);
 }
 
 export default {

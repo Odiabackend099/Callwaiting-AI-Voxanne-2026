@@ -2,42 +2,47 @@
 
 import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
-import { useRouter, usePathname } from 'next/navigation';
-import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 
 export default function LeftSidebar() {
-    const router = useRouter();
     const pathname = usePathname();
+    const router = useRouter();
     const { user, signOut } = useAuth();
-
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const navItems = useMemo(() => ([
         { label: 'Dashboard', href: '/dashboard', icon: Activity },
         { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
         { label: 'Agent Configuration', href: '/dashboard/agent-config', icon: Bot },
+        { label: 'Escalation Rules', href: '/dashboard/escalation-rules', icon: Zap },
         { label: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
-        { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
+        { label: 'Leads', href: '/dashboard/leads', icon: Activity },
         { label: 'Test Agents', href: '/dashboard/test', icon: Zap },
+        { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
+        { label: 'Settings', href: '/dashboard/settings', icon: Settings },
     ]), []);
 
-    const handleNavigate = (href: string) => {
+    const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+        // Voice session check
         try {
             const isVoiceActive = typeof window !== 'undefined' && window.sessionStorage.getItem('voice_session_active') === 'true';
-
-            // Voice session is persisted across dashboard routes, so do not warn when navigating within /dashboard.
             const leavingDashboard = !href.startsWith('/dashboard');
+
             if (isVoiceActive && leavingDashboard) {
                 const ok = window.confirm('A voice session is currently active. Leaving the dashboard may stop the call. Continue?');
-                if (!ok) return;
+                if (!ok) {
+                    e.preventDefault();
+                    return;
+                }
             }
         } catch {
             // ignore
         }
 
-        router.push(href);
         setMobileOpen(false);
     };
 
@@ -83,9 +88,10 @@ export default function LeftSidebar() {
                         : pathname?.startsWith(item.href);
 
                     return (
-                        <button
+                        <Link
                             key={item.href}
-                            onClick={() => handleNavigate(item.href)}
+                            href={item.href}
+                            onClick={(e) => handleLinkClick(e, item.href)}
                             className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${isActive
                                 ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
                                 : 'text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800/50'
@@ -93,7 +99,7 @@ export default function LeftSidebar() {
                         >
                             <Icon className="w-5 h-5" />
                             {item.label}
-                        </button>
+                        </Link>
                     );
                 })}
             </nav>

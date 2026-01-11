@@ -56,8 +56,8 @@ const testPassword = process.env.TEST_PASSWORD || 'TestPassword123!';
 async function getAuthToken(): Promise<string | null> {
   try {
     console.log('🔐 Attempting to get authentication token...');
-    
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+
+    const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
       auth: {
         autoRefreshToken: false,
         persistSession: false
@@ -236,10 +236,10 @@ async function runTests() {
     category: 'general',
     active: true
   };
-  
+
   const kbPostTest = await testEndpoint('Knowledge Base POST', 'POST', '/api/knowledge-base', token, testDoc);
   let createdDocId: string | null = null;
-  
+
   if (kbPostTest.success) {
     console.log(`✅ Status: ${kbPostTest.status} OK`);
     if (kbPostTest.data?.id) {

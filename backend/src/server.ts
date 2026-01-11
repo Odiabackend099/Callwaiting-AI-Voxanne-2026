@@ -23,6 +23,9 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
   });
 }
 
+// Import centralized configuration (single source of truth for env variables)
+import { config } from './config';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -59,6 +62,8 @@ import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
 import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
 import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
+import escalationRulesRouter from './routes/escalation-rules';
+import teamRouter from './routes/team';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -178,6 +183,8 @@ app.use('/api/founder-console', founderConsoleSettingsRouter);
 app.use('/api/founder-console', agentSyncRouter);
 app.use('/api/dashboard', dashboardLeadsRouter);
 app.use('/api/book-demo', bookDemoRouter);
+app.use('/api/escalation-rules', escalationRulesRouter);
+app.use('/api/team', teamRouter);
 
 // Google Calendar OAuth routes
 app.use('/api/google-oauth', googleOAuthRouter);

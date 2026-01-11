@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Trash2, CheckCircle, AlertCircle, Calendar, Phone, Users, Zap, X, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import LeftSidebar from '@/components/dashboard/LeftSidebar';
+// LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface Notification {
@@ -210,212 +210,207 @@ const NotificationsCenterContent = () => {
     if (!user) return null;
 
     return (
-        <div className="flex h-screen bg-white dark:bg-slate-950">
-            <LeftSidebar />
-
-            <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
-                <div className="max-w-3xl mx-auto px-6 py-8">
-                    {/* Header */}
-                    <div className="mb-8">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-50 mb-2">Notifications</h1>
-                                <p className="text-gray-600 dark:text-slate-400">
-                                    {unreadCount > 0 ? (
-                                        <span>You have <span className="font-bold text-red-600 dark:text-red-400">{unreadCount}</span> unread notifications</span>
-                                    ) : (
-                                        'All notifications read'
-                                    )}
-                                </p>
-                            </div>
-                            {unreadCount > 0 && (
-                                <button
-                                    onClick={handleMarkAllAsRead}
-                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium"
-                                >
-                                    Mark All as Read
-                                </button>
+        <div className="max-w-3xl mx-auto px-6 py-8">
+            {/* Header */}
+            <div className="mb-8">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-50 mb-2">Notifications</h1>
+                        <p className="text-gray-600 dark:text-slate-400">
+                            {unreadCount > 0 ? (
+                                <span>You have <span className="font-bold text-red-600 dark:text-red-400">{unreadCount}</span> unread notifications</span>
+                            ) : (
+                                'All notifications read'
                             )}
-                        </div>
+                        </p>
                     </div>
-
-                    {/* Error Message */}
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg text-red-700 dark:text-red-400 text-sm">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Filters */}
-                    <div className="mb-6 flex gap-4 flex-wrap">
+                    {unreadCount > 0 && (
                         <button
-                            onClick={() => {
-                                setFilterUnread(!filterUnread);
-                                setCurrentPage(1);
-                            }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterUnread
-                                ? 'bg-emerald-600 text-white'
-                                : 'border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-                                }`}
+                            onClick={handleMarkAllAsRead}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium"
                         >
-                            <Filter className="w-4 h-4" />
-                            Unread Only
+                            Mark All as Read
                         </button>
-
-                        <select
-                            value={filterType}
-                            onChange={(e) => {
-                                setFilterType(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        >
-                            <option value="">All Types</option>
-                            <option value="hot_lead">Hot Leads</option>
-                            <option value="appointment">Appointments</option>
-                            <option value="call">Calls</option>
-                            <option value="lead_update">Lead Updates</option>
-                        </select>
-                    </div>
-
-                    {/* Notifications List */}
-                    <div className="space-y-4">
-                        {isLoading ? (
-                            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-12">
-                                <div className="flex flex-col items-center gap-3">
-                                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                                    <p className="text-gray-600 dark:text-slate-400">Loading notifications...</p>
-                                </div>
-                            </div>
-                        ) : notifications.length === 0 ? (
-                            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-12">
-                                <div className="flex flex-col items-center gap-4">
-                                    <Bell className="w-12 h-12 text-gray-300 dark:text-slate-700" />
-                                    <p className="text-gray-600 dark:text-slate-400">No notifications</p>
-                                    <p className="text-sm text-gray-500 dark:text-slate-500">Your notifications will appear here</p>
-                                </div>
-                            </div>
-                        ) : (
-                            notifications.map((notification) => (
-                                <div
-                                    key={notification.id}
-                                    onClick={() => handleNotificationClick(notification)}
-                                    className={`border rounded-xl p-4 transition-all cursor-pointer hover:shadow-md ${notification.read
-                                        ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
-                                        : 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-900/50 ring-1 ring-emerald-200 dark:ring-emerald-900/50'
-                                        }`}
-                                >
-                                    <div className="flex items-start gap-4">
-                                        {/* Icon */}
-                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${getNotificationColor(notification.type)}`}>
-                                            {getNotificationIcon(notification.type)}
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="flex-1">
-                                                    <h3 className={`font-bold text-sm ${notification.read
-                                                        ? 'text-gray-700 dark:text-slate-300'
-                                                        : 'text-gray-900 dark:text-slate-50'
-                                                        }`}>
-                                                        {notification.title}
-                                                    </h3>
-                                                    <p className={`text-sm mt-1 ${notification.read
-                                                        ? 'text-gray-600 dark:text-slate-400'
-                                                        : 'text-gray-700 dark:text-slate-300'
-                                                        }`}>
-                                                        {notification.message}
-                                                    </p>
-                                                </div>
-
-                                                {/* Unread Badge */}
-                                                {!notification.read && (
-                                                    <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-500 mt-1" />
-                                                )}
-                                            </div>
-
-                                            {/* Footer */}
-                                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
-                                                <span className={`text-xs font-medium ${notification.read
-                                                    ? 'text-gray-500 dark:text-slate-500'
-                                                    : 'text-gray-600 dark:text-slate-400'
-                                                    }`}>
-                                                    {formatTimeAgo(notification.created_at)}
-                                                </span>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteNotification(notification.id);
-                                                    }}
-                                                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                                                    title="Delete notification"
-                                                >
-                                                    <Trash2 className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between mt-8 px-6 py-4">
-                                <div className="text-sm text-gray-700 dark:text-slate-400">
-                                    Showing {(currentPage - 1) * notificationsPerPage + 1} to {Math.min(currentPage * notificationsPerPage, totalNotifications)} of {totalNotifications} notifications
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
-                                        className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                        Previous
-                                    </button>
-                                    <div className="flex items-center gap-1">
-                                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                            let pageNum;
-                                            if (totalPages <= 5) {
-                                                pageNum = i + 1;
-                                            } else if (currentPage <= 3) {
-                                                pageNum = i + 1;
-                                            } else if (currentPage >= totalPages - 2) {
-                                                pageNum = totalPages - 4 + i;
-                                            } else {
-                                                pageNum = currentPage - 2 + i;
-                                            }
-                                            return (
-                                                <button
-                                                    key={pageNum}
-                                                    onClick={() => setCurrentPage(pageNum)}
-                                                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum
-                                                        ? 'bg-emerald-600 text-white'
-                                                        : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-                                                        }`}
-                                                >
-                                                    {pageNum}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                                    >
-                                        Next
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+                <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg text-red-700 dark:text-red-400 text-sm">
+                    {error}
+                </div>
+            )}
+
+            {/* Filters */}
+            <div className="mb-6 flex gap-4 flex-wrap">
+                <button
+                    onClick={() => {
+                        setFilterUnread(!filterUnread);
+                        setCurrentPage(1);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterUnread
+                        ? 'bg-emerald-600 text-white'
+                        : 'border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                        }`}
+                >
+                    <Filter className="w-4 h-4" />
+                    Unread Only
+                </button>
+
+                <select
+                    value={filterType}
+                    onChange={(e) => {
+                        setFilterType(e.target.value);
+                        setCurrentPage(1);
+                    }}
+                    className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                    <option value="">All Types</option>
+                    <option value="hot_lead">Hot Leads</option>
+                    <option value="appointment">Appointments</option>
+                    <option value="call">Calls</option>
+                    <option value="lead_update">Lead Updates</option>
+                </select>
+            </div>
+
+            {/* Notifications List */}
+            <div className="space-y-4">
+                {isLoading ? (
+                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-12">
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
+                            <p className="text-gray-600 dark:text-slate-400">Loading notifications...</p>
+                        </div>
+                    </div>
+                ) : notifications.length === 0 ? (
+                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-12">
+                        <div className="flex flex-col items-center gap-4">
+                            <Bell className="w-12 h-12 text-gray-300 dark:text-slate-700" />
+                            <p className="text-gray-600 dark:text-slate-400">No notifications</p>
+                            <p className="text-sm text-gray-500 dark:text-slate-500">Your notifications will appear here</p>
+                        </div>
+                    </div>
+                ) : (
+                    notifications.map((notification) => (
+                        <div
+                            key={notification.id}
+                            onClick={() => handleNotificationClick(notification)}
+                            className={`border rounded-xl p-4 transition-all cursor-pointer hover:shadow-md ${notification.read
+                                ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
+                                : 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-900/50 ring-1 ring-emerald-200 dark:ring-emerald-900/50'
+                                }`}
+                        >
+                            <div className="flex items-start gap-4">
+                                {/* Icon */}
+                                <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${getNotificationColor(notification.type)}`}>
+                                    {getNotificationIcon(notification.type)}
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                            <h3 className={`font-bold text-sm ${notification.read
+                                                ? 'text-gray-700 dark:text-slate-300'
+                                                : 'text-gray-900 dark:text-slate-50'
+                                                }`}>
+                                                {notification.title}
+                                            </h3>
+                                            <p className={`text-sm mt-1 ${notification.read
+                                                ? 'text-gray-600 dark:text-slate-400'
+                                                : 'text-gray-700 dark:text-slate-300'
+                                                }`}>
+                                                {notification.message}
+                                            </p>
+                                        </div>
+
+                                        {/* Unread Badge */}
+                                        {!notification.read && (
+                                            <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-500 mt-1" />
+                                        )}
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+                                        <span className={`text-xs font-medium ${notification.read
+                                            ? 'text-gray-500 dark:text-slate-500'
+                                            : 'text-gray-600 dark:text-slate-400'
+                                            }`}>
+                                            {formatTimeAgo(notification.created_at)}
+                                        </span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteNotification(notification.id);
+                                            }}
+                                            className="p-1.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                            title="Delete notification"
+                                        >
+                                            <Trash2 className="w-4 h-4 text-gray-500 dark:text-slate-500" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-8 px-6 py-4">
+                        <div className="text-sm text-gray-700 dark:text-slate-400">
+                            Showing {(currentPage - 1) * notificationsPerPage + 1} to {Math.min(currentPage * notificationsPerPage, totalNotifications)} of {totalNotifications} notifications
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                                Previous
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum;
+                                    if (totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage >= totalPages - 2) {
+                                        pageNum = totalPages - 4 + i;
+                                    } else {
+                                        pageNum = currentPage - 2 + i;
+                                    }
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setCurrentPage(pageNum)}
+                                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            >
+                                Next
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
+
     );
 };
 

@@ -1,28 +1,28 @@
-// Ensure environment variables are loaded
-// Load .env explicitly from backend directory using process.cwd()
-// @ts-ignore
-const path = require('path');
-const envPath = path.join(process.cwd(), '.env');
-// @ts-ignore
-require('dotenv').config({ path: envPath });
+/**
+ * Supabase Client
+ *
+ * IMPORTANT: This module uses centralized config management in backend/src/config/index.ts
+ * Environment variables are loaded once at application startup, not here.
+ *
+ * DO NOT add dotenv loading here - it's already handled by server.ts importing config/index.ts
+ */
 
 import { createClient } from '@supabase/supabase-js';
+import { config } from '../config';
 
-const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseUrl = (config.SUPABASE_URL || '').trim();
 // CRITICAL: Sanitize API key to prevent "Invalid character in header content" errors
 // Remove all control characters, newlines, carriage returns, and trim whitespace
 const supabaseKey = (
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_SERVICE_KEY ||
-  ''
+  config.SUPABASE_SERVICE_ROLE_KEY || ''
 ).trim().replace(/[\r\n\t\x00-\x1F\x7F]/g, '');
 
 if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY) environment variables');
+  throw new Error('Missing SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY environment variables');
 }
 
 function fetchWithTimeout(input: any, init?: any) {
-  const timeoutMs = Number(process.env.SUPABASE_FETCH_TIMEOUT_MS || 8000);
+  const timeoutMs = config.SUPABASE_FETCH_TIMEOUT_MS || 8000;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 

@@ -14,6 +14,7 @@ declare global {
         id: string;
         email: string;
         orgId: string;
+        role?: 'admin' | 'agent' | 'viewer';
       };
       org?: {
         id: string;
@@ -231,4 +232,46 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     console.error('[Optional Auth Middleware] Error:', error);
     next(); // Don't block on error for optional auth
   }
+}
+
+/**
+ * Require specific role (admin, agent, or viewer)
+ * Must be used after requireAuth or requireAuthOrDev
+ */
+export function requireRole(...allowedRoles: ('admin' | 'agent' | 'viewer')[]) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
+      // Fetch user role from user_org_roles
+      const { data: userRole, error } = await supabase
+        .from('user_org_roles')
+        .select('role')
+        .eq('user_id', req.user.id)
+        .eq('org_id', req.user.orgId)
+        .single();
+
+      if (error || !userRole) {
+        res.status(403).json({ error: 'User role not found' });
+        return;
+      }
+
+      if (!allowedRoles.includes(userRole.role as any)) {
+        res.status(403).json({
+          error: `Access denied. Required role: ${allowedRoles.join(' or ')}`
+        });
+        return;
+      }
+
+      // Attach role to request
+      req.user.role = userRole.role as any;
+      next();
+    } catch (error: any) {
+      console.error('[Role Middleware] Error:', error);
+      res.status(500).json({ error: 'Authorization failed' });
+    }
+  };
 }

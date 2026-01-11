@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import LeftSidebar from '@/components/dashboard/LeftSidebar';
-import { Settings, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, ChevronDown } from 'lucide-react';
+// LeftSidebar removed (now in layout)
+import { Settings, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, ChevronDown, Users } from 'lucide-react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { TeamMembersList } from './components/TeamMembersList';
 
 interface VapiAssistant {
   id: string;
@@ -30,6 +31,7 @@ interface SettingsData {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'general' | 'team'>('general');
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,7 +59,7 @@ export default function SettingsPage() {
         setError(null);
         const data = await authedBackendFetch<any>('/api/founder-console/settings');
         setSettings(data);
-        
+
         if (data.vapiApiKey) {
           setApiKey(data.vapiApiKey);
         }
@@ -143,7 +145,7 @@ export default function SettingsPage() {
       });
 
       setSuccess(`✅ Webhook configured successfully for ${selectedAssistantId}`);
-      
+
       // Save to database
       const newSettings = await authedBackendFetch<any>('/api/founder-console/settings', {
         method: 'POST',
@@ -198,264 +200,292 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <LeftSidebar />
+    <div className="max-w-2xl mx-auto p-8">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <Settings className="w-8 h-8 text-emerald-600" />
+          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+        </div>
+        <p className="text-gray-600">Configure your account, team, and integrations</p>
+      </div>
 
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-2xl mx-auto p-8">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <Settings className="w-8 h-8 text-emerald-600" />
-              <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-            </div>
-            <p className="text-gray-600">Configure your Vapi integration with just your API key</p>
+      {/* Tabs */}
+      <div className="mb-8 flex gap-4 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`px-4 py-3 font-medium border-b-2 transition ${
+            activeTab === 'general'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4" />
+            General Settings
           </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('team')}
+          className={`px-4 py-3 font-medium border-b-2 transition ${
+            activeTab === 'team'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Team Members
+          </div>
+        </button>
+      </div>
 
-          {loading ? (
-            <div className="bg-white rounded-lg shadow p-8 flex items-center justify-center gap-3">
-              <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
-              <span className="text-gray-600">Loading settings...</span>
-            </div>
-          ) : (
-            <>
-              {/* Vapi Configuration Section */}
-              <div className="bg-white rounded-lg shadow p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Vapi Integration</h2>
+      {loading && activeTab === 'general' ? (
+        <div className="bg-white rounded-lg shadow p-8 flex items-center justify-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+          <span className="text-gray-600">Loading settings...</span>
+        </div>
+      ) : activeTab === 'general' ? (
+        <>
+          {/* Vapi Configuration Section */}
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Vapi Integration</h2>
 
-                <div className="space-y-4">
-                  {/* Step 1: API Key Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Step 1: Enter Vapi API Key
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="sk-..."
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-10"
-                      />
-                      <button
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      >
-                        {showApiKey ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Your private Vapi API key. Never shared or logged.
-                    </p>
-                  </div>
-
-                  {/* Step 2: Discover Button */}
+            <div className="space-y-4">
+              {/* Step 1: API Key Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Step 1: Enter Vapi API Key
+                </label>
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-10"
+                  />
                   <button
-                    onClick={handleDiscoverResources}
-                    disabled={discovering || !apiKey.trim()}
-                    className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
-                    {discovering ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Discovering Assistants...
-                      </>
+                    {showApiKey ? (
+                      <EyeOff className="w-4 h-4" />
                     ) : (
-                      <>
-                        <ChevronDown className="w-5 h-5" />
-                        Step 2: Discover Assistants
-                      </>
+                      <Eye className="w-4 h-4" />
                     )}
                   </button>
-
-                  {/* Step 3: Assistant Selector */}
-                  {assistants.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Step 3: Select Assistant
-                      </label>
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowAssistantDropdown(!showAssistantDropdown)}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-left flex items-center justify-between hover:border-gray-400"
-                        >
-                          <span>
-                            {selectedAssistantId
-                              ? assistants.find(a => a.id === selectedAssistantId)?.name || 'Select Assistant'
-                              : 'Select Assistant'}
-                          </span>
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
-
-                        {showAssistantDropdown && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10">
-                            {assistants.map(assistant => (
-                              <button
-                                key={assistant.id}
-                                onClick={() => {
-                                  setSelectedAssistantId(assistant.id);
-                                  setShowAssistantDropdown(false);
-                                }}
-                                className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b last:border-b-0"
-                              >
-                                <div className="font-medium text-gray-900">{assistant.name}</div>
-                                <div className="text-xs text-gray-500">{assistant.id}</div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Step 4: Configure Button */}
-                  {assistants.length > 0 && selectedAssistantId && (
-                    <button
-                      onClick={handleConfigureWebhook}
-                      disabled={saving}
-                      className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Configuring Webhook...
-                        </>
-                      ) : (
-                        <>
-                          <Settings className="w-5 h-5" />
-                          Step 4: Configure Webhook & Save
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Status */}
-                  {settings?.vapiConfigured && (
-                    <div className="bg-green-50 border border-green-200 rounded p-3 flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-green-900">✅ Vapi Configured</p>
-                        <p className="text-xs text-green-800 mt-1">
-                          Webhook is active and ready to use
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Your private Vapi API key. Never shared or logged.
+                </p>
               </div>
 
-              {/* Success Message */}
-              {success && (
-                <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 flex items-start gap-3">
+              {/* Step 2: Discover Button */}
+              <button
+                onClick={handleDiscoverResources}
+                disabled={discovering || !apiKey.trim()}
+                className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+              >
+                {discovering ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Discovering Assistants...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-5 h-5" />
+                    Step 2: Discover Assistants
+                  </>
+                )}
+              </button>
+
+              {/* Step 3: Assistant Selector */}
+              {assistants.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Step 3: Select Assistant
+                  </label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAssistantDropdown(!showAssistantDropdown)}
+                      className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-left flex items-center justify-between hover:border-gray-400"
+                    >
+                      <span>
+                        {selectedAssistantId
+                          ? assistants.find(a => a.id === selectedAssistantId)?.name || 'Select Assistant'
+                          : 'Select Assistant'}
+                      </span>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+
+                    {showAssistantDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10">
+                        {assistants.map(assistant => (
+                          <button
+                            key={assistant.id}
+                            onClick={() => {
+                              setSelectedAssistantId(assistant.id);
+                              setShowAssistantDropdown(false);
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b last:border-b-0"
+                          >
+                            <div className="font-medium text-gray-900">{assistant.name}</div>
+                            <div className="text-xs text-gray-500">{assistant.id}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Configure Button */}
+              {assistants.length > 0 && selectedAssistantId && (
+                <button
+                  onClick={handleConfigureWebhook}
+                  disabled={saving}
+                  className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Configuring Webhook...
+                    </>
+                  ) : (
+                    <>
+                      <Settings className="w-5 h-5" />
+                      Step 4: Configure Webhook & Save
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Status */}
+              {settings?.vapiConfigured && (
+                <div className="bg-green-50 border border-green-200 rounded p-3 flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h3 className="font-medium text-green-900">Success!</h3>
-                    <p className="text-sm text-green-800 mt-1">{success}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded p-4 mb-6 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-medium text-red-900">Error</h3>
-                    <p className="text-sm text-red-800 mt-1">{error}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Hot Lead SMS Alerts Configuration */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="text-2xl">🔥</div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Hot Lead SMS Alerts</h2>
-                    <p className="text-sm text-gray-600">Receive instant SMS notifications for high-value leads</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="alertPhone" className="block text-sm font-medium text-gray-700 mb-2">
-                      Alert Phone Number
-                      <span className="text-xs text-gray-500 ml-2">(E.164 format: +1234567890)</span>
-                    </label>
-                    <input
-                      id="alertPhone"
-                      type="tel"
-                      placeholder="+12025551234"
-                      value={hotLeadAlertPhone}
-                      onChange={(e) => setHotLeadAlertPhone(e.target.value)}
-                      disabled={testingSMS}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      This phone number will receive SMS alerts when:
-                    </p>
-                    <ul className="text-xs text-gray-500 mt-1 ml-4 space-y-0.5">
-                      <li>✓ AI calls the notify_hot_lead function during a call</li>
-                      <li>✓ Call ends with lead score 70+ (automatic detection)</li>
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={handleTestHotLeadSMS}
-                    disabled={testingSMS || !hotLeadAlertPhone.trim()}
-                    className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
-                  >
-                    {testingSMS ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Sending Test SMS...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Send Test SMS
-                      </>
-                    )}
-                  </button>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                    <p className="text-xs text-blue-900">
-                      <strong>How It Works:</strong> Every inbound call is scored for lead quality. High-value leads (score 70+) trigger instant SMS alerts so your team can follow up immediately. Higher conversion rates = More revenue.
+                    <p className="text-sm font-medium text-green-900">✅ Vapi Configured</p>
+                    <p className="text-xs text-green-800 mt-1">
+                      Webhook is active and ready to use
                     </p>
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
 
-              {/* How It Works */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">How It Works</h2>
-                
-                <div className="space-y-3 text-sm text-gray-600">
-                  <p>
-                    <strong className="text-gray-900">Step 1:</strong> Paste your Vapi API key
-                  </p>
-                  <p>
-                    <strong className="text-gray-900">Step 2:</strong> Click "Discover Assistants" to fetch your assistants from Vapi
-                  </p>
-                  <p>
-                    <strong className="text-gray-900">Step 3:</strong> Select the assistant you want to configure
-                  </p>
-                  <p>
-                    <strong className="text-gray-900">Step 4:</strong> Click "Configure Webhook & Save" to automatically set up the Knowledge Base integration
-                  </p>
-                  <p className="pt-2 border-t border-gray-200">
-                    <strong className="text-emerald-700">Result:</strong> Your assistant is now configured to use the Knowledge Base RAG system. No manual webhook setup needed!
-                  </p>
-                </div>
+          {/* Success Message */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-green-900">Success!</h3>
+                <p className="text-sm text-green-800 mt-1">{success}</p>
               </div>
-            </>
+            </div>
           )}
-        </div>
-      </main>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded p-4 mb-6 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-red-900">Error</h3>
+                <p className="text-sm text-red-800 mt-1">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Hot Lead SMS Alerts Configuration */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-2xl">🔥</div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Hot Lead SMS Alerts</h2>
+                <p className="text-sm text-gray-600">Receive instant SMS notifications for high-value leads</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="alertPhone" className="block text-sm font-medium text-gray-700 mb-2">
+                  Alert Phone Number
+                  <span className="text-xs text-gray-500 ml-2">(E.164 format: +1234567890)</span>
+                </label>
+                <input
+                  id="alertPhone"
+                  type="tel"
+                  placeholder="+12025551234"
+                  value={hotLeadAlertPhone}
+                  onChange={(e) => setHotLeadAlertPhone(e.target.value)}
+                  disabled={testingSMS}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This phone number will receive SMS alerts when:
+                </p>
+                <ul className="text-xs text-gray-500 mt-1 ml-4 space-y-0.5">
+                  <li>✓ AI calls the notify_hot_lead function during a call</li>
+                  <li>✓ Call ends with lead score 70+ (automatic detection)</li>
+                </ul>
+              </div>
+
+              <button
+                onClick={handleTestHotLeadSMS}
+                disabled={testingSMS || !hotLeadAlertPhone.trim()}
+                className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+              >
+                {testingSMS ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sending Test SMS...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Send Test SMS
+                  </>
+                )}
+              </button>
+
+              <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <p className="text-xs text-blue-900">
+                  <strong>How It Works:</strong> Every inbound call is scored for lead quality. High-value leads (score 70+) trigger instant SMS alerts so your team can follow up immediately. Higher conversion rates = More revenue.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* How It Works */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">How It Works</h2>
+
+            <div className="space-y-3 text-sm text-gray-600">
+              <p>
+                <strong className="text-gray-900">Step 1:</strong> Paste your Vapi API key
+              </p>
+              <p>
+                <strong className="text-gray-900">Step 2:</strong> Click "Discover Assistants" to fetch your assistants from Vapi
+              </p>
+              <p>
+                <strong className="text-gray-900">Step 3:</strong> Select the assistant you want to configure
+              </p>
+              <p>
+                <strong className="text-gray-900">Step 4:</strong> Click "Configure Webhook & Save" to automatically set up the Knowledge Base integration
+              </p>
+              <p className="pt-2 border-t border-gray-200">
+                <strong className="text-emerald-700">Result:</strong> Your assistant is now configured to use the Knowledge Base RAG system. No manual webhook setup needed!
+              </p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <TeamMembersList />
+      )}
     </div>
+
+
   );
 }

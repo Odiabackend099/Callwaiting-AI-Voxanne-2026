@@ -800,14 +800,21 @@ router.get('/me', (req: Request, res: Response): void => {
 router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
   try {
     const orgId = req.user?.orgId;
+    const { role } = req.query;
 
     if (!orgId) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
+    // Validate role parameter if provided
+    if (role && !['inbound', 'outbound'].includes(role as string)) {
+      res.status(400).json({ error: 'Invalid role. Must be "inbound" or "outbound"' });
+      return;
+    }
+
     // Parallel fetch for performance (P1 fix: avoid sequential queries on 2G/3G)
-    const [vapiResult, twilioResult, agentResult] = await Promise.all([
+    const [vapiResult, twilioResult, inboundAgentResult, outboundAgentResult] = await Promise.all([
       // Get Vapi integration config (P0 fix: add org_id filter)
       supabase
         .from('integrations')
@@ -824,10 +831,18 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
         .eq('org_id', orgId)
         .limit(1)
         .single(),
-      // Get the outbound agent (select only needed columns for performance)
-      supabase
+      // Get the inbound agent (select only needed columns for performance)
+      role === 'outbound' ? Promise.resolve({ data: null }) : supabase
         .from('agents')
-        .select('id, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id')
+        .select('id, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
+        .eq('role', AGENT_ROLES.INBOUND)
+        .eq('org_id', orgId)
+        .limit(1)
+        .single(),
+      // Get the outbound agent (select only needed columns for performance)
+      role === 'inbound' ? Promise.resolve({ data: null }) : supabase
+        .from('agents')
+        .select('id, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .limit(1)
@@ -836,31 +851,74 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
 
     const vapiIntegration = vapiResult.data;
     const twilioIntegration = twilioResult.data;
-    const agent = agentResult.data;
+    const inboundAgent = inboundAgentResult.data;
+    const outboundAgent = outboundAgentResult.data;
 
     // Build response with masked keys
     const vapiConfig = vapiIntegration?.config || {};
     const twilioConfig = twilioIntegration?.config || {};
 
-    res.json({
-      vapi: {
-        publicKey: maskKey(vapiConfig.vapi_public_key),
-        secretKey: maskKey(vapiConfig.vapi_api_key || vapiConfig.vapi_secret_key),
-        systemPrompt: agent?.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
-        voice: agent?.voice || 'paige',
-        language: agent?.language || 'en-GB',
-        maxCallDuration: agent?.max_call_duration || 600,
+    // Build agents array based on role filter
+    const agents = [];
 
-        firstMessage: agent?.first_message || 'Hello! This is CallWaiting AI calling...',
-        phoneNumberId: vapiConfig.vapi_phone_number_id || '' // Phone ID is not a secret, don't mask it
-      },
+    if (inboundAgent) {
+      agents.push({
+        id: inboundAgent.id,
+        role: 'inbound',
+        systemPrompt: inboundAgent.system_prompt,
+        voice: inboundAgent.voice,
+        language: inboundAgent.language,
+        maxCallDuration: inboundAgent.max_call_duration,
+        firstMessage: inboundAgent.first_message,
+        vapiAssistantId: inboundAgent.vapi_assistant_id
+      });
+    }
+
+    if (outboundAgent) {
+      agents.push({
+        id: outboundAgent.id,
+        role: 'outbound',
+        systemPrompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
+        voice: outboundAgent.voice || 'paige',
+        language: outboundAgent.language || 'en-GB',
+        maxCallDuration: outboundAgent.max_call_duration || 600,
+        firstMessage: outboundAgent.first_message || 'Hello! This is CallWaiting AI calling...',
+        vapiAssistantId: outboundAgent.vapi_assistant_id
+      });
+    }
+
+    // Backward compatibility: expose outbound agent at top level for legacy clients
+    const legacyVapi = outboundAgent ? {
+      publicKey: maskKey(vapiConfig.vapi_public_key),
+      secretKey: maskKey(vapiConfig.vapi_api_key || vapiConfig.vapi_secret_key),
+      systemPrompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
+      voice: outboundAgent.voice || 'paige',
+      language: outboundAgent.language || 'en-GB',
+      maxCallDuration: outboundAgent.max_call_duration || 600,
+      firstMessage: outboundAgent.first_message || 'Hello! This is CallWaiting AI calling...',
+      phoneNumberId: vapiConfig.vapi_phone_number_id || ''
+    } : {
+      publicKey: maskKey(vapiConfig.vapi_public_key),
+      secretKey: maskKey(vapiConfig.vapi_api_key || vapiConfig.vapi_secret_key),
+      systemPrompt: buildOutboundSystemPrompt(getDefaultPromptConfig()),
+      voice: 'paige',
+      language: 'en-GB',
+      maxCallDuration: 600,
+      firstMessage: 'Hello! This is CallWaiting AI calling...',
+      phoneNumberId: vapiConfig.vapi_phone_number_id || ''
+    };
+
+    res.json({
+      success: true,
+      agents,
+      vapiConfigured: Boolean(vapiIntegration),
+      // Legacy response format for backward compatibility
+      vapi: legacyVapi,
       twilio: {
         accountSid: maskKey(twilioConfig.twilio_account_sid),
         authToken: maskKey(twilioConfig.twilio_auth_token),
         fromNumber: twilioConfig.twilio_from_number || ''
-      },
-      agentId: agent?.id || null,
-      vapiAssistantId: agent?.vapi_assistant_id || null
+      }
     });
   } catch (error: any) {
     logger.exception('Failed to get agent config', error);

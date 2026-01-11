@@ -42,7 +42,7 @@ echo "⚠️  IMPORTANT: After deployment, you need to manually add these secret
 echo "   (Render doesn't allow secrets in render.yaml for security)"
 echo ""
 echo "   SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxianltbG9keHByenFndHlxdGNxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzM0OTUzMSwiZXhwIjoyMDc4OTI1NTMxfQ.5B2bBOUgXw2qC6QpIkU2DNZiqMW20y8MzgLQ56LEtFA"
-echo "   VAPI_API_KEY=623b9f25-cda2-4de0-8e6e-5291eac94e32"
+echo "   VAPI_API_KEY=fa8fe4f9-4f22-4efd-af6f-37351aaf1628"
 echo "   OPENAI_API_KEY=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"
 echo "   TWILIO_AUTH_TOKEN=919da20c675c7e4c5a6d8060863042d8"
 echo ""
