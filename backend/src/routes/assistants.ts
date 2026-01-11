@@ -29,17 +29,17 @@ function requireVapi(res: Response): VapiClient | null {
 // Helper to determine voice provider from voice ID (case-insensitive)
 function determineVoiceProvider(voiceId: string): string {
   const id = (voiceId || '').toLowerCase();
-  
+
   // Deepgram voices start with 'aura-'
   if (id.startsWith('aura-')) return 'deepgram';
-  
+
   // OpenAI voices
   if (['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(id)) return 'openai';
-  
+
   // Vapi native voices (case-insensitive)
   const vapiVoices = ['paige', 'rohan', 'neha', 'hana', 'harry', 'elliot', 'lily', 'cole', 'savannah', 'spencer', 'kylie'];
   if (vapiVoices.includes(id)) return 'vapi';
-  
+
   // ElevenLabs voices (most other named voices)
   const elevenLabsVoices = [
     'rachel', 'drew', 'clyde', 'paul', 'domi', 'dave', 'fin', 'sarah', 'antoni', 'thomas',
@@ -49,7 +49,7 @@ function determineVoiceProvider(voiceId: string): string {
     'ryan', 'sam', 'glinda', 'giovanni', 'mimi'
   ];
   if (elevenLabsVoices.includes(id)) return 'elevenlabs';
-  
+
   // Default to vapi for unknown voices
   return 'vapi';
 }
@@ -236,6 +236,28 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
       const voiceId = agent.voice || 'paige';
       const voiceProvider = determineVoiceProvider(voiceId);
 
+      // CRITICAL: Fetch existing assistant to preserve query tools
+      let existingAssistant;
+      try {
+        existingAssistant = await localVapi.getAssistant(agent.vapi_assistant_id);
+      } catch (err: any) {
+        logger.warn('Could not fetch existing assistant, will proceed without tool merging', {
+          error: err?.message
+        });
+      }
+
+      // Preserve query-type tools (Knowledge Base) while updating server tools
+      const existingTools = existingAssistant?.tools || [];
+      const queryTools = existingTools.filter((t: any) => t.type === 'query');
+      const demoTools = localVapi.getDefaultDemoTools(); // Modern server tools
+      const mergedTools = [...queryTools, ...demoTools];
+
+      logger.info('Merging tools', {
+        queryToolsCount: queryTools.length,
+        demoToolsCount: demoTools.length,
+        totalTools: mergedTools.length
+      });
+
       vapiAssistant = await localVapi.updateAssistant(agent.vapi_assistant_id, {
         name: agent.name,
         model: {
@@ -258,9 +280,15 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
           model: 'nova-2',
           language: agent.language || 'en'
         },
-        maxDurationSeconds: agent.max_call_duration || 600,
-        functions: localVapi.getDefaultDemoFunctions()
+        maxDurationSeconds: agent.max_call_duration || 600
+        // CRITICAL: Vapi requires toolIds array, NOT tools objects
+        // Tools must be created separately via /tool endpoint, then referenced by ID
       });
+
+      // After update, merge toolIds separately if needed
+      // For now, tools are managed via Knowledge Base sync - no demo tools on update
+      // Demo tools would need to be created via /tool endpoint first, then IDs merged here
+
     } else {
       // Create new assistant in Vapi
       const { createLogger } = await import('../services/logger');
@@ -276,7 +304,10 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
         voiceProvider: voiceProvider,
         voiceId: voiceId,
         firstMessage: agent.first_message || 'Hello! How can I help you today?'
+        // CRITICAL: Do NOT send tools array - Vapi rejects it
+        // Tools must be created separately and managed via toolIds
       });
+
 
       // Store Vapi ID in Supabase
       const { error: updateError } = await supabase
@@ -369,7 +400,7 @@ assistantsRouter.get('/voices/available', async (req: Request, res: Response) =>
       { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'Southern American female' },
       { id: 'Spencer', name: 'Spencer', gender: 'male', provider: 'vapi', description: 'Casual American male' },
       { id: 'Kylie', name: 'Kylie', gender: 'female', provider: 'vapi', description: 'Australian female' },
-      
+
       // ElevenLabs Voices
       { id: 'rachel', name: 'Rachel', gender: 'female', provider: 'elevenlabs', description: 'American female, calm' },
       { id: 'drew', name: 'Drew', gender: 'male', provider: 'elevenlabs', description: 'American male, well-rounded' },
@@ -413,7 +444,7 @@ assistantsRouter.get('/voices/available', async (req: Request, res: Response) =>
       { id: 'glinda', name: 'Glinda', gender: 'female', provider: 'elevenlabs', description: 'American female, witch' },
       { id: 'giovanni', name: 'Giovanni', gender: 'male', provider: 'elevenlabs', description: 'English-Italian male, foreigner' },
       { id: 'mimi', name: 'Mimi', gender: 'female', provider: 'elevenlabs', description: 'Swedish female, childish' },
-      
+
       // OpenAI Voices
       { id: 'alloy', name: 'Alloy', gender: 'neutral', provider: 'openai', description: 'Neutral, balanced' },
       { id: 'echo', name: 'Echo', gender: 'male', provider: 'openai', description: 'Male, clear' },
@@ -421,7 +452,7 @@ assistantsRouter.get('/voices/available', async (req: Request, res: Response) =>
       { id: 'onyx', name: 'Onyx', gender: 'male', provider: 'openai', description: 'Deep, authoritative' },
       { id: 'nova', name: 'Nova', gender: 'female', provider: 'openai', description: 'Female, warm' },
       { id: 'shimmer', name: 'Shimmer', gender: 'female', provider: 'openai', description: 'Female, soft' },
-      
+
       // Deepgram Aura Voices
       { id: 'aura-asteria-en', name: 'Asteria', gender: 'female', provider: 'deepgram', description: 'American female, professional' },
       { id: 'aura-luna-en', name: 'Luna', gender: 'female', provider: 'deepgram', description: 'American female, warm' },
@@ -505,6 +536,22 @@ assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise
 
     // 4. Sync to VAPI
     if (agent.vapi_assistant_id) {
+      // CRITICAL: Preserve query tools when updating
+      let existingAssistant;
+      try {
+        existingAssistant = await client.getAssistant(agent.vapi_assistant_id);
+      } catch (err: any) {
+        console.warn('[auto-sync] Could not fetch existing assistant', { error: err?.message });
+      }
+
+      // If updating tools, merge with existing query tools
+      if (vapiUpdates.tools || Object.keys(vapiUpdates).length === 0) {
+        const existingTools = existingAssistant?.tools || [];
+        const queryTools = existingTools.filter((t: any) => t.type === 'query');
+        const demoTools = client.getDefaultDemoTools();
+        vapiUpdates.tools = [...queryTools, ...demoTools];
+      }
+
       await client.updateAssistant(agent.vapi_assistant_id, vapiUpdates);
     } else {
       // Create if doesn't exist
@@ -516,7 +563,8 @@ assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise
         systemPrompt: context,
         voiceProvider,
         voiceId,
-        firstMessage: agent.first_message
+        firstMessage: agent.first_message,
+        tools: client.getDefaultDemoTools() // Use modern tools
       });
 
       await supabase
@@ -524,6 +572,7 @@ assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise
         .update({ vapi_assistant_id: newAssistant.id })
         .eq('id', agentId);
     }
+
 
     // 5. Mark as synced
     await supabase

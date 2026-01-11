@@ -598,11 +598,13 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     model: {
       provider: VAPI_DEFAULTS.MODEL_PROVIDER,
       model: VAPI_DEFAULTS.MODEL_NAME,
-      messages: [{ role: 'system', content: resolvedSystemPrompt }]
+      messages: [{ role: 'system', content: resolvedSystemPrompt }],
+      // CRITICAL: Ensure toolIds is an empty array if no tools, to prevent legacy auto-population if that's a thing
+      toolIds: []
     },
     voice: {
       provider: resolvedVoiceProvider,
-      voiceId: resolvedVoiceId
+      voiceId: resolvedVoiceId.toLowerCase() === 'paige' ? 'Paige' : resolvedVoiceId // Force case for Paige
     },
     transcriber: {
       provider: VAPI_DEFAULTS.TRANSCRIBER_PROVIDER,
@@ -627,19 +629,37 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   if (agent.vapi_assistant_id) {
     try {
       // Validate assistant still exists in Vapi
-      await withRetry(() => vapiClient.getAssistant(agent.vapi_assistant_id!));
+      const existingAssistant = await withRetry(() => vapiClient.getAssistant(agent.vapi_assistant_id!));
 
-      // Update with retry
-      await withRetry(() => vapiClient.updateAssistant(agent.vapi_assistant_id!, {
+      // CRITICAL: Preserve existing tools by ID (especially KB query tools) when updating
+      // Matches manual-sync-assistant.ts logic
+      const existingToolIds = existingAssistant?.model?.toolIds || [];
+
+      logger.info('Preserving tools during assistant update', {
+        assistantId: agent.vapi_assistant_id,
+        existingToolIds,
+        newSystemPromptLength: resolvedSystemPrompt.length
+      });
+
+      // EXACT STRUCTURE MATCHING MANUAL SCRIPT
+      // Do not spread objects if possible to avoid hidden properties leaking in
+      const updatePayload = {
         name: assistantCreatePayload.name,
-        model: assistantCreatePayload.model,
+        model: {
+          provider: assistantCreatePayload.model.provider,
+          model: assistantCreatePayload.model.model,
+          messages: [{ role: 'system', content: resolvedSystemPrompt }],
+          toolIds: existingToolIds
+        },
         voice: assistantCreatePayload.voice,
         transcriber: assistantCreatePayload.transcriber,
         firstMessage: assistantCreatePayload.firstMessage,
         maxDurationSeconds: assistantCreatePayload.maxDurationSeconds,
         serverUrl: assistantCreatePayload.serverUrl,
         serverMessages: assistantCreatePayload.serverMessages
-      }));
+      };
+
+      await withRetry(() => vapiClient.updateAssistant(agent.vapi_assistant_id!, updatePayload));
 
       const duration = Date.now() - startTime;
       logger.info('Vapi assistant synced (updated)', {
@@ -670,9 +690,12 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   }
 
   // 5. CREATE new assistant with retry
+  // Ensure we do NOT pass 'tools' property even if it exists on payload type
+  const { tools, ...cleanPayload } = assistantCreatePayload as any;
+
   let assistant;
   try {
-    assistant = await withRetry(() => vapiClient.createAssistant(assistantCreatePayload as any));
+    assistant = await withRetry(() => vapiClient.createAssistant(cleanPayload));
   } catch (createErr: any) {
     const status: number | undefined = createErr?.response?.status;
     const details = createErr?.response?.data?.message || createErr?.response?.data || createErr?.message;
@@ -1071,7 +1094,18 @@ async function syncAssistantPromptInBackground(
         // Continue - still try to sync short prompts
       }
 
-      // Update assistant's system prompt with new {{variable}} syntax
+      // Fetch existing assistant to preserve tools (especially KB query tools)
+      let existingAssistant;
+      try {
+        existingAssistant = await vapiClient.getAssistant(agent.vapi_assistant_id);
+      } catch (err) {
+        logger.debug('Could not fetch existing assistant for tool preservation', { assistantId: agent.vapi_assistant_id });
+      }
+
+      // Preserve existing tools (especially KB query tools)
+      const existingTools = existingAssistant?.tools || [];
+
+      // Update assistant's system prompt with preserved tools
       await vapiClient.updateAssistant(agent.vapi_assistant_id, {
         model: {
           messages: [
@@ -1080,7 +1114,8 @@ async function syncAssistantPromptInBackground(
               content: systemPrompt
             }
           ]
-        }
+        },
+        tools: existingTools.length > 0 ? existingTools : undefined
       });
 
       // Update prompt_synced_at in database (with separate error handling)

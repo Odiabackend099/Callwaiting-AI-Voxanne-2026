@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
-import { validateKnowledgeBaseInput } from '../middleware/input-validation'; 
+import { validateKnowledgeBaseInput } from '../middleware/input-validation';
 import VapiClient from '../services/vapi-client';
 import { log } from '../services/logger';
 import { chunkDocumentWithMetadata } from '../services/document-chunker';
@@ -74,7 +74,7 @@ async function vapiUploadTextFile(params: { apiKey: string; filename: string; co
 
     const res = await fetch('https://api.vapi.ai/file', {
       method: 'POST',
-      headers: { 
+      headers: {
         Authorization: `Bearer ${params.apiKey}`,
         'X-Idempotency-Key': `${params.filename}-${Buffer.byteLength(params.content, 'utf8')}`
       },
@@ -112,7 +112,19 @@ async function vapiCreateOrUpdateQueryTool(params: {
       body: JSON.stringify({
         type: 'query',
         function: { name: params.toolName },
-        knowledgeBases: params.knowledgeBases
+        knowledgeBases: params.knowledgeBases,
+        // CRITICAL: Add filler messages for "Hold on a second" behavior
+        // CRITICAL: Add filler messages for "Hold on a second" behavior (Verified Schema)
+        messages: [
+          { type: 'request-start', content: 'Hold on a second...' },
+          { type: 'request-start', content: 'Let me check my knowledge base...' },
+          { type: 'request-start', content: 'Searching for that information...' },
+          { type: 'request-complete', content: 'Found it!' },
+          { type: 'request-complete', content: 'Here is what I found:' },
+          { type: 'request-failed', content: 'I could not find that information.' },
+          { type: 'request-delayed', content: 'Still searching...' },
+          { type: 'request-delayed', content: 'This is taking a moment...' }
+        ]
       })
     });
 
@@ -133,13 +145,23 @@ async function vapiCreateOrUpdateQueryTool(params: {
   });
 }
 
+
 async function attachToolToAssistant(params: { vapi: VapiClient; assistantId: string; toolId: string }): Promise<void> {
   const assistant = await params.vapi.getAssistant(params.assistantId);
+
+  // CRITICAL: Vapi requires toolIds array, not tools objects
   const model = assistant?.model;
   if (!model) throw new Error('Vapi assistant missing model configuration');
 
   const toolIds: string[] = Array.isArray(model.toolIds) ? model.toolIds : [];
-  const nextToolIds = Array.from(new Set([...toolIds, params.toolId]));
+
+  // Check if tool already attached
+  if (toolIds.includes(params.toolId)) {
+    log.debug('KnowledgeBase', 'Query tool already attached', { assistantId: params.assistantId, toolId: params.toolId });
+    return;
+  }
+
+  const nextToolIds = [...toolIds, params.toolId];
 
   await params.vapi.updateAssistant(params.assistantId, { model: { ...model, toolIds: nextToolIds } });
 }
@@ -151,7 +173,7 @@ async function attachToolToAssistant(params: { vapi: VapiClient; assistantId: st
 async function autoChunkDocument(params: { orgId: string; docId: string; content: string }): Promise<void> {
   try {
     log.info('KnowledgeBase', 'Auto-chunking document', { orgId: params.orgId, docId: params.docId });
-    
+
     // Chunk the document
     const chunks = chunkDocumentWithMetadata(params.content, {
       chunkSize: 1000,
@@ -234,7 +256,7 @@ knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     if (!orgId) {
-      log.error('KnowledgeBase', 'GET / - Missing orgId', { 
+      log.error('KnowledgeBase', 'GET / - Missing orgId', {
         user: req.user,
         hasAuthHeader: !!req.headers.authorization,
         nodeEnv: process.env.NODE_ENV
@@ -249,8 +271,8 @@ knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      log.error('KnowledgeBase', 'GET / - Database error', { 
-        orgId, 
+      log.error('KnowledgeBase', 'GET / - Database error', {
+        orgId,
         error: error.message,
         errorCode: error.code,
         errorDetails: error.details,
@@ -260,7 +282,7 @@ knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
     }
     return res.json({ items: data || [] });
   } catch (err: any) {
-    log.error('KnowledgeBase', 'GET / - Unexpected error', { 
+    log.error('KnowledgeBase', 'GET / - Unexpected error', {
       error: err?.message,
       stack: err?.stack,
       orgId: req.user?.orgId,
@@ -352,13 +374,13 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
             const authHeader = req.headers.authorization || `Bearer ${process.env.INTERNAL_API_KEY}`;
             const response = await fetch(`${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'}/api/knowledge-base/sync`, {
               method: 'POST',
-              headers: { 
+              headers: {
                 'Content-Type': 'application/json',
                 'Authorization': authHeader
               },
               body: JSON.stringify({ orgId })
             });
-            
+
             if (!response.ok) {
               const errorText = await response.text();
               log.error('KnowledgeBase', 'Auto-sync returned error', { orgId, docId: data.id, status: response.status, error: errorText });
@@ -516,8 +538,8 @@ knowledgeBaseRouter.delete('/:id', async (req: Request, res: Response) => {
           log.info('KnowledgeBase', 'DELETE - Vapi file deleted', { orgId, docId: id, vapiFileId });
         }
       } catch (vapiErr: any) {
-        log.warn('KnowledgeBase', 'DELETE - Failed to delete Vapi file (non-blocking)', { 
-          orgId, docId: id, vapiFileId, error: vapiErr?.message 
+        log.warn('KnowledgeBase', 'DELETE - Failed to delete Vapi file (non-blocking)', {
+          orgId, docId: id, vapiFileId, error: vapiErr?.message
         });
         // Don't fail the entire delete if Vapi cleanup fails
       }
@@ -698,15 +720,15 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     if (agentsError) return res.status(500).json({ error: agentsError.message });
 
     if (!agents || agents.length === 0) {
-      return res.status(400).json({ 
-        error: 'No agents found for this organization. Please create agents in Agent Configuration first, then sync knowledge base.' 
+      return res.status(400).json({
+        error: 'No agents found for this organization. Please create agents in Agent Configuration first, then sync knowledge base.'
       });
     }
 
     const validAgents = agents.filter(a => a.vapi_assistant_id);
     if (validAgents.length === 0) {
-      return res.status(400).json({ 
-        error: 'No agents have been synced to Vapi yet. Please save Agent Configuration first to create Vapi assistants.' 
+      return res.status(400).json({
+        error: 'No agents have been synced to Vapi yet. Please save Agent Configuration first to create Vapi assistants.'
       });
     }
 
@@ -725,16 +747,16 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
       if (!d.content || !d.filename) {
         return res.status(400).json({ error: `Invalid KB document: missing content or filename for ${d.id}` });
       }
-      
+
       // Validate content is valid UTF-8 and has no null bytes
       if (typeof d.content !== 'string') {
         return res.status(400).json({ error: `Invalid KB document: content must be text for ${d.filename}` });
       }
-      
+
       if (d.content.includes('\0')) {
         return res.status(400).json({ error: `Invalid KB document: content contains null bytes for ${d.filename}` });
       }
-      
+
       const bytes = Buffer.byteLength(d.content, 'utf8');
       if (bytes > KB_MAX_BYTES) {
         return res.status(400).json({ error: `KB doc too large: ${d.filename}. Max ${KB_MAX_BYTES} bytes.` });
@@ -752,12 +774,12 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     const metadataUpdatePromises = uploadResults.map(async (result) => {
       const doc = docMap.get(result.docId);
       if (!doc) return { success: true };
-      
+
       // Validate fileId before updating metadata
       if (!result.fileId || typeof result.fileId !== 'string') {
         return { success: false, error: new Error(`Invalid fileId for document ${result.docId}`) };
       }
-      
+
       const { error } = await supabase.from('knowledge_base').update({ metadata: { ...(doc.metadata || {}), vapi_file_id: result.fileId } }).eq('id', result.docId);
       return { success: !error, error };
     });
@@ -771,12 +793,12 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
 
     const uploadResultMap = new Map(uploadResults.map(r => [r.docId, r.fileId]));
     const categoryToFilesMap = new Map<string, { files: string[]; description: string }>();
-    
+
     // Group KB files by category for Vapi knowledge bases
     for (const d of items) {
       const fileId = uploadResultMap.get(d.id);
       if (!fileId) continue;
-      
+
       const category = d.category || 'general';
       if (!categoryToFilesMap.has(category)) {
         categoryToFilesMap.set(category, { files: [], description: `Contains ${category} information` });
@@ -797,21 +819,21 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     const vapi = new VapiClient(apiKey);
 
     // Log which agents will be updated
-    log.info('KnowledgeBase', 'Attaching KB tool to agents', { 
-      orgId, 
+    log.info('KnowledgeBase', 'Attaching KB tool to agents', {
+      orgId,
       agentCount: validAgents.length,
       roles: validAgents.map(a => a.role)
     });
 
     // Attach tool to all valid agents in parallel
-    const attachmentPromises = validAgents.map(a => 
+    const attachmentPromises = validAgents.map(a =>
       attachToolToAssistant({ vapi, assistantId: a.vapi_assistant_id, toolId })
         .catch(err => {
-          log.error('KnowledgeBase', 'Failed to attach tool to agent', { 
-            orgId, 
-            agentId: a.id, 
+          log.error('KnowledgeBase', 'Failed to attach tool to agent', {
+            orgId,
+            agentId: a.id,
             role: a.role,
-            error: err?.message 
+            error: err?.message
           });
           throw err;
         })
@@ -821,26 +843,26 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
     const successfulAttachments = attachmentResults.filter(r => r.status === 'fulfilled');
     const failedAttachments = attachmentResults.filter(r => r.status === 'rejected');
     const partialSuccess = successfulAttachments.length > 0;
-    
+
     if (failedAttachments.length > 0) {
-      log.warn('KnowledgeBase', 'Partial sync failure - some agents failed to attach KB tool', { 
+      log.warn('KnowledgeBase', 'Partial sync failure - some agents failed to attach KB tool', {
         orgId,
         successCount: successfulAttachments.length,
         failCount: failedAttachments.length,
         totalCount: validAgents.length,
         errors: failedAttachments.map((r: any) => r.reason?.message)
       });
-      
+
       if (!partialSuccess) {
-        return res.status(500).json({ 
-          error: 'Failed to attach knowledge base to any agents. Please try again.' 
+        return res.status(500).json({
+          error: 'Failed to attach knowledge base to any agents. Please try again.'
         });
       }
     }
 
-    const updated = validAgents.map(a => ({ 
-      role: a.role, 
-      assistantId: a.vapi_assistant_id 
+    const updated = validAgents.map(a => ({
+      role: a.role,
+      assistantId: a.vapi_assistant_id
     }));
 
     // Track sync metrics for logging

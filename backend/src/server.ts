@@ -32,29 +32,30 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit'; // Add express-rate-limit import
 import { createServer } from 'http';
 import { webhooksRouter } from './routes/webhooks';
-import smsStatusWebhookRouter from './routes/sms-status-webhook';
-import googleOAuthRouter from './routes/google-oauth';
+import smsStatusWebhookRouter from './routes/sms-status-webhook'; // default export
+// TEMPORARILY DISABLED: Google OAuth router causing startup crash
+// import googleOAuthRouter from './routes/google-oauth';
 import { callsRouter } from './routes/calls';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
-import integrationsRouter from './routes/integrations-byoc';
-import founderConsoleRouter from './routes/founder-console-v2';
-import founderConsoleSettingsRouter from './routes/founder-console-settings';
+import integrationsRouter from './routes/integrations-byoc'; // default export
+import founderConsoleRouter from './routes/founder-console-v2'; // default export
+import founderConsoleSettingsRouter from './routes/founder-console-settings'; // default export
 import { initLogger, requestLogger, log } from './services/logger';
 import { WebSocketServer } from 'ws';
 import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
 import { supabase } from './services/supabase-client';
-import inboundSetupRouter from './routes/inbound-setup';
-import knowledgeBaseRouter from './routes/knowledge-base';
+import inboundSetupRouter from './routes/inbound-setup'; // default export
+import knowledgeBaseRouter from './routes/knowledge-base'; // default export
 import { ragRouter } from './routes/knowledge-base-rag';
 import { vapiRagRouter } from './routes/vapi-rag-integration';
 import { vapiWebhookRouter } from './routes/vapi-webhook';
 import { vapiSetupRouter } from './routes/vapi-setup';
-import vapiDiscoveryRouter from './routes/vapi-discovery';
-import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard';
-import agentSyncRouter from './routes/agent-sync';
-import dashboardLeadsRouter from './routes/dashboard-leads';
+import vapiDiscoveryRouter from './routes/vapi-discovery'; // default export
+import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; // named export
+import agentSyncRouter from './routes/agent-sync'; // default export
+import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
 import { bookDemoRouter } from './routes/book-demo';
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
@@ -62,11 +63,11 @@ import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
 import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
 import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
-import escalationRulesRouter from './routes/escalation-rules';
-import teamRouter from './routes/team';
+import escalationRulesRouter from './routes/escalation-rules'; // default export
+import teamRouter from './routes/team'; // default export
 import { contactsRouter } from './routes/contacts';
 import { appointmentsRouter } from './routes/appointments';
-import notificationsRouter from './routes/notifications';
+import { notificationsRouter } from './routes/notifications';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -200,9 +201,9 @@ app.use('/api/contacts', contactsRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 
-// Google Calendar OAuth routes
-app.use('/api/google-oauth', googleOAuthRouter);
-log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
+// Google Calendar OAuth routes - TEMPORARILY DISABLED
+// app.use('/api/google-oauth', googleOAuthRouter);
+// log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
 log.info('Server', 'Contacts, appointments, and notifications routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
 

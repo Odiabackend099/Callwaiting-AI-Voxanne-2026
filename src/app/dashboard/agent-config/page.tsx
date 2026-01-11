@@ -294,10 +294,7 @@ export default function AgentConfigPage() {
     };
 
     const handleSave = async () => {
-        if (!vapiConfigured) {
-            setError('Please configure your Vapi API key in the API Keys page first.');
-            return;
-        }
+        // VAPI is platform-provided, no user configuration required
 
         setIsSaving(true);
         setSaveSuccess(false);
@@ -467,10 +464,10 @@ export default function AgentConfigPage() {
 
                 <button
                     onClick={handleSave}
-                    disabled={!hasActiveTabChanges() || isSaving || !vapiConfigured}
+                    disabled={!hasActiveTabChanges() || isSaving}
                     className={`px-6 py-3 rounded-xl font-medium shadow-lg transition-all flex items-center gap-2 ${saveSuccess
                         ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                        : hasActiveTabChanges() && vapiConfigured
+                        : hasActiveTabChanges()
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
                         }`}
@@ -501,14 +498,7 @@ export default function AgentConfigPage() {
                 </div>
             )}
 
-            {!vapiConfigured && (
-                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 flex items-center gap-3">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    <span>
-                        Your Vapi API key is not configured. Please go to the <a href="/dashboard/api-keys" className="font-bold underline">API Keys</a> page to set it up.
-                    </span>
-                </div>
-            )}
+            {/* VAPI is platform-provided - no user configuration warning needed */}
 
             {/* Draft Restoration Banner */}
             {hasDraft && (
@@ -546,11 +536,10 @@ export default function AgentConfigPage() {
                         setActiveTab('inbound');
                         router.push('/dashboard/agent-config?agent=inbound');
                     }}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                        activeTab === 'inbound'
+                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'inbound'
                             ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm'
                             : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
-                    }`}
+                        }`}
                 >
                     <Phone className="w-4 h-4" />
                     Inbound Agent
@@ -563,11 +552,10 @@ export default function AgentConfigPage() {
                         setActiveTab('outbound');
                         router.push('/dashboard/agent-config?agent=outbound');
                     }}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                        activeTab === 'outbound'
+                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'outbound'
                             ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
                             : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
-                    }`}
+                        }`}
                 >
                     <Phone className="w-4 h-4" />
                     Outbound Agent
@@ -579,7 +567,7 @@ export default function AgentConfigPage() {
 
             {/* INBOUND AGENT TAB */}
             {activeTab === 'inbound' && (
-            <div className="space-y-6 max-w-3xl">
+                <div className="space-y-6 max-w-3xl">
                     <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl p-6">
                         <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2 mb-1">
                             <Phone className="w-6 h-6" />
@@ -710,12 +698,12 @@ export default function AgentConfigPage() {
                     >
                         🌐 Test Web (Browser)
                     </button>
-            </div>
+                </div>
             )}
 
             {/* OUTBOUND AGENT TAB */}
             {activeTab === 'outbound' && (
-            <div className="space-y-6 max-w-3xl">
+                <div className="space-y-6 max-w-3xl">
                     <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 rounded-2xl p-6">
                         <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-2 mb-1">
                             📤 Outbound Agent
@@ -824,7 +812,7 @@ export default function AgentConfigPage() {
                     >
                         ☎️ Test Live Call
                     </button>
-            </div>
+                </div>
             )}
         </div>
 
