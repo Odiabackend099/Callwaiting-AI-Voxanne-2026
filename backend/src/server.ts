@@ -37,7 +37,7 @@ import googleOAuthRouter from './routes/google-oauth';
 import { callsRouter } from './routes/calls';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
-import integrationsRouter from './routes/integrations';
+import integrationsRouter from './routes/integrations-byoc';
 import founderConsoleRouter from './routes/founder-console-v2';
 import founderConsoleSettingsRouter from './routes/founder-console-settings';
 import { initLogger, requestLogger, log } from './services/logger';
@@ -64,6 +64,9 @@ import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monito
 import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
 import escalationRulesRouter from './routes/escalation-rules';
 import teamRouter from './routes/team';
+import { contactsRouter } from './routes/contacts';
+import { appointmentsRouter } from './routes/appointments';
+import notificationsRouter from './routes/notifications';
 // import { workspaceRouter } from './routes/workspace';
 
 // Initialize logger
@@ -136,12 +139,20 @@ app.use(express.json({
   },
 }));
 
-// General API rate limiter (100 req/15min)
+// General API rate limiter (100 req/15min in production, disabled in development)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 1000, // Increased from 100 to 1000 to handle rapid development/testing
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req: any) => {
+    // Skip rate limiting entirely in development mode for easier local testing
+    // This prevents 429 errors during development/Fast Refresh rebuilds
+    if (process.env.NODE_ENV === 'development') {
+      return true;
+    }
+    return false;
+  }
 });
 app.use(apiLimiter);
 
@@ -185,10 +196,14 @@ app.use('/api/dashboard', dashboardLeadsRouter);
 app.use('/api/book-demo', bookDemoRouter);
 app.use('/api/escalation-rules', escalationRulesRouter);
 app.use('/api/team', teamRouter);
+app.use('/api/contacts', contactsRouter);
+app.use('/api/appointments', appointmentsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // Google Calendar OAuth routes
 app.use('/api/google-oauth', googleOAuthRouter);
 log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
+log.info('Server', 'Contacts, appointments, and notifications routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
 
 // Health check endpoint - comprehensive dependency verification

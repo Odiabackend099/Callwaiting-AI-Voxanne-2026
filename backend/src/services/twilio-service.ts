@@ -34,53 +34,59 @@ interface TwilioResult {
 
 /**
  * Get a Twilio client instance
- * Uses provided credentials or falls back to environment variables
+ * REQUIRES credentials - no fallback to environment variables
+ * This ensures BYOC (Bring Your Own Credentials) model
  */
-function getClient(creds?: TwilioCredentials) {
-  if (creds) {
-    return twilio(creds.accountSid, creds.authToken);
+function getClient(creds: TwilioCredentials): any {
+  if (!creds || !creds.accountSid || !creds.authToken) {
+    throw new Error('Twilio credentials required: accountSid and authToken must be provided');
   }
-
-  // Fallback to env vars (Legacy/Dev mode)
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (accountSid && authToken) {
-    return twilio(accountSid, authToken);
-  }
-
-  return null;
+  return twilio(creds.accountSid, creds.authToken);
 }
 
 /**
- * Get sender number
+ * Get sender number from credentials
+ * REQUIRES credentials - no fallback to environment variables
  */
-function getFromNumber(creds?: TwilioCredentials): string | undefined {
-  if (creds) return creds.phoneNumber;
-  return process.env.TWILIO_PHONE_NUMBER;
+function getFromNumber(creds: TwilioCredentials): string {
+  if (!creds || !creds.phoneNumber) {
+    throw new Error('Twilio credentials required: phoneNumber must be provided');
+  }
+  return creds.phoneNumber;
 }
 
-function getWhatsappNumber(creds?: TwilioCredentials): string {
-  if (creds?.whatsappNumber) return creds.whatsappNumber;
-  return process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155552671';
+/**
+ * Get WhatsApp number from credentials or use default Twilio sandbox
+ */
+function getWhatsappNumber(creds: TwilioCredentials): string {
+  if (creds?.whatsappNumber) {
+    return creds.whatsappNumber;
+  }
+  // Use Twilio's sandbox number as fallback (not a process.env)
+  return 'whatsapp:+14155552671';
 }
 
 /**
  * Send SMS via Twilio
+ * REQUIRES credentials - will throw error if not provided
  */
 export async function sendSmsTwilio(
   options: SendSmsOptions,
-  credentials?: TwilioCredentials
+  credentials: TwilioCredentials
 ): Promise<TwilioResult> {
-  const client = getClient(credentials);
-  const fromNumber = options.from || getFromNumber(credentials);
+  if (!credentials) {
+    throw new Error('Twilio credentials are required to send SMS');
+  }
 
-  if (!client || !fromNumber) {
-    console.error('[Twilio SMS] Missing credentials or phone number');
-    return {
-      success: false,
-      error: 'Twilio not configured'
-    };
+  let client: any;
+  let fromNumber: string;
+
+  try {
+    client = getClient(credentials);
+    fromNumber = options.from || getFromNumber(credentials);
+  } catch (error: any) {
+    console.error('[Twilio SMS] Invalid credentials:', error.message);
+    throw error;
   }
 
   try {
@@ -119,20 +125,26 @@ export async function sendSmsTwilio(
 
 /**
  * Send WhatsApp message via Twilio
+ * REQUIRES credentials - will throw error if not provided
  */
 export async function sendWhatsAppTwilio(
   options: SendWhatsAppOptions,
-  credentials?: TwilioCredentials
+  credentials: TwilioCredentials
 ): Promise<TwilioResult> {
-  const client = getClient(credentials);
-  const fromNumber = getWhatsappNumber(credentials);
-
-  if (!client) {
-    return {
-      success: false,
-      error: 'Twilio not configured'
-    };
+  if (!credentials) {
+    throw new Error('Twilio credentials are required to send WhatsApp message');
   }
+
+  let client: any;
+
+  try {
+    client = getClient(credentials);
+  } catch (error: any) {
+    console.error('[Twilio WhatsApp] Invalid credentials:', error.message);
+    throw error;
+  }
+
+  const fromNumber = getWhatsappNumber(credentials);
 
   try {
     // Format WhatsApp numbers properly

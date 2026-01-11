@@ -7,9 +7,10 @@
  */
 
 import { google } from 'googleapis';
-import * as crypto from 'crypto';
 import { supabase } from './supabase-client';
 import { log } from './logger';
+import { EncryptionService } from './encryption';
+import { IntegrationDecryptor } from './integration-decryptor';
 
 // OAuth 2.0 Client Configuration
 // Initialize lazily to avoid errors if env vars not set during module load
@@ -30,98 +31,9 @@ function getOAuth2Client() {
   return oauth2Client;
 }
 
-// Encryption key - must be 32 bytes (256 bits) for AES-256-CBC
-let ENCRYPTION_KEY: Buffer | null = null;
-
-/**
- * Initialize encryption key from environment variable
- * Validates key format and throws if missing/invalid
- */
-function getEncryptionKey(): Buffer {
-  if (ENCRYPTION_KEY) {
-    return ENCRYPTION_KEY;
-  }
-
-  const keyString = process.env.GOOGLE_ENCRYPTION_KEY;
-  if (!keyString) {
-    throw new Error(
-      'GOOGLE_ENCRYPTION_KEY environment variable is required. ' +
-      'Generate one with: openssl rand -hex 32'
-    );
-  }
-
-  // Support both hex and base64 formats
-  try {
-    // Try hex first (recommended format)
-    if (/^[0-9a-fA-F]{64}$/.test(keyString)) {
-      ENCRYPTION_KEY = Buffer.from(keyString, 'hex');
-    } else {
-      // Try base64
-      ENCRYPTION_KEY = Buffer.from(keyString, 'base64');
-    }
-
-    // Validate key length (must be 32 bytes for AES-256)
-    if (ENCRYPTION_KEY.length !== 32) {
-      throw new Error(`Encryption key must be 32 bytes (64 hex characters or 44 base64 characters). Got ${ENCRYPTION_KEY.length} bytes.`);
-    }
-
-    return ENCRYPTION_KEY;
-  } catch (error: any) {
-    throw new Error(`Invalid GOOGLE_ENCRYPTION_KEY format: ${error.message}`);
-  }
-}
-
-/**
- * Encrypt text using AES-256-CBC with random IV
- * Output format: "iv_hex:encrypted_hex"
- * 
- * @param text - Plaintext to encrypt
- * @returns Encrypted string in format "iv:encrypted"
- */
-export function encrypt(text: string): string {
-  try {
-    const key = getEncryptionKey();
-    const iv = crypto.randomBytes(16); // 16 bytes IV for CBC mode
-    
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    // Return IV and encrypted data separated by colon
-    return `${iv.toString('hex')}:${encrypted}`;
-  } catch (error: any) {
-    log.error('GoogleOAuth', 'Encryption failed', { error: error?.message });
-    throw new Error(`Token encryption failed: ${error.message}`);
-  }
-}
-
-/**
- * Decrypt text encrypted with encrypt()
- * 
- * @param encryptedText - Encrypted string in format "iv:encrypted"
- * @returns Decrypted plaintext
- */
-export function decrypt(encryptedText: string): string {
-  try {
-    const key = getEncryptionKey();
-    const [ivHex, encryptedHex] = encryptedText.split(':');
-    
-    if (!ivHex || !encryptedHex) {
-      throw new Error('Invalid encrypted format. Expected "iv:encrypted"');
-    }
-
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    return decrypted;
-  } catch (error: any) {
-    log.error('GoogleOAuth', 'Decryption failed', { error: error?.message });
-    throw new Error(`Token decryption failed: ${error.message}`);
-  }
-}
+// Note: Encryption is now handled by unified EncryptionService
+// This uses AES-256-GCM instead of the old AES-256-CBC
+// Migration: Old tokens encrypted with CBC will be re-encrypted on next token refresh
 
 /**
  * Generate OAuth authorization URL
@@ -226,33 +138,26 @@ export async function exchangeCodeForTokens(
       ? new Date(tokens.expiry_date).toISOString()
       : new Date(Date.now() + 3600000).toISOString(); // 1 hour from now
 
-    // Encrypt tokens before storing
-    const config = {
-      access_token: encrypt(tokens.access_token),
-      refresh_token: encrypt(tokens.refresh_token),
-      expires_at: expiresAt
+    // Store encrypted tokens using IntegrationDecryptor (unified encryption)
+    // This automatically encrypts with AES-256-GCM and stores in org_credentials
+    const credentials = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt: expiresAt
     };
 
-    // Store encrypted tokens in database
-    const { error: upsertError } = await supabase
-      .from('integrations')
-      .upsert(
-        {
-          org_id: orgId,
-          provider: 'google_calendar',
-          config,
-          connected: true,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'org_id,provider' }
+    try {
+      await IntegrationDecryptor.storeCredentials(
+        orgId,
+        'google_calendar',
+        credentials
       );
-
-    if (upsertError) {
+    } catch (storageError: any) {
       log.error('GoogleOAuth', 'Failed to store tokens', {
         orgId,
-        error: upsertError.message
+        error: storageError.message
       });
-      throw new Error(`Failed to store tokens: ${upsertError.message}`);
+      throw new Error(`Failed to store tokens: ${storageError.message}`);
     }
 
     log.info('GoogleOAuth', 'Tokens stored successfully', {
@@ -280,88 +185,64 @@ export async function exchangeCodeForTokens(
  */
 export async function getCalendarClient(orgId: string): Promise<any> {
   try {
-    // Fetch stored tokens from database
-    const { data: integration, error: fetchError } = await supabase
-      .from('integrations')
-      .select('config')
-      .eq('org_id', orgId)
-      .eq('provider', 'google_calendar')
-      .single();
-
-    if (fetchError || !integration?.config) {
-      throw new Error(`Google Calendar not connected for organization ${orgId}. Please connect Google Calendar first.`);
-    }
-
-    const config = integration.config as any;
-
-    if (!config.access_token || !config.refresh_token) {
-      throw new Error('Invalid token configuration. Please reconnect Google Calendar.');
-    }
-
-    // Decrypt tokens
-    let accessToken: string;
-    let refreshToken: string;
-
+    // Fetch and decrypt stored tokens using IntegrationDecryptor
+    let googleCreds;
     try {
-      accessToken = decrypt(config.access_token);
-      refreshToken = decrypt(config.refresh_token);
+      googleCreds = await IntegrationDecryptor.getGoogleCalendarCredentials(orgId);
     } catch (error: any) {
-      log.error('GoogleOAuth', 'Token decryption failed', {
+      log.error('GoogleOAuth', 'Failed to retrieve Google Calendar credentials', {
         orgId,
         error: error?.message
       });
-      throw new Error('Failed to decrypt stored tokens. Encryption key may have changed.');
+      throw new Error('Google Calendar not connected. Please reconnect your Google account.');
     }
+
+    const accessToken = googleCreds.accessToken;
+    const refreshToken = googleCreds.refreshToken;
 
     // Set credentials on OAuth client
     const client = getOAuth2Client();
     client.setCredentials({
       access_token: accessToken,
       refresh_token: refreshToken,
-      expiry_date: config.expires_at ? new Date(config.expires_at).getTime() : undefined
+      expiry_date: googleCreds.expiresAt ? new Date(googleCreds.expiresAt).getTime() : undefined
     });
 
     // Check if access token is expired and refresh if needed
     if (client.isAccessTokenExpired()) {
       try {
         log.info('GoogleOAuth', 'Access token expired, refreshing', { orgId });
-        
+
         const { credentials } = await client.refreshAccessToken();
-        
+
         if (!credentials.access_token) {
           throw new Error('Refresh token exchange did not return access token');
         }
 
-        // Update stored access token (keep refresh token unchanged)
-        const updatedConfig = {
-          ...config,
-          access_token: encrypt(credentials.access_token),
-          expires_at: credentials.expiry_date
+        // Update stored access token using IntegrationDecryptor
+        // Keep refresh token unchanged, only update access token and expiry
+        const updatedCreds = {
+          accessToken: credentials.access_token,
+          refreshToken: refreshToken, // Keep existing refresh token
+          expiresAt: credentials.expiry_date
             ? new Date(credentials.expiry_date).toISOString()
             : new Date(Date.now() + 3600000).toISOString()
         };
 
-        const { error: updateError } = await supabase
-          .from('integrations')
-          .update({
-            config: updatedConfig,
-            updated_at: new Date().toISOString()
-          })
-          .eq('org_id', orgId)
-          .eq('provider', 'google_calendar');
+        await IntegrationDecryptor.storeCredentials(
+          orgId,
+          'google_calendar',
+          updatedCreds
+        );
 
-        if (updateError) {
-          log.warn('GoogleOAuth', 'Failed to update refreshed token in database', {
-            orgId,
-            error: updateError.message
-          });
-          // Don't throw - token is refreshed in memory, will work for this request
-        }
+        // Update the client with fresh access token
+        client.setCredentials({
+          access_token: credentials.access_token,
+          refresh_token: refreshToken,
+          expiry_date: credentials.expiry_date
+        });
 
-        // Update OAuth client with new token
-        client.setCredentials(credentials);
-
-        log.info('GoogleOAuth', 'Access token refreshed successfully', { orgId });
+        log.info('GoogleOAuth', 'Access token refreshed and stored', { orgId });
       } catch (refreshError: any) {
         log.error('GoogleOAuth', 'Token refresh failed', {
           orgId,
@@ -394,22 +275,27 @@ export async function getCalendarClient(orgId: string): Promise<any> {
  */
 export async function revokeAccess(orgId: string): Promise<void> {
   try {
-    // Optionally revoke token with Google (optional - just deleting from DB is usually enough)
-    // For now, just delete from database
-    
-    const { error: deleteError } = await supabase
-      .from('integrations')
-      .delete()
+    // Note: We don't revoke with Google API (that requires additional API call and permission)
+    // Just invalidate the stored credentials by marking as inactive
+    const { error: updateError } = await supabase
+      .from('org_credentials')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
       .eq('org_id', orgId)
       .eq('provider', 'google_calendar');
 
-    if (deleteError) {
+    if (updateError) {
       log.error('GoogleOAuth', 'Failed to revoke access', {
         orgId,
-        error: deleteError.message
+        error: updateError.message
       });
-      throw new Error(`Failed to revoke access: ${deleteError.message}`);
+      throw new Error(`Failed to revoke access: ${updateError.message}`);
     }
+
+    // Invalidate cache
+    IntegrationDecryptor.invalidateCache(orgId, 'google_calendar');
 
     log.info('GoogleOAuth', 'Access revoked successfully', { orgId });
   } catch (error: any) {

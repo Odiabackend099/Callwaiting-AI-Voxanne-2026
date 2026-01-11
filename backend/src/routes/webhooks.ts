@@ -17,6 +17,13 @@ import VapiClient from '../services/vapi-client';
 import { getAvailableSlots, checkAvailability, createCalendarEvent } from '../services/calendar-integration';
 import { sendAppointmentConfirmationSMS, sendHotLeadSMS } from '../services/sms-notifications';
 import { scoreLead } from '../services/lead-scoring';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
+import {
+  resolveOrgFromWebhook,
+  verifyVapiWebhookSignature,
+  getSmsCredentialsForOrg,
+  getCalendarCredentialsForOrg,
+} from '../utils/webhook-org-resolver';
 
 export const webhooksRouter = express.Router();
 
@@ -246,17 +253,38 @@ webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
     // Log every webhook call for debugging
     logger.info('webhooks', 'Webhook received');
 
-    // ===== CRITICAL FIX #9: Enforce webhook signature verification =====
+    // ===== CRITICAL: BYOC - Resolve organization from webhook FIRST =====
+    // This MUST happen before any credential access
+    const orgContext = await resolveOrgFromWebhook(req);
+    if (!orgContext) {
+      logger.error('webhooks', 'Failed to resolve organization from webhook');
+      res.status(400).json({ error: 'Cannot resolve organization' });
+      return;
+    }
+
+    // Store org_id in request for later use by handlers
+    (req as any).orgId = orgContext.orgId;
+    (req as any).assistantId = orgContext.assistantId;
+
+    logger.info('webhooks', 'Organization resolved from webhook', {
+      orgId: orgContext.orgId,
+      assistantId: orgContext.assistantId,
+    });
+
+    // ===== CRITICAL FIX #9: Enforce webhook signature verification with org-specific credentials =====
     try {
-      const isValid = await verifyVapiSignature(req);
+      const isValid = await verifyVapiWebhookSignature(req, orgContext.orgId);
       if (!isValid) {
-        logger.error('webhooks', 'Invalid webhook signature');
+        logger.error('webhooks', 'Invalid webhook signature', { orgId: orgContext.orgId });
         res.status(401).json({ error: 'Invalid webhook signature' });
         return;
       }
-      logger.debug('webhooks', 'Signature verified');
+      logger.debug('webhooks', 'Signature verified', { orgId: orgContext.orgId });
     } catch (verifyError: any) {
-      logger.error('webhooks', 'Signature verification failed');
+      logger.error('webhooks', 'Signature verification failed', {
+        orgId: orgContext.orgId,
+        error: verifyError?.message,
+      });
       res.status(401).json({ error: 'Webhook verification failed' });
       return;
     }
