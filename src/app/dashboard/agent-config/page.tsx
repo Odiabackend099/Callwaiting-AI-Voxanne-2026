@@ -449,7 +449,7 @@ export default function AgentConfigPage() {
 
     if (loading || isLoading) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
             </div>
         );

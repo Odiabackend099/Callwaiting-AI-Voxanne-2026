@@ -384,7 +384,7 @@ const CallsPageContent = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
                     <p className="text-gray-600 dark:text-slate-400">Loading...</p>
@@ -982,7 +982,7 @@ const CallsPageContent = () => {
 export default function CallsPage() {
     return (
         <React.Suspense fallback={
-            <div className="min-h-screen bg-white flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
                     <p className="text-gray-600">Loading...</p>

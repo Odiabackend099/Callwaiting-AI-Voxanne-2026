@@ -124,7 +124,7 @@ export default function CallWaitingAIDashboard() {
     // 1. Show loading while checking authentication status
     if (loading) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
                     <p className="text-gray-700">Verifying session...</p>
@@ -139,7 +139,7 @@ export default function CallWaitingAIDashboard() {
     // 3. If authenticated but fetching data, show dashboard loader
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
                     <p className="text-gray-700">Loading dashboard...</p>

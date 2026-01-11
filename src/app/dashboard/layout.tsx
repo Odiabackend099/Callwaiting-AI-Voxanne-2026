@@ -19,7 +19,7 @@ export default function DashboardLayout({
         <ThemeProvider>
             <DashboardGate>
                 <VoiceAgentProvider>
-                    <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors duration-300">
+                    <div className="flex h-screen bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors duration-300">
                         {/* Persistent Sidebar */}
                         <LeftSidebar />
 
