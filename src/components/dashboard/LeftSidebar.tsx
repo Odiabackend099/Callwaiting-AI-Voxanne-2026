@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings } from 'lucide-react';
+import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -14,16 +14,39 @@ export default function LeftSidebar() {
     const { user, signOut } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    const navItems = useMemo(() => ([
-        { label: 'Dashboard', href: '/dashboard', icon: Activity },
-        { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
-        { label: 'Agent Configuration', href: '/dashboard/agent-config', icon: Bot },
-        { label: 'Escalation Rules', href: '/dashboard/escalation-rules', icon: Zap },
-        { label: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
-        { label: 'Leads', href: '/dashboard/leads', icon: Activity },
-        { label: 'Test Agents', href: '/dashboard/test', icon: Zap },
-        { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
-        { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+    const navSections = useMemo(() => ([
+        {
+            label: 'OPERATIONS',
+            description: 'Review calls, manage leads, and monitor agent activity',
+            items: [
+                { label: 'Dashboard', href: '/dashboard', icon: Activity },
+                { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
+                { label: 'Leads', href: '/dashboard/leads', icon: Target },
+            ],
+        },
+        {
+            label: 'VOICE AGENT',
+            description: 'Configure, train, and test your AI agents',
+            items: [
+                { label: 'Agent Configuration', href: '/dashboard/agent-config', icon: Bot },
+                { label: 'Escalation Rules', href: '/dashboard/escalation-rules', icon: Zap },
+                { label: 'Knowledge Base', href: '/dashboard/knowledge-base', icon: BookOpen },
+                { label: 'Test Agents', href: '/dashboard/test', icon: Phone },
+            ],
+        },
+        {
+            label: 'INTEGRATIONS',
+            description: 'Set up and manage API keys and phone numbers',
+            items: [
+                { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
+                { label: 'Inbound Configuration', href: '/dashboard/inbound-config', icon: Phone },
+                { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+            ],
+        },
+    ]), []);
+
+    const footerItems = useMemo(() => ([
+        { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
     ]), []);
 
     const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -80,28 +103,65 @@ export default function LeftSidebar() {
                 </div>
             </div>
 
-            <nav className="flex-1 p-4 space-y-2">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = item.href === '/dashboard'
-                        ? pathname === '/dashboard'
-                        : pathname?.startsWith(item.href);
+            <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
+                {navSections.map((section) => (
+                    <div key={section.label}>
+                        <h3 className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                            {section.label}
+                        </h3>
+                        <div className="space-y-1">
+                            {section.items.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = item.href === '/dashboard'
+                                    ? pathname === '/dashboard'
+                                    : pathname?.startsWith(item.href);
 
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={(e) => handleLinkClick(e, item.href)}
-                            className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${isActive
-                                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                                : 'text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800/50'
-                                }`}
-                        >
-                            <Icon className="w-5 h-5" />
-                            {item.label}
-                        </Link>
-                    );
-                })}
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={(e) => handleLinkClick(e, item.href)}
+                                        className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${isActive
+                                            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                            : 'text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                                            }`}
+                                    >
+                                        <Icon className="w-5 h-5" />
+                                        {item.label}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+
+                {/* Divider before footer items */}
+                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                    <h3 className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        QUICK ACCESS
+                    </h3>
+                    <div className="space-y-1">
+                        {footerItems.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = pathname?.startsWith(item.href);
+
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    onClick={(e) => handleLinkClick(e, item.href)}
+                                    className={`w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all font-medium text-left ${isActive
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                        : 'text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                                        }`}
+                                >
+                                    <Icon className="w-5 h-5" />
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
             </nav>
 
             <div className="p-4 border-t border-gray-200 dark:border-slate-800 space-y-3">

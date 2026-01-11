@@ -3,6 +3,7 @@ import DashboardGate from './DashboardGate';
 import { VoiceAgentProvider } from '@/contexts/VoiceAgentContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
+import CommandPalette from '@/components/dashboard/CommandPalette';
 
 export const metadata: Metadata = {
     title: "Call Waiting AI AI - Voice Agent Dashboard",
@@ -26,6 +27,9 @@ export default function DashboardLayout({
                         <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
                             {children}
                         </div>
+
+                        {/* Command Palette */}
+                        <CommandPalette />
                     </div>
                 </VoiceAgentProvider>
             </DashboardGate>
