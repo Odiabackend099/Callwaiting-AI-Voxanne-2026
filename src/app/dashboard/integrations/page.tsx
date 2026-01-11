@@ -1,11 +1,11 @@
 /**
  * Integrations Dashboard Page
  *
- * Main page for managing third-party integrations (Vapi, Twilio, Google Calendar, Resend, ElevenLabs).
- * Shows status for all providers and allows users to configure/test/disconnect integrations.
+ * Main page for managing user-provided integrations (Twilio, Google Calendar).
+ * VAPI is platform-provided and not user-configurable.
  *
  * Features:
- * - Real-time status display for all providers
+ * - Real-time status display for BYOC providers
  * - Credential configuration forms with inline editing
  * - Test connection functionality
  * - Masked credential display (••••••)
@@ -17,7 +17,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { IntegrationCard } from '@/components/integrations/IntegrationCard';
-import { VapiCredentialForm } from '@/components/integrations/VapiCredentialForm';
 import { TwilioCredentialForm } from '@/components/integrations/TwilioCredentialForm';
 import { GoogleCalendarOAuthForm } from '@/components/integrations/GoogleCalendarOAuthForm';
 
@@ -189,21 +188,7 @@ export default function IntegrationsDashboardPage() {
 
         {/* Status Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          {/* Vapi */}
-          <div>
-            <IntegrationCard
-              provider="vapi"
-              state={mapStateFromStatus(status.vapi)}
-              lastVerified={status.vapi.lastVerified}
-              error={status.vapi.error}
-              onConfigure={() => setConfiguringModal({ provider: 'vapi' })}
-              onTest={() => handleTestConnection('vapi')}
-              onDisconnect={() => handleDisconnect('vapi')}
-              isTestingConnection={testingConnection === 'vapi'}
-            />
-          </div>
-
-          {/* Twilio */}
+            {/* Twilio */}
           <div>
             <IntegrationCard
               provider="twilio"
@@ -261,17 +246,6 @@ export default function IntegrationsDashboardPage() {
         </div>
 
         {/* Configuration Modals */}
-        {configuringModal.provider === 'vapi' && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
-              <VapiCredentialForm
-                onSuccess={() => handleConfigureSuccess('vapi')}
-                onCancel={() => setConfiguringModal({ provider: null })}
-              />
-            </div>
-          </div>
-        )}
-
         {configuringModal.provider === 'twilio' && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">

@@ -1,12 +1,12 @@
 /**
  * Integrations API Routes - BYOC Multi-Tenant Edition
  *
- * This file implements the REST API for managing integrations in a multi-tenant environment.
- * All endpoints enforce org isolation and credential encryption.
+ * This file implements the REST API for managing USER-PROVIDED integrations.
+ * VAPI is platform-provided and not user-configurable.
  *
- * Endpoints:
- * - POST   /api/integrations/vapi           - Store Vapi credentials
+ * User-Provided Integrations (BYOC):
  * - POST   /api/integrations/twilio         - Store Twilio credentials
+ * - POST   /api/integrations/google-calendar - Store Google Calendar credentials
  * - GET    /api/integrations/status         - Get all integration statuses
  * - POST   /api/integrations/:provider/verify - Test specific integration
  * - DELETE /api/integrations/:provider      - Disconnect integration
@@ -14,10 +14,8 @@
 
 import express from 'express';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
-import { VapiAssistantManager } from '../services/vapi-assistant-manager';
-import { VapiClient } from '../services/vapi-client';
 import { log } from '../services/logger';
-import { requireAuth } from '../middleware/auth'; // Assumes this middleware exists
+import { requireAuth } from '../middleware/auth';
 
 export const integrationsRouter = express.Router();
 
@@ -40,152 +38,6 @@ interface IntegrationResponse {
   error?: string;
   data?: any;
 }
-
-// ============================================
-// POST /api/integrations/vapi
-// Store Vapi credentials and auto-create assistants
-// ============================================
-
-integrationsRouter.post('/vapi', async (req: express.Request, res: express.Response) => {
-  try {
-    const orgId = (req as any).user.orgId;
-    const { apiKey, webhookSecret } = req.body;
-
-    // Validate input
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'apiKey is required and must be a non-empty string'
-      } as IntegrationResponse);
-    }
-
-    log.info('integrations', 'Storing Vapi credentials', { orgId });
-
-    // Step 1: Test Vapi connection
-    try {
-      const testVapi = new VapiClient(apiKey.trim());
-      const isValid = await testVapi.validateConnection();
-
-      if (!isValid) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid Vapi API key. Connection test failed.'
-        } as IntegrationResponse);
-      }
-    } catch (testError: any) {
-      log.error('integrations', 'Vapi connection test failed', {
-        orgId,
-        error: testError?.message
-      });
-      return res.status(400).json({
-        success: false,
-        error: `Vapi connection failed: ${testError?.message || 'Unknown error'}`
-      } as IntegrationResponse);
-    }
-
-    // Step 2: Store credentials (encrypted)
-    try {
-      await IntegrationDecryptor.storeCredentials(
-        orgId,
-        'vapi',
-        {
-          apiKey: apiKey.trim(),
-          webhookSecret: webhookSecret?.trim(),
-        }
-      );
-    } catch (storeError: any) {
-      log.error('integrations', 'Failed to store Vapi credentials', {
-        orgId,
-        error: storeError?.message
-      });
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to store credentials'
-      } as IntegrationResponse);
-    }
-
-    // Step 3: Create/update inbound assistant
-    let inboundAssistantId: string | undefined;
-    try {
-      const inboundConfig = await VapiAssistantManager.getAssistantConfig(orgId, 'inbound');
-
-      const result = await VapiAssistantManager.ensureAssistant(
-        orgId,
-        'inbound',
-        {
-          name: 'Inbound Agent',
-          systemPrompt: inboundConfig?.systemPrompt || 'You are a helpful assistant.',
-          firstMessage: inboundConfig?.firstMessage || 'Hello! How can I help you today?',
-          voiceId: inboundConfig?.voiceId || 'Paige',
-          language: inboundConfig?.language || 'en',
-          maxDurationSeconds: inboundConfig?.maxDurationSeconds || 600,
-        }
-      );
-
-      inboundAssistantId = result.assistantId;
-      log.info('integrations', 'Inbound assistant created/updated', {
-        orgId,
-        assistantId: inboundAssistantId,
-        isNew: result.isNew,
-      });
-    } catch (assistantError: any) {
-      log.warn('integrations', 'Failed to create inbound assistant', {
-        orgId,
-        error: assistantError?.message,
-      });
-      // Non-critical - continue without assistant
-    }
-
-    // Step 4: Create/update outbound assistant
-    let outboundAssistantId: string | undefined;
-    try {
-      const outboundConfig = await VapiAssistantManager.getAssistantConfig(orgId, 'outbound');
-
-      const result = await VapiAssistantManager.ensureAssistant(
-        orgId,
-        'outbound',
-        {
-          name: 'Outbound Agent',
-          systemPrompt: outboundConfig?.systemPrompt || 'You are a helpful assistant.',
-          firstMessage: outboundConfig?.firstMessage || 'Hello!',
-          voiceId: outboundConfig?.voiceId || 'Paige',
-          language: outboundConfig?.language || 'en',
-          maxDurationSeconds: outboundConfig?.maxDurationSeconds || 600,
-        }
-      );
-
-      outboundAssistantId = result.assistantId;
-      log.info('integrations', 'Outbound assistant created/updated', {
-        orgId,
-        assistantId: outboundAssistantId,
-        isNew: result.isNew,
-      });
-    } catch (assistantError: any) {
-      log.warn('integrations', 'Failed to create outbound assistant', {
-        orgId,
-        error: assistantError?.message,
-      });
-      // Non-critical - continue without assistant
-    }
-
-    res.json({
-      success: true,
-      message: 'Vapi credentials stored successfully',
-      data: {
-        inboundAssistantId,
-        outboundAssistantId,
-      }
-    } as IntegrationResponse);
-  } catch (error: any) {
-    log.error('integrations', 'Unexpected error storing Vapi credentials', {
-      error: error?.message
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Unexpected error'
-    } as IntegrationResponse);
-  }
-});
 
 // ============================================
 // POST /api/integrations/twilio
