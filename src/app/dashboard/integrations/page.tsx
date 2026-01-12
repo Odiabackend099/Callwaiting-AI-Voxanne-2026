@@ -14,6 +14,8 @@
 
 'use client';
 
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { IntegrationCard } from '@/components/integrations/IntegrationCard';
@@ -188,7 +190,7 @@ export default function IntegrationsDashboardPage() {
 
         {/* Status Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {/* Twilio */}
+          {/* Twilio */}
           <div>
             <IntegrationCard
               provider="twilio"

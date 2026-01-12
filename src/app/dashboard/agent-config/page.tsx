@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -55,6 +56,11 @@ export default function AgentConfigPage() {
     const [vapiConfigured, setVapiConfigured] = useState(false);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
 
+    // Vapi Phone Number State
+    const [vapiNumbers, setVapiNumbers] = useState<any[]>([]);
+    const [selectedNumberId, setSelectedNumberId] = useState('');
+    const [assigningNumber, setAssigningNumber] = useState(false);
+
 
 
     // Global Store State
@@ -89,9 +95,10 @@ export default function AgentConfigPage() {
                 authedBackendFetch<any>('/api/founder-console/settings'),
                 authedBackendFetch<any>('/api/founder-console/agent/config'),
                 authedBackendFetch<any>('/api/inbound/status'),
+                authedBackendFetch<any>('/api/integrations/vapi/numbers'), // Fetch Vapi numbers
             ]);
 
-            const [voicesResult, settingsResult, agentResult, inboundResult] = results;
+            const [voicesResult, settingsResult, agentResult, inboundResult, numbersResult] = results;
 
             if (voicesResult.status === 'fulfilled') {
                 const voicesData = voicesResult.value;
@@ -213,6 +220,12 @@ export default function AgentConfigPage() {
                 });
             } else {
                 console.warn('Failed to load inbound status:', inboundResult.reason);
+            }
+
+            if (numbersResult.status === 'fulfilled' && numbersResult.value.success) {
+                setVapiNumbers(numbersResult.value.numbers || []);
+            } else {
+                console.warn('Failed to load Vapi phone numbers');
             }
         } catch (err) {
             console.error('Unexpected error loading configuration:', err);
@@ -444,6 +457,41 @@ export default function AgentConfigPage() {
         }
     };
 
+    // Vapi Number Assignment Handler
+    const handleAssignNumber = async () => {
+        if (!selectedNumberId) return;
+        try {
+            setAssigningNumber(true);
+            setError(null);
+
+            // Find selected number object to get the phone number string for UI/DB update
+            const selectedNumObj = vapiNumbers.find(n => n.id === selectedNumberId);
+            const phoneNumber = selectedNumObj?.number;
+
+            const result = await authedBackendFetch<any>('/api/integrations/vapi/assign-number', {
+                method: 'POST',
+                body: JSON.stringify({
+                    vapiPhoneId: selectedNumberId,
+                    phoneNumber: phoneNumber
+                })
+            });
+
+            if (result.success) {
+                // Refresh inbound status to show new number
+                const status = await authedBackendFetch<InboundStatus>('/api/inbound/status');
+                setInboundStatus(status);
+                alert('Agent successfully assigned to phone number!');
+            } else {
+                throw new Error(result.error || 'Assignment failed');
+            }
+        } catch (err: any) {
+            console.error('Failed to assign number:', err);
+            setError(err.message || 'Failed to assign phone number');
+        } finally {
+            setAssigningNumber(false);
+        }
+    };
+
     if (loading || isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -537,8 +585,8 @@ export default function AgentConfigPage() {
                         router.push('/dashboard/agent-config?agent=inbound');
                     }}
                     className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'inbound'
-                            ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm'
-                            : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
+                        ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
                         }`}
                 >
                     <Phone className="w-4 h-4" />
@@ -553,8 +601,8 @@ export default function AgentConfigPage() {
                         router.push('/dashboard/agent-config?agent=outbound');
                     }}
                     className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'outbound'
-                            ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                            : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
                         }`}
                 >
                     <Phone className="w-4 h-4" />
@@ -598,6 +646,44 @@ export default function AgentConfigPage() {
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    {/* Phone Number Selection */}
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Phone className="w-5 h-5 text-indigo-600" />
+                            Select Phone Number
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Select a number from your Vapi account to assign to this agent.
+                        </p>
+                        <div className="flex gap-3">
+                            <select
+                                value={selectedNumberId}
+                                onChange={(e) => setSelectedNumberId(e.target.value)}
+                                className="flex-1 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                <option value="" disabled>Select a number...</option>
+                                {vapiNumbers.map((num) => (
+                                    <option key={num.id} value={num.id}>
+                                        {num.number} {num.name ? `(${num.name})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleAssignNumber}
+                                disabled={assigningNumber || !selectedNumberId}
+                                className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                            >
+                                {assigningNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                {assigningNumber ? 'Syncing...' : 'Sync Number'}
+                            </button>
+                        </div>
+                        {vapiNumbers.length === 0 && (
+                            <p className="text-xs text-amber-600 mt-2">
+                                No phone numbers found in your Vapi account. Please import numbers in Vapi first.
+                            </p>
+                        )}
                     </div>
 
                     {/* System Prompt */}
@@ -698,123 +784,126 @@ export default function AgentConfigPage() {
                     >
                         🌐 Test Web (Browser)
                     </button>
-                </div>
-            )}
+                </div >
+            )
+            }
 
             {/* OUTBOUND AGENT TAB */}
-            {activeTab === 'outbound' && (
-                <div className="space-y-6 max-w-3xl">
-                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 rounded-2xl p-6">
-                        <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-2 mb-1">
-                            📤 Outbound Agent
-                        </h2>
-                        <p className="text-sm text-emerald-700">Makes outgoing calls</p>
-                        {inboundStatus?.configured && inboundStatus?.inboundNumber && (
-                            <p className="text-xs text-emerald-600 mt-2">Caller ID: {inboundStatus.inboundNumber}</p>
-                        )}
-                    </div>
-
-                    {/* System Prompt */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-purple-600" />
-                            System Prompt
-                        </h3>
-                        <textarea
-                            value={outboundConfig.systemPrompt}
-                            onChange={(e) => setOutboundConfig({ systemPrompt: e.target.value })}
-                            placeholder="You are a professional outbound sales representative..."
-                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
-                        />
-                    </div>
-
-                    {/* First Message */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-blue-600" />
-                            First Message
-                        </h3>
-                        <textarea
-                            value={outboundConfig.firstMessage}
-                            onChange={(e) => setOutboundConfig({ firstMessage: e.target.value })}
-                            placeholder="Hello! This is an outbound call from..."
-                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
-                        />
-                    </div>
-
-                    {/* Voice & Language */}
-                    <div className="space-y-4">
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <Volume2 className="w-5 h-5 text-emerald-600" />
-                                Voice
-                            </h3>
-                            <select
-                                value={outboundConfig.voice}
-                                onChange={(e) => setOutboundConfig({ voice: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            >
-                                <option value="">Select a voice...</option>
-                                {voices.map((voice) => (
-                                    <option key={voice.id} value={voice.id}>
-                                        {voice.name} ({voice.gender}) - {voice.provider}
-                                    </option>
-                                ))}
-                            </select>
+            {
+                activeTab === 'outbound' && (
+                    <div className="space-y-6 max-w-3xl">
+                        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 rounded-2xl p-6">
+                            <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-2 mb-1">
+                                📤 Outbound Agent
+                            </h2>
+                            <p className="text-sm text-emerald-700">Makes outgoing calls</p>
+                            {inboundStatus?.configured && inboundStatus?.inboundNumber && (
+                                <p className="text-xs text-emerald-600 mt-2">Caller ID: {inboundStatus.inboundNumber}</p>
+                            )}
                         </div>
 
+                        {/* System Prompt */}
                         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <Globe className="w-5 h-5 text-cyan-600" />
-                                Language
+                                <Bot className="w-5 h-5 text-purple-600" />
+                                System Prompt
                             </h3>
-                            <select
-                                value={outboundConfig.language}
-                                onChange={(e) => setOutboundConfig({ language: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            >
-                                <option value="en-US">English (US)</option>
-                                <option value="en-GB">English (UK)</option>
-                                <option value="es-ES">Spanish (Spain)</option>
-                                <option value="es-MX">Spanish (Mexico)</option>
-                                <option value="fr-FR">French</option>
-                                <option value="de-DE">German</option>
-                                <option value="it-IT">Italian</option>
-                                <option value="pt-BR">Portuguese (Brazil)</option>
-                                <option value="pt-PT">Portuguese (Portugal)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Max Duration */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-amber-600" />
-                            Max Call Duration
-                        </h3>
-                        <div className="flex items-center gap-4">
-                            <input
-                                type="number"
-                                value={outboundConfig.maxDuration}
-                                onChange={(e) => setOutboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
-                                min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            <textarea
+                                value={outboundConfig.systemPrompt}
+                                onChange={(e) => setOutboundConfig({ systemPrompt: e.target.value })}
+                                placeholder="You are a professional outbound sales representative..."
+                                className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
                             />
-                            <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
                         </div>
-                    </div>
 
-                    {/* Test Button */}
-                    <button
-                        onClick={handleTestOutbound}
-                        className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-                    >
-                        ☎️ Test Live Call
-                    </button>
-                </div>
-            )}
-        </div>
+                        {/* First Message */}
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <MessageSquare className="w-5 h-5 text-blue-600" />
+                                First Message
+                            </h3>
+                            <textarea
+                                value={outboundConfig.firstMessage}
+                                onChange={(e) => setOutboundConfig({ firstMessage: e.target.value })}
+                                placeholder="Hello! This is an outbound call from..."
+                                className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
+                            />
+                        </div>
+
+                        {/* Voice & Language */}
+                        <div className="space-y-4">
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <Volume2 className="w-5 h-5 text-emerald-600" />
+                                    Voice
+                                </h3>
+                                <select
+                                    value={outboundConfig.voice}
+                                    onChange={(e) => setOutboundConfig({ voice: e.target.value })}
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                                >
+                                    <option value="">Select a voice...</option>
+                                    {voices.map((voice) => (
+                                        <option key={voice.id} value={voice.id}>
+                                            {voice.name} ({voice.gender}) - {voice.provider}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <Globe className="w-5 h-5 text-cyan-600" />
+                                    Language
+                                </h3>
+                                <select
+                                    value={outboundConfig.language}
+                                    onChange={(e) => setOutboundConfig({ language: e.target.value })}
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                                >
+                                    <option value="en-US">English (US)</option>
+                                    <option value="en-GB">English (UK)</option>
+                                    <option value="es-ES">Spanish (Spain)</option>
+                                    <option value="es-MX">Spanish (Mexico)</option>
+                                    <option value="fr-FR">French</option>
+                                    <option value="de-DE">German</option>
+                                    <option value="it-IT">Italian</option>
+                                    <option value="pt-BR">Portuguese (Brazil)</option>
+                                    <option value="pt-PT">Portuguese (Portugal)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Max Duration */}
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-amber-600" />
+                                Max Call Duration
+                            </h3>
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="number"
+                                    value={outboundConfig.maxDuration}
+                                    onChange={(e) => setOutboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
+                                    min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
+                                    max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
+                                    className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                                />
+                                <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
+                            </div>
+                        </div>
+
+                        {/* Test Button */}
+                        <button
+                            onClick={handleTestOutbound}
+                            className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                        >
+                            ☎️ Test Live Call
+                        </button>
+                    </div>
+                )
+            }
+        </div >
 
     );
 }
