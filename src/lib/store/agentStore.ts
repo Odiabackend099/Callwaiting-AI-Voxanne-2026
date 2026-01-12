@@ -33,6 +33,30 @@ export const INITIAL_CONFIG: AgentConfig = {
     maxDuration: AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
 };
 
+/**
+ * Validates and merges partial config updates to ensure all required fields remain valid.
+ * Prevents silent data loss from shallow merge operations.
+ * 
+ * @param config - Partial config update from user input
+ * @param existingConfig - Current complete config state
+ * @returns Complete validated AgentConfig with all required fields
+ */
+const validateAgentConfig = (config: Partial<AgentConfig>, existingConfig: AgentConfig): AgentConfig => {
+    const merged = { ...existingConfig, ...config };
+
+    // Ensure critical fields are never undefined/null after merge
+    // Use nullish coalescing to preserve empty strings (valid for systemPrompt/firstMessage)
+    const validated: AgentConfig = {
+        systemPrompt: merged.systemPrompt ?? '',
+        firstMessage: merged.firstMessage ?? '',
+        voice: merged.voice ?? '',
+        language: merged.language ?? 'en-US',
+        maxDuration: merged.maxDuration ?? AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+    };
+
+    return validated;
+};
+
 export const useAgentStore = create<AgentState>()(
     persist(
         (set) => ({
@@ -40,11 +64,11 @@ export const useAgentStore = create<AgentState>()(
             outboundConfig: INITIAL_CONFIG,
 
             setInboundConfig: (config) => set((state) => ({
-                inboundConfig: { ...state.inboundConfig, ...config }
+                inboundConfig: validateAgentConfig(config, state.inboundConfig)
             })),
 
             setOutboundConfig: (config) => set((state) => ({
-                outboundConfig: { ...state.outboundConfig, ...config }
+                outboundConfig: validateAgentConfig(config, state.outboundConfig)
             })),
 
             resetConfigs: () => set({

@@ -17,15 +17,48 @@ const contactsRouter = Router();
 contactsRouter.use(requireAuthOrDev);
 
 /**
+ * GET /api/contacts/stats
+ * Get aggregated contact statistics
+ * @returns Contact counts by lead status and total
+ */
+contactsRouter.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('lead_status', { count: 'exact' })
+      .eq('org_id', orgId);
+
+    if (error) {
+      log.error('Contacts', 'GET /stats - Database error', { orgId, error: error.message });
+      return res.status(500).json({ error: error.message });
+    }
+
+    const stats = {
+      total: data?.length || 0,
+      hot: data?.filter(c => c.lead_status === 'hot').length || 0,
+      warm: data?.filter(c => c.lead_status === 'warm').length || 0,
+      cold: data?.filter(c => c.lead_status === 'cold').length || 0
+    };
+
+    return res.json(stats);
+  } catch (e: any) {
+    log.error('Contacts', 'GET /stats - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to fetch contact stats' });
+  }
+});
+
+/**
  * GET /api/contacts
  * List contacts with pagination and filtering
+ * Uses RPC function to bypass PostgREST schema cache issues
  * @query page - Page number (default 1)
  * @query limit - Items per page (default 20, max 100)
  * @query leadStatus - Filter by status: 'hot', 'warm', 'cold'
  * @query search - Search by name, phone, or email
- * @query startDate - Filter by contact date range start
- * @query endDate - Filter by contact date range end
- * @returns Paginated list of contacts with call/appointment counts
+ * @returns Paginated list of contacts
  */
 contactsRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -36,77 +69,42 @@ contactsRouter.get('/', async (req: Request, res: Response) => {
       page: z.coerce.number().int().positive().default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
       leadStatus: z.enum(['hot', 'warm', 'cold']).optional(),
-      search: z.string().optional(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional()
+      search: z.string().optional()
     });
 
     const parsed = schema.parse(req.query);
     const offset = (parsed.page - 1) * parsed.limit;
 
-    let query = supabase
-      .from('contacts')
-      .select('*', { count: 'exact' })
-      .eq('org_id', orgId);
-
-    if (parsed.leadStatus) {
-      query = query.eq('lead_status', parsed.leadStatus);
-    }
-
-    if (parsed.search) {
-      const searchTerm = `%${parsed.search}%`;
-      query = query.or(`name.ilike.${searchTerm},phone.ilike.${searchTerm},email.ilike.${searchTerm}`);
-    }
-
-    if (parsed.startDate) {
-      query = query.gte('created_at', new Date(parsed.startDate).toISOString());
-    }
-    if (parsed.endDate) {
-      query = query.lte('created_at', new Date(parsed.endDate).toISOString());
-    }
-
-    query = query
-      .order('lead_score', { ascending: false })
-      .order('created_at', { ascending: false })
-      .range(offset, offset + parsed.limit - 1);
-
-    const { data, error, count } = await query;
+    // Call RPC function directly - bypasses schema introspection cache
+    const { data, error } = await supabase.rpc('get_contacts_paged', {
+      p_org_id: orgId,
+      p_limit: parsed.limit,
+      p_offset: offset,
+      p_lead_status: parsed.leadStatus || null,
+      p_search: parsed.search || null
+    });
 
     if (error) {
-      log.error('Contacts', 'GET / - Database error', { orgId, error: error.message });
+      log.error('Contacts', 'GET / - RPC error', { orgId, error: error.message });
       return res.status(500).json({ error: error.message });
     }
 
-    // Enhance contacts with call/appointment counts
-    const enhancedContacts = await Promise.all(
-      (data || []).map(async (contact) => {
-        const { count: callCount } = await supabase
-          .from('call_logs')
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId)
-          .eq('phone_number', contact.phone);
+    const rows = Array.isArray(data) ? data : [];
+    const total = rows.length > 0 ? (rows[0] as any).total_count : 0;
 
-        const { count: appointmentCount } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId)
-          .eq('contact_id', contact.id);
-
-        return {
-          ...contact,
-          total_calls: callCount || 0,
-          total_appointments: appointmentCount || 0
-        };
-      })
-    );
+    // Remove total_count from response data
+    const contacts = rows.map(row => {
+      const { total_count, ...contact } = row as any;
+      return contact;
+    });
 
     return res.json({
-      contacts: enhancedContacts,
+      contacts,
       pagination: {
         page: parsed.page,
         limit: parsed.limit,
-        total: count || 0,
-        pages: Math.ceil((count || 0) / parsed.limit)
+        total,
+        pages: Math.ceil(total / parsed.limit)
       }
     });
   } catch (e: any) {
@@ -452,7 +450,7 @@ contactsRouter.post('/:id/sms', async (req: Request, res: Response) => {
         phone: contact.phone,
         service: contact.service_interests?.[0] || 'Service',
         summary: parsed.message
-      });
+      }, orgId);
 
       // Log SMS in database
       const { error: logError } = await supabase

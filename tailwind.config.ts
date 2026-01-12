@@ -9,10 +9,10 @@ const config: Config = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ["var(--font-poppins)", "var(--font-inter)", "system-ui", "sans-serif"],
+                sans: ["var(--font-inter)", "var(--font-poppins)", "system-ui", "sans-serif"],
                 serif: ["var(--font-playfair)", "Georgia", "serif"],
                 display: ["var(--font-playfair)", "Georgia", "serif"],
-                body: ["var(--font-poppins)", "var(--font-inter)", "system-ui", "sans-serif"],
+                body: ["var(--font-inter)", "var(--font-poppins)", "system-ui", "sans-serif"],
             },
             fontSize: {
                 xs: ["0.75rem", { lineHeight: "1rem" }],

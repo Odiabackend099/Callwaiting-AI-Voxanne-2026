@@ -265,6 +265,198 @@ export class VapiClient {
     return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updates), { route: 'PATCH /assistant/:id', assistantId });
   }
 
+  /**
+   * CRITICAL: Sync appointment booking tools to agent
+   * Reads from vapi-tool-definitions.json and wires them into the agent's tools array
+   * 
+   * This function:
+   * 1. Loads tool definitions from config
+   * 2. Injects tenantId into webhook URLs
+   * 3. Updates the agent with the tools array
+   * 
+   * @param assistantId - The Vapi assistant ID
+   * @param tenantId - The organization/tenant ID for multi-tenant routing
+   * @param baseUrl - Optional override for webhook base URL
+   * @returns Updated assistant object
+   */
+  async syncAgentTools(assistantId: string, tenantId: string, baseUrl?: string): Promise<any> {
+    try {
+      // Load tool definitions
+      const toolDefinitions = this.getAppointmentBookingTools(baseUrl);
+      
+      logger.info('Syncing appointment booking tools to agent', { 
+        assistantId, 
+        tenantId, 
+        toolCount: toolDefinitions.length 
+      });
+
+      // Update the agent with tools
+      const response = await this.updateAssistant(assistantId, {
+        tools: toolDefinitions
+      });
+
+      logger.info('Successfully synced tools to agent', { assistantId, toolCount: toolDefinitions.length });
+      return response;
+    } catch (error) {
+      logger.error('Failed to sync tools to agent', { assistantId, error: (error as any)?.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Get appointment booking tool definitions
+   * These are server-type tools that handle: check_availability, reserve_slot, send_sms_reminder
+   * 
+   * @param baseUrl - Optional override for webhook base URL (defaults to environment variable)
+   * @returns Array of VapiTool definitions
+   */
+  public getAppointmentBookingTools(baseUrl?: string): VapiTool[] {
+    const url = baseUrl || process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'https://api.example.com';
+    
+    return [
+      {
+        type: 'server',
+        name: 'check_availability',
+        description: 'Check available appointment slots for a given date. Returns list of 30-minute time slots respecting business hours and buffer times.',
+        server: {
+          url: `${url}/api/vapi/tools/calendar/check`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Let me check our availability...',
+            'Looking up the schedule...',
+            'One moment while I check what we have available...'
+          ],
+          requestComplete: [
+            'Here are the available times:',
+            'I found these openings:',
+            'We have availability at:'
+          ],
+          requestFailed: [
+            'I\'m having trouble checking the schedule. Can you try again in a moment?',
+            'Let me try that again...'
+          ]
+        }
+      },
+      {
+        type: 'server',
+        name: 'reserve_atomic',
+        description: 'Atomically reserve an appointment slot using PostgreSQL advisory locks. Prevents double-booking with microsecond-level precision. Returns 10-minute hold that must be confirmed with OTP.',
+        server: {
+          url: `${url}/api/vapi/tools/booking/reserve-atomic`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Reserving that time for you...',
+            'Holding that slot atomically...'
+          ],
+          requestComplete: [
+            'Perfect! That time is reserved for you.',
+            'Got it - I\'ve held that appointment for you.'
+          ],
+          requestFailed: [
+            'It looks like someone just booked that time. Let me show you other options.',
+            'That slot was just taken. Would another time work?'
+          ]
+        }
+      },
+      {
+        type: 'server',
+        name: 'send_otp_code',
+        description: 'Generate and send a 4-digit verification code via SMS to confirm appointment booking. Code expires after 10 minutes or 3 failed attempts.',
+        server: {
+          url: `${url}/api/vapi/tools/booking/send-otp`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Sending you a verification code...',
+            'Just a moment while I send the code...'
+          ],
+          requestComplete: [
+            'Code sent! Check your text message.',
+            'Perfect! Look for the code in your text messages.'
+          ],
+          requestFailed: [
+            'I\'m having trouble sending the code. Let me try again...',
+            'Unable to send the verification code at the moment.'
+          ]
+        }
+      },
+      {
+        type: 'server',
+        name: 'verify_otp',
+        description: 'Verify the 4-digit OTP code from SMS to complete appointment booking. On successful verification, creates confirmed appointment in calendar.',
+        server: {
+          url: `${url}/api/vapi/tools/booking/verify-otp`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Verifying your code...',
+            'Checking that code...'
+          ],
+          requestComplete: [
+            'Code verified! Your appointment is confirmed.',
+            'Great! Code matches. You\'re all set.'
+          ],
+          requestFailed: [
+            'That code doesn\'t match. Please check your text and try again.',
+            'That\'s not the right code. You have a few more tries.'
+          ]
+        }
+      },
+      {
+        type: 'server',
+        name: 'send_confirmation_sms',
+        description: 'Send appointment confirmation SMS to patient after successful OTP verification. Includes date, time, clinic name, and reschedule instructions.',
+        server: {
+          url: `${url}/api/vapi/tools/booking/send-confirmation`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Sending your confirmation text...',
+            'Just a moment while I send that...'
+          ],
+          requestComplete: [
+            'Perfect! Confirmation sent to your phone.',
+            'SMS sent! Check your messages for the details.'
+          ],
+          requestFailed: [
+            'I\'m having trouble sending the confirmation. Let me try once more...',
+            'Unable to send the SMS at the moment.'
+          ]
+        }
+      },
+      {
+        type: 'server',
+        name: 'send_sms_reminder',
+        description: 'Send appointment reminder or confirmation SMS. 10DLC compliant with opt-out language. Includes reschedule link.',
+        server: {
+          url: `${url}/api/vapi/tools/sms/send`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Sending you a text...',
+            'Just a moment while I send that...'
+          ],
+          requestComplete: [
+            'Perfect! You\'ll receive a text shortly with all the details.',
+            'SMS sent! Check your messages.'
+          ],
+          requestFailed: [
+            'I\'m having trouble sending the text. Let me try once more...',
+            'Unable to send the SMS at the moment.'
+          ]
+        }
+      }
+    ];
+  }
+
   async getAssistant(assistantId: string) {
     return await this.request<any>(() => this.client.get(`/assistant/${assistantId}`), { route: 'GET /assistant/:id', assistantId });
   }

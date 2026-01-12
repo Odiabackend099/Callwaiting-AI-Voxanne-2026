@@ -47,11 +47,14 @@ import { attachClientWebSocket } from './services/web-voice-bridge';
 import { initWebSocket } from './services/websocket';
 import { supabase } from './services/supabase-client';
 import inboundSetupRouter from './routes/inbound-setup'; // default export
+import phoneMappingRouter from './routes/phone-mapping-routes'; // default export
 import knowledgeBaseRouter from './routes/knowledge-base'; // default export
 import { ragRouter } from './routes/knowledge-base-rag';
 import { vapiRagRouter } from './routes/vapi-rag-integration';
 import { vapiWebhookRouter } from './routes/vapi-webhook';
 import { vapiSetupRouter } from './routes/vapi-setup';
+import vapiToolsRouter from './routes/vapi-tools-routes';
+import handoffRouter from './routes/handoff-routes';
 import vapiDiscoveryRouter from './routes/vapi-discovery'; // default export
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; // named export
 import agentSyncRouter from './routes/agent-sync'; // default export
@@ -184,11 +187,14 @@ app.use('/api/assistants', assistantsRouter);
 app.use('/api/phone-numbers', phoneNumbersRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/inbound', inboundSetupRouter);
+app.use('/api/inbound', phoneMappingRouter);
 app.use('/api/knowledge-base', knowledgeBaseRouter);
 app.use('/api/knowledge-base', ragRouter);
 app.use('/api/vapi', vapiRagRouter);
 app.use('/api/vapi', vapiWebhookRouter);
 app.use('/api/vapi', vapiSetupRouter);
+app.use('/api/vapi', vapiToolsRouter);
+app.use('/api/handoff', handoffRouter);
 app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);

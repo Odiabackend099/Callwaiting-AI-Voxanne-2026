@@ -604,4 +604,114 @@ assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise
   }
 });
 
+/**
+ * POST /api/assistants/:assistantId/setup-booking
+ * 
+ * CRITICAL: Set up an agent for LIVE APPOINTMENT BOOKING
+ * 
+ * This endpoint:
+ * 1. Loads the booking agent setup service
+ * 2. Generates system prompt with temporal context + tool instructions
+ * 3. Wires appointment booking tools (check_availability, reserve_slot, send_sms_reminder)
+ * 4. Updates the agent in Vapi
+ * 5. Returns status: ready for testing
+ * 
+ * @param assistantId - The Vapi assistant ID
+ * @param tenantId - The organization ID (from query param or body)
+ */
+assistantsRouter.post('/:assistantId/setup-booking', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { assistantId } = req.params;
+    const { tenantId } = req.body || req.query;
+
+    if (!assistantId || !tenantId) {
+      res.status(400).json({ 
+        error: 'Missing required parameters',
+        required: ['assistantId (URL param)', 'tenantId (body or query)']
+      });
+      return;
+    }
+
+    console.log('[POST /assistants/:id/setup-booking] Setting up booking for agent', {
+      assistantId,
+      tenantId
+    });
+
+    // Load the booking setup service
+    const { createBookingAgentSetup } = await import('../services/booking-agent-setup');
+    const bookingSetup = createBookingAgentSetup();
+
+    // Get webhook base URL from environment
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'https://api.example.com';
+
+    // Set up the booking agent
+    const updatedAssistant = await bookingSetup.setupBookingAgent(assistantId, tenantId, baseUrl);
+
+    // Get current status
+    const status = await bookingSetup.getBookingAgentStatus(assistantId);
+
+    console.log('[POST /assistants/:id/setup-booking] Successfully set up booking', {
+      assistantId,
+      tenantId,
+      ready: status.ready,
+      toolCount: status.toolCount
+    });
+
+    res.json({
+      success: true,
+      assistantId,
+      tenantId,
+      message: 'Appointment booking agent successfully configured',
+      status: {
+        ready: status.ready,
+        toolCount: status.toolCount,
+        hasBookingTools: status.hasBookingTools,
+        hasBookingSystemPrompt: status.hasBookingSystemPrompt,
+        tools: status.tools
+      },
+      nextSteps: [
+        '✅ System prompt updated with booking instructions',
+        '✅ Tools wired: check_availability, reserve_slot, send_sms_reminder',
+        '🔧 Test: Call the agent and request an appointment',
+        '✅ Expected: Agent will check availability, hold slot, send SMS'
+      ]
+    });
+  } catch (error: any) {
+    console.error('[POST /assistants/:id/setup-booking] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to set up booking agent',
+      details: error.response?.data || undefined
+    });
+  }
+});
+
+/**
+ * GET /api/assistants/:assistantId/booking-status
+ * 
+ * Check if an agent is ready for appointment booking
+ * Returns: tool count, system prompt info, ready status
+ */
+assistantsRouter.get('/:assistantId/booking-status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { assistantId } = req.params;
+
+    const { createBookingAgentSetup } = await import('../services/booking-agent-setup');
+    const bookingSetup = createBookingAgentSetup();
+
+    const status = await bookingSetup.getBookingAgentStatus(assistantId);
+
+    res.json({
+      assistantId,
+      ready: status.ready,
+      status
+    });
+  } catch (error: any) {
+    console.error('[GET /assistants/:id/booking-status] Error:', error.message);
+    res.status(500).json({
+      error: error.message || 'Failed to get booking status'
+    });
+  }
+});
+
 export default assistantsRouter;

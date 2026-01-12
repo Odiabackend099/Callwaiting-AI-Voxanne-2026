@@ -1942,40 +1942,48 @@ router.post(
         outboundUpdated: Boolean(outboundPayload)
       });
 
-      const syncPromises = agentIdsToSync.map(id => ensureAssistantSynced(id, vapiApiKey!));
-      const syncResults = await Promise.allSettled(syncPromises);
+      // CRITICAL FIX: Capture individual agent success/failure instead of using Promise.allSettled
+      const syncPromises = agentIdsToSync.map(async (id) => {
+        try {
+          const assistantId = await ensureAssistantSynced(id, vapiApiKey!);
+          return { agentId: id, assistantId, success: true };
+        } catch (error: any) {
+          return { agentId: id, success: false, error: error.message || String(error) };
+        }
+      });
 
-      const successfulSyncs = syncResults.filter(r => r.status === 'fulfilled').map((r: any) => r.value);
-      const failedSyncs = syncResults.filter(r => r.status === 'rejected');
+      const syncResults = await Promise.all(syncPromises);
 
-      // CRITICAL: If ALL syncs failed, return error instead of success
-      if (successfulSyncs.length === 0) {
-        const errorMessages = failedSyncs.map((r: any) => r.reason?.message || String(r.reason)).join('; ');
-        logger.error('All agents failed to sync to Vapi', {
+      const successfulSyncs = syncResults.filter(r => r.success);
+      const failedSyncs = syncResults.filter(r => !r.success);
+
+      // CRITICAL FIX: Return error if ANY agent failed to sync (not just if ALL failed)
+      // This ensures database and Vapi stay in sync
+      if (failedSyncs.length > 0) {
+        const failureDetails = failedSyncs.map(f => ({
+          agentId: f.agentId,
+          error: f.error
+        }));
+
+        const errorMessage = failedSyncs.map(f => f.error).join('; ');
+
+        logger.error('Agent sync to Vapi failed', {
+          failedAgents: failureDetails,
+          successCount: successfulSyncs.length,
           failCount: failedSyncs.length,
-          errors: errorMessages,
           requestId
         });
+
         res.status(500).json({
-          error: `Failed to sync agents to Vapi: ${errorMessages}`,
+          success: false,
+          error: `Failed to sync ${failedSyncs.length} agent(s) to Vapi: ${errorMessage}`,
+          details: {
+            succeeded: successfulSyncs.map((s: any) => ({ agentId: s.agentId, assistantId: s.assistantId })),
+            failed: failureDetails
+          },
           requestId
         });
         return;
-      }
-
-      if (failedSyncs.length > 0) {
-        logger.warn('Some agents failed to sync to Vapi', {
-          successCount: successfulSyncs.length,
-          failCount: failedSyncs.length,
-          errors: failedSyncs.map((r: any) => r.reason?.message || String(r.reason)),
-          requestId
-        });
-      } else {
-        logger.info('All agents synced successfully to Vapi', {
-          count: successfulSyncs.length,
-          requestId,
-          assistantIds: successfulSyncs
-        });
       }
 
       // Verify voice was synced by checking agent records
@@ -1990,17 +1998,18 @@ router.post(
         vapiAssistantId: a.vapi_assistant_id
       }));
 
-      logger.info('Agent sync verification', {
+      logger.info('All agents synced successfully to Vapi', {
+        count: successfulSyncs.length,
         requestId,
         agents: agentDetails
       });
 
       res.status(200).json({
         success: true,
-        syncedAgentIds: successfulSyncs,
+        syncedAgentIds: successfulSyncs.map((s: any) => s.assistantId),
         message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated.`,
-        voiceSynced: successfulSyncs.length > 0,
-        knowledgeBaseSynced: successfulSyncs.length > 0,
+        voiceSynced: true,
+        knowledgeBaseSynced: true,
         agentDetails: agentDetails,
         requestId
       });

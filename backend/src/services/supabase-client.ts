@@ -44,4 +44,22 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 });
 
+// Cache-free client for schema introspection-free queries
+// Workaround for Supabase JS client schema cache issues
+export function createCacheFreeSuperbaseClient() {
+  return createClient(supabaseUrl, supabaseKey, {
+    global: {
+      fetch: fetchWithTimeout,
+    },
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true
+    },
+    db: {
+      schema: 'public'
+    }
+  });
+}
+
 export default supabase;
+

@@ -1,17 +1,13 @@
 'use client';
 export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { Phone, TrendingUp, ArrowUpRight, ArrowDownRight, Clock, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
-
-// LeftSidebar removed (now in layout)
 import HotLeadDashboard from '@/components/dashboard/HotLeadDashboard';
-
-// Removed local LeftSidebar definition
-
 
 interface DashboardStats {
     totalCalls: number;
@@ -30,8 +26,6 @@ interface RecentCall {
     duration_seconds: number | null;
     status: string;
     call_type?: string;
-    // Legacy fields for backwards compatibility
-    vapi_call_id?: string;
     to_number?: string;
     started_at?: string;
     metadata?: {
@@ -39,67 +33,43 @@ interface RecentCall {
     } | null;
 }
 
+// Fetcher function wrapper for useSWR
+const fetcher = (url: string) => authedBackendFetch<any>(url);
+
 export default function CallWaitingAIDashboard() {
     const router = useRouter();
-    const { user, loading } = useAuth();
-    const [stats, setStats] = useState<DashboardStats>({
-        totalCalls: 0,
-        inboundCalls: 0,
-        outboundCalls: 0,
-        completedCalls: 0,
-        callsToday: 0,
-        avgDuration: 0
-    });
-    const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { user, loading: authLoading } = useAuth();
+
+    // Use SWR for data fetching
+    // Key is null if user not loaded => pauses request
+    const { data, error, isLoading: swrLoading } = useSWR(
+        user ? '/api/calls-dashboard/stats' : null,
+        fetcher,
+        {
+            refreshInterval: 10000, // Poll every 10s for live-ish updates
+            revalidateOnFocus: true,
+            dedupingInterval: 5000,
+        }
+    );
+
+    const isLoading = authLoading || (swrLoading && !data);
+
+    const stats: DashboardStats = {
+        totalCalls: data?.totalCalls || 0,
+        inboundCalls: data?.inboundCalls || 0,
+        outboundCalls: data?.outboundCalls || 0,
+        completedCalls: data?.completedCalls || 0,
+        callsToday: data?.callsToday || 0,
+        avgDuration: data?.avgDuration || 0
+    };
+
+    const recentCalls: RecentCall[] = data?.recentCalls || [];
 
     useEffect(() => {
-        if (!loading && !user) {
+        if (!authLoading && !user) {
             router.push('/login');
         }
-    }, [user, loading, router]);
-
-    useEffect(() => {
-        if (user) {
-            fetchDashboardData();
-        }
-    }, [user]);
-
-    const fetchDashboardData = async () => {
-        setIsLoading(true);
-        try {
-            // Fetch dashboard stats from backend API (replaces direct Supabase query)
-            const data = await authedBackendFetch<{
-                totalCalls: number;
-                inboundCalls: number;
-                outboundCalls: number;
-                completedCalls: number;
-                callsToday: number;
-                avgDuration: number;
-                recentCalls: RecentCall[];
-            }>('/api/calls-dashboard/stats');
-
-            // Set stats from backend response
-            setStats({
-                totalCalls: data.totalCalls,
-                inboundCalls: data.inboundCalls,
-                outboundCalls: data.outboundCalls,
-                completedCalls: data.completedCalls,
-                callsToday: data.callsToday,
-                avgDuration: data.avgDuration
-            });
-
-            // Set recent calls from backend response
-            setRecentCalls(data.recentCalls || []);
-
-        } catch (error: any) {
-            console.error('Error fetching dashboard data:', error);
-            setError(error?.message || 'Failed to load dashboard data');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [user, authLoading, router]);
 
     const formatDuration = (seconds: number | null) => {
         if (!seconds) return '0:00';
@@ -122,193 +92,207 @@ export default function CallWaitingAIDashboard() {
         return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     };
 
-    // 1. Show loading while checking authentication status
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-700">Verifying session...</p>
-                </div>
-            </div>
-        );
-    }
-
-    // 2. If not authenticated, return null (router.push will redirect)
-    if (!user) return null;
-
-    // 3. If authenticated but fetching data, show dashboard loader
-    if (isLoading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-700">Loading dashboard...</p>
-                </div>
-            </div>
-        );
-    }
+    // 2. Authentication check (handled by useEffect, but safe return null)
+    if (!user && !authLoading) return null;
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-8 pb-32">
+        <div className="max-w-7xl mx-auto px-6 py-8 pb-32 space-y-8">
             {/* Header */}
-            <div className="mb-12">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
-                <p className="text-gray-700">Welcome back! Here&apos;s your system overview.</p>
+            <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">Dashboard</h1>
+                <p className="text-slate-500 dark:text-slate-400">Welcome back. Here&apos;s your system overview.</p>
             </div>
 
-            {/* Hot Lead Dashboard - Visible immediately on login */}
+            {/* Hot Lead Dashboard */}
             <HotLeadDashboard />
 
-            {/* Key Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                {/* Total Calls */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-                            <Phone className="w-6 h-6 text-emerald-600" />
-                        </div>
-                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3" /> Total
-                        </span>
+            {/* Key Metrics Bento Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Metric Card 1: Total Calls */}
+                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Phone className="w-24 h-24 text-emerald-500 transform rotate-12 translate-x-4 -translate-y-4" />
                     </div>
-                    <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.totalCalls}</h3>
-                    <p className="text-sm text-gray-700 font-medium mb-4">Total Calls</p>
-                    <div className="pt-4 border-t border-gray-200">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                            <span className="text-gray-600">Today: {stats.callsToday}</span>
-                            <span className="text-emerald-600">{stats.completedCalls} completed</span>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                <TrendingUp className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Calls</span>
                         </div>
-                    </div>
-                </div>
-
-                {/* Inbound Calls */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center">
-                            <ArrowDownRight className="w-6 h-6 text-cyan-600" />
-                        </div>
-                        <span className="text-xs font-bold text-cyan-600 bg-cyan-50 px-3 py-1 rounded-full">
-                            Inbound
-                        </span>
-                    </div>
-                    <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.inboundCalls}</h3>
-                    <p className="text-sm text-gray-700 font-medium mb-4">Inbound Calls</p>
-                    <div className="pt-4 border-t border-gray-200">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                            <span className="text-gray-600">Incoming</span>
-                            <span className="text-cyan-600">{Math.round((stats.inboundCalls / Math.max(stats.totalCalls, 1)) * 100)}%</span>
+                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
+                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : stats.totalCalls}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
+                            <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                {stats.completedCalls} completed
+                            </span>
+                            <span>• Today: {stats.callsToday}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Outbound Calls */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center">
-                            <ArrowUpRight className="w-6 h-6 text-purple-600" />
-                        </div>
-                        <span className="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
-                            Outbound
-                        </span>
+                {/* Metric Card 2: Inbound */}
+                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <ArrowDownRight className="w-24 h-24 text-cyan-500 transform rotate-12 translate-x-4 -translate-y-4" />
                     </div>
-                    <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats.outboundCalls}</h3>
-                    <p className="text-sm text-gray-700 font-medium mb-4">Outbound Calls</p>
-                    <div className="pt-4 border-t border-gray-200">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                            <span className="text-gray-600">Outgoing</span>
-                            <span className="text-purple-600">{Math.round((stats.outboundCalls / Math.max(stats.totalCalls, 1)) * 100)}%</span>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                                <ArrowDownRight className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Inbound</span>
+                        </div>
+                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
+                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : stats.inboundCalls}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
+                            <span className="text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                                {stats.totalCalls > 0 ? Math.round((stats.inboundCalls / stats.totalCalls) * 100) : 0}% traffic
+                            </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Average Duration */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
-                            <Clock className="w-6 h-6 text-amber-600" />
-                        </div>
-                        <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
-                            Avg
-                        </span>
+                {/* Metric Card 3: Outbound */}
+                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <ArrowUpRight className="w-24 h-24 text-purple-500 transform rotate-12 translate-x-4 -translate-y-4" />
                     </div>
-                    <h3 className="text-3xl font-bold text-gray-900 mb-1">{formatDuration(stats.avgDuration)}</h3>
-                    <p className="text-sm text-gray-700 font-medium mb-4">Avg Call Duration</p>
-                    <div className="pt-4 border-t border-gray-200">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                            <span className="text-gray-600">Per call</span>
-                            <span className="text-amber-600">Completed</span>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                                <ArrowUpRight className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Outbound</span>
+                        </div>
+                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
+                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : stats.outboundCalls}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
+                            <span className="text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                                {stats.totalCalls > 0 ? Math.round((stats.outboundCalls / stats.totalCalls) * 100) : 0}% traffic
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Metric Card 4: Avg Duration */}
+                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Clock className="w-24 h-24 text-amber-500 transform rotate-12 translate-x-4 -translate-y-4" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                <Clock className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg Duration</span>
+                        </div>
+                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
+                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : formatDuration(stats.avgDuration)}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
+                            <span className="text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                                Per completed call
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Recent Calls */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-8">
-                <div className="flex items-center justify-between mb-8">
+            {/* Recent Calls Table */}
+            <div className="glass-panel rounded-2xl overflow-hidden">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-800/60 flex items-center justify-between">
                     <div>
-                        <h3 className="text-2xl font-bold text-gray-900 mb-1">Recent Calls</h3>
-                        <p className="text-sm text-gray-700">Latest call activity</p>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Recent Activity</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Real-time call logs</p>
                     </div>
                     <button
                         onClick={() => router.push('/dashboard/calls')}
-                        className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors text-sm font-medium"
+                        className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20"
                     >
-                        View All
+                        View All Activity
                     </button>
                 </div>
 
-                <div className="space-y-4">
-                    {recentCalls.length === 0 ? (
-                        <div className="text-center py-12">
-                            <Phone className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <p className="text-gray-700">No calls yet</p>
-                            <p className="text-sm text-gray-600 mt-2">Calls will appear here once you start receiving them</p>
+                <div className="overflow-x-auto">
+                    {isLoading ? (
+                        <div className="p-6 space-y-4">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="flex items-center justify-between animate-pulse">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800" />
+                                        <div className="space-y-2">
+                                            <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
+                                            <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+                                        </div>
+                                    </div>
+                                    <div className="h-6 w-20 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : recentCalls.length === 0 ? (
+                        <div className="text-center py-16">
+                            <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-800">
+                                <Phone className="w-8 h-8 text-slate-400" />
+                            </div>
+                            <p className="text-slate-900 dark:text-white font-medium">No calls recorded yet</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Waiting for your first conversation...</p>
                         </div>
                     ) : (
-                        recentCalls.map((call) => (
-                            <div
-                                key={call.id}
-                                className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${call.metadata?.channel === 'inbound'
-                                            ? 'bg-cyan-50'
-                                            : 'bg-purple-50'
-                                            }`}>
-                                            {call.metadata?.channel === 'inbound' ? (
-                                                <ArrowDownRight className="w-6 h-6 text-cyan-600" />
-                                            ) : (
-                                                <ArrowUpRight className="w-6 h-6 text-purple-600" />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-gray-900">{call.to_number || call.phone_number || 'Unknown'}</h4>
-                                            <div className="flex items-center gap-2 text-xs text-gray-600 font-medium">
-                                                <Clock className="w-3 h-3" />
-                                                {formatTimeAgo(call.started_at || call.call_date || '')} • {formatDuration(call.duration_seconds)}
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50/50 dark:bg-slate-800/30 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold">
+                                <tr>
+                                    <th className="px-6 py-3 tracking-wider">Caller</th>
+                                    <th className="px-6 py-3 tracking-wider">Type</th>
+                                    <th className="px-6 py-3 tracking-wider">Duration</th>
+                                    <th className="px-6 py-3 tracking-wider text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60">
+                                {recentCalls.map((call) => (
+                                    <tr key={call.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="font-medium text-slate-900 dark:text-slate-200 tracking-tight">
+                                                {call.caller_name || call.to_number || call.phone_number || 'Unknown Caller'}
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${call.metadata?.channel === 'inbound'
-                                            ? 'bg-cyan-50 text-cyan-700'
-                                            : 'bg-purple-50 text-purple-700'
-                                            }`}>
-                                            {call.metadata?.channel === 'inbound' ? 'Inbound' : 'Outbound'}
-                                        </span>
-                                        {call.status === 'completed' && (
-                                            <CheckCircle className="w-5 h-5 text-emerald-600" />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))
+                                            <div className="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />
+                                                {formatTimeAgo(call.started_at || call.call_date || '')}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                {call.metadata?.channel === 'inbound' ? (
+                                                    <ArrowDownRight className="w-4 h-4 text-cyan-500" />
+                                                ) : (
+                                                    <ArrowUpRight className="w-4 h-4 text-purple-500" />
+                                                )}
+                                                <span className="text-slate-600 dark:text-slate-400 capitalize">
+                                                    {call.metadata?.channel || 'Unknown'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-400">
+                                            {formatDuration(call.duration_seconds)}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${call.status === 'completed'
+                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                                }`}>
+                                                {call.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     )}
                 </div>
             </div>
         </div>
-
     );
 }

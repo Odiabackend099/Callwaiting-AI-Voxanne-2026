@@ -19,17 +19,20 @@ export default function DashboardLayout({
         <ThemeProvider>
             <DashboardGate>
                 <VoiceAgentProvider>
-                    <div className="flex h-screen bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors duration-300">
+                    <div className="flex h-screen overflow-hidden">
                         {/* Persistent Sidebar */}
                         <LeftSidebar />
 
                         {/* Main Content Area */}
-                        <div className="flex-1 md:ml-64 pt-16 md:pt-0 overflow-y-auto">
-                            {children}
-                        </div>
+                        {/* ml-64 matches sidebar 60 (15rem) + gaps, roughly. Let's make it 18rem (72) to be safe with the floating gap */}
+                        <div className="flex-1 md:ml-72 flex flex-col h-full overflow-hidden relative">
+                            {/* Command Palette */}
+                            <CommandPalette />
 
-                        {/* Command Palette */}
-                        <CommandPalette />
+                            <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-4 pr-4 pb-4">
+                                {children}
+                            </main>
+                        </div>
                     </div>
                 </VoiceAgentProvider>
             </DashboardGate>

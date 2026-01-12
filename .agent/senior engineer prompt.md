@@ -8,3 +8,4 @@ Review this function as if you are a senior engineer. Specifically look for the 
 6. Ambiguous or hard to understand code that requires documentation.
 7. Debugging code that should be removed before pushing to production.
 8. Any other ways to improve the code quality, readability, performance, security, scalability, or maintainability.
+9. **UI/UX Audit**: For frontend code, does it meet "Premium AI Design" standards? (Inter font, tight tracking, glassmorphism, no jarring reloads, small text). Refer to `.agent/skills/ui-ux-designer/SKILL.md`.
