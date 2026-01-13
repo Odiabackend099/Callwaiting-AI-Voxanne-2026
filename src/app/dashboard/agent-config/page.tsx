@@ -536,8 +536,8 @@ export default function AgentConfigPage() {
         <div className="max-w-6xl mx-auto px-6 py-8">
             <div className="mb-8 flex justify-between items-start">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Agent Configuration</h1>
-                    <p className="text-gray-600">Configure both inbound and outbound agents. Settings sync to Vapi automatically.</p>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Agent Configuration</h1>
+                    <p className="text-gray-600 dark:text-slate-400">Configure both inbound and outbound agents. Settings sync to Vapi automatically.</p>
                 </div>
 
                 <button
@@ -547,7 +547,7 @@ export default function AgentConfigPage() {
                         ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                         : hasActiveTabChanges()
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-600 cursor-not-allowed border border-gray-200 dark:border-slate-700'
                         }`}
                 >
                     {isSaving ? (
@@ -658,15 +658,15 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* Template Selector */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <Bot className="w-5 h-5 text-indigo-600" />
                             Prompt Template
                         </h3>
-                        <p className="text-sm text-gray-500 mb-4">Auto-fill the system prompt and first message with industry best practices.</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">Auto-fill the system prompt and first message with industry best practices.</p>
                         <select
                             onChange={(e) => applyTemplate(e.target.value, 'inbound')}
-                            className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             defaultValue=""
                         >
                             <option value="" disabled>Select a template...</option>
@@ -679,19 +679,19 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* Phone Number Selection */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <Phone className="w-5 h-5 text-indigo-600" />
                             Select Phone Number
                         </h3>
-                        <p className="text-sm text-gray-500 mb-4">
+                        <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">
                             Select a number from your Vapi account to assign to this agent.
                         </p>
                         <div className="flex gap-3">
                             <select
                                 value={selectedNumberId}
                                 onChange={(e) => setSelectedNumberId(e.target.value)}
-                                className="flex-1 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="flex-1 px-4 py-2 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
                             >
                                 <option value="" disabled>Select a number...</option>
                                 {vapiNumbers.map((num) => (
@@ -717,8 +717,8 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* System Prompt */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <Bot className="w-5 h-5 text-purple-600" />
                             System Prompt
                         </h3>
@@ -726,13 +726,13 @@ export default function AgentConfigPage() {
                             value={inboundConfig.systemPrompt}
                             onChange={(e) => setInboundConfig({ systemPrompt: e.target.value })}
                             placeholder="You are a helpful AI assistant..."
-                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm leading-relaxed"
                         />
                     </div>
 
                     {/* First Message */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <MessageSquare className="w-5 h-5 text-blue-600" />
                             First Message
                         </h3>
@@ -740,21 +740,21 @@ export default function AgentConfigPage() {
                             value={inboundConfig.firstMessage}
                             onChange={(e) => setInboundConfig({ firstMessage: e.target.value })}
                             placeholder="Hello, thanks for calling!"
-                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                         />
                     </div>
 
                     {/* Voice & Language */}
                     <div className="space-y-4">
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                                 <Volume2 className="w-5 h-5 text-blue-600" />
                                 Voice
                             </h3>
                             <select
                                 value={inboundConfig.voice}
                                 onChange={(e) => setInboundConfig({ voice: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             >
                                 <option value="">Select a voice...</option>
                                 {voices.map((voice) => (
@@ -765,15 +765,15 @@ export default function AgentConfigPage() {
                             </select>
                         </div>
 
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                                 <Globe className="w-5 h-5 text-cyan-600" />
                                 Language
                             </h3>
                             <select
                                 value={inboundConfig.language}
                                 onChange={(e) => setInboundConfig({ language: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             >
                                 <option value="en-US">English (US)</option>
                                 <option value="en-GB">English (UK)</option>
@@ -789,8 +789,8 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* Max Duration */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-amber-600" />
                             Max Call Duration
                         </h3>
@@ -801,7 +801,7 @@ export default function AgentConfigPage() {
                                 onChange={(e) => setInboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
                                 min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
                                 max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             />
                             <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
                         </div>
@@ -831,8 +831,8 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* System Prompt */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <Bot className="w-5 h-5 text-purple-600" />
                             System Prompt
                         </h3>
@@ -840,13 +840,13 @@ export default function AgentConfigPage() {
                             value={outboundConfig.systemPrompt}
                             onChange={(e) => setOutboundConfig({ systemPrompt: e.target.value })}
                             placeholder="You are a professional outbound sales representative..."
-                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none resize-none font-mono text-sm leading-relaxed"
                         />
                     </div>
 
                     {/* First Message */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <MessageSquare className="w-5 h-5 text-blue-600" />
                             First Message
                         </h3>
@@ -860,8 +860,8 @@ export default function AgentConfigPage() {
 
                     {/* Voice & Language */}
                     <div className="space-y-4">
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                                 <Volume2 className="w-5 h-5 text-emerald-600" />
                                 Voice
                             </h3>
@@ -879,8 +879,8 @@ export default function AgentConfigPage() {
                             </select>
                         </div>
 
-                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                                 <Globe className="w-5 h-5 text-cyan-600" />
                                 Language
                             </h3>
@@ -903,8 +903,8 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* Max Duration */}
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-amber-600" />
                             Max Call Duration
                         </h3>

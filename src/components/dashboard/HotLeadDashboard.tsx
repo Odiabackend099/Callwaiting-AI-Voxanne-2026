@@ -105,7 +105,7 @@ export default function HotLeadDashboard() {
                                 <Phone className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
                                 {lead.phone}
                             </div>
-                            <div className="p-3 bg-slate-50/50 dark:bg-slate-900/50 rounded-lg text-xs italic text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800 line-clamp-3 relative">
+                            <div className="p-3 bg-slate-100/50 dark:bg-slate-900/50 rounded-lg text-xs italic text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 line-clamp-3 relative">
                                 <Sparkles className="w-3 h-3 text-amber-400 absolute -top-1.5 -right-1.5" />
                                 "{lead.summary}"
                             </div>

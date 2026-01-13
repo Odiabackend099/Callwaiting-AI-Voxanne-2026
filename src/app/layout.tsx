@@ -107,7 +107,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${lato.variable} ${playfair.variable} ${poppins.variable} ${inter.variable}`} suppressHydrationWarning>
       <body
-        className="antialiased font-sans bg-black text-white"
+        className="antialiased font-sans min-h-screen bg-background text-foreground"
         suppressHydrationWarning
       >
         <JsonLd />

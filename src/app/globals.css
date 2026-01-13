@@ -5,10 +5,11 @@
 /* @custom-variant dark (&:where(.dark, .dark *)); */
 
 :root {
-  /* Premium AI Design Base */
-  --background: #ffffff;
+  /* Premium AI Design Base - Light Mode (Slate 50 Foundation) */
+  --background: #f8fafc;
+  /* Slate 50 - Softer than pure white */
   --foreground: #0f172a;
-  /* Slate 900 */
+  /* Slate 900 - Sharp text */
   --card: #ffffff;
   --card-foreground: #0f172a;
   --popover: #ffffff;
@@ -16,14 +17,18 @@
   --primary: #0f172a;
   --primary-foreground: #f8fafc;
   --secondary: #f1f5f9;
+  /* Slate 100 */
   --secondary-foreground: #0f172a;
   --muted: #f1f5f9;
+  /* Slate 100 */
   --muted-foreground: #64748b;
+  /* Slate 500 */
   --accent: #f1f5f9;
   --accent-foreground: #0f172a;
   --destructive: #ef4444;
   --destructive-foreground: #f8fafc;
   --border: #e2e8f0;
+  /* Slate 200 */
   --input: #e2e8f0;
   --ring: #0f172a;
 }
@@ -91,7 +96,7 @@ select {
 
 /* Premium Glassmorphism Utilities */
 .glass-panel {
-  @apply bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-slate-800/50 shadow-sm dark:shadow-xl;
+  @apply bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/50 shadow-sm dark:shadow-xl;
 }
 
 .glass-card {

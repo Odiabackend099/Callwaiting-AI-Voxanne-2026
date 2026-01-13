@@ -107,8 +107,8 @@ export const TeamMembersList: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Team Members</h2>
-          <p className="text-gray-600 mt-1">Manage your team and assign roles</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Team Members</h2>
+          <p className="text-gray-600 dark:text-slate-400 mt-1">Manage your team and assign roles</p>
         </div>
         <button
           type="button"
@@ -122,7 +122,7 @@ export const TeamMembersList: React.FC = () => {
 
       {/* Alert Messages */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-800">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3 text-red-800 dark:text-red-200">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-medium">Error</p>
@@ -131,7 +131,7 @@ export const TeamMembersList: React.FC = () => {
           <button
             type="button"
             onClick={() => setError(null)}
-            className="ml-auto text-red-600 hover:text-red-800"
+            className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
           >
             ✕
           </button>
@@ -139,21 +139,21 @@ export const TeamMembersList: React.FC = () => {
       )}
 
       {success && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3 text-green-800">
+        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-3 text-green-800 dark:text-green-200">
           <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="font-medium">{success}</p>
         </div>
       )}
 
       {/* Team Members Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="glass-panel rounded-lg shadow overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center">
             <Loader className="w-6 h-6 animate-spin text-emerald-600" />
           </div>
         ) : members.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-gray-600 mb-4">No team members yet</p>
+            <p className="text-gray-600 dark:text-slate-400 mb-4">No team members yet</p>
             <button
               type="button"
               onClick={() => setShowInviteForm(true)}
@@ -163,33 +163,33 @@ export const TeamMembersList: React.FC = () => {
             </button>
           </div>
         ) : (
-          <table className="w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="w-full divide-y divide-gray-200 dark:divide-slate-700">
+            <thead className="bg-gray-50 dark:bg-slate-800/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
                   Member
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
                   Joined
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
               {members.map((member: TeamMember) => (
-                <tr key={member.id} className="hover:bg-gray-50">
+                <tr key={member.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                        {member.email.charAt(0).toUpperCase()}
+                        {member.email?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{member.email}</p>
+                        <p className="font-medium text-gray-900 dark:text-slate-200">{member.email}</p>
                       </div>
                     </div>
                   </td>
@@ -210,7 +210,7 @@ export const TeamMembersList: React.FC = () => {
                       </select>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
+                  <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
                     {new Date(member.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-sm">
@@ -222,7 +222,7 @@ export const TeamMembersList: React.FC = () => {
                         }
                       }}
                       disabled={removingMemberId === member.id}
-                      className="text-red-600 hover:text-red-700 inline-flex items-center gap-1 disabled:opacity-50"
+                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center gap-1 disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4" />
                       {removingMemberId === member.id ? 'Removing...' : 'Remove'}
@@ -237,9 +237,9 @@ export const TeamMembersList: React.FC = () => {
 
       {/* Invite Form Modal */}
       {showInviteForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 className="text-2xl font-bold mb-4">Invite Team Member</h2>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-slate-700">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Invite Team Member</h2>
             <InviteForm
               onClose={() => setShowInviteForm(false)}
               onSuccess={() => {

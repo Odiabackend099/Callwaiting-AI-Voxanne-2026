@@ -49,18 +49,21 @@ export class AtomicBookingService {
         };
       }
 
-      if (!data?.success) {
+      // Supabase RPC returns array of objects, extract first result
+      const result = Array.isArray(data) ? data[0] : data;
+
+      if (!result?.success) {
         return {
           success: false,
-          error: data?.error || 'Slot not available',
-          action: data?.action || 'OFFER_ALTERNATIVES',
+          error: result?.error || 'Slot not available',
+          action: result?.action || 'OFFER_ALTERNATIVES',
         };
       }
 
-      console.log('[AtomicBooking] Slot claimed:', data.hold_id);
+      console.log('[AtomicBooking] Slot claimed:', result.hold_id);
       return {
         success: true,
-        holdId: data.hold_id,
+        holdId: result.hold_id,
       };
     } catch (error) {
       console.error('[AtomicBooking] Unexpected error in claimSlotAtomic:', error);
@@ -241,10 +244,13 @@ export class AtomicBookingService {
         };
       }
 
-      console.log('[AtomicBooking] Appointment confirmed:', appointmentData.appointment_id);
+      // Supabase RPC returns array of objects
+      const confirmResult = Array.isArray(appointmentData) ? appointmentData[0] : appointmentData;
+
+      console.log('[AtomicBooking] Appointment confirmed:', confirmResult.appointment_id);
       return {
         success: true,
-        appointmentId: appointmentData.appointment_id,
+        appointmentId: confirmResult.appointment_id,
       };
     } catch (error) {
       console.error('[AtomicBooking] Unexpected error in verifyOTPAndConfirm:', error);
@@ -270,8 +276,11 @@ export class AtomicBookingService {
         return { success: false };
       }
 
+      // Supabase RPC returns array of objects
+      const releaseResult = Array.isArray(data) ? data[0] : data;
+
       console.log('[AtomicBooking] Hold released:', holdId);
-      return { success: true };
+      return { success: releaseResult?.success ?? true };
     } catch (error) {
       console.error('[AtomicBooking] Unexpected error in releaseHold:', error);
       return { success: false };
