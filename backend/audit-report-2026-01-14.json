@@ -1,0 +1,126 @@
+{
+    "timestamp": "2026-01-14T00:37:00Z",
+    "summary": {
+        "passed": 10,
+        "failed": 0,
+        "warnings": 42,
+        "status": "SYSTEM HEALTHY"
+    },
+    "tests": {
+        "atomicCollision": {
+            "name": "Atomic Lock Enforcement",
+            "category": "Concurrency",
+            "passed": true,
+            "details": "1 claim succeeded, 4 blocked (5 concurrent)",
+            "stressTest": {
+                "passed": true,
+                "requests": 100,
+                "successes": 1,
+                "conflicts": 99,
+                "errors": 0,
+                "throughputRPS": 97.70,
+                "timeMs": 1023.54
+            }
+        },
+        "contextualHandoff": {
+            "name": "Intent -> Task Creation",
+            "category": "Handoff",
+            "passed": true,
+            "details": "Follow-up task created for high-value lead",
+            "executionTimeMs": 4,
+            "financialValueAttributed": 10000,
+            "procedureIntent": "facelift"
+        },
+        "multiTenantSilo": {
+            "name": "Cross-Tenant Leakage Check",
+            "category": "Silo",
+            "passed": true,
+            "details": "No data leaked for random Org ID"
+        },
+        "medicalRedaction": {
+            "name": "PII Redaction in Logs",
+            "category": "Redaction",
+            "passed": true,
+            "details": "Redaction detected: Medical terms scrubbed",
+            "redactionTests": {
+                "email": "leak@test.com -> [REDACTED: EMAIL]",
+                "phone": "07700 900 123 -> [REDACTED: PHONE]",
+                "medical": "chlamydia -> [REDACTED: MEDICAL]"
+            }
+        },
+        "latencyBenchmark": {
+            "name": "Analytics Pipeline Latency",
+            "category": "Latency",
+            "passed": true,
+            "executionTimeMs": 4,
+            "targetMs": 800,
+            "redactionPipeline": {
+                "avgLatencyMs": 0.079,
+                "p99LatencyMs": 1.942,
+                "targetMs": 10
+            }
+        }
+    },
+    "securityAudit": {
+        "score": 100,
+        "status": "SECURE",
+        "tests": {
+            "multiTenantIsolation": "PASSED",
+            "piiRedaction": "PASSED",
+            "injectionDefense": "PASSED"
+        }
+    },
+    "performanceAudit": {
+        "status": "OPTIMAL",
+        "tests": {
+            "atomicIntegrity": "PASSED",
+            "redactionLatency": "PASSED"
+        }
+    },
+    "advisories": {
+        "security": {
+            "count": 18,
+            "critical": [
+                {
+                    "type": "rls_enabled_no_policy",
+                    "tables": [
+                        "credential_tokens",
+                        "disposition_rules",
+                        "notification_history",
+                        "notifications",
+                        "user_calendar_tokens"
+                    ],
+                    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+                },
+                {
+                    "type": "auth_leaked_password_protection",
+                    "detail": "Leaked password protection is disabled in Auth",
+                    "remediation": "https://supabase.com/docs/guides/auth/password-security"
+                }
+            ]
+        },
+        "performance": {
+            "count": 24,
+            "warnings": [
+                {
+                    "type": "unindexed_foreign_keys",
+                    "tables": [
+                        "agent_configurations",
+                        "appointment_holds",
+                        "appointments"
+                    ],
+                    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys"
+                },
+                {
+                    "type": "duplicate_index",
+                    "tables": [
+                        "campaign_phone_numbers",
+                        "user_active_calls",
+                        "user_phone_numbers"
+                    ],
+                    "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index"
+                }
+            ]
+        }
+    }
+}

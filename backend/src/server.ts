@@ -72,6 +72,7 @@ import { contactsRouter } from './routes/contacts';
 import { appointmentsRouter } from './routes/appointments';
 import { notificationsRouter } from './routes/notifications';
 // import { workspaceRouter } from './routes/workspace';
+import analyticsRouter from './routes/analytics';
 
 // Initialize logger
 initLogger();
@@ -206,6 +207,7 @@ app.use('/api/team', teamRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/analytics', analyticsRouter);
 
 // Google Calendar OAuth routes - TEMPORARILY DISABLED
 // app.use('/api/google-oauth', googleOAuthRouter);

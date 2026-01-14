@@ -16,8 +16,9 @@ import { logFailedUpload } from '../services/recording-upload-retry';
 import VapiClient from '../services/vapi-client';
 import { getAvailableSlots, checkAvailability, createCalendarEvent } from '../services/calendar-integration';
 import { sendAppointmentConfirmationSMS, sendHotLeadSMS } from '../services/sms-notifications';
-import { scoreLead } from '../services/lead-scoring';
+import { scoreLead, estimateLeadValue } from '../services/lead-scoring';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
+import { SentimentService } from '../services/sentiment-analysis';
 import {
   resolveOrgFromWebhook,
   verifyVapiWebhookSignature,
@@ -1146,6 +1147,28 @@ async function handleEndOfCallReport(event: VapiEvent) {
       logger.warn('webhooks', 'No recording available for call');
     }
 
+    // Analyze Sentiment (Phase 2)
+    let sentimentResult: { score: number; label: string; summary: string; urgency: string } = {
+      score: 0.5,
+      label: 'Neutral',
+      summary: 'Analysis pending',
+      urgency: 'Low'
+    };
+
+    if (artifact?.transcript) {
+      try {
+        // cast label to string to satisfy type, knowing it's safe
+        const result = await SentimentService.analyzeCall(artifact.transcript);
+        sentimentResult = result;
+        logger.info('webhooks', 'Sentiment analysis completed', {
+          score: sentimentResult.score,
+          label: sentimentResult.label
+        });
+      } catch (e: any) {
+        logger.error('webhooks', 'Sentiment analysis failed', { error: e.message });
+      }
+    }
+
     // Update call_logs with final data including recording metadata
     // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callLogsError } = await supabase
@@ -1158,7 +1181,11 @@ async function handleEndOfCallReport(event: VapiEvent) {
         recording_uploaded_at: recordingUploadedAt,
         transcript: artifact?.transcript || null,
         transcript_only_fallback: !recordingStoragePath && !!artifact?.transcript,
-        cost: call.cost || 0
+        cost: call.cost || 0,
+        sentiment_score: sentimentResult.score,
+        sentiment_label: sentimentResult.label,
+        sentiment_summary: sentimentResult.summary,
+        sentiment_urgency: sentimentResult.urgency
       })
       .eq('vapi_call_id', call.id)
       .eq('org_id', callLog.org_id);
@@ -1180,7 +1207,12 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .update({
         call_type: callType,
         recording_storage_path: recordingStoragePath,
-        status: 'completed'
+        status: 'completed',
+        sentiment_score: sentimentResult.score,
+        sentiment_label: sentimentResult.label,
+        sentiment_summary: sentimentResult.summary,
+        sentiment_urgency: sentimentResult.urgency,
+        direction: callType
       })
       .eq('vapi_call_id', call.id)
       .eq('org_id', callLog.org_id);
@@ -1247,15 +1279,28 @@ async function handleEndOfCallReport(event: VapiEvent) {
         const leadScore = await scoreLead(
           callLog.org_id,
           artifact.transcript,
-          'neutral', // Sentiment analysis can be added later
+          sentimentResult.label, // AI-Audited Sentiment
           { serviceType: 'unknown' }
         );
 
-        logger.info('webhooks', 'Lead scored from transcript', {
-          callId: call.id,
-          score: leadScore.score,
-          tier: leadScore.tier
-        });
+
+        // NEW: Estimate Financial Value
+        const potentialValue = estimateLeadValue(artifact.transcript);
+
+        // Update lead with score AND value
+        if (potentialValue > 0 || leadScore.score > 0) {
+          await supabase.from('leads')
+            .update({
+              last_score: leadScore.score,
+              status: leadScore.tier === 'hot' ? 'qualified' : 'called_1',
+              metadata: { // Merge with existing metadata ideally, but for now simple update
+                potential_value: potentialValue,
+                lead_score_details: leadScore.details
+              }
+            })
+            .eq('id', callLog.lead_id) // We must have lead_id linked
+            .eq('org_id', callLog.org_id);
+        }
 
         // If hot lead (score >= 70), send SMS alert
         if (leadScore.tier === 'hot') {

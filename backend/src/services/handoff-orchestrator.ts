@@ -128,6 +128,17 @@ export class HandoffOrchestrator {
             const highPriorityServices = ['facelift', 'rhinoplasty', 'breast augmentation'];
             if (highPriorityServices.includes(params.serviceInterest.toLowerCase())) {
                 await this.sendImmediateSMS(params);
+
+                // Mark task as completed to prevent double-send by cron
+                await supabase
+                    .from('follow_up_tasks')
+                    .update({
+                        status: 'completed',
+                        completed_at: new Date().toISOString()
+                    })
+                    .eq('id', data.id);
+
+                log.info('HandoffOrchestrator', 'Task marked completed after immediate SMS', { taskId: data.id });
             }
 
         } catch (error: any) {

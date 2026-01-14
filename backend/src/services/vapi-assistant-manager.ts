@@ -191,7 +191,11 @@ export class VapiAssistantManager {
           maxDurationSeconds: config.maxDurationSeconds || 600,
           serverUrl: config.serverUrl,
           serverMessages: config.serverMessages,
-          transcriber: config.transcriber,
+          transcriber: config.transcriber || {
+            provider: 'deepgram',
+            model: 'nova-2',
+            language: 'en-US'
+          },
           functions: config.functions,
         });
 

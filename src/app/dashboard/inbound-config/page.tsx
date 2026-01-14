@@ -130,10 +130,10 @@ export default function InboundConfigPage() {
             {/* Header */}
             <div className="flex justify-between items-start">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Inbound Configuration</h1>
-                    <p className="text-gray-700 mt-1">Configure your Twilio number for inbound AI handling</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inbound Configuration</h1>
+                    <p className="text-gray-700 dark:text-slate-400 mt-1">Configure your Twilio number for inbound AI handling</p>
                 </div>
-                <div className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${uiStatus === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                <div className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${uiStatus === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'
                     }`}>
                     {uiStatus === 'active' ? (
                         <><Check className="w-4 h-4" /> Inbound Active</>
@@ -145,12 +145,12 @@ export default function InboundConfigPage() {
 
             {/* Prerequisite Alert */}
             {uiStatus !== 'active' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 flex flex-col gap-2">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300 flex flex-col gap-2">
                     <div className="flex items-center gap-2 font-medium">
                         <AlertCircle className="w-4 h-4" />
                         Prerequisites
                     </div>
-                    <ul className="list-disc list-inside space-y-1 ml-1 text-blue-700">
+                    <ul className="list-disc list-inside space-y-1 ml-1 text-blue-700 dark:text-blue-400">
                         <li>Configure your <strong>Vapi API Key</strong> in integration settings.</li>
                         <li>Create and <strong>save an Inbound Agent</strong> in the Agent Config page.</li>
                     </ul>
@@ -162,15 +162,15 @@ export default function InboundConfigPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white rounded-xl shadow-sm border border-emerald-100 p-6"
+                    className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 p-6"
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                                <Phone className="w-5 h-5 text-emerald-600" />
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                                 {config.inboundNumber}
                             </h3>
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                                 Active since {new Date(config.activatedAt).toLocaleDateString()}
                             </p>
                         </div>
@@ -185,21 +185,21 @@ export default function InboundConfigPage() {
             )}
 
             {/* Configuration Form */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 p-6">
                 <div className="flex items-center gap-2 mb-6">
-                    <Lock className="w-5 h-5 text-gray-400" />
-                    <h2 className="text-lg font-semibold text-gray-900">Twilio Credentials</h2>
+                    <Lock className="w-5 h-5 text-gray-400 dark:text-slate-500" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Twilio Credentials</h2>
                 </div>
 
                 {error && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-lg text-red-700 dark:text-red-400 text-sm flex items-center gap-2">
                         <AlertCircle className="w-4 h-4" />
                         {error}
                     </div>
                 )}
 
                 {success && (
-                    <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-sm flex items-center gap-2">
+                    <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-2">
                         <Check className="w-4 h-4" />
                         {success}
                     </div>
@@ -207,7 +207,7 @@ export default function InboundConfigPage() {
 
                 <div className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                             Account SID
                         </label>
                         <input
@@ -215,12 +215,12 @@ export default function InboundConfigPage() {
                             value={config.accountSid}
                             onChange={(e) => setConfig({ ...config, accountSid: e.target.value })}
                             placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-mono text-sm text-gray-900 bg-white placeholder-gray-400"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-mono text-sm text-gray-900 bg-white dark:bg-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                             Auth Token
                         </label>
                         <input
@@ -228,12 +228,12 @@ export default function InboundConfigPage() {
                             value={config.authToken}
                             onChange={(e) => setConfig({ ...config, authToken: e.target.value })}
                             placeholder="••••••••••••••••••••••••••••••••"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-mono text-sm text-gray-900 bg-white placeholder-gray-400"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-mono text-sm text-gray-900 bg-white dark:bg-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                             Twilio Phone Number
                         </label>
                         <input
@@ -241,16 +241,16 @@ export default function InboundConfigPage() {
                             value={config.phoneNumber}
                             onChange={(e) => setConfig({ ...config, phoneNumber: e.target.value })}
                             placeholder="+442012345678"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-mono text-sm text-gray-900 bg-white placeholder-gray-400"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-mono text-sm text-gray-900 bg-white dark:bg-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                         />
-                        <p className="text-xs text-gray-600 mt-1">Must be E.164 format (e.g. +44...)</p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">Must be E.164 format (e.g. +44...)</p>
                     </div>
 
                     <div className="pt-4 flex items-center justify-end">
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-6 py-2 bg-gray-900 dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {saving ? (
                                 <><Loader2 className="w-4 h-4 animate-spin" /> Configuring...</>
@@ -263,25 +263,25 @@ export default function InboundConfigPage() {
             </div>
 
             {/* Stats Preview (Mock for now) */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 opacity-60 pointer-events-none">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 p-6 opacity-60 pointer-events-none">
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900">Inbound Analytics (Coming Soon)</h2>
-                    <button className="text-sm text-emerald-600 font-medium flex items-center gap-1">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Inbound Analytics (Coming Soon)</h2>
+                    <button className="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                         <Download className="w-4 h-4" /> Export Report
                     </button>
                 </div>
                 <div className="grid grid-cols-3 gap-6">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600">Total Calls (7d)</p>
-                        <p className="text-2xl font-bold text-gray-900">--</p>
+                    <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Total Calls (7d)</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600">Avg Duration</p>
-                        <p className="text-2xl font-bold text-gray-900">--</p>
+                    <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Avg Duration</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600">Demo Bookings</p>
-                        <p className="text-2xl font-bold text-gray-900">--</p>
+                    <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Demo Bookings</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
                     </div>
                 </div>
             </div>

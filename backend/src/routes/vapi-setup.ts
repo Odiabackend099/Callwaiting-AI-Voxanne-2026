@@ -1,164 +1,131 @@
 /**
  * Vapi Setup Routes
  * Programmatically configure Vapi assistant with RAG webhook
+ * Supports multi-tenant configuration via request body/headers
  */
 
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { log } from '../services/logger';
+import { supabase } from '../services/supabase-client';
 
 const vapiSetupRouter = Router();
 
-const VAPI_API_KEY = process.env.VAPI_API_KEY;
-const VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
-const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/vapi/webhook';
+// Fallback to env vars if provided (for backwards compatibility/single tenant dev)
+const ENV_VAPI_API_KEY = process.env.VAPI_API_KEY;
+const ENV_VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
+const ENV_WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/vapi/webhook';
 
 /**
  * POST /api/vapi/setup/configure-webhook
  * Programmatically configure Vapi assistant with RAG webhook
+ * 
+ * Config Hierarchy:
+ * 1. Request Body (vapiApiKey, vapiAssistantId)
+ * 2. Database (via Organization ID)
+ * 3. Environment Variables (Fallback)
  */
 vapiSetupRouter.post('/setup/configure-webhook', async (req: Request, res: Response) => {
   try {
-    if (!VAPI_API_KEY) {
-      return res.status(400).json({ 
-        error: 'VAPI_API_KEY environment variable not set' 
-      });
+    let vapiApiKey = req.body.vapiApiKey || ENV_VAPI_API_KEY;
+    let vapiAssistantId = req.body.vapiAssistantId || ENV_VAPI_ASSISTANT_ID;
+    const webhookUrl = req.body.webhookUrl || ENV_WEBHOOK_URL;
+    const orgId = req.headers['x-org-id'] as string; // Optional: fetch from DB if orgId provided
+
+    // If orgId provided but no keys, try to fetch from DB 'integrations' table
+    if (orgId && (!vapiApiKey || !vapiAssistantId)) {
+      const { data: integration } = await supabase
+        .from('integrations')
+        .select('vapi_api_key')
+        .eq('org_id', orgId)
+        .single();
+
+      if (integration?.vapi_api_key) vapiApiKey = integration.vapi_api_key;
+
+      // Assistant ID might be in 'agents' table
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('vapi_assistant_id')
+        .eq('org_id', orgId)
+        .limit(1)
+        .single();
+
+      if (agent?.vapi_assistant_id) vapiAssistantId = agent.vapi_assistant_id;
     }
 
-    if (!VAPI_ASSISTANT_ID) {
-      return res.status(400).json({ 
-        error: 'VAPI_ASSISTANT_ID environment variable not set' 
-      });
+    if (!vapiApiKey) {
+      return res.status(400).json({ error: 'Vapi API Key required (env, body, or org integration)' });
     }
 
-    log.info('Vapi-Setup', 'Starting webhook configuration', { 
-      assistantId: VAPI_ASSISTANT_ID 
-    });
+    if (!vapiAssistantId) {
+      return res.status(400).json({ error: 'Vapi Assistant ID required' });
+    }
+
+    log.info('Vapi-Setup', 'Starting webhook configuration', { assistantId: vapiAssistantId });
 
     const vapiClient = axios.create({
       baseURL: 'https://api.vapi.ai',
       headers: {
-        'Authorization': `Bearer ${VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiApiKey}`,
         'Content-Type': 'application/json'
       }
     });
 
     // Get current assistant
-    log.info('Vapi-Setup', 'Fetching current assistant configuration');
-    const getResponse = await vapiClient.get(`/assistant/${VAPI_ASSISTANT_ID}`);
+    const getResponse = await vapiClient.get(`/assistant/${vapiAssistantId}`);
     const assistant = getResponse.data;
 
-    log.info('Vapi-Setup', 'Assistant fetched', { 
-      name: assistant.name,
-      model: assistant.model?.provider 
-    });
-
     // Build updated assistant config
-    const baseSystemPrompt = assistant.systemPrompt || 'You are a helpful assistant for CallWaiting AI.';
-    
-    const enhancedSystemPrompt = `${baseSystemPrompt}
+    const baseSystemPrompt = assistant.systemPrompt || 'You are a helpful assistant.';
+
+    // Only append KB instructions if not already present
+    let enhancedSystemPrompt = baseSystemPrompt;
+    if (!baseSystemPrompt.includes('KNOWLEDGE BASE INSTRUCTIONS')) {
+      enhancedSystemPrompt = `${baseSystemPrompt}
 
 ---
 KNOWLEDGE BASE INSTRUCTIONS:
 You will receive relevant knowledge base information about our products and services. Use this information to provide accurate, detailed answers.
-
-If knowledge base information is provided in the context, prioritize it in your response. If the user asks something not covered in the knowledge base, say so honestly.
-
-Always be helpful, professional, and focused on helping the user understand our products and services.
+If knowledge base information is provided in the context, prioritize it in your response.
 ---`;
+    }
 
     const updatedAssistant = {
       ...assistant,
       systemPrompt: enhancedSystemPrompt,
-      // Add webhook configuration
       serverMessages: [
         {
           type: 'request-start',
-          url: WEBHOOK_URL,
+          url: webhookUrl,
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        },
+        {
+          type: 'end-of-call-report',
+          url: webhookUrl,
+          method: 'POST',
+        },
+        {
+          type: 'function-call',
+          url: webhookUrl, // Or specific tool URL
+          method: 'POST'
         }
       ]
     };
 
-    // Update assistant
-    log.info('Vapi-Setup', 'Updating assistant with webhook configuration');
     const updateResponse = await vapiClient.patch(
-      `/assistant/${VAPI_ASSISTANT_ID}`,
+      `/assistant/${vapiAssistantId}`,
       updatedAssistant
     );
 
-    log.info('Vapi-Setup', 'Assistant updated successfully', { 
-      webhookUrl: WEBHOOK_URL 
-    });
-
     return res.json({
       success: true,
-      message: 'Vapi assistant configured with RAG webhook',
-      assistant: {
-        id: updateResponse.data.id,
-        name: updateResponse.data.name,
-        webhookUrl: WEBHOOK_URL,
-        systemPromptUpdated: true
-      }
+      message: 'Vapi assistant configured',
+      webhookUrl: webhookUrl
     });
+
   } catch (error: any) {
-    log.error('Vapi-Setup', 'Configuration failed', { 
-      error: error?.response?.data?.message || error?.message 
-    });
-
-    return res.status(500).json({
-      error: 'Failed to configure Vapi webhook',
-      details: error?.response?.data?.message || error?.message
-    });
-  }
-});
-
-/**
- * GET /api/vapi/setup/status
- * Check if Vapi webhook is configured
- */
-vapiSetupRouter.get('/setup/status', async (req: Request, res: Response) => {
-  try {
-    if (!VAPI_API_KEY || !VAPI_ASSISTANT_ID) {
-      return res.json({
-        configured: false,
-        reason: 'Missing VAPI_API_KEY or VAPI_ASSISTANT_ID environment variables'
-      });
-    }
-
-    const vapiClient = axios.create({
-      baseURL: 'https://api.vapi.ai',
-      headers: {
-        'Authorization': `Bearer ${VAPI_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const response = await vapiClient.get(`/assistant/${VAPI_ASSISTANT_ID}`);
-    const assistant = response.data;
-
-    const hasWebhook = assistant.serverMessages && 
-                       assistant.serverMessages.some((msg: any) => msg.url === WEBHOOK_URL);
-
-    return res.json({
-      configured: hasWebhook,
-      assistantId: VAPI_ASSISTANT_ID,
-      assistantName: assistant.name,
-      webhookUrl: WEBHOOK_URL,
-      systemPromptUpdated: assistant.systemPrompt?.includes('KNOWLEDGE BASE INSTRUCTIONS')
-    });
-  } catch (error: any) {
-    log.error('Vapi-Setup', 'Status check failed', { 
-      error: error?.message 
-    });
-
-    return res.status(500).json({
-      error: 'Failed to check Vapi configuration status',
-      details: error?.message
-    });
+    log.error('Vapi-Setup', 'Configuration failed', { error: error?.message });
+    return res.status(500).json({ error: error?.message });
   }
 });
 

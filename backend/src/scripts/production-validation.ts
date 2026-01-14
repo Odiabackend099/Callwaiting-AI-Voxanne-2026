@@ -217,8 +217,9 @@ async function runProductionValidation() {
         // Test 1: PII Redaction Layer
         console.log('Test 1: PII Redaction Validation...');
         function redactPII(text: string): string {
-            // Redact phone numbers
-            text = text.replace(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '***PHONE***');
+            // Redact phone numbers (US + UK formats)
+            // Matches: +1-555-555-5555, (555) 555-5555, +44 7700 900999, 07700 900999
+            text = text.replace(/(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,5}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,6}/g, '***PHONE***');
             // Redact DOB patterns
             text = text.replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, '***DOB***');
             return text;
@@ -234,6 +235,12 @@ async function runProductionValidation() {
                 details: 'Phone numbers and DOB patterns successfully masked'
             });
             section3.score += 10;
+        } else {
+            section3.tests.push({
+                name: 'PII Redaction (Phone/DOB)',
+                status: 'FAIL',
+                details: `Failed to redact phone number. Output: ${redacted}`
+            });
         }
 
         // Test 2: Biometric Audio Compliance

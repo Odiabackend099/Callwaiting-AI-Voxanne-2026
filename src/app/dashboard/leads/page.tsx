@@ -85,8 +85,7 @@ const LeadsDashboardContent = () => {
     const leadsQueryParams = new URLSearchParams({
         page: currentPage.toString(),
         limit: leadsPerPage.toString(),
-        ...(filterStatus && { leadStatus: filterStatus }),
-        ...(filterScore && { leadScore: filterScore }),
+        ...(filterScore && { leadStatus: filterScore }),
         ...(searchQuery && { search: searchQuery })
     }).toString();
 
@@ -362,23 +361,6 @@ const LeadsDashboardContent = () => {
                 </div>
 
                 <select
-                    value={filterStatus}
-                    onChange={(e) => {
-                        setFilterStatus(e.target.value);
-                        setCurrentPage(1);
-                    }}
-                    className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                    <option value="">All Status</option>
-                    <option value="new">New</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="qualified">Qualified</option>
-                    <option value="booked">Booked</option>
-                    <option value="converted">Converted</option>
-                    <option value="lost">Lost</option>
-                </select>
-
-                <select
                     value={filterScore}
                     onChange={(e) => {
                         setFilterScore(e.target.value);
@@ -436,8 +418,8 @@ const LeadsDashboardContent = () => {
                                                 {scoreBadge.icon}
                                                 {scoreBadge.label} ({lead.lead_score})
                                             </span>
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getLeadStatusColor(lead.lead_status)}`}>
-                                                {lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)}
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getLeadStatusColor(lead.lead_status || 'new')}`}>
+                                                {lead.lead_status ? (lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)) : 'New'}
                                             </span>
                                         </div>
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-slate-50">{lead.contact_name}</h3>
@@ -614,8 +596,8 @@ const LeadsDashboardContent = () => {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase mb-2">Status</p>
-                                        <div className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border ${getLeadStatusColor(selectedLead.lead_status)}`}>
-                                            {selectedLead.lead_status.charAt(0).toUpperCase() + selectedLead.lead_status.slice(1)}
+                                        <div className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border ${getLeadStatusColor(selectedLead.lead_status || 'new')}`}>
+                                            {selectedLead.lead_status ? (selectedLead.lead_status.charAt(0).toUpperCase() + selectedLead.lead_status.slice(1)) : 'New'}
                                         </div>
                                     </div>
                                 </div>

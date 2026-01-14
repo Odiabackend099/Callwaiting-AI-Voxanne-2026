@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
+import { getSignedRecordingUrl } from '../services/call-recording-storage';
 
 const callsRouter = Router();
 
@@ -118,19 +119,34 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       if (outboundError) {
         log.warn('Calls', 'Failed to fetch outbound calls', { error: outboundError.message });
       } else {
-        allCalls = allCalls.concat((outboundCalls || []).map((call: any) => ({
-          id: call.id,
-          phone_number: call.phone_number,
-          caller_name: call.caller_name || 'Unknown',
-          call_date: call.call_date,
-          duration_seconds: call.duration_seconds,
-          status: call.status,
-          has_recording: !!call.recording_url,
-          has_transcript: !!call.transcript,
-          sentiment_score: call.sentiment_score,
-          sentiment_label: call.sentiment_label,
-          call_type: 'outbound'
-        })));
+        const processedCalls = await Promise.all((outboundCalls || []).map(async (call: any) => {
+          let signedUrl = call.recording_url;
+          // Generate signed URL if storage path exists (preferred)
+          if (call.recording_storage_path || call.recording_path) {
+            const path = call.recording_storage_path || call.recording_path;
+            const generatedUrl = await getSignedRecordingUrl(path);
+            if (generatedUrl) signedUrl = generatedUrl;
+          }
+
+          return {
+            id: call.id,
+            phone_number: call.phone_number,
+            caller_name: call.caller_name || 'Unknown',
+            call_date: call.call_date,
+            duration_seconds: call.duration_seconds,
+            status: call.status,
+            has_recording: !!signedUrl,
+            recording_url: signedUrl,
+            has_transcript: !!call.transcript,
+            sentiment_score: call.sentiment_score,
+            sentiment_label: call.sentiment_label,
+            sentiment_summary: call.sentiment_summary,
+            sentiment_urgency: call.sentiment_urgency,
+            call_type: 'outbound'
+          };
+        }));
+
+        allCalls = allCalls.concat(processedCalls);
         totalCount += (outboundCount || 0);
       }
     }
@@ -179,19 +195,37 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       return res.status(500).json({ error: callsError.message });
     }
 
+    // New: Calculate Pipeline Value from Leads (Last 30 Days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: leads, error: leadsError } = await supabase
+      .from('leads')
+      .select('metadata')
+      .eq('org_id', orgId)
+      .gte('created_at', thirtyDaysAgo.toISOString());
+
+    let pipelineValue = 0;
+    if (!leadsError && leads) {
+      pipelineValue = leads.reduce((sum, lead) => {
+        const val = (lead.metadata as any)?.potential_value;
+        return sum + (Number(val) || 0);
+      }, 0);
+    }
+
     const calls = allCalls || [];
-    
+
     // Calculate stats (matching frontend logic)
     const today = new Date().toISOString().split('T')[0];
     const callsToday = calls.filter((c: any) => c.started_at?.startsWith(today));
-    
+
     const inbound = calls.filter((c: any) => c.metadata?.channel === 'inbound');
     const outbound = calls.filter((c: any) => c.metadata?.channel === 'outbound' || !c.metadata?.channel);
     const completed = calls.filter((c: any) => c.status === 'completed');
-    
+
     const totalDuration = completed.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0);
     const avgDuration = completed.length > 0 ? Math.round(totalDuration / completed.length) : 0;
-    
+
     // Get recent calls (last 5) - format for frontend (include both old and new field names for compatibility)
     const recentCalls = calls.slice(0, 5).map((c: any) => ({
       id: c.id,
@@ -216,7 +250,9 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       outboundCalls: outbound.length,
       completedCalls: completed.length,
       callsToday: callsToday.length,
+      callsToday: callsToday.length,
       avgDuration,
+      pipelineValue, // New Field
       recentCalls
     });
   } catch (e: any) {
@@ -364,6 +400,14 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         sentiment: segment.sentiment || 'neutral'
       }));
 
+      // Generate signed URL if storage path exists
+      let recordingUrl = outboundCall.recording_url;
+      if (outboundCall.recording_storage_path || outboundCall.recording_path) {
+        const path = outboundCall.recording_storage_path || outboundCall.recording_path;
+        const signed = await getSignedRecordingUrl(path);
+        if (signed) recordingUrl = signed;
+      }
+
       return res.json({
         id: outboundCall.id,
         phone_number: outboundCall.phone_number,
@@ -371,10 +415,12 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         call_date: outboundCall.call_date,
         duration_seconds: outboundCall.duration_seconds,
         status: outboundCall.status,
-        recording_url: outboundCall.recording_url,
+        recording_url: recordingUrl,
         transcript,
         sentiment_score: outboundCall.sentiment_score,
         sentiment_label: outboundCall.sentiment_label,
+        sentiment_summary: outboundCall.sentiment_summary,
+        sentiment_urgency: outboundCall.sentiment_urgency,
         action_items: outboundCall.action_items || [],
         vapi_call_id: outboundCall.vapi_call_id,
         created_at: outboundCall.created_at,

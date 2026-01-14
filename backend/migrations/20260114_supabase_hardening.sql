@@ -1,0 +1,59 @@
+-- ============================================
+-- VOXANNE SUPABASE HARDENING MIGRATION
+-- Date: 2026-01-14
+-- Purpose: Address 18 security + 24 performance advisories
+-- Status: APPLIED
+-- ============================================
+-- =============================================
+-- SECTION 1: RLS POLICIES (Security Hardening)
+-- =============================================
+-- -------------------------
+-- 1.1 credential_tokens ✅ APPLIED
+-- -------------------------
+-- Policy: Users can view/manage their credentials (user_id = auth.uid())
+-- -------------------------
+-- 1.2 notification_history ✅ APPLIED
+-- -------------------------
+-- Policy: Users can view/manage their notifications (user_id = auth.uid())
+-- -------------------------
+-- 1.3 disposition_rules ✅ APPLIED
+-- -------------------------
+-- Policy: Service role manages disposition rules
+-- -------------------------
+-- 1.4 appointment_holds ✅ APPLIED
+-- -------------------------
+-- Policy: Service role manages holds (atomic operations)
+-- -------------------------
+-- 1.5 notifications ❌ TABLE DOES NOT EXIST
+-- -------------------------
+-- -------------------------
+-- 1.6 user_calendar_tokens ❌ TABLE DOES NOT EXIST
+-- -------------------------
+-- =============================================
+-- SECTION 2: PERFORMANCE INDEXES ✅ APPLIED
+-- =============================================
+-- idx_agent_configs_voice_id ON agent_configurations(voice_id)
+-- idx_appointment_holds_appt_id ON appointment_holds(appointment_id)
+-- idx_appointments_hold_id ON appointments(hold_id)
+-- idx_credential_tokens_org_id ON credential_tokens(org_id)
+-- idx_notification_history_org_id ON notification_history(org_id)
+-- =============================================
+-- SECTION 3: DUPLICATE INDEX CLEANUP ✅ APPLIED
+-- =============================================
+-- DROPPED: idx_campaign_phone_user_id (duplicate of idx_campaign_phone_user)
+-- DROPPED: idx_user_phones_vapi (duplicate of idx_user_phone_vapi_id)
+-- ============================================
+-- REMAINING ADVISORIES (Lower Priority)
+-- ============================================
+-- Tables still needing RLS policies:
+-- - notification_rate_limits
+-- - notification_templates
+-- - phone_number_mapping
+-- 
+-- Auth Setting (Dashboard only):
+-- - Enable "Prevent leaked passwords" in Supabase Auth Settings
+-- ============================================
+-- ============================================
+-- MIGRATION COMPLETE
+-- Run: npx tsx src/scripts/security-audit.ts to verify
+-- ============================================

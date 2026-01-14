@@ -32,7 +32,13 @@ notificationsRouter.get('/', async (req: Request, res: Response) => {
       page: z.coerce.number().int().positive().default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
       status: z.enum(['unread', 'read', 'all']).default('all'),
-      type: z.enum(['hot_lead', 'appointment', 'sms', 'call', 'system']).optional()
+      // Allow both DB enums and frontend alias types
+      type: z.enum([
+        // DB Enums
+        'hot_lead', 'appointment_booked', 'appointment_reminder', 'missed_call', 'system_alert', 'voicemail',
+        // Frontend Aliases
+        'appointment', 'call', 'system', 'sms', 'lead_update'
+      ]).optional()
     });
 
     const parsed = schema.parse(req.query);
@@ -50,7 +56,21 @@ notificationsRouter.get('/', async (req: Request, res: Response) => {
     }
 
     if (parsed.type) {
-      query = query.eq('type', parsed.type);
+      if (parsed.type === 'appointment') {
+        query = query.in('type', ['appointment_booked', 'appointment_reminder']);
+      } else if (parsed.type === 'call') {
+        query = query.in('type', ['missed_call', 'voicemail']);
+      } else if (parsed.type === 'system') {
+        query = query.eq('type', 'system_alert');
+      } else if (parsed.type === 'sms') {
+        // 'sms' isn't a DB type, maybe system_alert? Or ignore?
+        // Legacy: 'sms' not in DB enum.
+      } else if (parsed.type === 'lead_update') {
+        // Legacy/Frontend only. Maybe map to hot_lead?
+      } else {
+        // Direct match for valid DB enums
+        query = query.eq('type', parsed.type);
+      }
     }
 
     query = query
@@ -234,7 +254,8 @@ notificationsRouter.post('/', async (req: Request, res: Response) => {
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
 
     const schema = z.object({
-      type: z.enum(['hot_lead', 'appointment', 'sms', 'call', 'system']),
+      // Strictly enforce DB Enums for creation to prevent errors
+      type: z.enum(['hot_lead', 'appointment_booked', 'appointment_reminder', 'missed_call', 'system_alert', 'voicemail']),
       title: z.string().min(1),
       message: z.string().min(1),
       metadata: z.record(z.any()).optional()

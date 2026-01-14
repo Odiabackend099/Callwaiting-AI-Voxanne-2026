@@ -105,7 +105,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`dark ${lato.variable} ${playfair.variable} ${poppins.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${lato.variable} ${playfair.variable} ${poppins.variable} ${inter.variable}`} suppressHydrationWarning>
       <body
         className="antialiased font-sans min-h-screen bg-background text-foreground"
         suppressHydrationWarning

@@ -24,6 +24,8 @@ interface Call {
     has_transcript: boolean;
     sentiment_score?: number;
     sentiment_label?: string;
+    sentiment_summary?: string;
+    sentiment_urgency?: string;
     call_type?: 'inbound' | 'outbound';
     recording_status?: 'pending' | 'processing' | 'completed' | 'failed';
     recording_error?: string;
@@ -327,10 +329,39 @@ const CallsPageContent = () => {
     };
 
     const getSentimentColor = (label?: string) => {
-        switch (label) {
-            case 'positive': return 'text-green-600 bg-green-50';
-            case 'negative': return 'text-red-600 bg-red-50';
-            default: return 'text-gray-600 bg-gray-50';
+        const normalized = label?.toLowerCase() || '';
+        switch (normalized) {
+            case 'positive':
+            case 'reassured':
+                return 'text-green-600 bg-green-50';
+            case 'decisive':
+                return 'text-blue-600 bg-blue-50';
+            case 'anxious':
+                return 'text-orange-600 bg-orange-50';
+            case 'negative':
+            case 'frustrated':
+                return 'text-red-600 bg-red-50';
+            default:
+                return 'text-gray-600 bg-gray-50';
+        }
+    };
+
+    const getUrgencyBadge = (urgency?: string) => {
+        switch (urgency) {
+            case 'High':
+                return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                        🔥 High Urgency
+                    </span>
+                );
+            case 'Medium':
+                return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
+                        ⚡ Medium
+                    </span>
+                );
+            default:
+                return null;
         }
     };
 
@@ -566,10 +597,13 @@ const CallsPageContent = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 {call.sentiment_label && (
-                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getSentimentColor(call.sentiment_label)}`}>
-                                                        {call.sentiment_label.charAt(0).toUpperCase() + call.sentiment_label.slice(1)}
-                                                        {call.sentiment_score && ` (${(call.sentiment_score * 100).toFixed(0)}%)`}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getSentimentColor(call.sentiment_label)}`}>
+                                                            {call.sentiment_label.charAt(0).toUpperCase() + call.sentiment_label.slice(1)}
+                                                            {call.sentiment_score && ` (${(call.sentiment_score * 100).toFixed(0)}%)`}
+                                                        </span>
+                                                        {getUrgencyBadge(call.sentiment_urgency)}
+                                                    </div>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -701,7 +735,10 @@ const CallsPageContent = () => {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase">Sentiment</p>
-                                        <p className="text-lg font-bold text-gray-900 dark:text-slate-50 capitalize">{selectedCall.sentiment_label || 'N/A'}</p>
+                                        <p className="text-lg font-bold text-gray-900 dark:text-slate-50 capitalize">
+                                            {selectedCall.sentiment_label || 'N/A'}
+                                        </p>
+                                        {getUrgencyBadge(selectedCall.sentiment_urgency)}
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase">Recording</p>
@@ -712,6 +749,19 @@ const CallsPageContent = () => {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Clinical Summary */}
+                                {selectedCall.sentiment_summary && (
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-900 rounded-lg p-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-lg">🩺</span>
+                                            <p className="text-sm font-bold text-purple-900 dark:text-purple-400">Clinical Summary</p>
+                                        </div>
+                                        <p className="text-sm text-gray-800 dark:text-slate-200 leading-relaxed">
+                                            {selectedCall.sentiment_summary}
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Transfer Details (if transferred) */}
                                 {selectedCall.status === 'transferred' && selectedCall.transfer_to && (

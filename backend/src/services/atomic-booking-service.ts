@@ -42,9 +42,18 @@ export class AtomicBookingService {
 
       if (error) {
         console.error('[AtomicBooking] claim_slot_atomic RPC error:', error);
+
+        // Silent Failure Rule: Never expose DB errors
+        let userMessage = 'Unable to check slot availability. Please try again.';
+        if (error.message?.includes('violates foreign key constraint')) {
+          userMessage = 'This calendar configuration appears invalid. Please contact support.';
+        } else if (error.code === 'P0001') {
+          userMessage = error.message; // These are custom exceptions raised by our own PL/PGSQL function
+        }
+
         return {
           success: false,
-          error: error.message || 'Failed to claim slot',
+          error: userMessage, // Generic friendly message
           action: 'ESCALATE',
         };
       }
@@ -65,11 +74,13 @@ export class AtomicBookingService {
         success: true,
         holdId: result.hold_id,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('[AtomicBooking] Unexpected error in claimSlotAtomic:', error);
+
+      // Silent Failure Rule: Sanitize unexpected exceptions
       return {
         success: false,
-        error: 'Unexpected system error',
+        error: "I'm having trouble scheduling that right now. Let me find another way to help.",
         action: 'ESCALATE',
       };
     }

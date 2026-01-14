@@ -228,3 +228,27 @@ export function getTierEmoji(tier: 'hot' | 'warm' | 'cold'): string {
 export function formatTierWithEmoji(tier: 'hot' | 'warm' | 'cold'): string {
   return `${getTierEmoji(tier)} ${tier.charAt(0).toUpperCase() + tier.slice(1)}`;
 }
+
+/**
+ * Estimate financial value of a lead based on procedure keywords
+ * used for dashboard pipeline visualization
+ */
+export function estimateLeadValue(transcript: string): number {
+  const t = transcript.toLowerCase();
+
+  // Harley Street Market Rates (Conservative Estimates)
+  if (t.includes('rhinoplasty') || t.includes('nose job')) return 8000;
+  if (t.includes('facelift') || t.includes('face lift')) return 15000;
+  if (t.includes('breast augmentation') || t.includes('boob job')) return 7500;
+  if (t.includes('liposuction')) return 4000;
+  if (t.includes('tummy tuck') || t.includes('abdominoplasty')) return 9000;
+  if (t.includes('hair transplant')) return 6000;
+  if (t.includes('blepharoplasty') || t.includes('eyelid')) return 3500;
+
+  // Non-surgical
+  if (t.includes('botox') || t.includes('filler')) return 350;
+  if (t.includes('facial') || t.includes('peel')) return 150;
+  if (t.includes('consultation')) return 200;
+
+  return 0; // Unknown value
+}

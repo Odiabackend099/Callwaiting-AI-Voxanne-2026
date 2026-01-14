@@ -4,19 +4,11 @@ export const dynamic = "force-dynamic";
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { Phone, TrendingUp, ArrowUpRight, ArrowDownRight, Clock, CheckCircle } from 'lucide-react';
+import { Phone, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import HotLeadDashboard from '@/components/dashboard/HotLeadDashboard';
-
-interface DashboardStats {
-    totalCalls: number;
-    inboundCalls: number;
-    outboundCalls: number;
-    completedCalls: number;
-    callsToday: number;
-    avgDuration: number;
-}
+import ClinicalPulse from '@/components/dashboard/ClinicalPulse';
 
 interface RecentCall {
     id: string;
@@ -33,37 +25,26 @@ interface RecentCall {
     } | null;
 }
 
-// Fetcher function wrapper for useSWR
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
 export default function CallWaitingAIDashboard() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
 
-    // Use SWR for data fetching
-    // Key is null if user not loaded => pauses request
-    const { data, error, isLoading: swrLoading } = useSWR(
+    // Use SWR for recent calls only
+    const { data: recentCallsData, isLoading: swrLoading } = useSWR(
         user ? '/api/calls-dashboard/stats' : null,
         fetcher,
         {
-            refreshInterval: 10000, // Poll every 10s for live-ish updates
+            refreshInterval: 10000,
             revalidateOnFocus: true,
             dedupingInterval: 5000,
         }
     );
 
-    const isLoading = authLoading || (swrLoading && !data);
-
-    const stats: DashboardStats = {
-        totalCalls: data?.totalCalls || 0,
-        inboundCalls: data?.inboundCalls || 0,
-        outboundCalls: data?.outboundCalls || 0,
-        completedCalls: data?.completedCalls || 0,
-        callsToday: data?.callsToday || 0,
-        avgDuration: data?.avgDuration || 0
-    };
-
-    const recentCalls: RecentCall[] = data?.recentCalls || [];
+    const isLoading = authLoading || (swrLoading && !recentCallsData);
+    // Legacy stats endpoint returned recentCalls inside the object, check structure
+    const recentCalls: RecentCall[] = recentCallsData?.recentCalls || [];
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -92,7 +73,6 @@ export default function CallWaitingAIDashboard() {
         return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     };
 
-    // 2. Authentication check (handled by useEffect, but safe return null)
     if (!user && !authLoading) return null;
 
     return (
@@ -100,107 +80,14 @@ export default function CallWaitingAIDashboard() {
             {/* Header */}
             <div>
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">Dashboard</h1>
-                <p className="text-slate-500 dark:text-slate-400">Welcome back. Here&apos;s your system overview.</p>
+                <p className="text-slate-500 dark:text-slate-400">Welcome back. Here&apos;s your clinical system overview.</p>
             </div>
 
-            {/* Hot Lead Dashboard */}
+            {/* Clinical Pulse (Top ROI Metrics) */}
+            <ClinicalPulse />
+
+            {/* Hot Lead Dashboard (Actionable Items) */}
             <HotLeadDashboard />
-
-            {/* Key Metrics Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Metric Card 1: Total Calls */}
-                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Phone className="w-24 h-24 text-emerald-500 transform rotate-12 translate-x-4 -translate-y-4" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                                <TrendingUp className="w-4 h-4" />
-                            </div>
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Calls</span>
-                        </div>
-                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
-                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : stats.totalCalls}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
-                            <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                                {stats.completedCalls} completed
-                            </span>
-                            <span>• Today: {stats.callsToday}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Metric Card 2: Inbound */}
-                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <ArrowDownRight className="w-24 h-24 text-cyan-500 transform rotate-12 translate-x-4 -translate-y-4" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-                                <ArrowDownRight className="w-4 h-4" />
-                            </div>
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Inbound</span>
-                        </div>
-                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
-                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : stats.inboundCalls}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
-                            <span className="text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">
-                                {stats.totalCalls > 0 ? Math.round((stats.inboundCalls / stats.totalCalls) * 100) : 0}% traffic
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Metric Card 3: Outbound */}
-                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <ArrowUpRight className="w-24 h-24 text-purple-500 transform rotate-12 translate-x-4 -translate-y-4" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                                <ArrowUpRight className="w-4 h-4" />
-                            </div>
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Outbound</span>
-                        </div>
-                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
-                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : stats.outboundCalls}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
-                            <span className="text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
-                                {stats.totalCalls > 0 ? Math.round((stats.outboundCalls / stats.totalCalls) * 100) : 0}% traffic
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Metric Card 4: Avg Duration */}
-                <div className="glass-card rounded-2xl p-5 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Clock className="w-24 h-24 text-amber-500 transform rotate-12 translate-x-4 -translate-y-4" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                                <Clock className="w-4 h-4" />
-                            </div>
-                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg Duration</span>
-                        </div>
-                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-1">
-                            {isLoading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8 w-16 inline-block" /> : formatDuration(stats.avgDuration)}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
-                            <span className="text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                                Per completed call
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             {/* Recent Calls Table */}
             <div className="glass-panel rounded-2xl overflow-hidden">

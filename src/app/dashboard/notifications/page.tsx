@@ -10,7 +10,7 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface Notification {
     id: string;
-    type: 'hot_lead' | 'appointment' | 'call' | 'system' | 'lead_update';
+    type: 'hot_lead' | 'appointment_booked' | 'appointment_reminder' | 'missed_call' | 'system_alert' | 'voicemail' | 'lead_update';
     title: string;
     message: string;
     read: boolean;
@@ -155,12 +155,19 @@ const NotificationsCenterContent = () => {
         switch (type) {
             case 'hot_lead':
                 return <Zap className="w-5 h-5" />;
-            case 'appointment':
+            case 'appointment_booked':
+            case 'appointment_reminder':
+            case 'appointment': // Legacy fallback
                 return <Calendar className="w-5 h-5" />;
-            case 'call':
+            case 'missed_call':
+            case 'voicemail':
+            case 'call': // Legacy fallback
                 return <Phone className="w-5 h-5" />;
             case 'lead_update':
                 return <Users className="w-5 h-5" />;
+            case 'system_alert':
+            case 'system': // Legacy fallback
+                return <AlertCircle className="w-5 h-5" />;
             default:
                 return <AlertCircle className="w-5 h-5" />;
         }
@@ -170,9 +177,13 @@ const NotificationsCenterContent = () => {
         switch (type) {
             case 'hot_lead':
                 return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400';
-            case 'appointment':
+            case 'appointment_booked':
+            case 'appointment_reminder':
+            case 'appointment': // Legacy fallback
                 return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400';
-            case 'call':
+            case 'missed_call':
+            case 'voicemail':
+            case 'call': // Legacy fallback
                 return 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-900/50 text-cyan-700 dark:text-cyan-400';
             case 'lead_update':
                 return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-400';
