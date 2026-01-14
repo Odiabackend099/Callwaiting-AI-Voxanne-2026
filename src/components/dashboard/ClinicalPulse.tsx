@@ -119,7 +119,7 @@ export default function ClinicalPulse() {
                     </h3>
                     <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 mt-2">
                         <span className="text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
-                            {safeStats.total_calls > 0 ? Math.round((safeStats.inboundCalls / safeStats.total_calls) * 100) : 0}% Inbound
+                            {safeStats.total_calls > 0 ? Math.round((safeStats.inbound_calls / safeStats.total_calls) * 100) : 0}% Inbound
                         </span>
                     </div>
                 </div>
