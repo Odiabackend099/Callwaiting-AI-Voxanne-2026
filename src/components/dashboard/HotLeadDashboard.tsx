@@ -142,18 +142,20 @@ export default function HotLeadDashboard() {
                         <div className="space-y-3 flex-1">
                             <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
                                 <Zap className="mr-2 h-4 w-4 text-amber-500 shrink-0" />
-                                <span className="font-medium truncate capitalize">{lead.procedure_intent?.replace(/_/g, ' ') || 'General Inquiry'}</span>
+                                <span className="font-medium truncate capitalize">Hot Lead</span>
                             </div>
                             <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
                                 <Phone className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
                                 {lead.phone_number}
                             </div>
 
-                            {/* Recommended Action Badge */}
-                            <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/5 p-2 rounded border border-rose-500/10">
-                                <AlertCircle className="w-3 h-3" />
-                                Action: {lead.recommended_action}
-                            </div>
+                            {/* Call Summary */}
+                            {lead.last_call_summary && (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2 rounded border border-slate-200 dark:border-slate-700">
+                                    <AlertCircle className="w-3 h-3 shrink-0" />
+                                    <span className="line-clamp-2">{lead.last_call_summary}</span>
+                                </div>
+                            )}
                         </div>
 
                         <button
