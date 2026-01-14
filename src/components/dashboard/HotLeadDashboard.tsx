@@ -134,15 +134,10 @@ export default function HotLeadDashboard() {
                         </div>
 
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1 truncate tracking-tight group-hover/card:text-rose-500 transition-colors">
-                            {lead.patient_name || "Unknown Patient"}
+                            {lead.contact_name || "Unknown Contact"}
                         </h3>
 
-                        {lead.financial_value > 0 && (
-                            <div className="mb-4 text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex items-center gap-1">
-                                <span>Potential Value:</span>
-                                <span>£{lead.financial_value.toLocaleString()}</span>
-                            </div>
-                        )}
+                        {/* Financial value removed from new interface */}
 
                         <div className="space-y-3 flex-1">
                             <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
