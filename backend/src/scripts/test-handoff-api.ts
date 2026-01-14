@@ -1,16 +1,18 @@
 
-import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
+// Main async function to handle dynamic imports
+(async () => {
+  const { v4: uuidv4 } = await import('uuid');
+  const axios = (await import('axios')).default;
 
-const API_URL = 'http://localhost:3001/api/handoff';
+  const API_URL = 'http://localhost:3001/api/handoff';
 
-// Mock Data
-// Use a valid UUID for a new organization/tenant context test
-const MOCK_TENANT_ID = 'a0000000-0000-0000-0000-000000000001';
-const SESSION_ID = uuidv4();
-const PATIENT_PHONE = '+15550262026';
+  // Mock Data
+  // Use a valid UUID for a new organization/tenant context test
+  const MOCK_TENANT_ID = 'a0000000-0000-0000-0000-000000000001';
+  const SESSION_ID = uuidv4();
+  const PATIENT_PHONE = '+15550262026';
 
-async function testHandoffUpdate() {
+  async function testHandoffUpdate() {
     console.log('\n--- Testing Handoff Update ---');
     try {
         const payload = {
@@ -76,6 +78,7 @@ async function run() {
 
     await testHandoffUpdate();
     await testHandoffContext();
-}
+  }
 
-run();
+  run();
+})();

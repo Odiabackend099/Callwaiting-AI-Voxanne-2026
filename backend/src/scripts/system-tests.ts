@@ -127,11 +127,23 @@ async function runSystemTests() {
                 details: `OTP sent: ${otpCode}`
             });
 
+            // Fetch the contact ID from the hold record
+            const { data: holdData } = await supabase
+                .from('appointment_holds')
+                .select('contact_id')
+                .eq('id', claimResult.holdId)
+                .eq('org_id', orgId)
+                .single();
+            
+            const contactId = holdData?.contact_id || 'unknown';
+
             // Step 7: Verify OTP
             const verifyResult = await AtomicBookingService.verifyOTPAndConfirm(
                 claimResult.holdId,
+                orgId,
+                contactId,
                 otpCode,
-                orgId
+                'consultation'
             );
 
             if (verifyResult.success && verifyResult.appointmentId) {

@@ -154,7 +154,7 @@ export async function sendAppointmentConfirmationSMS(
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      meridiem: 'short'
+      hour12: true
     });
 
     let message = `📅 Appointment Confirmed!\n\n${clinicName}\n${appointmentData.serviceType}\nWhen: ${appointmentTime}`;
@@ -219,7 +219,7 @@ export async function sendAppointmentReminderSMS(
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      meridiem: 'short'
+      hour12: true
     });
 
     const message = `⏰ Reminder: Your appointment is in ${hoursUntil} hours!\n\n${clinicName}\n${appointmentData.serviceType}\nTime: ${appointmentTime}\n\nSee you soon!`;

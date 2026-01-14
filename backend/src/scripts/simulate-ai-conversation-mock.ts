@@ -3,16 +3,18 @@
  * Demonstrates the complete flow with mock responses
  */
 
-import { v4 as uuidv4 } from 'uuid';
+// Main async function to handle dynamic imports
+(async () => {
+  const { v4: uuidv4 } = await import('uuid');
 
-const CONFIG = {
+  const CONFIG = {
     adminPhone: '+13024648548',        // Business owner (receives hot lead alerts)
     patientPhone: '+13024648548',      // Test patient (receives booking confirmation)
     patientName: 'John Doe',
     orgId: 'a0000000-0000-0000-0000-000000000001',
     appointmentDate: '2026-01-15',
     serviceType: 'Botox Consultation'
-};
+  };
 
 console.log('═══════════════════════════════════════════════════════════');
 console.log('    MEDICAL AI RECEPTIONIST - MOCK SIMULATION');
@@ -194,6 +196,7 @@ async function simulateMockConversation() {
     console.log('📋 HANDOFF CONTEXT STORED:');
     console.log(JSON.stringify(handoffContext, null, 2));
     console.log('');
-}
+  }
 
-simulateMockConversation();
+  simulateMockConversation();
+})();

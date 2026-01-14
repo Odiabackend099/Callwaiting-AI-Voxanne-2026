@@ -20,6 +20,7 @@ declare global {
         id: string;
         name?: string;
       };
+      org_id?: string;
       requestId?: string;
     }
   }
@@ -35,6 +36,12 @@ declare global {
  */
 export async function requireAuthOrDev(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    // Allow CORS preflight without auth
+    if (req.method === 'OPTIONS') {
+      next();
+      return;
+    }
+
     const authHeader = req.headers.authorization;
 
     // Determine if we're in dev mode (must be EXPLICITLY set, defaults to production)
@@ -65,6 +72,7 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
               }
               if (orgId !== 'default') {
                 req.user = { id: user.id, email: user.email || '', orgId };
+                req.org_id = orgId;
                 next();
                 return;
               }

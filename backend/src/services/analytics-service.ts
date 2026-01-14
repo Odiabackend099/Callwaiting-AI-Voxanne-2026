@@ -62,6 +62,7 @@ export class AnalyticsService {
                 sentiment_score: sentimentScore,
                 lead_temp: leadTemp,
                 financial_value: financialValue,
+                org_id: orgId,
                 metadata: {
                     booking_confirmed: isBooked,
                     summary: cleanSummary,

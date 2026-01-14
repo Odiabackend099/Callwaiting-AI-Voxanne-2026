@@ -69,6 +69,7 @@ router.get('/members', requireAuthOrDev, async (req, res) => {
         );
 
         res.json(membersWithDetails);
+        return;
     } catch (error: any) {
         console.error('[Team] Unexpected error:', error);
         res.status(500).json({ error: 'Failed to fetch team members' });
@@ -148,6 +149,7 @@ router.post('/members', requireAuthOrDev, async (req, res) => {
         }
 
         res.status(201).json(data);
+        return;
     } catch (error: any) {
         console.error('[Team] Unexpected error:', error);
         res.status(500).json({ error: 'Failed to invite user' });
@@ -206,6 +208,7 @@ router.patch('/members/:userId/role', requireAuthOrDev, async (req, res) => {
         }
 
         res.json(data);
+        return;
     } catch (error: any) {
         console.error('[Team] Unexpected error:', error);
         res.status(500).json({ error: 'Failed to update user role' });

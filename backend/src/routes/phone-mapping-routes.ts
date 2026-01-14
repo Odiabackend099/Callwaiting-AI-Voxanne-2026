@@ -53,7 +53,7 @@ router.post('/phone-mappings', async (req: Request, res: Response) => {
     // Check if mapping already exists
     const { data: existing } = await supabase
       .from('phone_number_mapping')
-      .select('id')
+      .select('id, vapi_phone_number_id, clinic_name')
       .eq('org_id', org_id)
       .eq('inbound_phone_number', inbound_phone_number)
       .limit(1);

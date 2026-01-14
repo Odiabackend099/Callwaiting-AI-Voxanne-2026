@@ -209,10 +209,15 @@ async function runComprehensiveTest() {
     // BETTER: Create a contact for Org A. Try to fetch it using an Org B context (if we had middleware).
     // As a script, we'll verify that RLS policies EXIST for key tables.
 
-    const { data: policies } = await supabase
-        .rpc('get_policies', { table_name: 'contacts' }) // Hypothetical helper, or Query `pg_policies`
-        .then(res => res)
-        .catch(() => ({ data: null })); // Handle missing RPC safely
+    let policies = null;
+    try {
+      const res = await supabase
+        .rpc('get_policies', { table_name: 'contacts' }); // Hypothetical helper, or Query `pg_policies`
+      policies = res;
+    } catch (e) {
+      // Handle missing RPC safely
+      policies = null;
+    }
 
     // Fallback: Just query contacts where org_id = RANDOM. Should be empty. 
     const randomOrgId = randomUUID();

@@ -32,6 +32,8 @@ interface TwilioResult {
   error?: string;
 }
 
+export type { TwilioResult };
+
 /**
  * Get a Twilio client instance
  * REQUIRES credentials - no fallback to environment variables

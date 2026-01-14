@@ -1279,7 +1279,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
         const leadScore = await scoreLead(
           callLog.org_id,
           artifact.transcript,
-          sentimentResult.label, // AI-Audited Sentiment
+          sentimentResult.label as 'positive' | 'neutral' | 'negative', // AI-Audited Sentiment
           { serviceType: 'unknown' }
         );
 

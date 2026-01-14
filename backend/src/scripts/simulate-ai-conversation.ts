@@ -5,12 +5,15 @@
  */
 
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
 
 const API_URL = 'http://localhost:3001';
 
-// Configuration from user
-const CONFIG = {
+// Main async function to handle dynamic imports
+(async () => {
+  const { v4: uuidv4 } = await import('uuid');
+
+  // Configuration from user
+  const CONFIG = {
     // Admin/Business Owner (receives hot lead notifications)
     adminPhone: '+13024648548',
 
@@ -24,13 +27,13 @@ const CONFIG = {
     // Appointment details
     appointmentDate: '2026-01-15',
     serviceType: 'consultation'
-};
+  };
 
-console.log('═══════════════════════════════════════════════════════════');
-console.log('    MEDICAL AI RECEPTIONIST - LIVE SIMULATION');
-console.log('═══════════════════════════════════════════════════════════\n');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('    MEDICAL AI RECEPTIONIST - LIVE SIMULATION');
+  console.log('═══════════════════════════════════════════════════════════\n');
 
-async function simulateConversation() {
+  async function simulateConversation() {
     const sessionId = uuidv4();
 
     console.log('📞 INCOMING CALL');
@@ -186,7 +189,8 @@ async function simulateConversation() {
             console.error('📝 Details:', error.response.data.details);
         }
     }
-}
+  }
 
-// Run simulation
-simulateConversation();
+  // Run simulation
+  simulateConversation();
+})();

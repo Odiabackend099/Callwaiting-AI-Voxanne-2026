@@ -1,6 +1,6 @@
 import { supabase } from './supabase-client';
 import { sendSmsTwilio } from './twilio-service';
-import { getOrgCredentials } from './credential-manager';
+import { IntegrationDecryptor } from './integration-decryptor';
 import { log } from './logger';
 
 export interface ConfirmationSMSResult {
@@ -100,9 +100,10 @@ export class BookingConfirmationService {
       const messageContent = `Your appointment confirmed!\n\n📅 ${dateStr} at ${timeStr}\n💼 ${org.name}\n📞 Call ${org.phone_number} to reschedule\n\nReply STOP to unsubscribe.`;
 
       // Get Twilio credentials for org
-      const { accountSid, authToken, twilioPhoneNumber } = await getOrgCredentials(
-        orgId
-      );
+      const creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
+      const accountSid = creds?.accountSid;
+      const authToken = creds?.authToken;
+      const twilioPhoneNumber = creds?.phoneNumber;
 
       if (!accountSid || !authToken || !twilioPhoneNumber) {
         log.error('[BookingConfirmation] Missing Twilio credentials for org:', orgId);
@@ -114,20 +115,21 @@ export class BookingConfirmationService {
       }
 
       // Send SMS via Twilio
-      const { messageId, error: smsError } = await sendSmsTwilio(
-        patientPhone,
-        messageContent,
-        accountSid,
-        authToken,
-        twilioPhoneNumber
+      const result = await sendSmsTwilio(
+        {
+          to: patientPhone,
+          message: messageContent,
+          from: twilioPhoneNumber
+        },
+        { accountSid, authToken, phoneNumber: twilioPhoneNumber }
       );
 
-      if (smsError) {
-        log.error('[BookingConfirmation] Failed to send SMS:', smsError);
+      if (!result.success || !result.message_sid) {
+        log.error('[BookingConfirmation] Failed to send SMS:', result.error);
         return {
           success: false,
           messageSent: false,
-          error: smsError,
+          error: result.error,
         };
       }
 
@@ -136,7 +138,7 @@ export class BookingConfirmationService {
         .from('appointments')
         .update({
           confirmation_sms_sent: true,
-          confirmation_sms_id: messageId,
+          confirmation_sms_id: result.message_sid,
           confirmation_sms_sent_at: new Date().toISOString(),
         })
         .eq('id', appointmentId)

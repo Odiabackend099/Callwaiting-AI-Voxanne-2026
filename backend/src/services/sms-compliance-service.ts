@@ -1,5 +1,5 @@
 
-import { sendSmsTwilio } from './twilio-service';
+import { sendSmsTwilio, TwilioResult } from './twilio-service';
 import { IntegrationSettingsService } from './integration-settings';
 import { supabase } from './supabase-client';
 import { log } from './logger';
@@ -8,7 +8,7 @@ export class SmsComplianceService {
     /**
      * Send a 10DLC compliant SMS
      */
-    async sendCompliantSMS(tenantId: string, phone: string, template: string) {
+    async sendCompliantSMS(tenantId: string, phone: string, template: string): Promise<TwilioResult> {
         try {
             // 1. Get business name
             const { data: org, error } = await supabase
