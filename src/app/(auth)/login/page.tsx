@@ -158,7 +158,7 @@ function LoginPageContent() {
                                         onChange={(e) => setEmail(e.target.value)}
                                         placeholder="doctor@clinic.com"
                                         required
-                                        className="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+                                        className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
                                     />
                                 </div>
                             </div>
@@ -170,7 +170,7 @@ function LoginPageContent() {
                                     </label>
                                     <Link
                                         href="/forgot-password"
-                                        className="text-xs text-slate-500 hover:text-white cursor-pointer transition-colors"
+                                        className="text-xs text-slate-400 hover:text-white cursor-pointer transition-colors"
                                     >
                                         Forgot password?
                                     </Link>
@@ -183,7 +183,7 @@ function LoginPageContent() {
                                         onChange={(e) => setPassword(e.target.value)}
                                         placeholder="••••••••"
                                         required
-                                        className="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+                                        className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
                                     />
                                 </div>
                             </div>
@@ -212,7 +212,7 @@ function LoginPageContent() {
                                 <div className="w-full border-t border-white/10"></div>
                             </div>
                             <div className="relative flex justify-center text-sm">
-                                <span className="bg-black px-2 text-slate-500">Or continue with</span>
+                                <span className="bg-black px-2 text-slate-400">Or continue with</span>
                             </div>
                         </div>
 
@@ -249,7 +249,7 @@ function LoginPageContent() {
                     </div>
 
                     <div className="mt-8 text-center">
-                        <p className="text-slate-500 text-sm">
+                        <p className="text-slate-400 text-sm">
                             Not a member yet?{' '}
                             <a href="https://calendly.com/austyn-callwaitingai/30min" target="_blank" rel="noopener noreferrer" className="text-white hover:text-purple-300 font-semibold transition-colors">
                                 Book a Demo

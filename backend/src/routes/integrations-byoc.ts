@@ -124,27 +124,47 @@ integrationsRouter.post('/twilio', async (req: express.Request, res: express.Res
 // ============================================
 integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: express.Response) => {
   try {
-    const VAPI_API_KEY = process.env.VAPI_API_KEY;
-    if (!VAPI_API_KEY) throw new Error('VAPI_API_KEY missing');
+    const orgId = (req as any).user.orgId;
 
-    // Fetch numbers from Vapi
+    // 1. Get Integration Settings
+    const { data: settings, error: settingsError } = await (req as any).supabase
+      .from('integration_settings')
+      .select('api_key_encrypted')
+      .eq('org_id', orgId)
+      .eq('service_type', 'vapi')
+      .single();
+
+    if (settingsError || !settings || !settings.api_key_encrypted) {
+      // If no tenant key, return empty list (Strict Multi-Tenancy)
+      // OR optionally fallback to env if that's the business logic for "default tier"
+      // But user asked for multi-tenancy fixes, so empty list is safer.
+      return res.json({ success: true, numbers: [] });
+    }
+
+    // 2. Decrypt Key
+    const apiKey = await IntegrationDecryptor.decrypt(settings.api_key_encrypted);
+    if (!apiKey) {
+      throw new Error('Failed to decrypt Vapi API key');
+    }
+
+    // 3. Fetch numbers from Vapi
     const vapiRes = await fetch('https://api.vapi.ai/phone-number', {
       headers: {
-        'Authorization': `Bearer ${VAPI_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
 
     if (!vapiRes.ok) {
       const errorText = await vapiRes.text();
+      // If 401, maybe key is invalid
+      if (vapiRes.status === 401) {
+        return res.status(401).json({ success: false, error: 'Invalid Vapi API Key' });
+      }
       throw new Error(`Failed to fetch Vapi numbers: ${errorText}`);
     }
 
     const numbers = await vapiRes.json();
-
-    // Filter or transform if needed. Vapi returns all numbers for the org.
-    // We might want to filter by provider 'twilio' if only those support BYOC? 
-    // For now, return all.
 
     res.json({ success: true, numbers });
 

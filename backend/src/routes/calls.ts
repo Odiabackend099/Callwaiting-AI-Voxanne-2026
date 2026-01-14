@@ -308,7 +308,7 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
     const userId = (req as any).user?.id || 'anonymous';
     const userAgent = req.headers['user-agent'] || 'unknown';
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
-    
+
     // Log download access for audit trail (non-blocking, fire and forget)
     (supabase
       .from('recording_downloads')
@@ -333,17 +333,17 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to generate recording URL' });
         return;
       }
-      res.json({ 
+      res.json({
         recordingUrl: signedUrl,
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         expiresIn: 3600
       });
     } else if (callLog.recording_url) {
       // Direct URL from Vapi (legacy)
-      res.json({ 
+      res.json({
         recordingUrl: callLog.recording_url,
         expiresAt: callLog.recording_signed_url_expires_at,
-        expiresIn: callLog.recording_signed_url_expires_at 
+        expiresIn: callLog.recording_signed_url_expires_at
           ? Math.floor((new Date(callLog.recording_signed_url_expires_at).getTime() - Date.now()) / 1000)
           : 900
       });
@@ -394,7 +394,7 @@ callsRouter.post('/:callId/recording/refresh', async (req: Request, res: Respons
       })
       .eq('vapi_call_id', callId);
 
-    res.json({ 
+    res.json({
       recordingUrl: signedUrl,
       expiresAt,
       expiresIn: 3600
@@ -408,10 +408,23 @@ callsRouter.post('/:callId/recording/refresh', async (req: Request, res: Respons
 // List calls
 callsRouter.get('/', async (req: Request, res: Response) => {
   try {
+    const orgId = (req as any).user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
     const { limit = 50 } = req.query;
 
-    const calls = await vapi.listCalls(Number(limit));
-    res.json(calls);
+    const { data: calls, error } = await supabase
+      .from('call_logs')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(calls || []);
   } catch (error: any) {
     console.error('[GET /calls] Error:', error.message);
     res.status(500).json({

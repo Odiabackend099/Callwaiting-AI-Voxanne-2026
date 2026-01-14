@@ -151,7 +151,6 @@ export default function InboundConfigPage() {
                         Prerequisites
                     </div>
                     <ul className="list-disc list-inside space-y-1 ml-1 text-blue-700 dark:text-blue-400">
-                        <li>Configure your <strong>Vapi API Key</strong> in integration settings.</li>
                         <li>Create and <strong>save an Inbound Agent</strong> in the Agent Config page.</li>
                     </ul>
                 </div>
