@@ -39,7 +39,10 @@ export default function ClinicalPulse() {
         }),
         {
             refreshInterval: 10000,
-            revalidateOnFocus: true
+            revalidateOnFocus: false,      // Prevent reload on tab switch
+            revalidateOnMount: false,      // Use cache if available
+            dedupingInterval: 5000,        // Prevent duplicate requests within 5s
+            revalidateIfStale: true,       // Only refetch if data is stale
         }
     );
 

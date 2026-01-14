@@ -2,61 +2,62 @@ import React, { useState, useEffect } from 'react';
 import { Phone, Zap, ArrowUpRight, Flame, Sparkles, AlertCircle } from 'lucide-react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { useAuth } from '@/contexts/AuthContext';
+import useSWR from 'swr';
 
 interface ActionableLead {
     id: string;
-    patient_name: string;
+    contact_name: string;
     phone_number: string;
-    formatted_date: string;
-    duration: number;
-    status: string;
-    sentiment_score: number;
-    lead_temp: 'hot' | 'warm' | 'cool' | 'cold';
-    procedure_intent: string;
-    financial_value: number;
-    recommended_action: string;
-    is_booked: boolean;
-    metadata?: {
+    lead_temp: 'hot' | 'warm' | 'cold';
+    created_at: string;
+    last_call_summary?: string;
+    sentiment?: {
+        score: number;
+        label: string;
         summary?: string;
     }
 }
 
 export default function HotLeadDashboard() {
     const { user } = useAuth();
-    const [leads, setLeads] = useState<ActionableLead[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const orgId = (user?.app_metadata?.org_id || user?.user_metadata?.org_id) as string;
 
-    useEffect(() => {
-        if (user) fetchLeads();
-    }, [user]);
-
-    const fetchLeads = async () => {
-        try {
-            setLoading(true);
-            const orgId = (user?.app_metadata?.org_id || user?.user_metadata?.org_id) as string;
-
-            if (!orgId) {
-                console.warn('No Organization ID found on user');
-                return;
-            }
-
-            const data = await authedBackendFetch<{ leads: ActionableLead[] }>('/api/analytics/leads', {
-                headers: {
-                    'x-org-id': orgId
-                }
-            });
-            setLeads(data.leads || []);
-            setError(null);
-        } catch (err: any) {
-            console.error('Failed to load hot leads', err);
-            setError('Failed to load hot leads');
-        } finally {
-            setLoading(false);
+    const { data, error, isLoading } = useSWR(
+        orgId ? ['/api/analytics/leads', orgId] : null,
+        ([url, id]) => authedBackendFetch<{ leads: ActionableLead[] }>(url, {
+            headers: { 'x-org-id': id }
+        }),
+        {
+            refreshInterval: 30000,        // Refresh every 30s (less aggressive than pulse)
+            revalidateOnFocus: false,      // Prevent reload on tab switch
+            revalidateOnMount: false,      // Use cache if available
+            dedupingInterval: 10000,       // Prevent duplicate requests within 10s
+            revalidateIfStale: true,       // Only refetch if data is stale
         }
-    };
+    );
 
-    if (loading && leads.length === 0) {
+    const leads = data?.leads || [];
+
+    if (!orgId) {
+        return (
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6">
+                <p className="text-red-600 dark:text-red-400">{error?.message || 'Failed to load hot leads'}. Please log in to view hot leads</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="glass-panel p-6 rounded-2xl mb-8">
+                <div className="flex items-center gap-2 text-red-500">
+                    <AlertCircle className="w-5 h-5" />
+                    <p>Error loading leads: {error.message || 'Unknown error'}</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (isLoading && leads.length === 0) {
         return (
             <div className="glass-panel p-6 rounded-2xl mb-8 animate-pulse">
                 <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 rounded mb-6"></div>
@@ -72,7 +73,7 @@ export default function HotLeadDashboard() {
     // Filter for Hot/Warm leads only
     const criticalLeads = leads.filter(l => l.lead_temp === 'hot' || l.lead_temp === 'warm');
 
-    if (!loading && criticalLeads.length === 0) {
+    if (!isLoading && criticalLeads.length === 0) {
         // If no critical leads, show a "All Systems Go" state or nothing
         return (
             <div className="glass-panel p-6 rounded-2xl relative overflow-hidden group mb-8 border border-emerald-500/20">
@@ -127,7 +128,9 @@ export default function HotLeadDashboard() {
                                 }`}>
                                 {lead.lead_temp} Lead
                             </span>
-                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{lead.formatted_date}</span>
+                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                                {new Date(lead.created_at).toLocaleDateString()}
+                            </span>
                         </div>
 
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1 truncate tracking-tight group-hover/card:text-rose-500 transition-colors">
