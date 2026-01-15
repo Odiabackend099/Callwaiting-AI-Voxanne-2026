@@ -3,7 +3,7 @@ import express from 'express';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // Mock dependencies BEFORE importing the router
-jest.mock('../services/supabase-client', () => ({
+jest.mock('../../services/supabase-client', () => ({
     supabase: {
         from: jest.fn(),
         rpc: jest.fn(),
@@ -11,7 +11,7 @@ jest.mock('../services/supabase-client', () => ({
     }
 }));
 
-jest.mock('../services/vapi-client', () => {
+jest.mock('../../services/vapi-client', () => {
     return {
         VapiClient: jest.fn().mockImplementation(() => ({
             updateAssistant: jest.fn(),
@@ -20,12 +20,12 @@ jest.mock('../services/vapi-client', () => {
     };
 });
 
-jest.mock('../services/secrets-manager', () => ({
+jest.mock('../../services/secrets-manager', () => ({
     storeApiKey: jest.fn(),
     getApiKey: jest.fn().mockResolvedValue('test-api-key')
 }));
 
-jest.mock('../middleware/auth', () => ({
+jest.mock('../../middleware/auth', () => ({
     requireAuth: (req: any, res: any, next: any) => {
         req.user = { id: 'test-user', orgId: 'test-org' };
         next();
@@ -36,23 +36,23 @@ jest.mock('../middleware/auth', () => ({
     }
 }));
 
-jest.mock('../services/logger', () => ({
+jest.mock('../../services/logger', () => ({
     createLogger: () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn() }),
     log: { info: jest.fn(), error: jest.fn(), warn: jest.fn() }
 }));
 
-jest.mock('../middleware/rate-limit', () => ({
+jest.mock('../../middleware/rate-limit', () => ({
     agentConfigLimiter: (req: any, res: any, next: any) => next(),
     configRateLimiter: (req: any, res: any, next: any) => next(),
     callCreationLimiter: (req: any, res: any, next: any) => next()
 }));
 
-jest.mock('../services/web-voice-bridge', () => ({
+jest.mock('../../services/web-voice-bridge', () => ({
     createWebVoiceSession: jest.fn(),
     endWebVoiceSession: jest.fn()
 }));
 
-jest.mock('../services/csv-import-service', () => ({
+jest.mock('../../services/csv-import-service', () => ({
     validateCsv: jest.fn(),
     importCsvLeads: jest.fn(),
     getImportStatus: jest.fn(),
@@ -61,18 +61,18 @@ jest.mock('../services/csv-import-service', () => ({
     generateErrorCsv: jest.fn()
 }));
 
-jest.mock('../routes/founder-console-settings', () => ({
+jest.mock('../../routes/founder-console-settings', () => ({
     getIntegrationSettings: jest.fn()
 }));
 
-jest.mock('../routes/phone-numbers', () => ({
+jest.mock('../../routes/phone-numbers', () => ({
     phoneNumbersRouter: (req: any, res: any, next: any) => next()
 }));
 
 // Import router after mocks
-import founderConsoleRouter from '../routes/founder-console-v2';
-import { supabase } from '../services/supabase-client';
-import { VapiClient } from '../services/vapi-client';
+import founderConsoleRouter from '../../routes/founder-console-v2';
+import { supabase } from '../../services/supabase-client';
+import { VapiClient } from '../../services/vapi-client';
 
 const app = express();
 app.use(express.json());

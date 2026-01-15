@@ -4,13 +4,14 @@ export const dynamic = "force-dynamic";
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 // LeftSidebar removed (now in layout)
-import { Settings, Users } from 'lucide-react';
+import { Settings, Users, Building2 } from 'lucide-react';
 import { TeamMembersList } from './components/TeamMembersList';
+import { OrgSettings } from './components/OrgSettings';
 
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'team'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'organization' | 'team'>('general');
 
 
   return (
@@ -40,6 +41,19 @@ export default function SettingsPage() {
           </div>
         </button>
         <button
+          onClick={() => setActiveTab('organization')}
+          className={`px-4 py-3 font-medium border-b-2 transition ${
+            activeTab === 'organization'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4" />
+            Organization
+          </div>
+        </button>
+        <button
           onClick={() => setActiveTab('team')}
           className={`px-4 py-3 font-medium border-b-2 transition ${
             activeTab === 'team'
@@ -58,6 +72,8 @@ export default function SettingsPage() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-900 text-sm">
           <p><strong>Note:</strong> Integrations configuration has moved to the <a href="/dashboard/integrations" className="underline font-medium hover:text-blue-700">Integrations</a> page. Please use that page to configure Vapi, Twilio, and other providers.</p>
         </div>
+      ) : activeTab === 'organization' ? (
+        <OrgSettings />
       ) : (
         <TeamMembersList />
       )}

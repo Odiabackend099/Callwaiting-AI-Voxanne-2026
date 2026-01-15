@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Mail, MapPin, Phone } from 'lucide-react';
 import Logo from "./Logo";
+import { COMPANY_INFO } from '@/lib/constants';
 
 export default function Footer() {
     return (
@@ -12,7 +13,7 @@ export default function Footer() {
                     <div className="md:col-span-2">
                         <div className="mb-6 flex items-center gap-3">
                             <Logo size="lg" showText={false} href="/" />
-                            <span className="text-white font-serif text-3xl font-bold">CallWaiting AI</span>
+                            <span className="text-white font-serif text-3xl font-bold">{COMPANY_INFO.name}</span>
                         </div>
                         <p className="text-zinc-500 mb-6 leading-relaxed">
                             Transform your practice with AI-powered reception. Never miss a call, never lose a lead.
@@ -20,15 +21,17 @@ export default function Footer() {
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 text-zinc-400">
                                 <MapPin className="w-4 h-4 text-cyan-400" />
-                                <span className="text-xs">Collage House, 2nd Floor, 17 King Edward Road, Ruislip, London HA4 7AE</span>
+                                <span className="text-xs">
+                                    {COMPANY_INFO.address.line1}, {COMPANY_INFO.address.line2}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.region} {COMPANY_INFO.address.postalCode}
+                                </span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Phone className="w-4 h-4 text-cyan-400" />
-                                <a href="tel:+447424038250" className="hover:text-white transition-colors">+44 7424 038250</a>
+                                <a href={`tel:${COMPANY_INFO.contact.phone}`} className="hover:text-white transition-colors">{COMPANY_INFO.contact.phoneDisplay}</a>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Mail className="w-4 h-4 text-cyan-400" />
-                                <a href="mailto:support@callwaitingai.dev" className="hover:text-white transition-colors">support@callwaitingai.dev</a>
+                                <a href={`mailto:${COMPANY_INFO.contact.email}`} className="hover:text-white transition-colors">{COMPANY_INFO.contact.email}</a>
                             </div>
                         </div>
                     </div>

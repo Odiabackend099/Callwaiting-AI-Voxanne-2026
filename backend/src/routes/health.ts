@@ -28,18 +28,20 @@ healthRouter.get('/health', async (req: Request, res: Response) => {
         timestamp: new Date().toISOString()
     };
 
-    // Check database
+    // Check database - validate both error and data response
     try {
-        const { error } = await supabase.from('organizations').select('id').limit(1);
-        checks.database = !error;
+        const response = await supabase.from('organizations').select('id').limit(1);
+        // Data must exist and error must be null
+        checks.database = response && response.data !== null && response.data !== undefined && response.error === null;
     } catch (error) {
         checks.database = false;
     }
 
-    // Check OpenAI
+    // Check OpenAI - validate instance creation
     try {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        if (openai) checks.openai = true;
+        // Verify instance is created and has required properties
+        checks.openai = openai && openai.apiKey !== undefined;
     } catch (error) {
         checks.openai = false;
     }

@@ -60,6 +60,7 @@ import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; 
 import agentSyncRouter from './routes/agent-sync'; // default export
 import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
 import { bookDemoRouter } from './routes/book-demo';
+import integrationsStatusRouter from './routes/integrations-status'; // default export
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
@@ -73,6 +74,8 @@ import { appointmentsRouter } from './routes/appointments';
 import { notificationsRouter } from './routes/notifications';
 // import { workspaceRouter } from './routes/workspace';
 import analyticsRouter from './routes/analytics';
+import calendarOAuthRouter from './routes/calendar-oauth'; // default export
+import vapiCalendarToolsRouter from './routes/vapi-tools'; // default export
 
 // Initialize logger
 initLogger();
@@ -187,6 +190,7 @@ app.use('/api/calls-dashboard', callsDashboardRouter);
 app.use('/api/assistants', assistantsRouter);
 app.use('/api/phone-numbers', phoneNumbersRouter);
 app.use('/api/integrations', integrationsRouter);
+app.use('/api/integrations', integrationsStatusRouter);
 app.use('/api/inbound', inboundSetupRouter);
 app.use('/api/inbound', phoneMappingRouter);
 app.use('/api/knowledge-base', knowledgeBaseRouter);
@@ -208,11 +212,13 @@ app.use('/api/contacts', contactsRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/calendar', calendarOAuthRouter);
+app.use('/api/vapi', vapiCalendarToolsRouter);
 
 // Google Calendar OAuth routes - TEMPORARILY DISABLED
 // app.use('/api/google-oauth', googleOAuthRouter);
 // log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
-log.info('Server', 'Contacts, appointments, and notifications routes registered');
+log.info('Server', 'Contacts, appointments, notifications, and calendar routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
 
 // Health check endpoint - comprehensive dependency verification

@@ -138,7 +138,9 @@ async function getOrgAndVapiConfig(
     .maybeSingle();
 
   const vapiApiKey: string | undefined =
-    vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
+    vapiIntegration?.config?.vapi_api_key ||
+    vapiIntegration?.config?.vapi_secret_key ||
+    process.env.VAPI_API_KEY; // Fallback to global key for default org/single-tenant
 
   if (!vapiApiKey) {
     res.status(400).json({ error: 'Vapi connection not configured', requestId });
@@ -1797,7 +1799,13 @@ router.post(
       const org = orgs[0];
 
       // Get the stored Vapi API key
-      let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
+      const envKey = process.env.VAPI_API_KEY;
+      console.log('DEBUG: Resolving Vapi Key. Env Key exists:', !!envKey, 'Length:', envKey?.length);
+      console.log('DEBUG: vapiIntegration config:', vapiIntegration?.config);
+
+      let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key || process.env.VAPI_API_KEY;
+
+      console.log('DEBUG: Resolved vapiApiKey:', vapiApiKey ? 'FOUND' : 'MISSING');
 
       if (!vapiApiKey) {
         res.status(400).json({
@@ -1818,6 +1826,7 @@ router.post(
         });
         return;
       }
+
 
       // INDEPENDENT AGENT UPDATES: Find or create agents by role
       const agentMap: Record<string, string> = {}; // role -> agentId
@@ -1843,13 +1852,17 @@ router.post(
 
         if (!agentId) {
           const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
+          const defaultSystemPrompt = role === AGENT_ROLES.OUTBOUND 
+            ? 'You are a helpful assistant making outbound calls on behalf of the business.'
+            : 'You are a helpful assistant answering inbound calls for the business.';
+          
           const { data: newAgent, error: insertError } = await supabase
             .from('agents')
             .insert({
               role: role,
               name: name,
-              status: 'active',
-              org_id: orgId
+              org_id: orgId,
+              system_prompt: defaultSystemPrompt
             })
             .select('id')
             .single();

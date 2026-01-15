@@ -3,10 +3,12 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrg } from '@/hooks/useOrg';
 
 export default function DashboardGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading, isVerified } = useAuth();
+  const orgId = useOrg();
 
   useEffect(() => {
     if (loading) return;
@@ -21,7 +23,13 @@ export default function DashboardGate({ children }: { children: React.ReactNode 
       router.push(`/verify-email${qs}`);
       return;
     }
-  }, [loading, user, isVerified, router]);
+
+    // If orgId is missing after auth resolves, force login to rehydrate session org context
+    if (!orgId) {
+      router.push('/login');
+      return;
+    }
+  }, [loading, user, isVerified, orgId, router]);
 
   if (loading) return null;
   // Bypass auth for testing

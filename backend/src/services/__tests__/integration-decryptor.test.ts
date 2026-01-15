@@ -10,21 +10,20 @@
  * - Error handling
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IntegrationDecryptor } from '../integration-decryptor';
 
 // Mock the Supabase client
-vi.mock('@/services/supabase-server', () => ({
+jest.mock('@/services/supabase-server', () => ({
   supabase: {
-    from: vi.fn(),
+    from: jest.fn(),
   },
 }));
 
 // Mock the EncryptionService
-vi.mock('@/services/encryption', () => ({
+jest.mock('@/services/encryption', () => ({
   EncryptionService: {
-    encryptObject: vi.fn((obj) => `encrypted:${JSON.stringify(obj)}`),
-    decryptObject: vi.fn((encrypted) => {
+    encryptObject: jest.fn((obj) => `encrypted:${JSON.stringify(obj)}`),
+    decryptObject: jest.fn((encrypted) => {
       const content = encrypted.replace('encrypted:', '');
       return JSON.parse(content);
     }),

@@ -25,7 +25,8 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitReturns": false,
-    "noEmit": false
+    "noEmit": false,
+    "isolatedModules": true
   },
   "include": [
     "src"

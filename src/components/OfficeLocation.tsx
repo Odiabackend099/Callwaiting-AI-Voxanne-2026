@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail } from "lucide-react";
+import { COMPANY_INFO } from "@/lib/constants";
 
 export default function OfficeLocation() {
     return (
@@ -33,10 +34,10 @@ export default function OfficeLocation() {
                                 <div>
                                     <h3 className="text-lg font-bold text-white mb-1">Global Headquarters</h3>
                                     <p className="text-zinc-400 text-sm leading-relaxed">
-                                        Collage House, 2nd Floor<br />
-                                        17 King Edward Road<br />
-                                        Ruislip, London HA4 7AE<br />
-                                        United Kingdom
+                                        {COMPANY_INFO.address.line1}<br />
+                                        {COMPANY_INFO.address.line2}<br />
+                                        {COMPANY_INFO.address.city}, {COMPANY_INFO.address.region} {COMPANY_INFO.address.postalCode}<br />
+                                        {COMPANY_INFO.address.country}
                                     </p>
                                 </div>
                             </div>
@@ -47,8 +48,8 @@ export default function OfficeLocation() {
                                 </div>
                                 <div>
                                     <h4 className="text-white font-semibold mb-1">Phone</h4>
-                                    <a href="tel:+447424038250" className="text-zinc-400 text-sm hover:text-cyan-400 transition-colors">
-                                        +44 7424 038250
+                                    <a href={`tel:${COMPANY_INFO.contact.phone}`} className="text-zinc-400 text-sm hover:text-cyan-400 transition-colors">
+                                        {COMPANY_INFO.contact.phoneDisplay}
                                     </a>
                                 </div>
                             </div>
@@ -59,8 +60,8 @@ export default function OfficeLocation() {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-white mb-1">Email Us</h3>
-                                    <a href="mailto:support@callwaitingai.dev" className="text-zinc-400 hover:text-cyan-400 transition-colors">
-                                        support@callwaitingai.dev
+                                    <a href={`mailto:${COMPANY_INFO.contact.email}`} className="text-zinc-400 hover:text-cyan-400 transition-colors">
+                                        {COMPANY_INFO.contact.email}
                                     </a>
                                 </div>
                             </div>
@@ -75,7 +76,7 @@ export default function OfficeLocation() {
                         className="relative h-[400px] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900"
                     >
                         <iframe
-                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2478.8!2d-0.4234!3d51.5732!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x48766e0c8f8f8f8f%3A0x0!2s17%20King%20Edward%20Rd%2C%20Ruislip%20HA4%207AE%2C%20UK!5e0!3m2!1sen!2sus!4v1234567890"
+                            src={COMPANY_INFO.links.mapsEmbed}
                             width="100%"
                             height="100%"
                             style={{ border: 0, filter: 'invert(90%) hue-rotate(180deg)' }}
@@ -96,7 +97,7 @@ export default function OfficeLocation() {
                                 <div className="w-4 h-4 bg-cyan-500 rounded-full border-2 border-black relative z-10"></div>
                             </div>
                             <div className="px-3 py-1 bg-black/90 backdrop-blur-md rounded-lg border border-cyan-500/50 text-xs font-bold text-white shadow-lg">
-                                CallWaiting AI HQ
+                                {COMPANY_INFO.name} HQ
                             </div>
                         </div>
                     </motion.div>

@@ -88,6 +88,8 @@ export class AtomicBookingService {
 
   /**
    * Sends OTP code to patient phone for verification
+   * CRITICAL FIX: Fetch credentials FIRST (fail early), then store OTP, then send SMS
+   * This prevents race condition where OTP is marked in DB but credentials fail to fetch
    */
   static async sendOTPCode(
     holdId: string,
@@ -96,7 +98,50 @@ export class AtomicBookingService {
     twilioCredentials?: any
   ): Promise<{ success: boolean; error?: string; otpCode?: string }> {
     try {
-      // Generate 4-digit OTP
+      // CRITICAL FIX #1: Fetch credentials FIRST before modifying state
+      let credentials = twilioCredentials;
+      let orgId: string;
+      
+      if (!credentials) {
+        // Fetch hold to get org_id (from method call - holdId should be from authenticated context)
+        // Note: sendOTPCode should ideally be called with orgId parameter from caller context
+        // For now, fetch hold to derive org_id, but ensure caller validates org context
+        const { data: holdCheck, error: holdCheckError } = await supabase
+          .from('appointment_holds')
+          .select('org_id')
+          .eq('id', holdId)
+          .single();
+        
+        if (holdCheckError || !holdCheck) {
+          console.error('[AtomicBooking] Failed to fetch hold for credential lookup:', holdCheckError);
+          return {
+            success: false,
+            error: 'Booking hold not found',
+          };
+        }
+        
+        orgId = holdCheck.org_id;
+        
+        // Fetch from database using org_id - BEFORE changing state
+        const { data: credData, error: credError } = await supabase
+          .from('org_credentials')
+          .select('decrypted_auth_config')
+          .eq('org_id', orgId)
+          .eq('integration_type', 'twilio_byoc')
+          .single();
+
+        if (credError || !credData) {
+          console.error('[AtomicBooking] Failed to get Twilio credentials');
+          return {
+            success: false,
+            error: 'SMS service not configured',
+          };
+        }
+
+        credentials = credData.decrypted_auth_config;
+      }
+
+      // NOW generate OTP and store it
       const otpCode = generateOTP(4);
 
       // Store OTP in appointment_holds
@@ -118,28 +163,6 @@ export class AtomicBookingService {
         };
       }
 
-      // Get Twilio credentials if not provided
-      let credentials = twilioCredentials;
-      if (!credentials) {
-        // Fetch from database using org_id from holdData
-        const { data: credData, error: credError } = await supabase
-          .from('org_credentials')
-          .select('decrypted_auth_config')
-          .eq('org_id', holdData.org_id)
-          .eq('integration_type', 'twilio_byoc')
-          .single();
-
-        if (credError || !credData) {
-          console.error('[AtomicBooking] Failed to get Twilio credentials');
-          return {
-            success: false,
-            error: 'SMS service not configured',
-          };
-        }
-
-        credentials = credData.decrypted_auth_config;
-      }
-
       // Send SMS to patient
       const smsResult = await sendSmsTwilio(
         {
@@ -151,7 +174,18 @@ export class AtomicBookingService {
       );
 
       if (!smsResult.success) {
+        // CRITICAL FIX #2: Rollback OTP if SMS send fails
         console.error('[AtomicBooking] Failed to send SMS:', smsResult.error);
+        console.log('[AtomicBooking] Rolling back OTP storage due to SMS failure');
+        
+        await supabase
+          .from('appointment_holds')
+          .update({
+            otp_code: null,
+            otp_sent_at: null,
+          })
+          .eq('id', holdId);
+        
         return {
           success: false,
           error: 'Failed to send verification code via SMS',

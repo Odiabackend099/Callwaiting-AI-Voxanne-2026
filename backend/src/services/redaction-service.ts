@@ -32,14 +32,20 @@ export class RedactionService {
         redacted = redacted.replace(emailRegex, '[REDACTED: EMAIL]');
 
         // 2. Redact Phone Numbers (International & UK Formats)
-        // More robust regex covering +44, 07, US formats, etc.
-        const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,5}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,6}/g;
-        // Basic length check to avoid redacting 4-digit years unless they look really like phone parts
-        // The above regex is aggressive. Let's make it smarter or apply it carefully.
-        // Actually, for a Redaction Service, aggressive is safer than leaky.
-        // But let's use the one from smoke-test-suite which passed:
-        // /(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,5}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,6}/g
-        redacted = redacted.replace(phoneRegex, '[REDACTED: PHONE]');
+        // CRITICAL FIX: Previous regex matched dates like "2023-01-15" and addresses like "123 Main St"
+        // Use specific patterns with length validation to avoid false positives
+        
+        // UK phones: +44 or 07 prefix, then 9-12 digits (total 10-13 characters)
+        const ukPhoneRegex = /((\+44|0)\d{1,2}[\s.-]?|\(?0\d{1,2}\)?[\s.-]?)\d{3,4}[\s.-]?\d{3,4}[\s.-]?\d{1,2}/g;
+        redacted = redacted.replace(ukPhoneRegex, '[REDACTED: PHONE]');
+        
+        // US phones: (XXX) XXX-XXXX or XXX-XXX-XXXX, with 10 digits total
+        const usPhoneRegex = /(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g;
+        redacted = redacted.replace(usPhoneRegex, '[REDACTED: PHONE]');
+        
+        // International format: +[country code] [digits], minimum 10 digits total
+        const intlPhoneRegex = /\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{3,4}/g;
+        redacted = redacted.replace(intlPhoneRegex, '[REDACTED: PHONE]');
 
         // 3. Redact UK Postcodes (Basic Pattern)
         const postcodeRegex = /\b([A-Z]{1,2}[0-9][A-Z0-9]? [0-9][ABD-HJLNP-UW-Z]{2})\b/gi;

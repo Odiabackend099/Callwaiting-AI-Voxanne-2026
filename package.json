@@ -7,7 +7,10 @@
     "dev:all": "concurrently \"npm run dev\" \"cd backend && npm run dev\"",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:frontend": "vitest",
+    "test:frontend:watch": "vitest --watch",
+    "test:frontend:ui": "vitest --ui"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -33,17 +36,27 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
     "@types/node": "^20.11.17",
     "@types/nodemailer": "^6.4.14",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/ui": "^4.0.17",
     "autoprefixer": "^10.4.17",
     "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "14.2.14",
+    "happy-dom": "^20.3.0",
+    "jsdom": "^27.4.0",
+    "msw": "^2.12.7",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.17"
   },
   "engines": {
     "node": ">=20.0.0"

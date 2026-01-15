@@ -69,8 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     router.push(`/verify-email${qs}`);
                 }
 
-                // Fetch settings in background (non-blocking)
+                // NOTE: org_id is now obtained from JWT app_metadata (stamped by Phase 1 trigger)
+                // AuthContext no longer fetches or manages org_id
+                // Validation is handled by useOrgValidation hook
                 if (data.session?.user) {
+                    // Skip tenant_id fetch - useOrgValidation handles org validation
+                    // This prevents overwriting JWT org_id with unvalidated data
+
+                    // Fetch settings in background (non-blocking)
                     fetchUserSettings(data.session.user.id).catch(err => {
                         if (isMounted && process.env.NODE_ENV !== 'production') {
                             console.error('Settings fetch failed:', err);
@@ -105,7 +111,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         router.push(`/verify-email${qs}`);
                         return;
                     }
+
+                    // CRITICAL FIX: Also fetch tenant_id on auth state change (via server)
+                    try {
+                        const response = await fetch('/api/auth/tenant-id');
+                        const result = await response.json();
+
+                    // NOTE: org_id is now obtained from JWT app_metadata
+                    // AuthContext no longer fetches or manages org_id
+                    if (isMounted) {
+                        // org_id should already be in JWT from Phase 1 trigger
+                        // useOrgValidation will validate it when needed
+                    }
+                } catch (err) {
+                    console.error('Error in auth state handler:', err);
                 }
+            }
 
                 // Only fetch settings on specific events to avoid N+1 queries
                 if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -118,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }
                 } else if (event === 'SIGNED_OUT') {
                     setUserSettings(null);
+                    localStorage.removeItem('org_id');
                     setLoading(false);
                     router.push('/login');
                 }

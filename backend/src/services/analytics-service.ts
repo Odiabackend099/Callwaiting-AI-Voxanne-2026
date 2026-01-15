@@ -50,8 +50,14 @@ export class AnalyticsService {
             const leadTemp = this.calculateLeadTemperature(call.status, intent, call.durationSeconds, isBooked);
 
             // Financial Value Map
-            // Financial Value Map
             const financialValue = this.getFinancialValue(intent);
+
+            // Validate orgId exists (required for multi-tenant isolation)
+            const orgId = call.orgId || call.organization_id || payload.orgId;
+            if (!orgId) {
+                log.warn('AnalyticsService', 'Missing orgId - skipping analysis', { callId: call.id });
+                return;
+            }
 
             // GDPR Redaction
             const cleanTranscript = RedactionService.redact(transcript);

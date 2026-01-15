@@ -5,6 +5,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase-client';
+import { validateAndResolveOrgId } from '../services/org-validation';
 
 // Extend Express Request to include user info, org, and requestId
 declare global {
@@ -62,15 +63,16 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
               // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
               // Fallback to user_metadata.org_id for backward compatibility during migration
               let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
+              
+              // SECURITY FIX: STRICT validation - NO fallback to limit(1)
+              // If org_id is missing or 'default', reject with 401
               if (orgId === 'default') {
-                const { data: org } = await supabase
-                  .from('organizations')
-                  .select('id')
-                  .limit(1)
-                  .single();
-                if (org?.id) orgId = org.id;
+                console.log('[AuthOrDev] User missing valid org_id in JWT - rejecting in dev mode');
+                res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
+                return;
               }
-              if (orgId !== 'default') {
+              
+              if (orgId) {
                 req.user = { id: user.id, email: user.email || '', orgId };
                 req.org_id = orgId;
                 next();
@@ -141,21 +143,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
     // Fallback to user_metadata.org_id for backward compatibility during migration
     let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
+    
+    // SECURITY FIX: STRICT validation - NO fallback to limit(1)
+    // If org_id is missing or 'default', reject immediately
     if (orgId === 'default') {
-      try {
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('id')
-          .limit(1)
-          .single();
-        if (org?.id) orgId = org.id;
-      } catch {
-        // Fallback: keep 'default' (will be rejected by downstream routes that require a real org)
-      }
-    }
-
-    if (orgId === 'default') {
-      res.status(401).json({ error: 'Organization not resolved for user' });
+      console.log('[requireAuth] User missing valid org_id in JWT - rejecting');
+      res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
       return;
     }
 

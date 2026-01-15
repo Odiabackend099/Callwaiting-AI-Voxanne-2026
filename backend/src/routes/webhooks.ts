@@ -19,6 +19,7 @@ import { sendAppointmentConfirmationSMS, sendHotLeadSMS } from '../services/sms-
 import { scoreLead, estimateLeadValue } from '../services/lead-scoring';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { SentimentService } from '../services/sentiment-analysis';
+import { processVapiToolCall } from '../services/vapi-booking-handler';
 import {
   resolveOrgFromWebhook,
   verifyVapiWebhookSignature,
@@ -1948,5 +1949,56 @@ async function handleNotifyHotLead(
     };
   }
 }
+
+/**
+ * PHASE 6C: Vapi Booking Tool Integration Endpoint
+ * Handles tool-calls from Vapi voice agent: book_appointment
+ * 
+ * Flow:
+ * 1. Extract org_id from JWT
+ * 2. Validate provider credentials
+ * 3. Check for appointment conflicts
+ * 4. Execute atomic INSERT
+ * 5. Return confirmation to voice agent
+ */
+webhooksRouter.post('/api/vapi/booking', webhookLimiter, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || null;
+    const { tool_name, tool_input } = req.body;
+
+    logger.info('webhooks', 'Vapi booking tool-call received', {
+      tool: tool_name,
+      provider_id: tool_input?.provider_id
+    });
+
+    // Process the booking request
+    const result = await processVapiToolCall(authHeader, tool_name, tool_input);
+
+    // Log the booking attempt
+    if (result.success) {
+      logger.info('webhooks', 'Appointment created', {
+        appointment_id: result.appointment_id,
+        latency_ms: result.latency_ms
+      });
+    } else {
+      logger.warn('webhooks', 'Booking failed', {
+        error: result.error,
+        conflict: result.conflict
+      });
+    }
+
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error: any) {
+    logger.error('webhooks', 'Vapi booking endpoint error', {
+      error: error?.message,
+      stack: error?.stack
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error processing booking'
+    });
+  }
+});
 
 export default webhooksRouter;

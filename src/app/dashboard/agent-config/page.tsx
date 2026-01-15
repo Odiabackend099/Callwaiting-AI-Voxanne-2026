@@ -334,6 +334,8 @@ export default function AgentConfigPage() {
 
     const handleSave = async () => {
         // VAPI is platform-provided, no user configuration required
+        // BACKEND enforces key presence via 'integration_settings' table.
+        // Frontend should NOT validate this, as it doesn't have access to the key.
 
         setIsSaving(true);
         setSaveSuccess(false);

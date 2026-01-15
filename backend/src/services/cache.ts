@@ -9,7 +9,7 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
-class InMemoryCache {
+export class InMemoryCache {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
 

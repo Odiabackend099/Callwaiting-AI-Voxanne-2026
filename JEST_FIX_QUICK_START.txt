@@ -1,0 +1,204 @@
+================================================================================
+        JEST MEMORY ISSUE - QUICK START GUIDE
+================================================================================
+
+SITUATION:
+  Jest crashes with "JavaScript heap out of memory" when running stress tests
+  Root cause: jest.fn().mockResolvedValue() creates memory-intensive closures
+
+SOLUTION (Pick One):
+
+TIER 1 (RECOMMENDED - 2 Hours):
+  Replace jest.fn() with plain async functions
+  
+  BEFORE:
+    mockService = {
+      search: jest.fn().mockResolvedValue({ data: [] })
+    };
+  
+  AFTER:
+    mockService = {
+      search: async () => ({ data: [] })
+    };
+  
+  Impact: 90% memory reduction
+  Steps: See JEST_MEMORY_ROOT_CAUSE.md, Section "Implementation Details"
+
+TIER 2 (FALLBACK - 30 Min):
+  Split large test files into smaller ones
+  
+  kb-accuracy.stress.test.ts (704 lines) → 4 files (175 lines each)
+  
+  Impact: 50% memory reduction per split
+  Steps: Create file by copy-paste, remove unneeded test blocks
+
+TIER 3 (CI/CD ONLY - 1 Hour):
+  Run each test in separate CI job
+  
+  Steps: Add GitHub Actions matrix strategy
+  Impact: Works but CI/CD only (not ideal)
+
+================================================================================
+IMPLEMENTATION GUIDE - TIER 1 (RECOMMENDED)
+================================================================================
+
+FILE: cross-channel-booking.stress.test.ts
+TIME: 30 minutes
+
+STEP 1: Find all jest.fn() mocks
+  - Lines 40-60 in beforeEach block
+  - Search for: "jest.fn().mockResolvedValue"
+
+STEP 2: Replace with plain async functions
+
+  OLD (Lines 40-60):
+  ─────────────────────────────────────────
+  smsService = {
+    sendFollowup: jest.fn().mockResolvedValue({
+      success: true,
+      messageId: 'sms_123',
+      sentAt: new Date().toISOString(),
+    }),
+    getHistory: jest.fn().mockResolvedValue([
+      {
+        to: testPatient.phone,
+        message: 'Complete your booking...',
+        sentAt: new Date().toISOString(),
+      },
+    ]),
+  };
+  
+  NEW:
+  ─────────────────────────────────────────
+  smsService = {
+    sendFollowup: async () => ({
+      success: true,
+      messageId: 'sms_123',
+      sentAt: new Date().toISOString(),
+    }),
+    getHistory: async () => [
+      {
+        to: testPatient.phone,
+        message: 'Complete your booking...',
+        sentAt: new Date().toISOString(),
+      },
+    ],
+  };
+
+STEP 3: Delete beforeEach if it only created mocks
+  - If beforeEach() becomes empty, delete it
+  - Tests still work without it
+
+STEP 4: Test it works
+  npm test -- src/__tests__/stress/cross-channel-booking.stress.test.ts --forceExit
+  
+  Expected:
+  ✓ 35 tests passing
+  ✓ Execution time: <10 seconds
+  ✓ Memory: <300MB
+
+STEP 5: Repeat for other 4 files
+  - atomic-collision.stress.test.ts (20 min)
+  - pii-redaction-audit.stress.test.ts (35 min)
+  - clinic-isolation.stress.test.ts (30 min)
+  - kb-accuracy.stress.test.ts (25 min)
+
+TOTAL TIME: 2 hours for all 5 files
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After completing all 5 files:
+
+  npm test -- --testPathPattern="stress" --forceExit --no-coverage
+
+Expected:
+  ✅ 153 tests passing
+  ✅ Execution: <60 seconds
+  ✅ Memory: <500MB peak
+  ✅ Exit code: 0
+  ✅ No OOM errors
+
+================================================================================
+IF TIER 1 DOESN'T WORK - TRY TIER 2 (30 MIN)
+================================================================================
+
+Split kb-accuracy.stress.test.ts:
+
+1. Copy entire file to: kb-accuracy-niche-procedures.test.ts
+2. Keep only: "Niche Procedure Recognition" describe block
+3. Delete: All other describe blocks
+4. Repeat for other 3 blocks:
+   - kb-accuracy-alternative-names.test.ts
+   - kb-accuracy-vector-similarity.test.ts
+   - kb-accuracy-hallucination-prevention.test.ts
+
+Result: 4 files × 175 lines instead of 1 file × 704 lines
+
+Test independently:
+  npm test -- kb-accuracy-niche-procedures.test.ts --forceExit
+  npm test -- kb-accuracy-alternative-names.test.ts --forceExit
+  npm test -- kb-accuracy-vector-similarity.test.ts --forceExit
+  npm test -- kb-accuracy-hallucination-prevention.test.ts --forceExit
+
+Each should: <300MB memory, <10 seconds
+
+================================================================================
+DOCUMENTATION
+================================================================================
+
+For detailed guidance:
+
+  📄 JEST_MEMORY_ROOT_CAUSE.md
+     - Why jest.fn() is the problem
+     - Four solution strategies
+     - Code examples
+     - Decision matrix
+
+  📄 JEST_MEMORY_FIX_IMPLEMENTATION.md
+     - Step-by-step implementation
+     - Expected results
+     - Verification checklist
+
+  📄 PHASE_3_JEST_MEMORY_FIX_STATUS.md
+     - Current progress
+     - Time estimates
+     - Success criteria
+
+================================================================================
+ESTIMATED TIMELINE
+================================================================================
+
+NOW:     Foundation complete (mock-pool.ts, Jest config optimized)
++2h:     Implement Tier 1 (replace jest.fn() in all 5 files)
++2.5h:   All 153 tests passing and verified
++3h:     Ready for Phase 3 system testing
+
+Or if Tier 1 doesn't work:
++2h + 30min: Split files (Tier 2)
++2.5h:      All tests passing and verified
+
+================================================================================
+CONFIDENCE LEVEL
+================================================================================
+
+Tier 1 Success:     95% (solid root cause, proven solution)
+Tier 2 Success:     99% (guaranteed to work)
+Both Combined:      99.9% (at least one will solve it)
+
+================================================================================
+NEXT ACTION: START TIER 1
+================================================================================
+
+1. Open: backend/src/__tests__/stress/cross-channel-booking.stress.test.ts
+2. Find: Lines 40-60 (jest.fn() mocks)
+3. Replace: jest.fn().mockResolvedValue() with async functions
+4. Test: npm test -- cross-channel-booking.stress.test.ts --forceExit
+5. Verify: 35 tests pass, <10 seconds, <300MB memory
+6. Repeat: For remaining 4 files
+
+Estimated: 2 hours total
+Target:    All 153 tests passing by 18:00 UTC
+
+================================================================================

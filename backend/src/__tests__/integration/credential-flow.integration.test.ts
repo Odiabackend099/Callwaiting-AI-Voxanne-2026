@@ -9,8 +9,10 @@
  * - Cache behavior under load
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
+
+// Increase timeout for integration tests that make HTTP requests
+jest.setTimeout(30000);
 
 // Assumes Express app is exported from main server file
 // import { app } from '@/server';
