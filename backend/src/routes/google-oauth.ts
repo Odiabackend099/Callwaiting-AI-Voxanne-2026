@@ -24,6 +24,64 @@ router.get('/test', (req: Request, res: Response) => {
 });
 
 /**
+ * TESTING ONLY: POST /api/google-oauth/test-callback
+ * Simulates a successful OAuth callback for testing purposes
+ * This allows testing the calendar status display without waiting for Google's redirect
+ */
+router.post('/test-callback', async (req: Request, res: Response): Promise<void> => {
+  if (process.env.NODE_ENV !== 'development') {
+    res.status(403).json({ error: 'This endpoint is only available in development' });
+    return;
+  }
+
+  try {
+    const { orgId, email } = req.body;
+
+    if (!orgId) {
+      res.status(400).json({ error: 'orgId is required' });
+      return;
+    }
+
+    // Insert dummy credentials to simulate successful OAuth
+    const { error } = await supabase
+      .from('org_credentials')
+      .upsert({
+        org_id: orgId,
+        provider: 'google_calendar',
+        encrypted_config: 'test_encrypted_credentials',
+        is_active: true,
+        metadata: email ? { email } : undefined,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'org_id,provider'
+      });
+
+    if (error) {
+      // Check if it's a table not found error
+      if (error.code === 'PGRST116' || error.message?.includes('Could not find the table')) {
+        log.error('GoogleOAuth', 'org_credentials table not found', { error, code: error?.code });
+        res.status(503).json({
+          error: 'Database not initialized',
+          message: 'The org_credentials table does not exist. Please contact support to initialize the database schema.'
+        });
+        return;
+      }
+
+      log.error('GoogleOAuth', 'Failed to insert test credentials', { error, code: error?.code });
+      res.status(500).json({ error: 'Failed to simulate OAuth callback', details: error?.message });
+      return;
+    }
+
+    log.info('GoogleOAuth', 'Test callback simulated successfully', { orgId, email });
+    res.json({ success: true, message: 'Test OAuth callback simulated', connected: true, email });
+  } catch (error: any) {
+    log.error('GoogleOAuth', 'Test callback error', { error: error?.message, code: error?.code });
+    res.status(500).json({ error: 'Test callback failed', message: error?.message });
+  }
+});
+
+/**
  * GET /api/google-oauth/authorize
  *
  * Initiates OAuth flow by redirecting user to Google consent screen
@@ -61,12 +119,14 @@ router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
     // Generate OAuth URL
     const authUrl = await getOAuthUrl(orgId);
 
-    log.info('GoogleOAuth', 'Authorize endpoint called', { orgId, acceptsJSON: req.accepts('json') });
+    const acceptsJSON = req.accepts('json') || req.headers.accept?.includes('application/json');
+    log.info('GoogleOAuth', 'Authorize endpoint called', { orgId, acceptsJSON, acceptHeader: req.headers.accept });
 
     // UNIFIED BEHAVIOR: Check if caller wants JSON or redirect
-    // Frontend API routes want JSON, direct browser navigation wants redirect
-    if (req.accepts('json')) {
+    // Frontend API routes want JSON (Accept: application/json), direct browser navigation wants redirect
+    if (acceptsJSON) {
       // Return JSON for API callers (Next.js route handlers)
+      log.info('GoogleOAuth', 'Returning JSON response');
       res.json({
         success: true,
         url: authUrl,
@@ -74,6 +134,7 @@ router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
       });
     } else {
       // Redirect for direct browser navigation
+      log.info('GoogleOAuth', 'Redirecting to Google OAuth');
       res.redirect(authUrl);
     }
   } catch (error: any) {
@@ -317,13 +378,28 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
     // Check if credentials exist in org_credentials table
     const { data: credentials, error } = await supabase
       .from('org_credentials')
-      .select('provider, created_at, updated_at')
+      .select('provider, created_at, updated_at, metadata')
       .eq('org_id', orgId)
       .eq('provider', 'google_calendar')
       .eq('is_active', true)
       .maybeSingle();
 
-    if (error || !credentials) {
+    if (error) {
+      // Handle table not found error
+      if (error.code === 'PGRST116' || error.message?.includes('Could not find the table')) {
+        log.warn('GoogleOAuth', 'org_credentials table not found', { error: error?.message });
+        res.json({
+          connected: false,
+          message: 'Google Calendar credentials table not yet configured - please contact support'
+        });
+        return;
+      }
+
+      // Other errors
+      throw error;
+    }
+
+    if (!credentials) {
       res.json({
         connected: false,
         message: 'Google Calendar not connected'
@@ -331,24 +407,39 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
-    // Get the email address if available (may be stored in metadata)
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', orgId) // Note: This assumes orgId maps to user id, adjust as needed
-      .maybeSingle();
+    // Try to get the email from metadata or user profile
+    let email = credentials.metadata?.email || null;
+
+    if (!email) {
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', orgId)
+        .maybeSingle();
+
+      email = userProfile?.email;
+    }
 
     res.json({
       connected: true,
       active: true,
-      email: userProfile?.email,
+      email: email,
       connectedAt: credentials.updated_at,
       hasTokens: true
     });
   } catch (error: any) {
     log.error('GoogleOAuth', 'Failed to check connection status', {
-      error: error?.message
+      error: error?.message,
+      code: error?.code
     });
+
+    // If it's a table not found error, provide helpful message
+    if (error?.message?.includes('Could not find the table')) {
+      return res.json({
+        connected: false,
+        message: 'Credentials storage not yet initialized'
+      });
+    }
 
     res.status(500).json({
       error: 'Failed to check connection status',
