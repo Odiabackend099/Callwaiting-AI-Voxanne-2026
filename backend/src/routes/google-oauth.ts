@@ -29,6 +29,62 @@ router.get('/test', (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/google-oauth/test-store-credentials
+ * Test endpoint to verify credentials can be stored in database
+ * Body: { orgId: string, email?: string }
+ */
+router.post('/test-store-credentials', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orgId, email } = req.body;
+
+    if (!orgId) {
+      res.status(400).json({ error: 'orgId is required' });
+      return;
+    }
+
+    log.info('GoogleOAuth', 'Test: Attempting to store credentials', { orgId, email });
+
+    // Test credentials to store
+    const testCredentials = {
+      accessToken: 'test_access_token_12345',
+      refreshToken: 'test_refresh_token_67890',
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      email: email || 'test@gmail.com'
+    };
+
+    // Call storeCredentials directly
+    const { IntegrationDecryptor } = await import('../services/integration-decryptor');
+    await IntegrationDecryptor.storeCredentials(
+      orgId,
+      'google_calendar',
+      testCredentials
+    );
+
+    log.info('GoogleOAuth', 'Test: Credentials stored successfully', { orgId });
+
+    res.json({
+      success: true,
+      message: 'Test credentials stored successfully',
+      orgId,
+      email: testCredentials.email,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    log.error('GoogleOAuth', 'Test: Failed to store credentials', {
+      error: error?.message,
+      stack: error?.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to store test credentials',
+      message: error?.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
  * TESTING ONLY: POST /api/google-oauth/test-callback
  * Simulates a successful OAuth callback for testing purposes
  * This allows testing the calendar status display without waiting for Google's redirect
@@ -179,9 +235,16 @@ router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
  * Response: Redirects to frontend settings page with success/error status
  */
 router.get('/callback', async (req: Request, res: Response): Promise<void> => {
+  console.log('[DEBUG] OAuth Callback Triggered');
+  console.log('Full URL:', req.url);
+  console.log('Query Params:', req.query);
+  console.log('Headers:', req.headers);
+  
   try {
     const { code, state, error } = req.query;
-
+    console.log('[DEBUG] Code:', code?.toString().slice(0, 10) + '...');
+    console.log('[DEBUG] State:', state);
+    
     // Get frontend URL for redirects
     const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -296,6 +359,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
       res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}&details=${encodeURIComponent(errorDetails)}`);
     }
   } catch (error: any) {
+    console.error('[DEBUG] Callback error:', error);
     log.error('GoogleOAuth', 'OAuth callback handler error', {
       error: error?.message,
       stack: error?.stack
@@ -541,9 +605,9 @@ router.get('/status/:orgId?', requireAuthOrDev, async (req: Request, res: Respon
 
 /**
  * GET /api/google-oauth/test-orgid
- * 
+ *
  * Test endpoint for orgId debugging
- * 
+ *
  * Response: JSON with received orgId, query parameters, authenticated user, and headers
  */
 router.get('/test-orgid/:orgId?', requireAuthOrDev, (req: Request, res: Response) => {
@@ -556,9 +620,191 @@ router.get('/test-orgid/:orgId?', requireAuthOrDev, (req: Request, res: Response
     },
     timestamp: new Date().toISOString()
   };
-  
+
   log.debug('GoogleOAuth TestEndpoint', 'Test orgId endpoint called', response);
   res.json(response);
+});
+
+/**
+ * GET /api/google-oauth/debug
+ *
+ * Comprehensive diagnostic endpoint
+ * Shows current user's org_id from JWT and checks database state
+ *
+ * DEVELOPMENT: This endpoint works without auth for easier debugging
+ * Pass ?orgId=<uuid> in query to check a specific org
+ *
+ * Response: Detailed diagnostic information for troubleshooting
+ */
+router.get('/debug', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Get orgId from either authenticated user or query parameter
+    let userOrgId = req.user?.orgId;
+
+    // Allow overriding with query parameter for testing
+    if (req.query.orgId) {
+      userOrgId = req.query.orgId as string;
+      log.debug('GoogleOAuth Debug', 'Using org_id from query parameter', { orgId: userOrgId });
+    }
+
+    if (!userOrgId) {
+      res.status(400).json({
+        error: 'No org_id provided',
+        hint: 'Either authenticate with org_id in JWT, or pass ?orgId=<uuid> as query parameter',
+        authenticated: !!req.user,
+        jwtOrgId: req.user?.orgId || null,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Check database for credentials
+    const { data: credentials, error: credError } = await supabase
+      .from('org_credentials')
+      .select('provider, is_active, metadata, created_at, updated_at')
+      .eq('org_id', userOrgId)
+      .eq('provider', 'google_calendar');
+
+    // Check profile for org_id
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email, org_id')
+      .eq('id', req.user?.id || '');
+
+    const response = {
+      jwt: {
+        org_id: userOrgId,
+        user_id: req.user?.id
+      },
+      database: {
+        profile: profile?.[0] || null,
+        profileError: profileError?.message || null,
+        googleCalendarCredentials: credentials || [],
+        credentialsError: credError?.message || null,
+        credentialsCount: credentials?.length || 0
+      },
+      diagnostics: {
+        hasOrgIdInJwt: !!userOrgId,
+        hasGoogleCalendarConnected: (credentials?.length || 0) > 0 && credentials?.[0]?.is_active,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    log.info('GoogleOAuth Debug', 'Diagnostic check performed', {
+      orgId: userOrgId,
+      hasCredentials: (credentials?.length || 0) > 0
+    });
+
+    res.json(response);
+  } catch (error: any) {
+    log.error('GoogleOAuth Debug', 'Diagnostic check failed', {
+      error: error?.message,
+      stack: error?.stack
+    });
+
+    res.status(500).json({
+      error: 'Failed to run diagnostic check',
+      message: error?.message || 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/google-oauth/test-flow
+ * 
+ * Test endpoint for OAuth flow
+ * 
+ * Response: HTML with link to start OAuth flow
+ */
+router.get('/test-flow', async (req: Request, res: Response) => {
+  try {
+    const orgId = '550e8400-e29b-41d4-a716-446655440000';
+    const authUrl = await getOAuthUrl(orgId);
+    
+    res.send(`
+      <html>
+        <body>
+          <h1>Google OAuth Test</h1>
+          <a href="${authUrl}">Connect Google Calendar</a>
+          <div id="status"></div>
+          <script>
+            document.querySelector('a').addEventListener('click', (e) => {
+              document.getElementById('status').innerText = 'Redirecting to Google...';
+            });
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
+/**
+ * GET /api/google-oauth/test-page
+ * 
+ * Direct test endpoint
+ * 
+ * Response: HTML with link to start OAuth flow
+ */
+router.get('/test-page', (req: Request, res: Response) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Google OAuth Test</title>
+    </head>
+    <body>
+      <h1>Google Calendar OAuth Test</h1>
+      <a href="/api/google-oauth/authorize?orgId=550e8400-e29b-41d4-a716-446655440000">
+        Connect Google Calendar
+      </a>
+    </body>
+    </html>
+  `);
+});
+
+router.get('/test-page', (req: Request, res: Response) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Google OAuth Test</title>
+    </head>
+    <body>
+      <h1>Google Calendar OAuth Test</h1>
+      <a href="/api/google-oauth/authorize?orgId=550e8400-e29b-41d4-a716-446655440000">
+        Connect Google Calendar
+      </a>
+    </body>
+    </html>
+  `);
+});
+
+/**
+ * GET /api/google-oauth/test-success
+ * 
+ * Test endpoint for successful OAuth callback
+ * 
+ * Response: JSON with success status
+ */
+router.get('/test-success', async (req: Request, res: Response) => {
+  try {
+    // Simulate successful OAuth callback
+    const orgId = '550e8400-e29b-41d4-a716-446655440000';
+    const credentials = {
+      accessToken: 'test_access_token',
+      refreshToken: 'test_refresh_token',
+      expiresAt: new Date(Date.now() + 3600000).toISOString()
+    };
+    
+    await IntegrationDecryptor.storeCredentials(orgId, 'google_calendar', credentials);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[DEBUG] Test error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 export default router;

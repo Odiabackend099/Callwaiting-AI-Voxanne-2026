@@ -78,6 +78,7 @@ import calendarOAuthRouter from './routes/calendar-oauth'; // default export
 import vapiCalendarToolsRouter from './routes/vapi-tools'; // default export
 import { authRouter } from './routes/health';
 import orgsRouter from './routes/orgs'; // default export
+import oauthTestRouter from './routes/oauth-test';
 
 // Initialize logger
 initLogger();
@@ -149,6 +150,7 @@ app.use(express.json({
     req.rawBody = buf?.toString('utf8');
   },
 }));
+app.use(express.static('public')); // Add static file serving for public directory
 
 // General API rate limiter (100 req/15min in production, disabled in development)
 const apiLimiter = rateLimit({
@@ -218,8 +220,6 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/calendar', calendarOAuthRouter);
 app.use('/api/vapi', vapiCalendarToolsRouter);
-
-// Google Calendar OAuth routes
 app.use('/api/google-oauth', googleOAuthRouter);
 log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
 log.info('Server', 'Contacts, appointments, notifications, calendar, and org validation routes registered');
@@ -646,6 +646,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 // Mount routers
 app.use('/api/auth', authRouter);
+app.use('/oauth-test', oauthTestRouter);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

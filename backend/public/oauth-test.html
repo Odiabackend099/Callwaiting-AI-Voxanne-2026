@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google OAuth Test</title>
+</head>
+<body>
+    <h1>Google Calendar OAuth Test</h1>
+    <button id="connectBtn">Connect Google Calendar</button>
+    <div id="status"></div>
+
+    <script>
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            const statusEl = document.getElementById('status');
+            statusEl.innerHTML = 'Starting OAuth flow...';
+            
+            try {
+                // Get auth URL from backend
+                const response = await fetch('/api/google-oauth/authorize?orgId=550e8400-e29b-41d4-a716-446655440000');
+                const data = await response.json();
+                
+                if (data.url) {
+                    // Open OAuth flow in same window
+                    window.location.href = data.url;
+                } else {
+                    statusEl.innerHTML = `Error: ${data.error || 'No auth URL returned'}`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = `Failed to start OAuth: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>

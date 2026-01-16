@@ -32,7 +32,9 @@
     "perf:test:db": "node scripts/performance-validation.js",
     "perf:test:api": "node scripts/performance-api-stress-test.js",
     "perf:test:quick": "node scripts/run-performance-suite.js --api-only",
-    "test:inbound-setup-refactor": "ts-node src/scripts/test-inbound-setup-refactor.ts"
+    "test:inbound-setup-refactor": "ts-node src/scripts/test-inbound-setup-refactor.ts",
+    "verify:oauth": "ts-node scripts/verify-oauth.ts",
+    "watch:oauth": "./scripts/watch-oauth.sh"
   },
   "keywords": [],
   "author": "",

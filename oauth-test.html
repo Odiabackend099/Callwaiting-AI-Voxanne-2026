@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google OAuth Test</title>
+    <script>
+        async function startOAuth() {
+            const status = document.getElementById('status');
+            status.innerText = 'Starting OAuth flow...';
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/google-oauth/authorize?orgId=550e8400-e29b-41d4-a716-446655440000');
+                const data = await response.json();
+                
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    status.innerText = 'Error: ' + (data.error || 'No auth URL returned');
+                }
+            } catch (error) {
+                status.innerText = 'Failed: ' + error.message;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Google OAuth Test</h1>
+    <button onclick="startOAuth()">Connect Google Calendar</button>
+    <div id="status"></div>
+</body>
+</html>

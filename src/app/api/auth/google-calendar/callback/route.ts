@@ -1,17 +1,20 @@
 /**
  * Frontend API Route: POST /api/auth/google-calendar/callback
  *
- * Purpose: Handle OAuth callback from Google and exchange code for tokens
- * - Receives authorization code from Google OAuth flow
- * - Exchanges code for tokens via backend
- * - Backend stores encrypted tokens in Supabase
+ * DEPRECATED: This route is NOT used in the current OAuth flow.
  *
- * Flow:
- * 1. User authorized on Google consent screen
- * 2. Google redirects back to frontend
- * 3. Frontend calls this endpoint with auth code
- * 4. This endpoint exchanges code for tokens via backend
- * 5. Backend stores encrypted tokens in Supabase
+ * Why it's deprecated:
+ * The GOOGLE_REDIRECT_URI points directly to the backend (/api/google-oauth/callback),
+ * so Google redirects straight to the backend, bypassing this frontend route.
+ *
+ * The actual flow:
+ * 1. User authorizes on Google consent screen
+ * 2. Google redirects to backend /api/google-oauth/callback
+ * 3. Backend exchanges code and stores tokens
+ * 4. Backend redirects to frontend /dashboard/api-keys?success=calendar_connected
+ * 5. Frontend detects the success parameter and confirms connection
+ *
+ * This route remains for backward compatibility if anyone was using it.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,17 +22,17 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: NextRequest) {
   try {
     const { code, state } = await req.json();
-    
+
     // Get org_id from cookies or headers
     let orgId = req.cookies.get('org_id')?.value;
-    
+
     if (!orgId) {
       orgId = req.headers.get('x-org-id') || '';
     }
 
     if (!code || !orgId) {
       return NextResponse.json(
-        { 
+        {
           error: 'Missing authorization code or organization ID',
           details: { code: !!code, orgId: !!orgId }
         },
@@ -37,44 +40,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Call backend to exchange code for tokens
-    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-    
-    console.log(`[Google OAuth Callback] Exchanging code for org: ${orgId}`);
-    
-    const response = await fetch(
-      `${backendUrl}/api/calendar/auth/callback`,
+    // This is a legacy pathway - the actual token exchange happens in the backend
+    // at /api/google-oauth/callback (which is the GOOGLE_REDIRECT_URI)
+    console.warn('[Google OAuth Callback] Deprecated route called. Tokens should have been exchanged at backend.');
+
+    return NextResponse.json(
       {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          code, 
-          state,
-          org_id: orgId 
-        }),
-      }
+        error: 'This route is deprecated. Google OAuth redirects directly to backend.',
+        info: 'Check /api/google-oauth/callback status instead'
+      },
+      { status: 410 } // 410 Gone
     );
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('[Google OAuth Callback] Backend error:', data);
-      return NextResponse.json(data, { status: response.status });
-    }
-
-    console.log('[Google OAuth Callback] Tokens exchanged and stored successfully');
-
-    return NextResponse.json({ 
-      success: true,
-      data,
-      message: 'Google Calendar connected successfully'
-    });
   } catch (error) {
     console.error('[Google OAuth Callback] Error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to complete authorization',
         details: error instanceof Error ? error.message : 'Unknown error'
       },

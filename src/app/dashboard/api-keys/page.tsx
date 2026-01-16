@@ -62,36 +62,56 @@ export default function ApiKeysPage() {
         setIsLoadingCalendar(true);
         try {
             // Timeout after 3 seconds to prevent infinite loading
-            const timeoutPromise = new Promise((_, reject) => 
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Calendar status check timed out')), 3000)
             );
-            
-            // Extract org_id from user session
-            // The org_id is stored in app_metadata by the database trigger
+
+            // Extract org_id from user session - try multiple sources
             let orgId: string | undefined;
 
             if (user) {
-                // Primary source: app_metadata.org_id (set by auth trigger)
+                // Try multiple possible locations for org_id (for backward compatibility)
+                // 1. app_metadata.org_id (from database trigger - fresh logins)
                 orgId = (user as any).app_metadata?.org_id;
 
+                // 2. user_metadata.org_id (fallback - some edge cases)
+                if (!orgId) {
+                    orgId = (user as any).user_metadata?.org_id;
+                }
+
+                // 3. Check raw JWT structure for debugging
+                const userAny = user as any;
                 console.debug('[Calendar Status] Extracted org_id from user:', {
                     orgId,
-                    hasAppMetadata: !!(user as any).app_metadata,
-                    appMetadata: (user as any).app_metadata
+                    sources: {
+                        app_metadata: userAny.app_metadata,
+                        user_metadata: userAny.user_metadata,
+                    },
+                    user_id: user.id,
+                    email: user.email,
+                    timestamp: new Date().toISOString()
                 });
             }
 
+            if (!orgId) {
+                console.warn('[Calendar Status] No org_id found in user session. This might indicate:');
+                console.warn('  1. User needs to log out and back in to refresh JWT');
+                console.warn('  2. Database trigger failed during signup');
+                console.warn('  3. Raw app_metadata was not populated');
+                setCalendarStatus({ connected: false });
+                setIsLoadingCalendar(false);
+                return;
+            }
+
             // Pass org_id in the URL path (backend will handle missing org_id gracefully)
-            const statusUrl = orgId
-                ? `/api/google-oauth/status/${orgId}`
-                : '/api/google-oauth/status/unknown';
+            const statusUrl = `/api/google-oauth/status/${orgId}`;
 
             console.debug('[Calendar Status] Calling status endpoint:', statusUrl);
-            
+
             // Race against timeout
             const fetchPromise = authedBackendFetch<CalendarStatus>(statusUrl);
             const data = (await Promise.race([fetchPromise, timeoutPromise])) as CalendarStatus;
-            
+
             setCalendarStatus(data);
             setCalendarError(null);
         } catch (error) {
@@ -137,21 +157,29 @@ export default function ApiKeysPage() {
             // Add longer delay and retry logic to ensure credentials are written to database
             console.log('[OAuth Callback] Calendar connected, waiting for database...');
 
-            const checkStatusWithRetry = async (maxAttempts = 3) => {
+            const checkStatusWithRetry = async (maxAttempts = 4) => {
               let lastStatus: CalendarStatus = { connected: false };
+              let lastError: Error | null = null;
 
               for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                const delayMs = attempt === 1 ? 1500 : 2500 * (attempt - 1); // 1.5s, 2.5s, 6.25s
+                // Exponential backoff: 2s, 4s, 8s, 16s (allows schema cache to refresh)
+                const delayMs = attempt === 1 ? 2000 : 2000 * Math.pow(2, attempt - 2);
 
+                console.log(`[OAuth Callback] Waiting ${delayMs}ms before status check attempt ${attempt}/${maxAttempts}`);
                 await new Promise(resolve => setTimeout(resolve, delayMs));
 
                 console.log(`[OAuth Callback] Checking status (attempt ${attempt}/${maxAttempts})`);
 
                 try {
-                  // Get org_id
-                  const orgId = (user as any)?.app_metadata?.org_id;
+                  // Get org_id - try multiple sources
+                  let orgId = (user as any)?.app_metadata?.org_id;
                   if (!orgId) {
-                    console.error('[OAuth Callback] Cannot get org_id from user');
+                    orgId = (user as any)?.user_metadata?.org_id;
+                  }
+
+                  if (!orgId) {
+                    console.error('[OAuth Callback] Cannot get org_id from user - no org_id in app_metadata or user_metadata');
+                    lastError = new Error('Cannot determine organization ID');
                     continue;
                   }
 
@@ -162,27 +190,52 @@ export default function ApiKeysPage() {
                     }
                   });
 
-                  if (statusResponse.ok) {
-                    const statusData = await statusResponse.json();
-                    lastStatus = statusData;
-                    console.log(`[OAuth Callback] Status check attempt ${attempt}:`, {
-                      connected: statusData.connected,
-                      email: statusData.email,
-                      hasTokens: statusData.hasTokens
-                    });
+                  const statusData = await statusResponse.json();
 
+                  // Log all attempts for debugging
+                  console.log(`[OAuth Callback] Status check attempt ${attempt}:`, {
+                    httpStatus: statusResponse.status,
+                    connected: statusData.connected,
+                    email: statusData.email,
+                    hasTokens: statusData.hasTokens,
+                    isSchemaRefreshing: statusData.isSchemaRefreshing
+                  });
+
+                  if (statusResponse.ok) {
+                    lastStatus = statusData;
+
+                    // Success: connected with email
                     if (statusData.connected && statusData.email) {
                       console.log('[OAuth Callback] Status confirmed as connected with email!');
                       setCalendarStatus(statusData);
-                      break;
+                      return; // Exit early on success
                     }
+
+                    // Schema cache still refreshing - continue retrying
+                    if (statusData.isSchemaRefreshing) {
+                      console.log('[OAuth Callback] Schema cache still refreshing, retrying...');
+                      lastError = new Error('Supabase schema cache refreshing');
+                      continue;
+                    }
+
+                    // Connected but no email yet - still valid
+                    if (statusData.connected) {
+                      console.log('[OAuth Callback] Status confirmed as connected!');
+                      setCalendarStatus(statusData);
+                      return; // Exit on success
+                    }
+                  } else {
+                    lastError = new Error(`Status endpoint returned ${statusResponse.status}`);
+                    console.warn(`[OAuth Callback] Status check failed:`, statusData);
                   }
                 } catch (statusError) {
-                  console.error(`[OAuth Callback] Status check error on attempt ${attempt}:`, statusError);
+                  lastError = statusError instanceof Error ? statusError : new Error(String(statusError));
+                  console.error(`[OAuth Callback] Status check error on attempt ${attempt}:`, lastError);
                 }
               }
 
-              // Update state with final status
+              // Update state with final status (will show "not connected" if all retries failed)
+              console.warn('[OAuth Callback] All retry attempts exhausted', { lastError, lastStatus });
               setCalendarStatus(lastStatus);
             };
 

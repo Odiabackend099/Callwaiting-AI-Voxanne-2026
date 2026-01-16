@@ -52,12 +52,26 @@ export async function GET(req: NextRequest) {
     }
 
     // Step 2: Extract org_id from JWT app_metadata (single source of truth)
-    const orgId = session.user.app_metadata?.org_id as string | undefined;
+    let orgId = session.user.app_metadata?.org_id as string | undefined;
+
+    // Fallback: try user_metadata as well
+    if (!orgId) {
+      orgId = session.user.user_metadata?.org_id as string | undefined;
+    }
 
     if (!orgId) {
-      console.error('[Google OAuth] User missing org_id in JWT:', session.user.id);
+      console.error('[Google OAuth] User missing org_id in JWT:', {
+        user_id: session.user.id,
+        email: session.user.email,
+        app_metadata: session.user.app_metadata,
+        user_metadata: session.user.user_metadata,
+        message: 'User may need to log out and back in to refresh JWT with org_id'
+      });
       return NextResponse.json(
-        { error: 'Organization not found. Please contact support.' },
+        {
+          error: 'Organization not found. Please log out and log in again to refresh your session.',
+          details: 'Your user session is missing the organization ID. This typically requires a fresh login.'
+        },
         { status: 401 }
       );
     }

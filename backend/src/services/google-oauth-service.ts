@@ -43,29 +43,17 @@ function getOAuth2Client() {
  * @returns Authorization URL to redirect user to Google
  */
 export async function getOAuthUrl(orgId: string): Promise<string> {
-  try {
-    const client = getOAuth2Client();
-    
-    // Encode orgId in state parameter (CSRF protection)
-    // Using base64url encoding (URL-safe base64)
-    const state = Buffer.from(JSON.stringify({ orgId })).toString('base64url');
-    
-    const authUrl = client.generateAuthUrl({
-      access_type: 'offline', // Required to get refresh token
-      scope: ['https://www.googleapis.com/auth/calendar.events'], // Read/write calendar events
-      state,
-      prompt: 'consent' // Force consent screen to ensure refresh token
-    });
-
-    log.info('GoogleOAuth', 'Generated OAuth URL', { orgId, hasState: !!state });
-    return authUrl;
-  } catch (error: any) {
-    log.error('GoogleOAuth', 'Failed to generate OAuth URL', {
-      orgId,
-      error: error?.message
-    });
-    throw new Error(`Failed to generate OAuth URL: ${error.message}`);
-  }
+  const client = getOAuth2Client();
+  const state = Buffer.from(JSON.stringify({ orgId })).toString('base64url');
+  
+  // Strictly follows Google's OAuth protocol for offline access
+  return client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    response_type: 'code',
+    scope: ['https://www.googleapis.com/auth/calendar.events'],
+    state
+  });
 }
 
 /**
@@ -172,6 +160,15 @@ export async function exchangeCodeForTokens(
       log.debug('GoogleOAuth', 'Storing credentials with metadata', {
         orgId,
         hasEmail: !!userEmail,
+        email: userEmail,
+        credentialsKeys: Object.keys(credentialsWithMetadata)
+      });
+
+      console.log('[GoogleOAuth] About to store credentials:', {
+        orgId,
+        provider: 'google_calendar',
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
         email: userEmail
       });
 
@@ -181,6 +178,8 @@ export async function exchangeCodeForTokens(
         credentialsWithMetadata
       );
 
+      console.log('[GoogleOAuth] storeCredentials() completed successfully');
+
       log.info('GoogleOAuth', 'Tokens stored successfully', {
         orgId,
         hasAccessToken: !!tokens.access_token,
@@ -189,11 +188,14 @@ export async function exchangeCodeForTokens(
         timestamp: new Date().toISOString()
       });
     } catch (storageError: any) {
+      console.error('[GoogleOAuth] storeCredentials() failed with error:', storageError);
+
       log.error('GoogleOAuth', 'Failed to store tokens', {
         orgId,
         error: storageError.message,
         errorCode: storageError?.code,
-        stack: storageError?.stack
+        stack: storageError?.stack,
+        fullError: storageError
       });
       throw new Error(`Failed to store tokens: ${storageError.message}`);
     }

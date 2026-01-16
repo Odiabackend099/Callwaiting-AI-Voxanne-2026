@@ -432,7 +432,6 @@ export class IntegrationDecryptor {
             provider,
             encrypted_config: encryptedConfig,
             is_active: true,
-            last_verified_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             metadata: Object.keys(metadata).length > 0 ? metadata : null,
           },
@@ -469,7 +468,6 @@ export class IntegrationDecryptor {
                   provider,
                   encrypted_config: encryptedConfig,
                   is_active: true,
-                  last_verified_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                   metadata: Object.keys(metadata).length > 0 ? metadata : null,
                 },
@@ -599,7 +597,6 @@ export class IntegrationDecryptor {
         .from('org_credentials')
         .update({
           verification_error: isValid ? null : 'Verification failed',
-          last_verified_at: new Date().toISOString(),
         })
         .eq('org_id', orgId)
         .eq('provider', provider);
@@ -626,7 +623,6 @@ export class IntegrationDecryptor {
 
       return {
         success: isValid,
-        lastVerified: new Date().toISOString(),
       };
     } catch (error: any) {
       log.error('IntegrationDecryptor', 'Credential verification error', {
@@ -640,7 +636,6 @@ export class IntegrationDecryptor {
         .from('org_credentials')
         .update({
           verification_error: error?.message || 'Verification error',
-          last_verified_at: new Date().toISOString(),
         })
         .eq('org_id', orgId)
         .eq('provider', provider)
@@ -725,7 +720,7 @@ export class IntegrationDecryptor {
       // Query org_credentials table
       const { data, error } = await supabase
         .from('org_credentials')
-        .select('encrypted_config, is_active, last_verified_at')
+        .select('encrypted_config, is_active')
         .eq('org_id', orgId)
         .eq('provider', provider)
         .eq('is_active', true)
@@ -792,7 +787,6 @@ export class IntegrationDecryptor {
       log.info('IntegrationDecryptor', 'Credentials retrieved', {
         orgId,
         provider,
-        lastVerified: data.last_verified_at,
         cacheSize: credentialCache.size,
       });
 
