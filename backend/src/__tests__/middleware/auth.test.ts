@@ -1,298 +1,574 @@
 /**
- * Tests for Auth Middleware (backend/src/middleware/auth.ts)
+ * Auth Middleware Tests - Comprehensive Unit Tests
+ * 
+ * Tests the authentication middleware functions in isolation:
+ * - requireAuth() - Strict JWT validation for production
+ * - requireAuthOrDev() - Development mode bypass with security defaults
+ * - verifyOrgAccess() - Multi-tenant access control
+ * - requireRole() - Role-based access control
  * 
  * Principle: "Does this one thing work?"
- * This test file validates that the auth middleware correctly:
- * 1. Extracts org_id from JWT app_metadata
- * 2. Rejects requests with missing org_id (401)
- * 3. Rejects requests with invalid UUID format (400)
- * 4. Passes valid requests to next middleware
- * 5. Never falls back to "first organization"
- * 
- * Each test isolates a single middleware behavior without database access.
+ * Each test validates a single middleware behavior without database dependencies.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Request, Response, NextFunction } from 'express';
+import { requireAuth, requireAuthOrDev, verifyOrgAccess, requireRole } from '../../middleware/auth';
+import * as supabaseClient from '../../services/supabase-client';
 import {
-  extractOrgIdFromHeader,
-  validateUUIDFormat,
-  hasOrgIdClaim,
-  createMockRequest,
-  createMockRequestNoAuth,
-  createMockRequestNoOrgId,
-  createMockRequestInvalidOrgId,
-} from '@/__tests__/__mocks__/jwt';
+  createMockExpressRequest,
+  createMockExpressResponse,
+  createMockNextFunction,
+  createMockJWT,
+  createMockSupabaseAuthResponse,
+} from '../../tests/utils/test-helpers';
 
-describe('Auth Middleware - org_id Validation', () => {
-  /**
-   * TEST 1: Valid org_id from Authorization header
-   * 
-   * Scenario: Request has Authorization header with valid JWT containing org_id
-   * Expected: Middleware extracts org_id, validates UUID format, passes to next
-   */
-  it('should extract valid org_id from Authorization header', () => {
-    const request = createMockRequest('550e8400-e29b-41d4-a716-446655440000', 'user-123');
-    
-    // Step 1: Extract org_id from request (middleware does this)
-    const orgId = request.user?.org_id;
-    expect(orgId).toBe('550e8400-e29b-41d4-a716-446655440000');
-    
-    // Step 2: Validate UUID format
-    const isValid = validateUUIDFormat(orgId!);
-    expect(isValid).toBe(true);
-    
-    // Step 3: Middleware passes to next
-    // (In real code, next(req) is called)
-    expect(request.user?.id).toBe('user-123');
+// Mock the Supabase client
+jest.mock('../../services/supabase-client', () => ({
+  supabase: {
+    auth: {
+      getUser: jest.fn(),
+    },
+    from: jest.fn(),
+  },
+}));
+
+describe('Auth Middleware - requireAuth()', () => {
+  let mockReq: any;
+  let mockRes: any;
+  let mockNext: jest.Mock;
+  let mockSupabase: any;
+
+  beforeEach(() => {
+    mockReq = createMockExpressRequest();
+    mockRes = createMockExpressResponse();
+    mockNext = createMockNextFunction();
+    mockSupabase = supabaseClient.supabase;
+    jest.clearAllMocks();
   });
 
-  /**
-   * TEST 2: Missing org_id in JWT
-   * 
-   * Scenario: JWT exists but app_metadata.org_id is missing
-   * Expected: Middleware returns 401 Unauthorized, does NOT continue
-   */
-  it('should reject request with missing org_id (401)', () => {
-    const request = createMockRequestNoOrgId();
-    
-    // Step 1: Extract org_id
-    const orgId = request.user?.org_id;
-    
-    // Step 2: Check if org_id exists
-    if (!orgId || orgId.length === 0) {
-      // Middleware returns 401
-      const responseStatus = 401;
-      const responseBody = { error: 'Organization ID is required' };
-      
-      expect(responseStatus).toBe(401);
-      expect(responseBody.error).toContain('required');
-    }
-  });
+  describe('Valid JWT with org_id in app_metadata', () => {
+    it('should extract org_id from app_metadata and call next()', async () => {
+      const orgId = 'a0000000-0000-0000-0000-000000000001';
+      const mockUser = createMockJWT({ app_metadata: { org_id: orgId } });
 
-  /**
-   * TEST 3: Missing Authorization header
-   * 
-   * Scenario: Request has no Authorization header
-   * Expected: Middleware returns 401 Unauthorized
-   */
-  it('should reject request with no Authorization header (401)', () => {
-    const request = createMockRequestNoAuth();
-    
-    // Step 1: Check for Authorization header
-    const authHeader = request.headers.authorization;
-    
-    if (!authHeader) {
-      // Middleware returns 401
-      const responseStatus = 401;
-      const responseBody = { error: 'Authorization header is required' };
-      
-      expect(responseStatus).toBe(401);
-      expect(responseBody.error).toContain('Authorization');
-    }
-  });
+      mockReq.headers.authorization = 'Bearer valid_token_123';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
 
-  /**
-   * TEST 4: Invalid UUID format
-   * 
-   * Scenario: org_id is present but not a valid UUID
-   * Expected: Middleware returns 400 Bad Request, provides clear error
-   */
-  it('should reject invalid UUID format (400)', () => {
-    const invalidOrgId = 'not-a-valid-uuid';
-    
-    // Step 1: Validate UUID format
-    const isValidFormat = validateUUIDFormat(invalidOrgId);
-    expect(isValidFormat).toBe(false);
-    
-    // Step 2: If invalid, middleware returns 400
-    if (!isValidFormat) {
-      const responseStatus = 400;
-      const responseBody = {
-        error: 'Organization ID must be a valid UUID',
-        received: invalidOrgId,
-      };
-      
-      expect(responseStatus).toBe(400);
-      expect(responseBody.error).toContain('UUID');
-    }
-  });
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
 
-  /**
-   * TEST 5: No fallback to "first organization"
-   * 
-   * Scenario: Middleware receives request with missing org_id
-   * Expected: Middleware returns error, does NOT query database for fallback
-   * Security Critical: This prevents users from accidentally accessing wrong org
-   */
-  it('should NOT fall back to first organization on missing org_id', () => {
-    const request = createMockRequestNoOrgId();
-    const mockDatabaseQuery = vi.fn();
-    
-    // Middleware logic:
-    // 1. Extract org_id
-    const orgId = request.user?.org_id;
-    
-    // 2. If missing, return 401 (do NOT call database)
-    if (!orgId || orgId.length === 0) {
-      // Middleware should return error here
-      expect(mockDatabaseQuery).not.toHaveBeenCalled();
-      
-      const responseStatus = 401;
-      expect(responseStatus).toBe(401);
-    }
-  });
+      expect(mockSupabase.auth.getUser).toHaveBeenCalledWith('valid_token_123');
+      expect(mockReq.user).toEqual({
+        id: mockUser.sub,
+        email: mockUser.email,
+        orgId: orgId,
+      });
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
 
-  /**
-   * TEST 6: Multiple valid UUID formats
-   * 
-   * Scenario: Different but valid UUID formats in org_id
-   * Expected: All are accepted as valid
-   */
-  it('should accept various valid UUID formats', () => {
-    const validUUIDs = [
-      '123e4567-e89b-12d3-a456-426614174000',
-      'ABCDEF01-2345-6789-ABCD-EF0123456789',
-      'abcdef01-2345-6789-abcd-ef0123456789',
-    ];
-    
-    validUUIDs.forEach((uuid) => {
-      const isValid = validateUUIDFormat(uuid);
-      expect(isValid).toBe(true);
+    it('should accept valid UUID in various formats', async () => {
+      const validUUIDs = [
+        '123e4567-e89b-12d3-a456-426614174000',
+        'ABCDEF01-2345-6789-ABCD-EF0123456789',
+        'abcdef01-2345-6789-abcd-ef0123456789',
+      ];
+
+      for (const uuid of validUUIDs) {
+        jest.clearAllMocks();
+        mockReq = createMockExpressRequest();
+        mockRes = createMockExpressResponse();
+        mockNext = createMockNextFunction();
+
+        const mockUser = createMockJWT({ app_metadata: { org_id: uuid } });
+        mockReq.headers.authorization = 'Bearer valid_token';
+        mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+        await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+        expect(mockReq.user.orgId).toBe(uuid);
+        expect(mockNext).toHaveBeenCalled();
+      }
     });
   });
 
-  /**
-   * TEST 7: Various invalid UUID formats
-   * 
-   * Scenario: Different malformed org_id values
-   * Expected: All are rejected as invalid
-   */
-  it('should reject various invalid UUID formats', () => {
-    const invalidUUIDs = [
-      'not-a-uuid',
-      '123-456-789', // Too short
-      '123e4567e89b12d3a456426614174000', // No hyphens
-      '123e4567-e89b-12d3-a456', // Incomplete
-      '123e4567-e89b-12d3-a456-426614174000-extra', // Too long
-      '', // Empty
-      'null', // String "null"
-    ];
-    
-    invalidUUIDs.forEach((uuid) => {
-      const isValid = validateUUIDFormat(uuid);
-      expect(isValid).toBe(false);
+  describe('Fallback to user_metadata.org_id', () => {
+    it('should fall back to user_metadata.org_id when app_metadata is missing', async () => {
+      const orgId = 'b0000000-0000-0000-0000-000000000002';
+      const mockUser = createMockJWT({
+        app_metadata: {}, // No org_id in app_metadata
+        user_metadata: { org_id: orgId },
+      });
+
+      mockReq.headers.authorization = 'Bearer valid_token';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockReq.user.orgId).toBe(orgId);
+      expect(mockNext).toHaveBeenCalled();
     });
   });
 
-  /**
-   * TEST 8: Middleware doesn't modify org_id
-   * 
-   * Scenario: Valid org_id passes through middleware
-   * Expected: org_id is not modified or sanitized
-   */
-  it('should pass org_id unchanged to next middleware', () => {
-    const originalOrgId = '550e8400-e29b-41d4-a716-446655440000';
-    const request = createMockRequest(originalOrgId);
-    
-    // Step 1: Extract org_id
-    const extractedOrgId = request.user?.org_id;
-    
-    // Step 2: Validate but don't modify
-    const isValid = validateUUIDFormat(extractedOrgId!);
-    expect(isValid).toBe(true);
-    
-    // Step 3: Verify org_id is unchanged
-    expect(extractedOrgId).toBe(originalOrgId);
+  describe('Missing or invalid Authorization header', () => {
+    it('should reject request with no Authorization header (401)', async () => {
+      mockReq.headers.authorization = undefined;
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Missing or invalid Authorization header',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('should reject request with malformed Authorization header (401)', async () => {
+      mockReq.headers.authorization = 'InvalidFormat token123';
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Missing or invalid Authorization header',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('should reject request with empty Bearer token (401)', async () => {
+      mockReq.headers.authorization = 'Bearer ';
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockNext).not.toHaveBeenCalled();
+    });
   });
 
-  /**
-   * TEST 9: Request context available to next middleware
-   * 
-   * Scenario: Valid request passes through auth middleware
-   * Expected: req.user object is available with org_id and user_id
-   */
-  it('should attach org_id and user_id to request context', () => {
-    const request = createMockRequest('550e8400-e29b-41d4-a716-446655440000', 'user-123');
-    
-    // Verify request object has required properties
-    expect(request.user).toBeDefined();
-    expect(request.user?.org_id).toBe('550e8400-e29b-41d4-a716-446655440000');
-    expect(request.user?.id).toBe('user-123');
+  describe('Invalid or expired JWT', () => {
+    it('should reject expired JWT token (401)', async () => {
+      mockReq.headers.authorization = 'Bearer expired_token';
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'JWT expired' },
+      });
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Invalid or expired token',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('should reject invalid JWT token (401)', async () => {
+      mockReq.headers.authorization = 'Bearer invalid_token';
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'Invalid JWT' },
+      });
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Invalid or expired token',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
   });
 
-  /**
-   * TEST 10: Error response format consistency
-   * 
-   * Scenario: Middleware rejects invalid requests
-   * Expected: All error responses have consistent format
-   */
-  it('should return consistent error response format', () => {
-    // Test missing org_id error
-    const missingOrgIdError = {
-      status: 401,
-      body: { error: 'Organization ID is required' },
-    };
-    
-    // Test invalid format error
-    const invalidFormatError = {
-      status: 400,
-      body: { error: 'Organization ID must be a valid UUID' },
-    };
-    
-    // All errors should have status and body.error
-    expect(missingOrgIdError.body).toHaveProperty('error');
-    expect(invalidFormatError.body).toHaveProperty('error');
-    expect(missingOrgIdError.status).toBeGreaterThanOrEqual(400);
-    expect(invalidFormatError.status).toBeGreaterThanOrEqual(400);
+  describe('Missing org_id claim', () => {
+    it('should reject JWT with missing org_id (401)', async () => {
+      const mockUser = createMockJWT({
+        app_metadata: {}, // No org_id
+        user_metadata: {}, // No org_id
+      });
+
+      mockReq.headers.authorization = 'Bearer valid_token';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Missing org_id in JWT. User must be provisioned with organization.',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('should reject JWT with org_id === "default" (401)', async () => {
+      const mockUser = createMockJWT({
+        app_metadata: { org_id: 'default' },
+      });
+
+      mockReq.headers.authorization = 'Bearer valid_token';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Missing org_id in JWT. User must be provisioned with organization.',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should handle Supabase service errors gracefully (500)', async () => {
+      mockReq.headers.authorization = 'Bearer valid_token';
+      mockSupabase.auth.getUser.mockRejectedValue(new Error('Supabase connection failed'));
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Authentication failed',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Request context attachment', () => {
+    it('should attach user and org_id to request object', async () => {
+      const orgId = 'c0000000-0000-0000-0000-000000000003';
+      const userId = 'user_123';
+      const email = 'test@clinic.com';
+      const mockUser = createMockJWT({
+        sub: userId,
+        email: email,
+        app_metadata: { org_id: orgId },
+      });
+
+      mockReq.headers.authorization = 'Bearer valid_token';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+      await requireAuth(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockReq.user).toEqual({
+        id: userId,
+        email: email,
+        orgId: orgId,
+      });
+      expect(mockNext).toHaveBeenCalled();
+    });
   });
 });
 
-/**
- * Bonus: Test the actual middleware behavior with mocked Express
- */
-describe('Auth Middleware - Express Integration', () => {
-  /**
-   * TEST 11: Middleware function signature
-   * 
-   * Scenario: Middleware is used in Express app
-   * Expected: Middleware has correct (req, res, next) signature
-   */
-  it('should have correct Express middleware signature', () => {
-    // Middleware signature: (req, res, next) => void
-    const mockReq = createMockRequest();
-    const mockRes = { status: vi.fn().mockReturnThis(), json: vi.fn() };
-    const mockNext = vi.fn();
-    
-    // Simulate middleware call
-    // const authMiddleware = (req: any, res: any, next: any) => {
-    //   // ... validation logic
-    //   next(); // Call next if valid
-    // };
-    
-    // For this test, verify the mock objects have required methods
-    expect(mockRes).toHaveProperty('status');
-    expect(mockRes).toHaveProperty('json');
-    expect(typeof mockNext).toBe('function');
+describe('Auth Middleware - requireAuthOrDev()', () => {
+  let mockReq: any;
+  let mockRes: any;
+  let mockNext: jest.Mock;
+  let mockSupabase: any;
+  let originalNodeEnv: string | undefined;
+
+  beforeEach(() => {
+    mockReq = createMockExpressRequest();
+    mockRes = createMockExpressResponse();
+    mockNext = createMockNextFunction();
+    mockSupabase = supabaseClient.supabase;
+    originalNodeEnv = process.env.NODE_ENV;
+    jest.clearAllMocks();
   });
 
-  /**
-   * TEST 12: Early return on invalid org_id
-   * 
-   * Scenario: Middleware encounters invalid org_id
-   * Expected: Returns error response, does NOT call next()
-   */
-  it('should return error and NOT call next() on invalid org_id', () => {
-    const request = createMockRequestNoOrgId();
-    const mockNext = vi.fn();
-    
-    // Simulate middleware logic
-    const orgId = request.user?.org_id;
-    
-    if (!orgId || orgId.length === 0) {
-      // Return error, don't call next
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  describe('Production mode (default)', () => {
+    it('should enforce strict auth when NODE_ENV is not "development"', async () => {
+      process.env.NODE_ENV = 'production';
+      mockReq.headers.authorization = undefined;
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Missing or invalid Authorization header',
+      });
       expect(mockNext).not.toHaveBeenCalled();
-    } else {
-      mockNext();
-    }
+    });
+
+    it('should enforce strict auth when NODE_ENV is undefined', async () => {
+      delete process.env.NODE_ENV;
+      mockReq.headers.authorization = undefined;
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Development mode', () => {
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development';
+    });
+
+    it('should use dev user when no Authorization header provided', async () => {
+      mockReq.headers.authorization = undefined;
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockReq.user).toEqual({
+        id: process.env.DEV_USER_ID || 'dev-user',
+        email: process.env.DEV_USER_EMAIL || 'dev@local',
+        orgId: 'a0000000-0000-0000-0000-000000000001',
+      });
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
+
+    it('should use valid token when provided in dev mode', async () => {
+      const orgId = 'd0000000-0000-0000-0000-000000000004';
+      const mockUser = createMockJWT({ app_metadata: { org_id: orgId } });
+
+      mockReq.headers.authorization = 'Bearer valid_dev_token';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockReq.user.orgId).toBe(orgId);
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it('should fall back to dev user when token validation fails', async () => {
+      mockReq.headers.authorization = 'Bearer invalid_token';
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'Invalid token' },
+      });
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockReq.user.orgId).toBe('a0000000-0000-0000-0000-000000000001');
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it('should reject dev user when org_id is "default" even in dev mode', async () => {
+      const mockUser = createMockJWT({
+        app_metadata: { org_id: 'default' },
+      });
+
+      mockReq.headers.authorization = 'Bearer token_with_default_org';
+      mockSupabase.auth.getUser.mockResolvedValue(createMockSupabaseAuthResponse(mockUser));
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Missing org_id in JWT. User must be provisioned with organization.',
+      });
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('CORS preflight', () => {
+    it('should allow OPTIONS requests without auth', async () => {
+      mockReq.method = 'OPTIONS';
+      mockReq.headers.authorization = undefined;
+
+      await requireAuthOrDev(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('Auth Middleware - verifyOrgAccess()', () => {
+  let mockReq: any;
+  let mockRes: any;
+  let mockNext: jest.Mock;
+
+  beforeEach(() => {
+    mockReq = createMockExpressRequest();
+    mockRes = createMockExpressResponse();
+    mockNext = createMockNextFunction();
+    jest.clearAllMocks();
+  });
+
+  it('should allow access when user owns the organization', async () => {
+    const orgId = 'e0000000-0000-0000-0000-000000000005';
+    mockReq.user = { id: 'user_123', email: 'test@example.com', orgId };
+    mockReq.query = { org_id: orgId };
+
+    await verifyOrgAccess(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).toHaveBeenCalled();
+    expect(mockRes.status).not.toHaveBeenCalled();
+  });
+
+  it('should deny access when user does not own the organization (403)', async () => {
+    mockReq.user = {
+      id: 'user_123',
+      email: 'test@example.com',
+      orgId: 'f0000000-0000-0000-0000-000000000006',
+    };
+    mockReq.query = { org_id: 'g0000000-0000-0000-0000-000000000007' };
+
+    await verifyOrgAccess(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: 'Access denied to this organization',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('should reject unauthenticated requests (401)', async () => {
+    mockReq.user = undefined;
+
+    await verifyOrgAccess(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: 'User not authenticated',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('should allow access to default org', async () => {
+    mockReq.user = { id: 'user_123', email: 'test@example.com', orgId: 'default' };
+    mockReq.query = { org_id: 'default' };
+
+    await verifyOrgAccess(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).toHaveBeenCalled();
+  });
+});
+
+describe('Auth Middleware - requireRole()', () => {
+  let mockReq: any;
+  let mockRes: any;
+  let mockNext: jest.Mock;
+  let mockSupabase: any;
+
+  beforeEach(() => {
+    mockReq = createMockExpressRequest();
+    mockRes = createMockExpressResponse();
+    mockNext = createMockNextFunction();
+    mockSupabase = supabaseClient.supabase;
+    jest.clearAllMocks();
+  });
+
+  it('should allow access when user has required role', async () => {
+    const orgId = 'h0000000-0000-0000-0000-000000000008';
+    mockReq.user = { id: 'user_123', email: 'admin@clinic.com', orgId };
+
+    const mockFrom = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: { role: 'admin' },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    mockSupabase.from = mockFrom;
+
+    const middleware = requireRole('admin');
+    await middleware(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockReq.user.role).toBe('admin');
+    expect(mockNext).toHaveBeenCalled();
+    expect(mockRes.status).not.toHaveBeenCalled();
+  });
+
+  it('should deny access when user has insufficient role (403)', async () => {
+    const orgId = 'i0000000-0000-0000-0000-000000000009';
+    mockReq.user = { id: 'user_123', email: 'viewer@clinic.com', orgId };
+
+    const mockFrom = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: { role: 'viewer' },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    mockSupabase.from = mockFrom;
+
+    const middleware = requireRole('admin');
+    await middleware(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: 'Access denied. Required role: admin',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('should allow access when user has one of multiple allowed roles', async () => {
+    const orgId = 'j0000000-0000-0000-0000-000000000010';
+    mockReq.user = { id: 'user_123', email: 'agent@clinic.com', orgId };
+
+    const mockFrom = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: { role: 'agent' },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    mockSupabase.from = mockFrom;
+
+    const middleware = requireRole('admin', 'agent');
+    await middleware(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it('should reject unauthenticated requests (401)', async () => {
+    mockReq.user = undefined;
+
+    const middleware = requireRole('admin');
+    await middleware(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: 'User not authenticated',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it('should reject when user role not found in database (403)', async () => {
+    const orgId = 'k0000000-0000-0000-0000-000000000011';
+    mockReq.user = { id: 'user_123', email: 'unknown@clinic.com', orgId };
+
+    const mockFrom = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'No rows found' },
+            }),
+          }),
+        }),
+      }),
+    });
+    mockSupabase.from = mockFrom;
+
+    const middleware = requireRole('admin');
+    await middleware(mockReq as Request, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: 'User role not found',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 });

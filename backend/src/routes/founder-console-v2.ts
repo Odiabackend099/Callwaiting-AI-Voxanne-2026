@@ -1808,14 +1808,15 @@ router.post(
       console.log('DEBUG: Resolved vapiApiKey:', vapiApiKey ? 'FOUND' : 'MISSING');
 
       if (!vapiApiKey) {
-        res.status(400).json({
-          error: 'Vapi API key not configured. Please save your Vapi API key in Settings first.',
+        logger.error('VAPI_API_KEY missing in environment variables', { requestId });
+        res.status(500).json({
+          error: 'System configuration error: Telephony provider unavailable.',
           requestId
         });
         return;
       }
 
-      // Sanitize Vapi key
+      // No sanitization needed for env var (assumed safe), but keeping for safety if source changes
       try {
         vapiApiKey = sanitizeVapiKey(vapiApiKey);
       } catch (sanitizeErr: any) {
@@ -1852,10 +1853,10 @@ router.post(
 
         if (!agentId) {
           const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
-          const defaultSystemPrompt = role === AGENT_ROLES.OUTBOUND 
+          const defaultSystemPrompt = role === AGENT_ROLES.OUTBOUND
             ? 'You are a helpful assistant making outbound calls on behalf of the business.'
             : 'You are a helpful assistant answering inbound calls for the business.';
-          
+
           const { data: newAgent, error: insertError } = await supabase
             .from('agents')
             .insert({
@@ -2063,12 +2064,14 @@ router.post(
       // Fetch integration settings from database (keys stored securely)
       const settings = await getIntegrationSettings();
 
-      if (!settings?.vapi_api_key) {
-        res.status(400).json({ error: 'Vapi API key not configured. Save settings first.', requestId });
+      const vapiApiKey = process.env.VAPI_API_KEY;
+
+      if (!vapiApiKey) {
+        logger.error('VAPI_API_KEY missing in environment variables', { requestId });
+        res.status(500).json({ error: 'System configuration error: Telephony provider unavailable.', requestId });
         return;
       }
 
-      const vapiApiKey = settings.vapi_api_key;
       const storedDest = settings.test_destination_number;
 
       const destination = testDestinationNumber || storedDest;
@@ -3410,24 +3413,19 @@ router.post(
         return;
       }
 
-      // Get Vapi credentials using secrets manager (supports Vault and encryption)
-      const vapiConfig = await getApiKey('vapi', orgId || 'default');
-
-      // Always prefer the runtime env key (used by setup scripts) and fall back to stored key
-      const vapiApiKey = process.env.VAPI_API_KEY || vapiConfig?.vapi_api_key;
+      // Enforce Platform Provider Model: Use environment variable only
+      const vapiApiKey = process.env.VAPI_API_KEY;
 
       logger.debug('Vapi credentials check', {
         hasApiKey: !!vapiApiKey,
-        source: process.env.VAPI_API_KEY ? 'env' : 'db'
+        source: 'env'
       });
 
       if (!vapiApiKey) {
-        logger.error('Vapi API key not configured', { orgId, provider: 'vapi' });
-        const isDebugEnabled = process.env.NODE_ENV === 'development' && process.env.EXPOSE_DEBUG_INFO === 'true';
-        res.status(400).json({
-          error: 'Vapi API key not configured',
-          action: 'Please configure your Vapi credentials in Agent Settings',
-          debugInfo: isDebugEnabled ? { orgId, hasKeys: !!vapiConfig } : undefined
+        logger.error('VAPI_API_KEY missing in environment variables', { orgId });
+        res.status(500).json({
+          error: 'System configuration error: Telephony provider unavailable.',
+          requestId
         });
         return;
       }

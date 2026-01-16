@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
+import { requireAuth } from '../middleware/auth';
 
 export const assistantsRouter = express.Router();
 
@@ -178,7 +179,8 @@ async function buildAgentContext(agent: any): Promise<string> {
 }
 
 // Sync database agent to Vapi (create or update)
-assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void> => {
+// SECURITY FIX: Added requireAuth
+assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { agentId } = req.body;
 
@@ -204,17 +206,14 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
     // Fetch the correct Vapi API Key from DB (Integrations table)
     // to ensure we create the assistant in the SAME account that calls it.
     // =================================================================
-    const { data: vapiIntegration } = await supabase
-      .from('integrations')
-      .select('config')
-      .eq('provider', 'vapi')
-      .limit(1)
-      .single();
-
-    const dynamicApiKey = vapiIntegration?.config?.vapi_api_key || process.env.VAPI_API_KEY;
+    // =================================================================
+    // PLATFORM VAPI CLIENT INIT
+    // Use system API Key for all tenants
+    // =================================================================
+    const dynamicApiKey = process.env.VAPI_API_KEY;
 
     if (!dynamicApiKey) {
-      res.status(500).json({ error: 'Vapi API Key not configured in Integrations or Environment' });
+      res.status(500).json({ error: 'System Error: VAPI_API_KEY missing in environment' });
       return;
     }
 
@@ -343,7 +342,8 @@ assistantsRouter.post('/sync', async (req: Request, res: Response): Promise<void
 });
 
 // Get assistant details
-assistantsRouter.get('/:assistantId', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+assistantsRouter.get('/:assistantId', requireAuth, async (req: Request, res: Response) => {
   try {
     const { assistantId } = req.params;
 
@@ -361,7 +361,8 @@ assistantsRouter.get('/:assistantId', async (req: Request, res: Response) => {
 });
 
 // List assistants
-assistantsRouter.get('/', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+assistantsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const vapi = requireVapi(res);
     if (!vapi) return;
@@ -478,7 +479,8 @@ assistantsRouter.get('/voices/available', async (req: Request, res: Response) =>
 });
 
 // Auto-sync partial updates
-assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise<void> => {
+// SECURITY FIX: Added requireAuth
+assistantsRouter.post('/auto-sync', requireAuth, async (req: Request, res: Response): Promise<void> => {
   const { agentId, updates } = req.body;
   // updates = { name?, systemPrompt?, voice?, firstMessage? }
 
@@ -498,16 +500,9 @@ assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise
     if (dbError) throw dbError;
 
     // 2. Get VAPI API key (using fallback to env for now if not in integrations)
-    // In production we should prioritize the integration key
-    const { data: integration } = await supabase
-      .from('integrations')
-      .select('config')
-      .eq('org_id', agent.org_id)
-      .eq('provider', 'vapi')
-      .single();
-
-    const apiKey = integration?.config?.vapi_api_key || process.env.VAPI_API_KEY;
-    if (!apiKey) throw new Error('No VAPI API key configured');
+    // 2. Get VAPI API key (Platform Mode)
+    const apiKey = process.env.VAPI_API_KEY;
+    if (!apiKey) throw new Error('System Error: VAPI_API_KEY missing');
 
     const client = new VapiClient(apiKey);
 
@@ -619,13 +614,14 @@ assistantsRouter.post('/auto-sync', async (req: Request, res: Response): Promise
  * @param assistantId - The Vapi assistant ID
  * @param tenantId - The organization ID (from query param or body)
  */
-assistantsRouter.post('/:assistantId/setup-booking', async (req: Request, res: Response): Promise<void> => {
+// SECURITY FIX: Added requireAuth
+assistantsRouter.post('/:assistantId/setup-booking', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { assistantId } = req.params;
     const { tenantId } = req.body || req.query;
 
     if (!assistantId || !tenantId) {
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Missing required parameters',
         required: ['assistantId (URL param)', 'tenantId (body or query)']
       });
@@ -692,7 +688,8 @@ assistantsRouter.post('/:assistantId/setup-booking', async (req: Request, res: R
  * Check if an agent is ready for appointment booking
  * Returns: tool count, system prompt info, ready status
  */
-assistantsRouter.get('/:assistantId/booking-status', async (req: Request, res: Response): Promise<void> => {
+// SECURITY FIX: Added requireAuth
+assistantsRouter.get('/:assistantId/booking-status', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { assistantId } = req.params;
 

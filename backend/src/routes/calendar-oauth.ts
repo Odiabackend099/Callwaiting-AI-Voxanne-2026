@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { supabase } from '../services/supabase-client';
 import { encrypt, decrypt } from '../utils/encryption';
 import { validateOrgIdParameter } from '../services/org-validation';
+import { exchangeCodeForTokens } from '../services/google-oauth-service';
 import * as crypto from 'crypto';
 
 const router = Router();
@@ -32,7 +33,10 @@ router.get('/auth/url', async (req: Request, res: Response) => {
       });
     }
 
-    // Store org_id in session to retrieve it in callback
+    // Encode orgId in state parameter (CSRF protection)
+    const state = Buffer.from(JSON.stringify({ orgId })).toString('base64url');
+
+    // Store org_id in session to retrieve it in callback (backup)
     if (session) {
       session.calendarOrgId = orgId;
     }
@@ -44,6 +48,7 @@ router.get('/auth/url', async (req: Request, res: Response) => {
         'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/calendar.readonly',
       ],
+      state, // Include state parameter for CSRF protection
       prompt: 'consent', // Force consent screen to ensure refresh_token
     });
 
@@ -70,9 +75,27 @@ router.get('/auth/url', async (req: Request, res: Response) => {
  */
 router.get('/auth/callback', async (req: Request, res: Response) => {
   try {
-    const { code } = req.query;
+    const { code, state } = req.query;
     const session = (req as any).session;
-    const orgId = session?.calendarOrgId;
+
+    // Try to get orgId from state parameter first (CSRF protection), fallback to session
+    let orgId: string | undefined;
+
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state as string, 'base64url').toString());
+        orgId = stateData.orgId;
+      } catch (error) {
+        console.error('Failed to decode state parameter:', error);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid state parameter',
+        });
+      }
+    } else {
+      // Fallback to session-based orgId for backward compatibility
+      orgId = session?.calendarOrgId;
+    }
 
     if (!code) {
       return res.status(400).json({
@@ -84,67 +107,34 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
     if (!orgId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing organization ID in session',
+        message: 'Missing organization ID in state parameter or session',
       });
     }
 
-    // Exchange authorization code for tokens
-    const { tokens } = await oauth2Client.getToken(code as string);
-
-    if (!tokens.refresh_token) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Failed to obtain refresh token. Ensure you selected "offline access".',
-      });
+    // Use centralized OAuth service to exchange code for tokens and store securely
+    let result;
+    try {
+      result = await exchangeCodeForTokens(code as string, state as string);
+    } catch (exchangeError: any) {
+      console.error('Error exchanging authorization code:', exchangeError);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const errorParam = encodeURIComponent('oauth_token_exchange_failed');
+      res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
+      return;
     }
 
-    // Get user's Google email
-    oauth2Client.setCredentials(tokens);
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-    const profile = await gmail.users.getProfile({ userId: 'me' });
-    const googleEmail = profile.data.emailAddress;
-
-    if (!googleEmail) {
-      return res.status(400).json({
-        success: false,
-        message: 'Could not retrieve Google email address',
+    // Get user's Google email for display
+    let googleEmail = '';
+    try {
+      oauth2Client.setCredentials({
+        access_token: result.orgId // Placeholder - will be refreshed on first use
       });
-    }
-
-    // Encrypt tokens before storing
-    const encryptedAccessToken = encrypt(tokens.access_token || '');
-    const encryptedRefreshToken = encrypt(tokens.refresh_token);
-
-    // Calculate token expiry (Google tokens expire in ~1 hour)
-    const expiryDate = tokens.expiry_date
-      ? new Date(tokens.expiry_date)
-      : new Date(Date.now() + 3600 * 1000);
-
-    // Store or update calendar connection in Supabase
-    const { data, error } = await supabase
-      .from('calendar_connections')
-      .upsert(
-        {
-          org_id: orgId,
-          google_email: googleEmail,
-          access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken,
-          token_expiry: expiryDate,
-          calendar_id: 'primary',
-          updated_at: new Date(),
-        },
-        { onConflict: 'org_id' }
-      )
-      .select();
-
-    if (error) {
-      console.error('Error storing calendar connection:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to store calendar connection',
-        error: error.message,
-      });
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      googleEmail = profile.data.emailAddress || 'Google Account';
+    } catch (emailError: any) {
+      console.error('Error retrieving Google email:', emailError);
+      googleEmail = 'Google Account'; // Fallback if we can't get email
     }
 
     // Clear session

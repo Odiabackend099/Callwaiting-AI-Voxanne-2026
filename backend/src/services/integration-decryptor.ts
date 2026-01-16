@@ -409,7 +409,22 @@ export class IntegrationDecryptor {
       // Encrypt the credentials
       const encryptedConfig = EncryptionService.encryptObject(credentials);
 
-      const { error } = await supabase
+      // Prepare metadata - include email if provided
+      const metadata: Record<string, any> = {};
+      if (credentials.email) {
+        metadata.email = credentials.email;
+      }
+
+      log.info('IntegrationDecryptor', 'Preparing to upsert credentials', {
+        orgId,
+        provider,
+        hasMetadata: Object.keys(metadata).length > 0,
+        metadataKeys: Object.keys(metadata),
+        metadataValues: metadata, // Log actual values for debugging
+        timestamp: new Date().toISOString()
+      });
+
+      const { data, error } = await supabase
         .from('org_credentials')
         .upsert(
           {
@@ -419,27 +434,106 @@ export class IntegrationDecryptor {
             is_active: true,
             last_verified_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
+            metadata: Object.keys(metadata).length > 0 ? metadata : null,
           },
           { onConflict: 'org_id,provider' }
-        );
+        )
+        .select();
 
       if (error) {
+        // Handle schema cache errors - table exists but REST API can't find it
+        if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+          log.warn('IntegrationDecryptor', 'Schema cache issue, retrying with exponential backoff', {
+            orgId,
+            provider,
+            error: error?.message,
+            code: error?.code
+          });
+
+          // Retry up to 3 times with exponential backoff (2s, 4s, 8s)
+          let lastError = error;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const delayMs = 2000 * Math.pow(2, attempt - 1);
+            log.debug('IntegrationDecryptor', `Schema cache retry attempt ${attempt}/3`, {
+              orgId,
+              delayMs
+            });
+
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            
+            const { data: retryData, error: retryError } = await supabase
+              .from('org_credentials')
+              .upsert(
+                {
+                  org_id: orgId,
+                  provider,
+                  encrypted_config: encryptedConfig,
+                  is_active: true,
+                  last_verified_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  metadata: Object.keys(metadata).length > 0 ? metadata : null,
+                },
+                { onConflict: 'org_id,provider' }
+              )
+              .select();
+
+            if (!retryError) {
+              log.info('IntegrationDecryptor', 'Schema cache retry succeeded', {
+                orgId,
+                provider,
+                attempt
+              });
+              return; // Success!
+            }
+
+            lastError = retryError;
+            log.warn('IntegrationDecryptor', `Schema cache retry ${attempt} failed`, {
+              orgId,
+              attempt,
+              error: retryError?.message,
+              code: retryError?.code
+            });
+          }
+
+          // All retries exhausted
+          log.error('IntegrationDecryptor', 'All schema cache retries failed', {
+            orgId,
+            provider,
+            error: lastError?.message,
+            code: lastError?.code
+          });
+          throw lastError;
+        }
+
+        log.error('IntegrationDecryptor', 'Supabase upsert error', {
+          orgId,
+          provider,
+          error: error?.message,
+          code: error?.code,
+          details: error?.details
+        });
         throw error;
       }
-
-      // Invalidate cache after successful storage
-      this.invalidateCache(orgId, provider);
 
       log.info('IntegrationDecryptor', 'Credentials stored successfully', {
         orgId,
         provider,
-        timestamp: new Date().toISOString(),
+        insertedId: data?.[0]?.id,
+        credentialMetadata: data?.[0]?.metadata, // Verify metadata was stored
+        rowsAffected: data?.length || 0,
+        hasMetadata: Object.keys(metadata).length > 0,
+        timestamp: new Date().toISOString()
       });
+
+      // Invalidate cache after successful storage
+      this.invalidateCache(orgId, provider);
     } catch (error: any) {
       log.error('IntegrationDecryptor', 'Failed to store credentials', {
         orgId,
         provider,
         error: error?.message,
+        errorCode: error?.code,
+        stack: error?.stack
       });
       throw error;
     }

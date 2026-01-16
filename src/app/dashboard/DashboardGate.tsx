@@ -1,37 +1,20 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { useOrg } from '@/hooks/useOrg';
+import { OrgErrorBoundary } from '@/components/OrgErrorBoundary';
 
+/**
+ * DashboardGate - Client-side error boundary wrapper
+ *
+ * SECURITY FIX: Removed all redirect logic
+ * - Server-side auth is handled by dashboard/layout.tsx
+ * - Client-side only wraps children in OrgErrorBoundary for user-friendly error messages
+ * - NO redirects here - redirects happen server-side only
+ * - This prevents infinite redirect loops
+ */
 export default function DashboardGate({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const { user, loading, isVerified } = useAuth();
-  const orgId = useOrg();
-
-  useEffect(() => {
-    if (loading) return;
-
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
-    if (!isVerified) {
-      const qs = user.email ? `?email=${encodeURIComponent(user.email)}` : '';
-      router.push(`/verify-email${qs}`);
-      return;
-    }
-
-    // If orgId is missing after auth resolves, force login to rehydrate session org context
-    if (!orgId) {
-      router.push('/login');
-      return;
-    }
-  }, [loading, user, isVerified, orgId, router]);
-
-  if (loading) return null;
-  // Bypass auth for testing
-  return <>{children}</>;
+  return (
+    <OrgErrorBoundary>
+      {children}
+    </OrgErrorBoundary>
+  );
 }

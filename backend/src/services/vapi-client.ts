@@ -95,15 +95,17 @@ export class VapiClient {
   private apiKey: string;
   private circuitBreaker: CircuitBreakerState;
 
-  constructor(apiKey: string) {
+  constructor(apiKey?: string) {
     // CRITICAL: Sanitize API key to prevent "Invalid character in header content" errors
-    // Remove all control characters, newlines, carriage returns, and whitespace
-    const sanitizedKey = (apiKey || '')
+    // Use passed key or fallback to environment variable
+    const keySource = apiKey || process.env.VAPI_API_KEY || '';
+
+    const sanitizedKey = keySource
       .trim()
       .replace(/[\r\n\t\x00-\x1F\x7F]/g, ''); // Remove all control characters
 
     if (!sanitizedKey) {
-      throw new Error('VapiClient: API key is required and cannot be empty');
+      throw new Error('VapiClient: API key is required and cannot be empty (checked constructor arg and VAPI_API_KEY env var)');
     }
 
     this.apiKey = sanitizedKey;
@@ -283,11 +285,11 @@ export class VapiClient {
     try {
       // Load tool definitions
       const toolDefinitions = this.getAppointmentBookingTools(baseUrl);
-      
-      logger.info('Syncing appointment booking tools to agent', { 
-        assistantId, 
-        tenantId, 
-        toolCount: toolDefinitions.length 
+
+      logger.info('Syncing appointment booking tools to agent', {
+        assistantId,
+        tenantId,
+        toolCount: toolDefinitions.length
       });
 
       // Update the agent with tools
@@ -312,7 +314,7 @@ export class VapiClient {
    */
   public getAppointmentBookingTools(baseUrl?: string): VapiTool[] {
     const url = baseUrl || process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'https://api.example.com';
-    
+
     return [
       {
         type: 'server',

@@ -28,6 +28,7 @@ interface Call {
     sentiment_urgency?: string;
     call_type?: 'inbound' | 'outbound';
     recording_status?: 'pending' | 'processing' | 'completed' | 'failed';
+    recording_url?: string;
     recording_error?: string;
     transfer_to?: string;
     transfer_time?: string;
@@ -203,6 +204,40 @@ const CallsPageContent = () => {
             setError(null);
         } catch (err: any) {
             setError(err?.message || 'Failed to delete call');
+        }
+    };
+
+    const handlePlayRecordingFromList = async (call: Call) => {
+        if (!call.recording_url) {
+            setError('No recording available for this call');
+            return;
+        }
+
+        try {
+            const audio = new Audio(call.recording_url);
+            audio.play().catch((err) => {
+                setError('Failed to play recording: ' + err.message);
+            });
+        } catch (err: any) {
+            setError('Failed to play recording');
+        }
+    };
+
+    const handleDownloadRecordingFromList = async (call: Call) => {
+        if (!call.recording_url) {
+            setError('No recording available for this call');
+            return;
+        }
+
+        try {
+            const link = document.createElement('a');
+            link.href = call.recording_url;
+            link.download = `call_${call.id}_${formatDateTime(call.call_date)}.wav`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err: any) {
+            setError('Failed to download recording');
         }
     };
 
@@ -549,13 +584,14 @@ const CallsPageContent = () => {
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Duration</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Status</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Sentiment</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Outcome Summary</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center">
+                                        <td colSpan={7} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-3">
                                                 <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
                                                 <p className="text-gray-600 dark:text-slate-400">Loading calls...</p>
@@ -564,7 +600,7 @@ const CallsPageContent = () => {
                                     </tr>
                                 ) : calls.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center">
+                                        <td colSpan={7} className="px-6 py-12 text-center">
                                             <p className="text-gray-600 dark:text-slate-400">No calls found</p>
                                         </td>
                                     </tr>
@@ -606,36 +642,65 @@ const CallsPageContent = () => {
                                                     </div>
                                                 )}
                                             </td>
+                                            <td className="px-6 py-4">
+                                                {call.sentiment_summary ? (
+                                                    <div className="max-w-xs">
+                                                        <p className="text-xs text-gray-700 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                                                            {call.sentiment_summary}
+                                                        </p>
+                                                        {call.sentiment_urgency && (
+                                                            <span className={`text-xs font-medium inline-block mt-1 ${
+                                                                call.sentiment_urgency === 'High' ? 'text-red-600 dark:text-red-400' :
+                                                                call.sentiment_urgency === 'Medium' ? 'text-amber-600 dark:text-amber-400' :
+                                                                'text-blue-600 dark:text-blue-400'
+                                                            }`}>
+                                                                {call.sentiment_urgency} urgency
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    {call.has_recording ? (
+                                                <div className="flex items-center gap-1">
+                                                    {call.has_recording && call.recording_status === 'completed' ? (
                                                         <>
-                                                            {getRecordingStatusBadge(call.recording_status, call.recording_error)}
-                                                            {call.recording_status === 'completed' && (
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        fetchCallDetail(call.id);
-                                                                    }}
-                                                                    className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                                                                    title="Play recording"
-                                                                >
-                                                                    <Volume2 className="w-4 h-4 text-blue-600" />
-                                                                </button>
-                                                            )}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handlePlayRecordingFromList(call);
+                                                                }}
+                                                                className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                                                                title="Play recording"
+                                                            >
+                                                                <Play className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDownloadRecordingFromList(call);
+                                                                }}
+                                                                className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                                                title="Download recording"
+                                                            >
+                                                                <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                            </button>
                                                         </>
+                                                    ) : call.recording_status === 'processing' || call.recording_status === 'pending' ? (
+                                                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{call.recording_status}</span>
                                                     ) : (
-                                                        <span className="text-xs text-gray-400">No recording</span>
+                                                        <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                                                     )}
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             deleteCall(call.id);
                                                         }}
-                                                        className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                                         title="Delete call"
                                                     >
-                                                        <Trash2 className="w-4 h-4 text-red-600" />
+                                                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                                                     </button>
                                                 </div>
                                             </td>

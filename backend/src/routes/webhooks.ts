@@ -580,10 +580,14 @@ async function handleCallStarted(event: VapiEvent) {
       logger.error('webhooks', 'Error loading agent config (non-blocking)');
     }
 
-    // Fallback to environment variable if config table doesn't have the key
+    // Platform Provider Model: Always use system API key
+    // Ignore any key returned from legacy DB configs
+    vapiApiKey = process.env.VAPI_API_KEY || null;
+
     if (!vapiApiKey) {
-      vapiApiKey = process.env.VAPI_API_KEY || null;
-      logger.warn('webhooks', 'Using VAPI_API_KEY from environment');
+      logger.error('webhooks', 'CRITICAL: VAPI_API_KEY missing in environment');
+    } else {
+      logger.debug('webhooks', 'Using Platform VAPI_API_KEY');
     }
 
     // Fetch RAG context from knowledge base and inject into agent

@@ -8,6 +8,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import { log } from '../services/logger';
 import { supabase } from '../services/supabase-client';
+import { requireAuth } from '../middleware/auth';
 
 const vapiSetupRouter = Router();
 
@@ -19,29 +20,25 @@ const ENV_WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/va
 /**
  * POST /api/vapi/setup/configure-webhook
  * Programmatically configure Vapi assistant with RAG webhook
- * 
+ *
  * Config Hierarchy:
  * 1. Request Body (vapiApiKey, vapiAssistantId)
- * 2. Database (via Organization ID)
+ * 2. Database (via Organization ID from JWT)
  * 3. Environment Variables (Fallback)
+ *
+ * SECURITY FIX: Added requireAuth - org_id comes from JWT only
  */
-vapiSetupRouter.post('/setup/configure-webhook', async (req: Request, res: Response) => {
+vapiSetupRouter.post('/setup/configure-webhook', requireAuth, async (req: Request, res: Response) => {
   try {
-    let vapiApiKey = req.body.vapiApiKey || ENV_VAPI_API_KEY;
+    // Platform Provider Model: Only use system API key
+    const vapiApiKey = process.env.VAPI_API_KEY;
+
     let vapiAssistantId = req.body.vapiAssistantId || ENV_VAPI_ASSISTANT_ID;
     const webhookUrl = req.body.webhookUrl || ENV_WEBHOOK_URL;
-    const orgId = req.headers['x-org-id'] as string; // Optional: fetch from DB if orgId provided
+    const orgId = req.user?.orgId; // Extract org_id from JWT (set by requireAuth middleware)
 
-    // If orgId provided but no keys, try to fetch from DB 'integrations' table
-    if (orgId && (!vapiApiKey || !vapiAssistantId)) {
-      const { data: integration } = await supabase
-        .from('integrations')
-        .select('vapi_api_key')
-        .eq('org_id', orgId)
-        .single();
-
-      if (integration?.vapi_api_key) vapiApiKey = integration.vapi_api_key;
-
+    // If orgId provided but no assistant ID, try to fetch from DB
+    if (orgId && !vapiAssistantId) {
       // Assistant ID might be in 'agents' table
       const { data: agent } = await supabase
         .from('agents')
@@ -54,7 +51,8 @@ vapiSetupRouter.post('/setup/configure-webhook', async (req: Request, res: Respo
     }
 
     if (!vapiApiKey) {
-      return res.status(400).json({ error: 'Vapi API Key required (env, body, or org integration)' });
+      log.error('Vapi-Setup', 'Critical: VAPI_API_KEY missing in environment');
+      return res.status(500).json({ error: 'System configuration error' });
     }
 
     if (!vapiAssistantId) {

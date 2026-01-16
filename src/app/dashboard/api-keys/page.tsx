@@ -21,7 +21,8 @@ interface CalendarStatus {
 export default function ApiKeysPage() {
     const router = useRouter();
     const { user, loading } = useAuth();
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+    const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
     const [status, setStatus] = useState<IntegrationStatus>({
@@ -43,6 +44,7 @@ export default function ApiKeysPage() {
     }, [user, loading, router]);
 
     const fetchSettings = useCallback(async () => {
+        setIsLoadingSettings(true);
         try {
             const data = await authedBackendFetch<any>('/api/founder-console/settings');
             setStatus(data);
@@ -52,27 +54,63 @@ export default function ApiKeysPage() {
         } catch (error) {
             console.error('Error fetching settings:', error);
         } finally {
-            setIsLoading(false);
+            setIsLoadingSettings(false);
         }
     }, []);
 
     const fetchCalendarStatus = useCallback(async () => {
+        setIsLoadingCalendar(true);
         try {
-            const data = await authedBackendFetch<CalendarStatus>('/api/google-oauth/status');
+            // Timeout after 3 seconds to prevent infinite loading
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Calendar status check timed out')), 3000)
+            );
+            
+            // Extract org_id from user session
+            // The org_id is stored in app_metadata by the database trigger
+            let orgId: string | undefined;
+
+            if (user) {
+                // Primary source: app_metadata.org_id (set by auth trigger)
+                orgId = (user as any).app_metadata?.org_id;
+
+                console.debug('[Calendar Status] Extracted org_id from user:', {
+                    orgId,
+                    hasAppMetadata: !!(user as any).app_metadata,
+                    appMetadata: (user as any).app_metadata
+                });
+            }
+
+            // Pass org_id in the URL path (backend will handle missing org_id gracefully)
+            const statusUrl = orgId
+                ? `/api/google-oauth/status/${orgId}`
+                : '/api/google-oauth/status/unknown';
+
+            console.debug('[Calendar Status] Calling status endpoint:', statusUrl);
+            
+            // Race against timeout
+            const fetchPromise = authedBackendFetch<CalendarStatus>(statusUrl);
+            const data = (await Promise.race([fetchPromise, timeoutPromise])) as CalendarStatus;
+            
             setCalendarStatus(data);
             setCalendarError(null);
         } catch (error) {
             console.error('Error fetching calendar status:', error);
-            setCalendarError(error instanceof Error ? error.message : 'Failed to fetch calendar status');
+            // Don't set error - just silently fail and show default "not connected" state
+            // This prevents blocking the page if calendar check fails
+            setCalendarStatus({ connected: false });
+        } finally {
+            setIsLoadingCalendar(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
-        if (user) {
+        // Only fetch settings once when component mounts with user
+        if (user && !loading) {
             fetchSettings();
             fetchCalendarStatus();
         }
-    }, [user, fetchSettings, fetchCalendarStatus]);
+    }, [user?.id, loading, fetchSettings, fetchCalendarStatus]);
 
     // Check for OAuth callback parameters in URL
     // CRITICAL FIX: Handle all callback parameter variations from unified OAuth flow
@@ -94,8 +132,62 @@ export default function ApiKeysPage() {
                 : 'Calendar connected successfully!';
             setCalendarSuccess(successMsg);
             setCalendarError(null);
-            // Refresh calendar status to show connected state
-            fetchCalendarStatus();
+            
+            // CRITICAL: Re-fetch calendar status with retry logic
+            // Add longer delay and retry logic to ensure credentials are written to database
+            console.log('[OAuth Callback] Calendar connected, waiting for database...');
+
+            const checkStatusWithRetry = async (maxAttempts = 3) => {
+              let lastStatus: CalendarStatus = { connected: false };
+
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                const delayMs = attempt === 1 ? 1500 : 2500 * (attempt - 1); // 1.5s, 2.5s, 6.25s
+
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+
+                console.log(`[OAuth Callback] Checking status (attempt ${attempt}/${maxAttempts})`);
+
+                try {
+                  // Get org_id
+                  const orgId = (user as any)?.app_metadata?.org_id;
+                  if (!orgId) {
+                    console.error('[OAuth Callback] Cannot get org_id from user');
+                    continue;
+                  }
+
+                  // Directly call status endpoint with retry
+                  const statusResponse = await fetch(`/api/google-oauth/status/${orgId}`, {
+                    headers: {
+                      'Content-Type': 'application/json',
+                    }
+                  });
+
+                  if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    lastStatus = statusData;
+                    console.log(`[OAuth Callback] Status check attempt ${attempt}:`, {
+                      connected: statusData.connected,
+                      email: statusData.email,
+                      hasTokens: statusData.hasTokens
+                    });
+
+                    if (statusData.connected && statusData.email) {
+                      console.log('[OAuth Callback] Status confirmed as connected with email!');
+                      setCalendarStatus(statusData);
+                      break;
+                    }
+                  }
+                } catch (statusError) {
+                  console.error(`[OAuth Callback] Status check error on attempt ${attempt}:`, statusError);
+                }
+              }
+
+              // Update state with final status
+              setCalendarStatus(lastStatus);
+            };
+
+            checkStatusWithRetry();
+            
             handled = true;
         }
         // Handle error from calendar-oauth.ts (backward compatibility)
@@ -180,7 +272,7 @@ export default function ApiKeysPage() {
         }
     };
 
-    if (loading || isLoading) {
+    if (loading || isLoadingSettings) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -202,7 +294,7 @@ export default function ApiKeysPage() {
                 {/* Common Settings */}
                 <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Testing Defaults</h2>
-                    <div>
+                    <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                             Default Test Phone Number
                         </label>
@@ -216,6 +308,25 @@ export default function ApiKeysPage() {
                         <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                             Used for &quot;Test Live&quot; calls from the dashboard.
                         </p>
+                    </div>
+                    <div className="flex justify-end">
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-5 h-5" />
+                                    Save Changes
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
 
@@ -236,7 +347,22 @@ export default function ApiKeysPage() {
                     {/* Error Message */}
                     {calendarError && (
                         <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                            <p className="text-sm text-red-400">{calendarError}</p>
+                            <p className="text-sm text-red-400 font-semibold mb-2">Connection Error</p>
+                            <p className="text-sm text-red-400 mb-2">{calendarError}</p>
+
+                            {/* Debug info in development */}
+                            {process.env.NODE_ENV === 'development' && (
+                              <details className="mt-2">
+                                <summary className="text-xs text-red-300 cursor-pointer font-medium">Debug Info</summary>
+                                <pre className="mt-2 text-xs text-red-300 overflow-auto bg-black/30 p-2 rounded">
+                                  {JSON.stringify({
+                                    timestamp: new Date().toISOString(),
+                                    calendarStatus,
+                                    userOrgId: user?.user_metadata?.org_id
+                                  }, null, 2)}
+                                </pre>
+                              </details>
+                            )}
                         </div>
                     )}
 
@@ -278,26 +404,6 @@ export default function ApiKeysPage() {
                             {isConnectingCalendar ? 'Connecting...' : calendarStatus.connected ? 'Connected' : 'Link My Google Calendar'}
                         </button>
                     </div>
-                </div>
-
-                <div className="flex justify-end pt-4">
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                Saving...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="w-5 h-5" />
-                                Save Changes
-                            </>
-                        )}
-                    </button>
                 </div>
             </div>
         </div>

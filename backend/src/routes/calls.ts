@@ -1,9 +1,13 @@
 import express, { Request, Response } from 'express';
 import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
+import { requireAuth } from '../middleware/auth';
 import { getSignedRecordingUrl } from '../services/call-recording-storage';
 
 export const callsRouter = express.Router();
+
+// Protect all routes
+callsRouter.use(requireAuth);
 
 const vapiApiKey = process.env.VAPI_API_KEY;
 const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;

@@ -71,19 +71,33 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       if (inboundError) {
         log.warn('Calls', 'Failed to fetch inbound calls', { error: inboundError.message });
       } else {
-        allCalls = allCalls.concat((inboundCalls || []).map((call: any) => ({
-          id: call.id,
-          phone_number: call.phone_number || 'Unknown',
-          caller_name: call.caller_name || 'Unknown',
-          call_date: call.created_at,
-          duration_seconds: call.duration_seconds || 0,
-          status: call.status || 'completed',
-          has_recording: !!call.recording_storage_path,
-          has_transcript: !!call.transcript,
-          sentiment_score: call.sentiment_score,
-          sentiment_label: call.sentiment_label,
-          call_type: 'inbound'
-        })));
+        const processedInboundCalls = await Promise.all((inboundCalls || []).map(async (call: any) => {
+          let signedUrl = call.recording_url;
+          // Generate signed URL if storage path exists (preferred)
+          if (call.recording_storage_path) {
+            const generatedUrl = await getSignedRecordingUrl(call.recording_storage_path);
+            if (generatedUrl) signedUrl = generatedUrl;
+          }
+
+          return {
+            id: call.id,
+            phone_number: call.phone_number || 'Unknown',
+            caller_name: call.caller_name || 'Unknown',
+            call_date: call.created_at,
+            duration_seconds: call.duration_seconds || 0,
+            status: call.status || 'completed',
+            has_recording: !!signedUrl,
+            recording_url: signedUrl,
+            has_transcript: !!call.transcript,
+            sentiment_score: call.sentiment_score,
+            sentiment_label: call.sentiment_label,
+            sentiment_summary: call.sentiment_summary,
+            sentiment_urgency: call.sentiment_urgency,
+            call_type: 'inbound'
+          };
+        }));
+
+        allCalls = allCalls.concat(processedInboundCalls);
         totalCount += (inboundCount || 0);
       }
     }

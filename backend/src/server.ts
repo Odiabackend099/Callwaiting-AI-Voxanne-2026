@@ -33,8 +33,7 @@ import rateLimit from 'express-rate-limit'; // Add express-rate-limit import
 import { createServer } from 'http';
 import { webhooksRouter } from './routes/webhooks';
 import smsStatusWebhookRouter from './routes/sms-status-webhook'; // default export
-// TEMPORARILY DISABLED: Google OAuth router causing startup crash
-// import googleOAuthRouter from './routes/google-oauth';
+import googleOAuthRouter from './routes/google-oauth';
 import { callsRouter } from './routes/calls';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
@@ -56,6 +55,7 @@ import { vapiSetupRouter } from './routes/vapi-setup';
 import vapiToolsRouter from './routes/vapi-tools-routes';
 import handoffRouter from './routes/handoff-routes';
 import vapiDiscoveryRouter from './routes/vapi-discovery'; // default export
+import verificationRouter from './routes/verification';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; // named export
 import agentSyncRouter from './routes/agent-sync'; // default export
 import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
@@ -76,6 +76,8 @@ import { notificationsRouter } from './routes/notifications';
 import analyticsRouter from './routes/analytics';
 import calendarOAuthRouter from './routes/calendar-oauth'; // default export
 import vapiCalendarToolsRouter from './routes/vapi-tools'; // default export
+import { authRouter } from './routes/health';
+import orgsRouter from './routes/orgs'; // default export
 
 // Initialize logger
 initLogger();
@@ -138,7 +140,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-org-id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+  // SECURITY FIX: Removed 'x-org-id' - org_id must come from JWT only
   maxAge: 86400 // 24 hours
 }));
 app.use(express.json({
@@ -212,13 +215,14 @@ app.use('/api/contacts', contactsRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/calendar', calendarOAuthRouter);
 app.use('/api/vapi', vapiCalendarToolsRouter);
 
-// Google Calendar OAuth routes - TEMPORARILY DISABLED
-// app.use('/api/google-oauth', googleOAuthRouter);
-// log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
-log.info('Server', 'Contacts, appointments, notifications, and calendar routes registered');
+// Google Calendar OAuth routes
+app.use('/api/google-oauth', googleOAuthRouter);
+log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
+log.info('Server', 'Contacts, appointments, notifications, calendar, and org validation routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
 
 // Health check endpoint - comprehensive dependency verification
@@ -544,99 +548,104 @@ webTestWss.on('connection', (ws, req) => {
 });
 
 // Start listening (critical: use server.listen, not app.listen)
-server.listen(PORT, () => {
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, () => {
 
-  console.log(`
-╔════════════════════════════════════════╗
-║    Voxanne Backend Server Started      ║
-╚════════════════════════════════════════╝
-
-Port: ${PORT}
-Environment: ${process.env.NODE_ENV || 'development'}
-Uptime: ${new Date().toISOString()}
-
-Endpoints:
-  GET  /health
-  GET  /
-  POST /api/webhooks/vapi
-  POST /api/calls/create
-  GET  /api/calls/:callId
-  GET  /api/calls
-  POST /api/assistants/sync
-  GET  /api/assistants
-  GET  /api/assistants/:assistantId
-  GET  /api/assistants/voices/available
-  POST /api/phone-numbers/import
-  GET  /api/phone-numbers
-  GET  /api/phone-numbers/:phoneNumberId
-
-  CallWaiting AI:
-  GET  /api/founder-console/agent/config
-  POST /api/founder-console/agent/config
-  GET  /api/founder-console/leads
-  POST /api/founder-console/calls/start
-  POST /api/founder-console/calls/end
-  GET  /api/founder-console/calls/recent
-  GET  /api/founder-console/voices
+    console.log(`
+  ╔════════════════════════════════════════╗
+  ║    Voxanne Backend Server Started      ║
+  ╚════════════════════════════════════════╝
   
-  WebSocket:
-  WS   /ws/live-calls
-  WS   /api/web-voice
+  Port: ${PORT}
+  Environment: ${process.env.NODE_ENV || 'development'}
+  Uptime: ${new Date().toISOString()}
+  
+  Endpoints:
+    GET  /health
+    GET  /
+    POST /api/webhooks/vapi
+    POST /api/calls/create
+    GET  /api/calls/:callId
+    GET  /api/calls
+    POST /api/assistants/sync
+    GET  /api/assistants
+    GET  /api/assistants/:assistantId
+    GET  /api/assistants/voices/available
+    POST /api/phone-numbers/import
+    GET  /api/phone-numbers
+    GET  /api/phone-numbers/:phoneNumberId
+  
+    CallWaiting AI:
+    GET  /api/founder-console/agent/config
+    POST /api/founder-console/agent/config
+    GET  /api/founder-console/leads
+    POST /api/founder-console/calls/start
+    POST /api/founder-console/calls/end
+    GET  /api/founder-console/calls/recent
+    GET  /api/founder-console/voices
+    
+    WebSocket:
+    WS   /ws/live-calls
+    WS   /api/web-voice
+  
+  Ready to accept requests!
+  `);
 
-Ready to accept requests!
-`);
+    // Schedule background jobs
+    try {
+      scheduleOrphanCleanup();
+      console.log('Orphan recording cleanup job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule orphan cleanup job:', error.message);
+    }
 
-  // Schedule background jobs
-  try {
-    scheduleOrphanCleanup();
-    console.log('Orphan recording cleanup job scheduled');
-  } catch (error: any) {
-    console.warn('Failed to schedule orphan cleanup job:', error.message);
-  }
+    try {
+      scheduleRecordingUploadRetry();
+      console.log('Recording upload retry job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule recording upload retry job:', error.message);
+    }
 
-  try {
-    scheduleRecordingUploadRetry();
-    console.log('Recording upload retry job scheduled');
-  } catch (error: any) {
-    console.warn('Failed to schedule recording upload retry job:', error.message);
-  }
+    try {
+      scheduleRecordingMetricsMonitor();
+      console.log('Recording metrics monitor job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule recording metrics monitor job:', error.message);
+    }
 
-  try {
-    scheduleRecordingMetricsMonitor();
-    console.log('Recording metrics monitor job scheduled');
-  } catch (error: any) {
-    console.warn('Failed to schedule recording metrics monitor job:', error.message);
-  }
+    try {
+      scheduleRecordingQueueWorker();
+      console.log('Recording queue worker job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule recording queue worker job:', error.message);
+    }
 
-  try {
-    scheduleRecordingQueueWorker();
-    console.log('Recording queue worker job scheduled');
-  } catch (error: any) {
-    console.warn('Failed to schedule recording queue worker job:', error.message);
-  }
+    // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
+    // Reason: Polling caused race conditions with webhook handlers and wasted bandwidth
+    // Webhooks are more reliable (immediate notification) and prevent duplicate processing
+    // Keep poller functions in codebase for emergency manual recovery only
+    // See: /Users/mac/.claude/plans/streamed-swinging-ullman.md for details
 
-  // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
-  // Reason: Polling caused race conditions with webhook handlers and wasted bandwidth
-  // Webhooks are more reliable (immediate notification) and prevent duplicate processing
-  // Keep poller functions in codebase for emergency manual recovery only
-  // See: /Users/mac/.claude/plans/streamed-swinging-ullman.md for details
+    // try {
+    //   scheduleTwilioCallPoller();
+    //   console.log('Twilio call poller scheduled');
+    // } catch (error: any) {
+    //   console.warn('Failed to schedule Twilio call poller:', error.message);
+    // }
 
-  // try {
-  //   scheduleTwilioCallPoller();
-  //   console.log('Twilio call poller scheduled');
-  // } catch (error: any) {
-  //   console.warn('Failed to schedule Twilio call poller:', error.message);
-  // }
+    // try {
+    //   scheduleVapiCallPoller();
+    //   console.log('Vapi call poller scheduled');
+    // } catch (error: any) {
+    //   console.warn('Failed to schedule Vapi call poller:', error.message);
+    // }
 
-  // try {
-  //   scheduleVapiCallPoller();
-  //   console.log('Vapi call poller scheduled');
-  // } catch (error: any) {
-  //   console.warn('Failed to schedule Vapi call poller:', error.message);
-  // }
+    console.log('✅ Recording pollers disabled - using webhook-only architecture');
+  });
+}
 
-  console.log('✅ Recording pollers disabled - using webhook-only architecture');
-});
+// Mount routers
+app.use('/api/auth', authRouter);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

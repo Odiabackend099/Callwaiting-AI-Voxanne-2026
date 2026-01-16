@@ -20,13 +20,11 @@ interface ActionableLead {
 
 export default function HotLeadDashboard() {
     const { user } = useAuth();
-    const orgId = (user?.app_metadata?.org_id || user?.user_metadata?.org_id) as string;
 
+    // SECURITY FIX: Removed orgId extraction - backend auth middleware extracts from JWT
     const { data, error, isLoading } = useSWR(
-        orgId ? ['/api/analytics/leads', orgId] : null,
-        ([url, id]) => authedBackendFetch<{ leads: ActionableLead[] }>(url, {
-            headers: { 'x-org-id': id }
-        }),
+        '/api/analytics/leads',
+        (url) => authedBackendFetch<{ leads: ActionableLead[] }>(url),
         {
             refreshInterval: 30000,        // Refresh every 30s (less aggressive than pulse)
             revalidateOnFocus: false,      // Prevent reload on tab switch
@@ -38,10 +36,11 @@ export default function HotLeadDashboard() {
 
     const leads = data?.leads || [];
 
-    if (!orgId) {
+    // Auth is handled by server-side middleware, no need to check orgId here
+    if (!user) {
         return (
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6">
-                <p className="text-red-600 dark:text-red-400">{error?.message || 'Failed to load hot leads'}. Please log in to view hot leads</p>
+                <p className="text-red-600 dark:text-red-400">Please log in to view hot leads</p>
             </div>
         );
     }

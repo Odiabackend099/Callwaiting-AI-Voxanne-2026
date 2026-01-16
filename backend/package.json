@@ -27,7 +27,12 @@
     "agent:deploy": "ts-node scripts/run-deployment-agent.ts",
     "agent:monitor": "ts-node scripts/run-monitoring-agent.ts",
     "agent:research": "ts-node scripts/run-research-agent.ts",
-    "tunnel": "ngrok http 3000"
+    "tunnel": "ngrok http 3000",
+    "perf:test": "node scripts/run-performance-suite.js",
+    "perf:test:db": "node scripts/performance-validation.js",
+    "perf:test:api": "node scripts/performance-api-stress-test.js",
+    "perf:test:quick": "node scripts/run-performance-suite.js --api-only",
+    "test:inbound-setup-refactor": "ts-node src/scripts/test-inbound-setup-refactor.ts"
   },
   "keywords": [],
   "author": "",

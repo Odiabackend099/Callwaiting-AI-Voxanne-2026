@@ -39,7 +39,7 @@ export default function LeftSidebar() {
             description: 'Set up and manage API keys and phone numbers',
             items: [
                 { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
-                { label: 'Inbound Configuration', href: '/dashboard/inbound-config', icon: Phone },
+                { label: 'Telephony', href: '/dashboard/inbound-config', icon: Phone },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ],
         },

@@ -267,3 +267,118 @@ export function createMockLogger() {
     debug: jest.fn(),
   };
 }
+
+/**
+ * Creates a mock Express Request object for testing middleware
+ */
+export function createMockExpressRequest(overrides: any = {}) {
+  return {
+    headers: {},
+    body: {},
+    query: {},
+    params: {},
+    method: 'GET',
+    path: '/',
+    user: undefined,
+    org_id: undefined,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a mock Express Response object with spy methods
+ */
+export function createMockExpressResponse() {
+  const res: any = {
+    status: jest.fn().mockReturnThis(),
+    json: jest.fn().mockReturnThis(),
+    send: jest.fn().mockReturnThis(),
+    setHeader: jest.fn().mockReturnThis(),
+    end: jest.fn().mockReturnThis(),
+  };
+  return res;
+}
+
+/**
+ * Creates a mock Express NextFunction
+ */
+export function createMockNextFunction() {
+  return jest.fn();
+}
+
+/**
+ * Creates a mock JWT token with custom claims
+ */
+export function createMockJWT(overrides: any = {}) {
+  return {
+    sub: 'user_mock_123',
+    email: 'test@example.com',
+    app_metadata: {
+      org_id: 'a0000000-0000-0000-0000-000000000001',
+      provider: 'email',
+      ...overrides.app_metadata,
+    },
+    user_metadata: {
+      ...overrides.user_metadata,
+    },
+    aud: 'authenticated',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    iat: Math.floor(Date.now() / 1000),
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a mock Supabase auth.getUser() response
+ */
+export function createMockSupabaseAuthResponse(user: any = null, error: any = null) {
+  const defaultUser = {
+    id: 'user_mock_123',
+    email: 'test@example.com',
+    app_metadata: {
+      org_id: 'a0000000-0000-0000-0000-000000000001',
+    },
+    user_metadata: {},
+  };
+
+  // If user is provided, merge with defaults and ensure id field exists
+  const finalUser = user ? {
+    ...defaultUser,
+    ...user,
+    id: user.id || user.sub || defaultUser.id, // Use id, fallback to sub, then default
+  } : defaultUser;
+
+  return {
+    data: {
+      user: finalUser,
+    },
+    error,
+  };
+}
+
+/**
+ * Helper to simulate race conditions with controlled timing
+ */
+export async function simulateRaceCondition<T>(
+  operations: (() => Promise<T>)[],
+  delayMs: number = 0
+): Promise<T[]> {
+  // Add small random delays to simulate real-world race conditions
+  const delayedOps = operations.map((op, index) =>
+    waitForAsync(delayMs + Math.random() * 10).then(() => op())
+  );
+  return Promise.all(delayedOps);
+}
+
+/**
+ * Helper to assert RLS enforcement in database queries
+ */
+export function assertRLSEnforcement(mockQuery: jest.Mock, expectedOrgId: string): void {
+  expect(mockQuery).toHaveBeenCalled();
+  const calls = mockQuery.mock.calls;
+  // Verify that .eq('org_id', expectedOrgId) was called in the query chain
+  const hasOrgIdFilter = calls.some((call: any) =>
+    call[0] === 'org_id' && call[1] === expectedOrgId
+  );
+  expect(hasOrgIdFilter).toBe(true);
+}

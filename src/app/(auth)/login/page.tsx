@@ -6,26 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Mail, Lock, ArrowRight, Loader } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import Logo from '@/components/Logo';
-
-// Branding images for carousel
-const BRANDING_IMAGES = [
-    '/branding/resource_8Yu5GfUCC29dqKx3x0skXr.png',
-    '/branding/resource_8vxcerNBlWE4yxe6z7t4nh.png',
-    '/branding/resource_9Fnvkd0qdNf9kUnicIO_4i.png',
-    '/branding/resource_9Jl0RXn61UJdSrgTMuDOHn.png',
-    '/branding/resource_9ltCVdMUYmv9yVAyBQIkEL.png',
-    '/branding/resource_9mC_ELBS7fC2fnV2ZG_Oiy.png',
-    '/branding/resource_aQYFm53KqYX5LsYT4nok53.png',
-    '/branding/resource_ahUbsyF9X0Y9I4uijZ-O0g.png',
-    '/branding/resource_aoavD787FGN3LgBj6ENk1f.png',
-    '/branding/resource_b48jIDhedfi7SNQrCI4_tG.png',
-    '/branding/resource_bA3PtO8TZ_X01qLbyPx4CV.png',
-    '/branding/resource_baoMoNSrueT23LGWB1c_fA.png',
-    '/branding/resource_bq982z4VJm6bDMH2oYdk1N.png',
-    '/branding/resource_bxSAiNMJ85y4XpeAi2k4or.png',
-];
 
 export default function LoginPage() {
     return (
@@ -42,13 +23,13 @@ export default function LoginPage() {
 function LoginPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { signIn, signInWithGoogle } = useAuth();
+    const { user, signIn, signInWithGoogle, loading: authLoading } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [waitingForAuthState, setWaitingForAuthState] = useState(false);
 
     useEffect(() => {
         const err = searchParams.get('error');
@@ -60,14 +41,14 @@ function LoginPageContent() {
         }
     }, [searchParams]);
 
-    // Auto-rotate carousel
+    // Monitor auth state for successful sign-in redirect
     useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentImageIndex((prev) => (prev + 1) % BRANDING_IMAGES.length);
-        }, 4000); // Change image every 4 seconds
-
-        return () => clearInterval(interval);
-    }, []);
+        if (waitingForAuthState && user && !authLoading) {
+            // User is now authenticated, redirect to dashboard
+            setWaitingForAuthState(false);
+            router.push('/dashboard');
+        }
+    }, [waitingForAuthState, user, authLoading, router]);
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -79,16 +60,18 @@ function LoginPageContent() {
                 throw new Error('Email and password are required');
             }
 
-            const { user, error: signInError } = await signIn(email, password);
+            const { user: signedInUser, error: signInError } = await signIn(email, password);
 
             if (signInError) {
                 throw signInError;
             }
 
-            if (user) {
-                // Wait a moment for auth state to update, then redirect
-                await new Promise(resolve => setTimeout(resolve, 500));
-                router.push('/dashboard');
+            if (signedInUser) {
+                // Signal that we're waiting for auth state to update
+                // The useEffect above will detect when user is populated and redirect
+                setWaitingForAuthState(true);
+                // Keep button disabled while waiting for auth state
+                // setLoading will remain true
             } else {
                 throw new Error('Sign in failed - no user returned');
             }
@@ -113,9 +96,8 @@ function LoginPageContent() {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white flex font-sans">
-            {/* Left Side - Login Form */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen bg-black text-white flex items-center justify-center font-sans p-4">
+            <div className="w-full flex items-center justify-center relative overflow-hidden">
                 {/* Background Ambience */}
                 <div className="absolute inset-0 z-0">
                     <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-900/20 rounded-full blur-[120px] animate-pulse-glow" />
@@ -135,7 +117,7 @@ function LoginPageContent() {
                         </p>
                     </div>
 
-                    <div className="glass-panel p-8 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
+                    <div className="p-8 rounded-2xl border border-white/20 bg-slate-900/40 backdrop-blur-xl">
                         <form onSubmit={handleSignIn} className="space-y-5">
                             {error && (
                                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
@@ -256,66 +238,6 @@ function LoginPageContent() {
                             </a>
                         </p>
                     </div>
-                </div>
-            </div>
-
-            {/* Right Side - Animated Branding Showcase */}
-            <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-purple-900/20 to-blue-900/20 items-center justify-center p-12 relative overflow-hidden">
-                {/* Decorative Background */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
-
-                {/* Animated Image Carousel */}
-                <div className="relative w-full max-w-2xl aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl bg-slate-800">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={currentImageIndex}
-                            initial={{ opacity: 0, scale: 1.1 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ duration: 1, ease: "easeInOut" }}
-                            className="absolute inset-0 bg-cover bg-center"
-                            style={{
-                                backgroundImage: `url(${BRANDING_IMAGES[currentImageIndex]})`,
-                            }}
-                        />
-                    </AnimatePresence>
-
-                    {/* Carousel Indicators */}
-                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
-                        {BRANDING_IMAGES.map((_, index) => (
-                            <button
-                                key={index}
-                                onClick={() => setCurrentImageIndex(index)}
-                                className={`h-1.5 rounded-full transition-all duration-300 ${index === currentImageIndex
-                                    ? 'w-8 bg-white'
-                                    : 'w-1.5 bg-white/40 hover:bg-white/60'
-                                    }`}
-                                aria-label={`Go to slide ${index + 1}`}
-                            />
-                        ))}
-                    </div>
-                </div>
-
-                {/* Branding Text Overlay */}
-                <div className="absolute bottom-12 left-12 right-12 text-center">
-                    <motion.h2
-                        key={`title-${currentImageIndex}`}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5, duration: 0.8 }}
-                        className="text-3xl font-bold text-white mb-2"
-                    >
-                        AI-Powered Reception
-                    </motion.h2>
-                    <motion.p
-                        key={`subtitle-${currentImageIndex}`}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.7, duration: 0.8 }}
-                        className="text-slate-300 text-lg"
-                    >
-                        24/7 availability, zero missed opportunities
-                    </motion.p>
                 </div>
             </div>
         </div>

@@ -1,11 +1,144 @@
 /**
  * Authentication Middleware
  * Validates JWT tokens and protects founder console endpoints
+ *
+ * Performance Optimizations:
+ * - JWT token cache with 5-minute TTL (reduces Supabase API calls)
+ * - Auth latency monitoring (logs slow validations, tracks cache metrics)
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase-client';
 import { validateAndResolveOrgId } from '../services/org-validation';
+
+/**
+ * JWT Cache Entry - stores validated user data with TTL
+ */
+interface CachedJWT {
+  userId: string;
+  email: string;
+  orgId: string;
+  expiresAt: number; // timestamp when cache entry expires
+}
+
+/**
+ * In-memory JWT cache
+ * Key: JWT token
+ * Value: cached user data with expiration
+ */
+const jwtCache = new Map<string, CachedJWT>();
+
+/**
+ * Cache statistics for monitoring
+ */
+interface CacheStats {
+  hits: number;
+  misses: number;
+  totalRequests: number;
+  avgLatencyCached: number;
+  avgLatencyUncached: number;
+  latencyDataCached: number[];
+  latencyDataUncached: number[];
+}
+
+const cacheStats: CacheStats = {
+  hits: 0,
+  misses: 0,
+  totalRequests: 0,
+  avgLatencyCached: 0,
+  avgLatencyUncached: 0,
+  latencyDataCached: [],
+  latencyDataUncached: []
+};
+
+/**
+ * Clean expired cache entries (runs periodically)
+ */
+function cleanExpiredCache(): void {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [token, entry] of jwtCache.entries()) {
+    if (entry.expiresAt < now) {
+      jwtCache.delete(token);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0 && process.env.DEBUG_AUTH) {
+    console.debug(`[JWT Cache] Cleaned ${cleaned} expired entries`);
+  }
+}
+
+/**
+ * Get cached JWT or null if expired/missing
+ */
+function getCachedJWT(token: string): CachedJWT | null {
+  cleanExpiredCache();
+  const cached = jwtCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached;
+  }
+  if (cached) {
+    jwtCache.delete(token);
+  }
+  return null;
+}
+
+/**
+ * Cache JWT token with 5-minute TTL
+ */
+function cacheJWT(token: string, userId: string, email: string, orgId: string): void {
+  const ttlMs = 5 * 60 * 1000; // 5 minutes
+  const expiresAt = Date.now() + ttlMs;
+  jwtCache.set(token, { userId, email, orgId, expiresAt });
+  if (process.env.DEBUG_AUTH) {
+    console.debug(`[JWT Cache] Cached token for user ${userId}, ${jwtCache.size} entries`);
+  }
+}
+
+/**
+ * Log auth latency and update statistics
+ */
+function recordAuthLatency(latencyMs: number, cached: boolean): void {
+  cacheStats.totalRequests++;
+
+  if (cached) {
+    cacheStats.latencyDataCached.push(latencyMs);
+    // Keep only last 100 samples
+    if (cacheStats.latencyDataCached.length > 100) {
+      cacheStats.latencyDataCached.shift();
+    }
+    const sum = cacheStats.latencyDataCached.reduce((a, b) => a + b, 0);
+    cacheStats.avgLatencyCached = Math.round(sum / cacheStats.latencyDataCached.length);
+  } else {
+    cacheStats.latencyDataUncached.push(latencyMs);
+    // Keep only last 100 samples
+    if (cacheStats.latencyDataUncached.length > 100) {
+      cacheStats.latencyDataUncached.shift();
+    }
+    const sum = cacheStats.latencyDataUncached.reduce((a, b) => a + b, 0);
+    cacheStats.avgLatencyUncached = Math.round(sum / cacheStats.latencyDataUncached.length);
+  }
+
+  // Warn if latency is high
+  if (latencyMs > 100) {
+    console.warn(`[Auth Latency] ${cached ? 'CACHED' : 'UNCACHED'} auth took ${latencyMs}ms`);
+  }
+
+  // Log stats periodically (every 100 requests)
+  if (cacheStats.totalRequests % 100 === 0) {
+    const hitRate = cacheStats.totalRequests > 0
+      ? Math.round((cacheStats.hits / cacheStats.totalRequests) * 100)
+      : 0;
+    console.info(`[Auth Cache Stats] Hits: ${cacheStats.hits}, Misses: ${cacheStats.misses}, HitRate: ${hitRate}%, Cached: ${cacheStats.avgLatencyCached}ms, Uncached: ${cacheStats.avgLatencyUncached}ms, Size: ${jwtCache.size}`);
+  }
+}
+
+/**
+ * Public API: Get current cache statistics
+ */
+export function getAuthCacheStats(): CacheStats {
+  return { ...cacheStats };
+}
 
 // Extend Express Request to include user info, org, and requestId
 declare global {
@@ -57,13 +190,31 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
         if (!isProduction) {
           // Development mode: Attempt token validation, but don't block on failure
           try {
-            const { data: { user }, error } = await supabase.auth.getUser(token);
+            // PERFORMANCE: Check cache first
+            let cachedUser = getCachedJWT(token);
+            let user: any = null;
+            let error: any = null;
+
+            if (cachedUser) {
+              // Use cached data
+              user = {
+                id: cachedUser.userId,
+                email: cachedUser.email,
+                app_metadata: { org_id: cachedUser.orgId }
+              };
+            } else {
+              // Fetch from Supabase
+              const result = await supabase.auth.getUser(token);
+              user = result.data?.user;
+              error = result.error;
+            }
+
             if (!error && user) {
               // Token is valid, resolve org
               // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
               // Fallback to user_metadata.org_id for backward compatibility during migration
               let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
-              
+
               // SECURITY FIX: STRICT validation - NO fallback to limit(1)
               // If org_id is missing or 'default', reject with 401
               if (orgId === 'default') {
@@ -71,7 +222,7 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
                 res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
                 return;
               }
-              
+
               if (orgId) {
                 req.user = { id: user.id, email: user.email || '', orgId };
                 req.org_id = orgId;
@@ -119,8 +270,13 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
 /**
  * Verify JWT token from Authorization header
  * Expected format: "Bearer <token>"
+ *
+ * PERFORMANCE: Uses JWT cache to reduce Supabase API calls
+ * Cache hit target: >80% of requests
+ * Latency targets: <50ms (cached), <200ms (uncached)
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const startTime = Date.now();
   try {
     const authHeader = req.headers.authorization;
 
@@ -129,12 +285,50 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    const token = authHeader.substring(7).trim(); // Remove "Bearer " prefix and trim whitespace
+
+    if (!token) {
+      res.status(401).json({ error: 'Missing or invalid Authorization header' });
+      return;
+    }
+
+    // PERFORMANCE OPTIMIZATION: Check JWT cache first
+    let cachedUser = getCachedJWT(token);
+    let isCached = false;
+
+    if (cachedUser) {
+      // Cache hit: use cached data
+      isCached = true;
+      cacheStats.hits++;
+
+      if (cachedUser.orgId === 'default') {
+        const latency = Date.now() - startTime;
+        recordAuthLatency(latency, isCached);
+        res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
+        return;
+      }
+
+      req.user = {
+        id: cachedUser.userId,
+        email: cachedUser.email,
+        orgId: cachedUser.orgId
+      };
+
+      const latency = Date.now() - startTime;
+      recordAuthLatency(latency, isCached);
+      next();
+      return;
+    }
+
+    // Cache miss: validate with Supabase
+    cacheStats.misses++;
 
     // Verify token with Supabase
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
+      const latency = Date.now() - startTime;
+      recordAuthLatency(latency, false);
       res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
@@ -143,14 +337,29 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
     // Fallback to user_metadata.org_id for backward compatibility during migration
     let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
-    
+
+    // DEBUG: Log auth details for regression debugging
+    if (orgId === 'default' || process.env.NODE_ENV === 'test') {
+      console.log('[Auth Debug]', {
+        email: user.email,
+        app_metadata: user.app_metadata,
+        user_metadata: user.user_metadata,
+        resolvedOrgId: orgId
+      });
+    }
+
     // SECURITY FIX: STRICT validation - NO fallback to limit(1)
     // If org_id is missing or 'default', reject immediately
     if (orgId === 'default') {
+      const latency = Date.now() - startTime;
+      recordAuthLatency(latency, false);
       console.log('[requireAuth] User missing valid org_id in JWT - rejecting');
       res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
       return;
     }
+
+    // Cache the validated JWT for future requests
+    cacheJWT(token, user.id, user.email || '', orgId);
 
     req.user = {
       id: user.id,
@@ -158,8 +367,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       orgId
     };
 
+    const latency = Date.now() - startTime;
+    recordAuthLatency(latency, false);
+
     next();
   } catch (error: any) {
+    const latency = Date.now() - startTime;
+    recordAuthLatency(latency, false);
     console.error('[Auth Middleware] Error:', error);
     res.status(500).json({ error: 'Authentication failed' });
   }
@@ -194,6 +408,8 @@ export async function verifyOrgAccess(req: Request, res: Response, next: NextFun
 
 /**
  * Optional auth - attaches user if token provided, but doesn't require it
+ * SECURITY FIX: No database fallback - if org_id missing, don't attach user
+ * PERFORMANCE: Uses JWT cache to reduce Supabase API calls
  */
 export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -201,30 +417,43 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const { data: { user }, error } = await supabase.auth.getUser(token);
+
+      // PERFORMANCE: Check cache first
+      let cachedUser = getCachedJWT(token);
+      let user: any = null;
+      let error: any = null;
+
+      if (cachedUser) {
+        user = {
+          id: cachedUser.userId,
+          email: cachedUser.email,
+          app_metadata: { org_id: cachedUser.orgId }
+        };
+      } else {
+        const result = await supabase.auth.getUser(token);
+        user = result.data?.user;
+        error = result.error;
+      }
 
       if (!error && user) {
         // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
         // Fallback to user_metadata.org_id for backward compatibility during migration
         let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
-        if (orgId === 'default') {
-          try {
-            const { data: org } = await supabase
-              .from('organizations')
-              .select('id')
-              .limit(1)
-              .single();
-            if (org?.id) orgId = org.id;
-          } catch {
-            // ignore
+
+        // SECURITY FIX: Don't attach user if org_id is 'default' or missing
+        // This prevents accidental cross-tenant data access via database fallback
+        if (orgId && orgId !== 'default') {
+          req.user = {
+            id: user.id,
+            email: user.email || '',
+            orgId
+          };
+
+          // Cache the token if we fetched it
+          if (!cachedUser) {
+            cacheJWT(token, user.id, user.email || '', orgId);
           }
         }
-
-        req.user = {
-          id: user.id,
-          email: user.email || '',
-          orgId
-        };
       }
     }
 

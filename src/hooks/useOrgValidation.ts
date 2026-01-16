@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 /**
  * useOrgValidation Hook
@@ -83,30 +84,51 @@ export function useOrgValidation() {
         }
 
         // Confirm org exists in database via API
-        const response = await fetch(`/api/orgs/validate/${orgId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          // Credentials ensures JWT is sent to validate user's access
-          credentials: 'include',
-        });
+        // SECURITY FIX: Using authedBackendFetch which includes JWT automatically
+        try {
+          const data = await authedBackendFetch<{ success: boolean; orgId: string; validated: boolean }>(
+            `/api/orgs/validate/${orgId}`,
+            { method: 'GET' }
+          );
 
-        if (!response.ok) {
+          // Validation succeeded
+          if (data.success && data.orgId === orgId) {
+            console.debug('[useOrgValidation] Organization validation succeeded:', orgId);
+            setOrgValid(true);
+            setOrgError(null);
+            setValidationLoading(false);
+            return;
+          } else {
+            const error = 'Organization validation returned unexpected result';
+            console.error('[useOrgValidation]', error, data);
+            setOrgError(error);
+            setOrgValid(false);
+            setValidationLoading(false);
+
+            setTimeout(() => {
+              router.push('/login?error=validation_failed');
+            }, 1500);
+            return;
+          }
+        } catch (err: any) {
           let errorMessage = 'Organization validation failed';
-          
-          if (response.status === 404) {
+
+          // Extract error from authedBackendFetch response
+          if (err?.status === 404) {
             errorMessage = `Organization ${orgId} does not exist`;
-          } else if (response.status === 403) {
+          } else if (err?.status === 403) {
             errorMessage = 'You do not have access to this organization';
-          } else if (response.status === 401) {
+          } else if (err?.status === 401) {
             errorMessage = 'Authentication required. Please log in again.';
+          } else if (err?.message) {
+            errorMessage = err.message;
           }
 
           console.error('[useOrgValidation] API validation failed:', {
-            status: response.status,
+            status: err?.status,
             message: errorMessage,
-            orgId
+            orgId,
+            error: err
           });
 
           setOrgError(errorMessage);
@@ -114,7 +136,7 @@ export function useOrgValidation() {
           setValidationLoading(false);
 
           // Redirect based on error type
-          const redirectUrl = response.status === 401 
+          const redirectUrl = err?.status === 401
             ? '/login'
             : `/login?error=${encodeURIComponent(errorMessage)}`;
 
@@ -123,32 +145,6 @@ export function useOrgValidation() {
           }, 1500);
           return;
         }
-
-        // Validation succeeded
-        const data = await response.json();
-        
-        if (data.success && data.orgId === orgId) {
-          console.debug('[useOrgValidation] Organization validation succeeded:', orgId);
-          setOrgValid(true);
-          setOrgError(null);
-        } else {
-          const error = 'Organization validation returned unexpected result';
-          console.error('[useOrgValidation]', error, data);
-          setOrgError(error);
-          setOrgValid(false);
-
-          setTimeout(() => {
-            router.push('/login?error=validation_failed');
-          }, 1500);
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown validation error';
-        console.error('[useOrgValidation] Validation error:', errorMessage, err);
-        setOrgError(`Validation error: ${errorMessage}`);
-        setOrgValid(false);
-
-        // Retry on network errors (not fatal)
-        // Don't redirect immediately; let component handle retry logic
       } finally {
         setValidationLoading(false);
       }

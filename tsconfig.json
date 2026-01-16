@@ -39,6 +39,9 @@
   "exclude": [
     "node_modules",
     "_archived_dashboard",
-    "backend"
+    "backend",
+    "scripts",
+    "frontend",
+    "src/components/integrations"
   ]
 }

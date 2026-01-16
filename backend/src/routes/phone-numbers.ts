@@ -3,6 +3,7 @@ import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
 import { z } from 'zod'; // Assuming zod is available, if not fallback to manual validation
 import { createLogger } from '../services/logger';
+import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
 const logger = createLogger('phone-numbers');
@@ -51,33 +52,24 @@ function getEffectiveOrgId(req: Request): string {
 }
 
 async function getOrgVapiClient(orgId: string): Promise<VapiClient> {
-  const { data: vapiIntegration, error } = await supabase
-    .from('integrations')
-    .select('config')
-    .eq('provider', INTEGRATION_PROVIDERS.VAPI)
-    .eq('org_id', orgId)
-    .single();
-
-  if (error || !vapiIntegration) {
-    logger.error('Failed to fetch VAPI integration', { orgId, error });
-    throw new Error('VAPI Integration not configured for this Organization');
-  }
-
-  const apiKey = vapiIntegration.config?.vapi_api_key || vapiIntegration.config?.vapi_private_key || process.env.VAPI_API_KEY;
+  // Platform Provider Model: Use system key for all tenants
+  const apiKey = process.env.VAPI_API_KEY;
 
   if (!apiKey) {
-    throw new Error('VAPI API Key missing in configuration');
+    logger.error('VAPI_API_KEY missing in environment variables');
+    throw new Error('System Configuration Error: Telephony provider unavailable');
   }
 
-  // Sanitize key
-  const safeKey = apiKey.trim().replace(/[^\x20-\x7E]/g, '');
-  return new VapiClient(safeKey);
+  // We no longer fetch per-tenant keys from DB.
+  // The Platform Key allows us to manage resources for all tenants.
+  return new VapiClient(apiKey);
 }
 
 // --- Routes ---
 
 // POST /import
-router.post('/import', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+router.post('/import', requireAuth, async (req: Request, res: Response) => {
   try {
     const validation = ImportSchema.safeParse(req.body);
     if (!validation.success) {
@@ -157,7 +149,8 @@ router.post('/import', async (req: Request, res: Response) => {
 });
 
 // GET /
-router.get('/', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const orgId = getEffectiveOrgId(req);
     const vapi = await getOrgVapiClient(orgId);
@@ -170,7 +163,8 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /:id
-router.get('/:id', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const orgId = getEffectiveOrgId(req);
     const vapi = await getOrgVapiClient(orgId);
@@ -183,7 +177,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // PATCH /:id (The "Select Phone Number" Logic)
-router.patch('/:id', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const orgId = getEffectiveOrgId(req);
     const { id } = req.params;
@@ -241,7 +236,8 @@ router.patch('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /:id
-router.delete('/:id', async (req: Request, res: Response) => {
+// SECURITY FIX: Added requireAuth
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const orgId = getEffectiveOrgId(req);
     const vapi = await getOrgVapiClient(orgId);

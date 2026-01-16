@@ -1,0 +1,96 @@
+services:
+  # Frontend Service
+  - type: web
+    name: callwaiting-ai-frontend
+    env: node
+    plan: standard
+    buildCommand: npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: supabaseUrl
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: supabaseAnonKey
+      - key: NEXT_PUBLIC_BACKEND_URL
+        value: https://callwaiting-ai-backend.onrender.com
+      - key: NEXT_PUBLIC_GA_ID
+        value: ${NEXT_PUBLIC_GA_ID}
+    routes:
+      - path: /
+        matchType: prefix
+
+  # Backend Service
+  - type: web
+    name: callwaiting-ai-backend
+    env: node
+    plan: standard
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: BACKEND_URL
+        value: https://callwaiting-ai-backend.onrender.com
+      - key: FRONTEND_URL
+        value: https://callwaiting-ai-frontend.onrender.com
+      - key: SUPABASE_URL
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: supabaseUrl
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: supabaseServiceRoleKey
+      - key: SUPABASE_ANON_KEY
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: supabaseAnonKey
+      - key: GOOGLE_CLIENT_ID
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: googleClientId
+      - key: GOOGLE_CLIENT_SECRET
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: googleClientSecret
+      - key: GOOGLE_REDIRECT_URI
+        value: https://callwaiting-ai-backend.onrender.com/api/google-oauth/callback
+      - key: VAPI_API_KEY
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: vapiApiKey
+      - key: TWILIO_ACCOUNT_SID
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: twilioAccountSid
+      - key: TWILIO_AUTH_TOKEN
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: twilioAuthToken
+      - key: ENCRYPTION_KEY
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: encryptionKey
+      - key: JWT_SECRET
+        fromDatabase:
+          name: callwaiting-ai-db
+          property: jwtSecret
+    routes:
+      - path: /api
+        matchType: prefix
+
+databases:
+  - name: callwaiting-ai-db
+    databaseName: callwaiting_ai_prod
+    user: postgres
+    region: us-east  # Change based on your preference

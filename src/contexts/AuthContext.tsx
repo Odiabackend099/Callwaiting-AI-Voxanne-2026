@@ -112,34 +112,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         return;
                     }
 
-                    // CRITICAL FIX: Also fetch tenant_id on auth state change (via server)
-                    try {
-                        const response = await fetch('/api/auth/tenant-id');
-                        const result = await response.json();
-
-                    // NOTE: org_id is now obtained from JWT app_metadata
+                    // NOTE: org_id is now obtained from JWT app_metadata (stamped by database trigger)
                     // AuthContext no longer fetches or manages org_id
-                    if (isMounted) {
-                        // org_id should already be in JWT from Phase 1 trigger
-                        // useOrgValidation will validate it when needed
-                    }
-                } catch (err) {
-                    console.error('Error in auth state handler:', err);
-                }
-            }
+                    // Validation is handled by useOrgValidation hook in dashboard/layout.tsx
+                    // org_id should already be in JWT from Phase 1 trigger
 
-                // Only fetch settings on specific events to avoid N+1 queries
-                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                    if (session?.user) {
+                    // Fetch user settings in background (non-blocking)
+                    if (isMounted) {
                         fetchUserSettings(session.user.id).catch(err => {
-                            if (isMounted && process.env.NODE_ENV !== 'production') {
+                            if (process.env.NODE_ENV !== 'production') {
                                 console.error('Settings fetch failed:', err);
                             }
                         });
                     }
                 } else if (event === 'SIGNED_OUT') {
                     setUserSettings(null);
-                    localStorage.removeItem('org_id');
+                    localStorage.removeItem('org_id'); // Clean up legacy localStorage
                     setLoading(false);
                     router.push('/login');
                 }

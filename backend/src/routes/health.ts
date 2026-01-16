@@ -59,4 +59,8 @@ healthRouter.get('/health', async (req: Request, res: Response) => {
     res.status(statusCode).json(response);
 });
 
-export { healthRouter };
+const authRouter = Router();
+
+authRouter.get('/auth/health', (req, res) => res.status(200).send('OK'));
+
+export { healthRouter, authRouter };

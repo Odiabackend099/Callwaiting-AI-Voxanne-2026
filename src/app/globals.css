@@ -97,11 +97,11 @@ select {
 
 /* Premium Glassmorphism Utilities */
 .glass-panel {
-  @apply bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/50 shadow-sm dark:shadow-xl;
+  @apply bg-slate-900/60 backdrop-blur-xl border border-white/20 shadow-sm dark:shadow-xl;
 }
 
 .glass-card {
-  @apply bg-white/50 dark:bg-slate-900/40 backdrop-blur-lg border border-gray-100/50 dark:border-slate-800/40 transition-all duration-300;
+  @apply bg-slate-900/40 backdrop-blur-lg border border-white/20 transition-all duration-300;
 }
 
 @keyframes heartbeat {

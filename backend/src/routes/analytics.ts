@@ -2,22 +2,22 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../services/supabase-client';
 import { log } from '../services/logger';
+import { requireAuth } from '../middleware/auth';
 
 const analyticsRouter = Router();
 
 /**
  * GET /api/analytics/dashboard-pulse
  * Retrieves the high-level metrics for the dashboard cards
+ * SECURITY FIX: Now requires JWT authentication
  */
-analyticsRouter.get('/dashboard-pulse', async (req: Request, res: Response) => {
+analyticsRouter.get('/dashboard-pulse', requireAuth, async (req: Request, res: Response) => {
     try {
-        // Determine org_id from request (middleware usually attaches it, or use header/query for now)
-        // For MVP/Console, assuming single org or passed securely. 
-        // Ideally user is authenticated via middleware.
-        const orgId = req.headers['x-org-id'] as string; // Temporary for dev/MVP
+        // Extract org_id from JWT (attached by requireAuth middleware)
+        const orgId = req.user?.orgId;
 
         if (!orgId) {
-            return res.status(400).json({ error: 'Organization ID required' });
+            return res.status(401).json({ error: 'Authentication required' });
         }
 
         const { data, error } = await supabase
@@ -53,13 +53,15 @@ analyticsRouter.get('/dashboard-pulse', async (req: Request, res: Response) => {
 /**
  * GET /api/analytics/leads
  * Retrieves the actionable leads list
+ * SECURITY FIX: Now requires JWT authentication
  */
-analyticsRouter.get('/leads', async (req: Request, res: Response) => {
+analyticsRouter.get('/leads', requireAuth, async (req: Request, res: Response) => {
     try {
-        const orgId = req.headers['x-org-id'] as string;
+        // Extract org_id from JWT (attached by requireAuth middleware)
+        const orgId = req.user?.orgId;
 
         if (!orgId) {
-            return res.status(400).json({ error: 'Organization ID required' });
+            return res.status(401).json({ error: 'Authentication required' });
         }
 
         const { data, error } = await supabase
@@ -75,6 +77,113 @@ analyticsRouter.get('/leads', async (req: Request, res: Response) => {
         return res.json({ leads: data || [] });
     } catch (err: any) {
         log.error('AnalyticsAPI', 'Internal error', { error: err.message });
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * GET /api/analytics/recent-activity
+ * Retrieves the last 10 activity events (calls, hot leads, bookings)
+ * SECURITY FIX: Now requires JWT authentication
+ */
+analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const orgId = req.user?.orgId;
+
+        if (!orgId) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        // Fetch recent calls
+        const { data: calls, error: callsError } = await supabase
+            .from('call_logs')
+            .select('id, created_at, caller_name, duration_seconds, sentiment_label, sentiment_summary, sentiment_urgency')
+            .eq('org_id', orgId)
+            .eq('call_type', 'inbound')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        // Fetch recent hot lead alerts
+        const { data: hotLeads, error: hotLeadsError } = await supabase
+            .from('hot_lead_alerts')
+            .select('id, created_at, lead_name, lead_phone, service_interest, lead_score')
+            .eq('org_id', orgId)
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        // Fetch recent appointments
+        const { data: appointments, error: appointmentsError } = await supabase
+            .from('appointments')
+            .select('id, created_at, customer_name, scheduled_at, contact_phone')
+            .eq('org_id', orgId)
+            .eq('status', 'scheduled')
+            .order('scheduled_at', { ascending: false })
+            .limit(5);
+
+        // Combine and sort by timestamp
+        const events: any[] = [];
+
+        // Add call events
+        if (calls && !callsError) {
+            calls.forEach((call: any) => {
+                events.push({
+                    id: `call_${call.id}`,
+                    type: 'call_completed',
+                    timestamp: call.created_at,
+                    summary: `Call from ${call.caller_name || 'Unknown'} - ${Math.floor((call.duration_seconds || 0) / 60)}m`,
+                    metadata: {
+                        caller_name: call.caller_name,
+                        sentiment: call.sentiment_label,
+                        sentiment_summary: call.sentiment_summary,
+                        sentiment_urgency: call.sentiment_urgency,
+                        duration_seconds: call.duration_seconds
+                    }
+                });
+            });
+        }
+
+        // Add hot lead events
+        if (hotLeads && !hotLeadsError) {
+            hotLeads.forEach((lead: any) => {
+                events.push({
+                    id: `hotlead_${lead.id}`,
+                    type: 'hot_lead_detected',
+                    timestamp: lead.created_at,
+                    summary: `🔥 Hot lead: ${lead.lead_name}`,
+                    metadata: {
+                        lead_name: lead.lead_name,
+                        lead_phone: lead.lead_phone,
+                        service_interest: lead.service_interest,
+                        lead_score: lead.lead_score
+                    }
+                });
+            });
+        }
+
+        // Add appointment events
+        if (appointments && !appointmentsError) {
+            appointments.forEach((apt: any) => {
+                events.push({
+                    id: `appointment_${apt.id}`,
+                    type: 'appointment_booked',
+                    timestamp: apt.created_at,
+                    summary: `📅 Appointment for ${apt.customer_name || 'Unknown'}`,
+                    metadata: {
+                        customer_name: apt.customer_name,
+                        scheduled_at: apt.scheduled_at,
+                        contact_phone: apt.contact_phone
+                    }
+                });
+            });
+        }
+
+        // Sort by timestamp (newest first) and limit to 10
+        events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const recentEvents = events.slice(0, 10);
+
+        return res.json({ events: recentEvents });
+    } catch (err: any) {
+        log.error('AnalyticsAPI', 'Failed to fetch recent activity', { error: err.message });
         return res.status(500).json({ error: 'Internal server error' });
     }
 });

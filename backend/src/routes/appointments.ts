@@ -33,7 +33,7 @@ appointmentsRouter.get('/', async (req: Request, res: Response) => {
     const schema = z.object({
       page: z.coerce.number().int().positive().default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
-      status: z.enum(['scheduled', 'completed', 'cancelled']).optional(),
+      status: z.enum(['confirmed', 'scheduled', 'completed', 'cancelled']).optional(),
       contact_id: z.string().uuid().optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional()
@@ -131,7 +131,7 @@ appointmentsRouter.post('/', async (req: Request, res: Response) => {
         contact_phone: parsed.contactPhone,
         customer_name: parsed.customerName,
         contact_id: parsed.contact_id || null,
-        status: 'scheduled',
+        status: 'confirmed',
         confirmation_sent: false,
         created_at: new Date().toISOString()
       })

@@ -12,6 +12,11 @@ import {
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
 import { supabase } from '../services/supabase-client';
+import { EncryptionService } from '../services/encryption';
+
+const isValidUUID = (uuid: string): boolean => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
+};
 
 const router = express.Router();
 
@@ -234,21 +239,34 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 
     // Exchange code for tokens and store
     try {
-      const result = await exchangeCodeForTokens(code as string, state as string);
-      
-      log.info('GoogleOAuth', 'OAuth callback successful', {
-        orgId: result.orgId
+      log.debug('GoogleOAuth', 'Calling exchangeCodeForTokens', {
+        codeLength: code?.toString().length,
+        stateLength: state?.toString().length
       });
 
-      // Redirect to frontend with success
+      const result = await exchangeCodeForTokens(code as string, state as string);
+
+      log.info('GoogleOAuth', 'OAuth callback successful', {
+        orgId: result.orgId,
+        email: result.email,
+        timestamp: new Date().toISOString(),
+        success: result.success
+      });
+
+      // Redirect to frontend with success (optionally include email if available)
       const successParam = encodeURIComponent('calendar_connected');
-      res.redirect(`${frontendUrl}/dashboard/api-keys?success=${successParam}`);
+      let redirectUrl = `${frontendUrl}/dashboard/api-keys?success=${successParam}`;
+      if (result.email) {
+        redirectUrl += `&email=${encodeURIComponent(result.email)}`;
+      }
+      res.redirect(redirectUrl);
     } catch (exchangeError: any) {
       log.error('GoogleOAuth', 'Failed to exchange code for tokens', {
         error: exchangeError?.message,
         errorCode: exchangeError?.code,
         errorResponse: exchangeError?.response?.data,
-        stack: exchangeError?.stack
+        stack: exchangeError?.stack,
+        timestamp: new Date().toISOString()
       });
 
       // Determine error type with more specific error messages
@@ -346,86 +364,159 @@ router.post('/revoke', requireAuthOrDev, async (req: Request, res: Response): Pr
 });
 
 /**
- * GET /api/google-oauth/status
+ * GET /api/google-oauth/status/:orgId
  * 
  * Check if Google Calendar is connected for an organization
  * 
- * Query parameters:
- * - orgId (optional): Organization ID. If not provided, uses authenticated user's orgId
+ * URL parameters:
+ * - orgId (required): Organization ID to check
  * 
  * Response: JSON with connection status
  */
-router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
+router.get('/status/:orgId?', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Get orgId from query or authenticated user context
-    let orgId = req.query.orgId as string;
+    // Get orgId from path, query, or authenticated user (in order of precedence)
+    let orgId = req.params.orgId || req.query.orgId as string;
 
     if (!orgId && req.user?.orgId) {
       orgId = req.user.orgId;
     }
 
-    if (!orgId) {
-      if (process.env.NODE_ENV === 'development') {
-        orgId = 'a0000000-0000-0000-0000-000000000001';
-      } else {
-        res.status(400).json({
-          error: 'orgId is required'
-        });
-        return;
-      }
+    // Handle "unknown" as missing orgId (frontend fallback value)
+    if (orgId === 'unknown') {
+      orgId = '';
     }
 
-    // Check if credentials exist in org_credentials table
-    const { data: credentials, error } = await supabase
-      .from('org_credentials')
-      .select('provider, created_at, updated_at, metadata')
-      .eq('org_id', orgId)
-      .eq('provider', 'google_calendar')
-      .eq('is_active', true)
-      .maybeSingle();
+    // If still no orgId, use default for dev mode
+    if (!orgId && process.env.NODE_ENV === 'development') {
+      orgId = 'a0000000-0000-0000-0000-000000000001';
+      log.warn('GoogleOAuth', 'Using default dev org_id - user session missing org_id', {
+        message: 'User needs to log out and back in, or update auth.users.raw_app_meta_data'
+      });
+    }
 
-    if (error) {
-      // Handle table not found error
-      if (error.code === 'PGRST116' || error.message?.includes('Could not find the table')) {
-        log.warn('GoogleOAuth', 'org_credentials table not found', { error: error?.message });
+    // Validate orgId format (applies to all sources)
+    if (!orgId || (orgId !== 'test' && !isValidUUID(orgId))) {
+      return res.status(400).json({
+        error: 'Invalid organization ID',
+        message: 'Please provide a valid organization ID in UUID format. Your user session may be missing org_id - try logging out and back in.'
+      });
+    }
+
+    log.debug('GoogleOAuth', 'Status endpoint called', { 
+      orgId,
+      path: req.path,
+      method: req.method
+    });
+
+    // Check if credentials exist in org_credentials table
+    // Add retry logic for schema cache issues with exponential backoff
+    // Include encrypted_config for fallback email extraction if metadata is missing
+    let credentials: any = null;
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { data, error } = await supabase
+        .from('org_credentials')
+        .select('provider, created_at, updated_at, metadata, is_active, encrypted_config')
+        .eq('org_id', orgId)
+        .eq('provider', 'google_calendar')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!error) {
+        credentials = data;
+        break;
+      }
+
+      lastError = error;
+
+      // Handle schema cache errors with exponential backoff
+      if (error.code === 'PGRST116' || error.code === 'PGRST205' || error.message?.includes('Could not find')) {
+        if (attempt < 3) {
+          const delayMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s
+          log.debug('GoogleOAuth', `Schema cache retry ${attempt}/3`, { orgId, delayMs });
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+      }
+
+      // Non-retryable error
+      break;
+    }
+
+    // Check if we got data after retries
+    if (lastError && !credentials) {
+      if (lastError.code === 'PGRST116' || lastError.code === 'PGRST205') {
+        log.warn('GoogleOAuth', 'Schema cache issue after retries', {
+          orgId,
+          error: lastError?.message,
+          code: lastError?.code
+        });
+
         res.json({
           connected: false,
-          message: 'Google Calendar credentials table not yet configured - please contact support'
+          message: 'Checking calendar status... Please refresh in a moment',
+          isSchemaRefreshing: true,
+          timestamp: new Date().toISOString()
         });
         return;
       }
 
-      // Other errors
-      throw error;
+      throw lastError;
     }
 
     if (!credentials) {
+      log.debug('GoogleOAuth', 'No credentials found', {
+        orgId,
+        timestamp: new Date().toISOString()
+      });
+
       res.json({
         connected: false,
-        message: 'Google Calendar not connected'
+        message: 'Google Calendar not connected',
+        timestamp: new Date().toISOString()
       });
       return;
     }
 
-    // Try to get the email from metadata or user profile
+    // Get email from metadata (set during OAuth callback)
     let email = credentials.metadata?.email || null;
 
-    if (!email) {
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', orgId)
-        .maybeSingle();
-
-      email = userProfile?.email;
+    // Fallback: Try to decrypt email from encrypted_config if not in metadata
+    if (!email && credentials.encrypted_config) {
+      try {
+        const decrypted = EncryptionService.decryptObject(credentials.encrypted_config);
+        email = decrypted.email || null;
+        if (email) {
+          log.debug('GoogleOAuth', 'Email recovered from encrypted config', {
+            orgId
+          });
+        }
+      } catch (decryptError) {
+        log.debug('GoogleOAuth', 'Could not decrypt email from config', {
+          orgId,
+          error: (decryptError as any)?.message
+        });
+      }
     }
+
+    log.info('GoogleOAuth', 'Status check successful', {
+      orgId,
+      connected: true,
+      email: email || 'no email found',
+      hasMetadata: !!credentials.metadata?.email,
+      hasEncrypted: !!credentials.encrypted_config,
+      timestamp: new Date().toISOString()
+    });
 
     res.json({
       connected: true,
-      active: true,
+      active: credentials.is_active === true,
       email: email,
       connectedAt: credentials.updated_at,
-      hasTokens: true
+      hasTokens: true,
+      timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     log.error('GoogleOAuth', 'Failed to check connection status', {
@@ -446,6 +537,28 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       message: error?.message || 'Unknown error'
     });
   }
+});
+
+/**
+ * GET /api/google-oauth/test-orgid
+ * 
+ * Test endpoint for orgId debugging
+ * 
+ * Response: JSON with received orgId, query parameters, authenticated user, and headers
+ */
+router.get('/test-orgid/:orgId?', requireAuthOrDev, (req: Request, res: Response) => {
+  const response = {
+    pathOrgId: req.params.orgId,
+    queryOrgId: req.query.orgId,
+    authenticatedUser: req.user?.orgId ? { orgId: req.user.orgId } : null,
+    headers: {
+      authorization: req.headers.authorization
+    },
+    timestamp: new Date().toISOString()
+  };
+  
+  log.debug('GoogleOAuth TestEndpoint', 'Test orgId endpoint called', response);
+  res.json(response);
 });
 
 export default router;

@@ -30,13 +30,10 @@ const formatCurrency = (amount: number) => {
 export default function ClinicalPulse() {
     const { user } = useAuth();
 
-    const orgId = (user?.app_metadata?.org_id || user?.user_metadata?.org_id) as string;
-
+    // SECURITY FIX: Removed orgId extraction - backend auth middleware extracts from JWT
     const { data: stats, isLoading } = useSWR(
-        orgId ? ['/api/analytics/dashboard-pulse', orgId] : null,
-        ([url, id]) => authedBackendFetch<DashboardPulse>(url, {
-            headers: { 'x-org-id': id }
-        }),
+        '/api/analytics/dashboard-pulse',
+        (url) => authedBackendFetch<DashboardPulse>(url),
         {
             refreshInterval: 10000,
             revalidateOnFocus: false,      // Prevent reload on tab switch

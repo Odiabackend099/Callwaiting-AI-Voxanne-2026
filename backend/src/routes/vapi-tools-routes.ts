@@ -4,6 +4,8 @@ import { supabase } from '../services/supabase-client';
 import { calendarSlotService } from '../services/calendar-slot-service';
 import { smsComplianceService } from '../services/sms-compliance-service';
 import { log } from '../services/logger';
+import { AtomicBookingService } from '../services/atomic-booking-service';
+import { BookingConfirmationService } from '../services/booking-confirmation-service';
 
 const router = Router();
 
@@ -26,9 +28,9 @@ async function resolveTenantId(tenantId?: string, inboundPhoneNumber?: string): 
                 .single();
 
             if (!error && data?.org_id) {
-                log.info('VapiTools', 'Resolved phone number to org_id', { 
-                    inboundPhoneNumber, 
-                    org_id: data.org_id 
+                log.info('VapiTools', 'Resolved phone number to org_id', {
+                    inboundPhoneNumber,
+                    org_id: data.org_id
                 });
                 return data.org_id;
             } else {
@@ -82,9 +84,9 @@ router.post('/tools/calendar/check', async (req, res) => {
             return res.status(400).json({ error: 'Missing tenantId/inboundPhoneNumber or date parameters' });
         }
 
-        log.info('VapiTools', 'Checking availability', { 
-            resolvedTenantId, 
-            date, 
+        log.info('VapiTools', 'Checking availability', {
+            resolvedTenantId,
+            date,
             serviceType,
             source: tenantId ? 'direct' : 'phone_lookup'
         });
@@ -98,7 +100,7 @@ router.post('/tools/calendar/check', async (req, res) => {
             date: date,
             availableSlots: slots,
             slotCount: slots.length,
-            message: slots.length > 0 
+            message: slots.length > 0
                 ? `Found ${slots.length} available times on ${date}`
                 : `No availability on ${date}`
         });
@@ -116,7 +118,7 @@ router.post('/tools/calendar/check', async (req, res) => {
 
     } catch (error: any) {
         log.error('VapiTools', 'Error checking calendar', { error: error.message });
-        
+
         // Return error in toolResult format so GPT-4o understands
         return res.json({
             toolResult: {
@@ -164,9 +166,9 @@ router.post('/tools/calendar/reserve', async (req, res) => {
             return res.status(400).json({ error: 'Missing required reservation parameters' });
         }
 
-        log.info('VapiTools', 'Reserving slot', { 
-            resolvedTenantId, 
-            slotId, 
+        log.info('VapiTools', 'Reserving slot', {
+            resolvedTenantId,
+            slotId,
             patientPhone,
             source: tenantId ? 'direct' : 'phone_lookup'
         });
@@ -248,9 +250,9 @@ router.post('/tools/sms/send', async (req, res) => {
             return res.status(400).json({ error: 'Missing required SMS parameters' });
         }
 
-        log.info('VapiTools', 'Sending SMS', { 
-            resolvedTenantId, 
-            phoneNumber, 
+        log.info('VapiTools', 'Sending SMS', {
+            resolvedTenantId,
+            phoneNumber,
             messageType,
             source: tenantId ? 'direct' : 'phone_lookup'
         });
@@ -374,7 +376,6 @@ router.post('/tools/booking/reserve-atomic', async (req, res) => {
         }
 
         // Call atomic booking function
-        const { AtomicBookingService } = await import('../services/atomic-booking-service.js');
         const result = await AtomicBookingService.claimSlotAtomic(
             resolvedTenantId,
             calendarId || 'primary',
@@ -394,7 +395,7 @@ router.post('/tools/booking/reserve-atomic', async (req, res) => {
                         action: result.action
                     })
                 },
-                speech: result.action === 'OFFER_ALTERNATIVES' 
+                speech: result.action === 'OFFER_ALTERNATIVES'
                     ? `I'm sorry, that slot just got booked by another patient. Let me show you other available times.`
                     : `I'm having a technical issue. Let me connect you with our team to book this.`
             });
@@ -486,7 +487,6 @@ router.post('/tools/booking/verify-otp', async (req, res) => {
         }
 
         // Call OTP verification
-        const { AtomicBookingService } = await import('../services/atomic-booking-service.js');
         const result = await AtomicBookingService.verifyOTPAndConfirm(
             holdId,
             resolvedTenantId,
@@ -566,7 +566,6 @@ router.post('/tools/booking/send-confirmation', async (req, res) => {
         });
 
         // Send confirmation SMS
-        const { BookingConfirmationService } = await import('../services/booking-confirmation-service.js');
         const result = await BookingConfirmationService.sendConfirmationSMS(
             resolvedTenantId,
             appointmentId,

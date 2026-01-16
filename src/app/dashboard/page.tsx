@@ -10,19 +10,25 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import HotLeadDashboard from '@/components/dashboard/HotLeadDashboard';
 import ClinicalPulse from '@/components/dashboard/ClinicalPulse';
 
-interface RecentCall {
+interface ActivityEvent {
     id: string;
-    phone_number?: string;
-    caller_name?: string;
-    call_date?: string;
-    duration_seconds: number | null;
-    status: string;
-    call_type?: string;
-    to_number?: string;
-    started_at?: string;
+    type: 'call_completed' | 'hot_lead_detected' | 'appointment_booked';
+    timestamp: string;
+    summary: string;
     metadata?: {
-        channel?: 'inbound' | 'outbound';
-    } | null;
+        caller_name?: string;
+        sentiment?: string;
+        sentiment_summary?: string;
+        sentiment_urgency?: string;
+        duration_seconds?: number;
+        lead_name?: string;
+        lead_phone?: string;
+        service_interest?: string;
+        lead_score?: number;
+        customer_name?: string;
+        scheduled_at?: string;
+        contact_phone?: string;
+    };
 }
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
@@ -31,9 +37,9 @@ export default function CallWaitingAIDashboard() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
 
-    // Use SWR for recent calls only
-    const { data: recentCallsData, isLoading: swrLoading } = useSWR(
-        user ? '/api/calls-dashboard/stats' : null,
+    // Use SWR for recent activity
+    const { data: recentActivityData, isLoading: swrLoading } = useSWR(
+        user ? '/api/analytics/recent-activity' : null,
         fetcher,
         {
             refreshInterval: 10000,
@@ -44,9 +50,8 @@ export default function CallWaitingAIDashboard() {
         }
     );
 
-    const isLoading = authLoading || (swrLoading && !recentCallsData);
-    // Legacy stats endpoint returned recentCalls inside the object, check structure
-    const recentCalls: RecentCall[] = recentCallsData?.recentCalls || [];
+    const isLoading = authLoading || (swrLoading && !recentActivityData);
+    const recentEvents: ActivityEvent[] = recentActivityData?.events || [];
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -122,63 +127,85 @@ export default function CallWaitingAIDashboard() {
                                 </div>
                             ))}
                         </div>
-                    ) : recentCalls.length === 0 ? (
+                    ) : recentEvents.length === 0 ? (
                         <div className="text-center py-16">
                             <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-800">
                                 <Phone className="w-8 h-8 text-slate-400" />
                             </div>
-                            <p className="text-slate-900 dark:text-white font-medium">No calls recorded yet</p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Waiting for your first conversation...</p>
+                            <p className="text-slate-900 dark:text-white font-medium">No recent activity yet</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Waiting for your first call...</p>
                         </div>
                     ) : (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50/50 dark:bg-slate-800/30 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold">
-                                <tr>
-                                    <th className="px-6 py-3 tracking-wider">Caller</th>
-                                    <th className="px-6 py-3 tracking-wider">Type</th>
-                                    <th className="px-6 py-3 tracking-wider">Duration</th>
-                                    <th className="px-6 py-3 tracking-wider text-right">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60">
-                                {recentCalls.map((call) => (
-                                    <tr key={call.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <div className="font-medium text-slate-900 dark:text-slate-200 tracking-tight">
-                                                {call.caller_name || call.to_number || call.phone_number || 'Unknown Caller'}
+                        <div className="divide-y divide-gray-100 dark:divide-slate-800/60">
+                            {recentEvents.map((event) => (
+                                <div key={event.id} className="px-6 py-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex items-start gap-4 flex-1">
+                                            {/* Event Type Icon */}
+                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                                                event.type === 'call_completed' ? 'bg-blue-500/80' :
+                                                event.type === 'hot_lead_detected' ? 'bg-red-500/80' :
+                                                'bg-green-500/80'
+                                            }`}>
+                                                {event.type === 'call_completed' ? '📞' :
+                                                event.type === 'hot_lead_detected' ? '🔥' :
+                                                '📅'}
                                             </div>
-                                            <div className="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1">
-                                                <Clock className="w-3 h-3" />
-                                                {formatTimeAgo(call.started_at || call.call_date || '')}
+
+                                            {/* Event Details */}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-slate-900 dark:text-slate-200 truncate">
+                                                    {event.summary}
+                                                </p>
+
+                                                {/* Event metadata */}
+                                                <div className="mt-2 space-y-1">
+                                                    {event.type === 'call_completed' && event.metadata && (
+                                                        <>
+                                                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                                <span className="font-medium">Sentiment:</span> {event.metadata.sentiment || 'Unknown'}
+                                                                {event.metadata.sentiment_urgency && ` • ${event.metadata.sentiment_urgency} urgency`}
+                                                            </div>
+                                                            {event.metadata.sentiment_summary && (
+                                                                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                                                                    {event.metadata.sentiment_summary}
+                                                                </p>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                    {event.type === 'hot_lead_detected' && event.metadata && (
+                                                        <>
+                                                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                                <span className="font-medium">Score:</span> {event.metadata.lead_score}/100
+                                                            </div>
+                                                            {event.metadata.service_interest && (
+                                                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                                    <span className="font-medium">Interested in:</span> {event.metadata.service_interest}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                    {event.type === 'appointment_booked' && event.metadata && (
+                                                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                            {event.metadata.scheduled_at && (
+                                                                <span><span className="font-medium">Scheduled:</span> {new Date(event.metadata.scheduled_at).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                {call.metadata?.channel === 'inbound' ? (
-                                                    <ArrowDownRight className="w-4 h-4 text-cyan-500" />
-                                                ) : (
-                                                    <ArrowUpRight className="w-4 h-4 text-purple-500" />
-                                                )}
-                                                <span className="text-slate-600 dark:text-slate-400 capitalize">
-                                                    {call.metadata?.channel || 'Unknown'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-400">
-                                            {formatDuration(call.duration_seconds)}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${call.status === 'completed'
-                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                                }`}>
-                                                {call.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+
+                                        {/* Time */}
+                                        <div className="flex-shrink-0">
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 text-right whitespace-nowrap">
+                                                {formatTimeAgo(event.timestamp)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
             </div>

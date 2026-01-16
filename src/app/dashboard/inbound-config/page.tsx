@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { Phone, Save, Loader2, Check, AlertCircle, RefreshCw, Download, Lock } from 'lucide-react';
+import { Phone, Save, Loader2, Check, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 // LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
@@ -130,8 +130,8 @@ export default function InboundConfigPage() {
             {/* Header */}
             <div className="flex justify-between items-start">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inbound Configuration</h1>
-                    <p className="text-gray-700 dark:text-slate-400 mt-1">Configure your Twilio number for inbound AI handling</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Telephony Configuration</h1>
+                    <p className="text-gray-700 dark:text-slate-400 mt-1\">Configure your Twilio number for inbound AI handling</p>
                 </div>
                 <div className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${uiStatus === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'
                     }`}>
@@ -254,33 +254,9 @@ export default function InboundConfigPage() {
                             {saving ? (
                                 <><Loader2 className="w-4 h-4 animate-spin" /> Configuring...</>
                             ) : (
-                                <><Save className="w-4 h-4" /> Save & Activate Inbound</>
+                                <><Save className="w-4 h-4" /> Save and Activate Telephony</>
                             )}
                         </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Stats Preview (Mock for now) */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 p-6 opacity-60 pointer-events-none">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Inbound Analytics (Coming Soon)</h2>
-                    <button className="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                        <Download className="w-4 h-4" /> Export Report
-                    </button>
-                </div>
-                <div className="grid grid-cols-3 gap-6">
-                    <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">Total Calls (7d)</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
-                    </div>
-                    <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">Avg Duration</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
-                    </div>
-                    <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">Demo Bookings</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
                     </div>
                 </div>
             </div>

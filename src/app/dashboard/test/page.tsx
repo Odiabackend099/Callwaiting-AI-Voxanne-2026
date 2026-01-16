@@ -140,8 +140,15 @@ const TestAgentPageContent = () => {
     }, [transcripts]);
 
     useEffect(() => {
-        if (activeTab === 'web') {
-            transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (activeTab === 'web' && displayTranscripts.length > 0) {
+            // Use immediate scroll for better UX during rapid updates
+            const scrollElement = transcriptEndRef.current;
+            if (scrollElement) {
+                // Small delay to ensure DOM is updated
+                requestAnimationFrame(() => {
+                    scrollElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+            }
         }
     }, [displayTranscripts, activeTab]);
 
@@ -356,10 +363,10 @@ const TestAgentPageContent = () => {
                             };
 
                             setOutboundTranscripts(prev => [...prev, newTranscript].slice(-100));
-                            // Auto-scroll
-                            setTimeout(() => {
-                                outboundTranscriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                            }, 100);
+                            // Auto-scroll with requestAnimationFrame for smooth scrolling
+                            requestAnimationFrame(() => {
+                                outboundTranscriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            });
                         } else if (data.type === 'call_ended') {
                             handleEndPhoneCall();
                         }
@@ -437,68 +444,45 @@ const TestAgentPageContent = () => {
                 </button>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden min-h-[500px] flex flex-col">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden min-h-[600px] flex flex-col">
 
                 {/* --- Web Test Interface --- */}
                 {activeTab === 'web' && (
                     <div className="flex flex-col h-full">
-                        {/* Header / Controls */}
-                        <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                        {/* Minimal Header */}
+                        <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
-                                <span className="font-medium text-gray-700">
-                                    {isConnected ? 'Connected' : 'Ready to Connect'}
+                                <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
+                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    {isConnected ? 'Connected' : 'Ready'}
                                 </span>
                             </div>
-
-                            <button
-                                onClick={handleToggleWebCall}
-                                disabled={callInitiating}
-                                className={`px-6 py-2.5 rounded-lg font-semibold text-white shadow-sm transition-all flex items-center gap-2 ${isConnected
-                                    ? 'bg-red-500 hover:bg-red-600'
-                                    : 'bg-emerald-600 hover:bg-emerald-700'
-                                    }`}
-                            >
-                                {callInitiating ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Connecting...
-                                    </>
-                                ) : isConnected ? (
-                                    <>
-                                        <StopCircle className="w-5 h-5" />
-                                        End Session
-                                    </>
-                                ) : (
-                                    <>
-                                        <PlayCircle className="w-5 h-5" />
-                                        Start Session
-                                    </>
-                                )}
-                            </button>
+                            {isConnected && isRecording && (
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-full">
+                                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                    <span className="text-xs font-medium text-red-600">Recording</span>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Transcript Area */}
+                        {/* Transcript Area - Scrollable (Full Height) */}
                         <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-white relative">
                             {displayTranscripts.length === 0 ? (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300">
-                                    <Mic className="w-16 h-16 mb-4 opacity-20" />
-                                    <p className="text-lg font-medium">Start the session to begin speaking</p>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                                    <Mic className="w-12 h-12 mb-3 opacity-30" />
+                                    <p className="text-sm font-medium">Start the session to begin speaking</p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     {displayTranscripts.map((t) => (
                                         <div
                                             key={t.id}
                                             className={`flex ${t.speaker === 'user' ? 'justify-end' : 'justify-start'}`}
                                         >
-                                            <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${t.speaker === 'user'
-                                                ? 'bg-blue-500 text-white rounded-tr-none'
-                                                : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                                            <div className={`max-w-[70%] rounded-lg px-4 py-2.5 text-sm ${t.speaker === 'user'
+                                                ? 'bg-blue-500 text-white'
+                                                : 'bg-gray-100 text-gray-800'
                                                 }`}>
-                                                <p className="text-sm font-medium opacity-75 mb-1 text-xs uppercase tracking-wider">
-                                                    {t.speaker === 'user' ? 'You' : 'Agent'}
-                                                </p>
                                                 <p className="leading-relaxed">
                                                     {t.text}
                                                     {!t.isFinal && <span className="animate-pulse">...</span>}
@@ -508,6 +492,30 @@ const TestAgentPageContent = () => {
                                     ))}
                                     <div ref={transcriptEndRef} />
                                 </div>
+                            )}
+                        </div>
+
+                        {/* Control Footer - Compact */}
+                        <div className="px-6 py-4 border-t border-gray-200 bg-white flex items-center justify-center gap-3">
+                            <button
+                                onClick={handleToggleWebCall}
+                                disabled={callInitiating}
+                                title={isConnected ? 'End session' : 'Start session'}
+                                className={`relative flex items-center justify-center rounded-full transition-all shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isConnected
+                                    ? 'w-14 h-14 bg-red-500 hover:bg-red-600'
+                                    : 'w-14 h-14 bg-emerald-500 hover:bg-emerald-600'
+                                    }`}
+                            >
+                                {callInitiating ? (
+                                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                ) : isConnected ? (
+                                    <StopCircle className="w-6 h-6 text-white" />
+                                ) : (
+                                    <Phone className="w-6 h-6 text-white" />
+                                )}
+                            </button>
+                            {callInitiating && (
+                                <span className="text-xs text-gray-600">Connecting...</span>
                             )}
                         </div>
                     </div>

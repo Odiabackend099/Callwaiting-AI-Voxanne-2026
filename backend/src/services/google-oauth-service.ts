@@ -79,7 +79,7 @@ export async function getOAuthUrl(orgId: string): Promise<string> {
 export async function exchangeCodeForTokens(
   code: string,
   state: string
-): Promise<{ orgId: string; success: boolean }> {
+): Promise<{ orgId: string; success: boolean; email?: string }> {
   try {
     // Decode orgId from state parameter
     let orgId: string;
@@ -146,27 +146,59 @@ export async function exchangeCodeForTokens(
       expiresAt: expiresAt
     };
 
+    // Get user email from ID token for metadata
+    let userEmail: string | null = null;
     try {
+      if (tokens.id_token) {
+        const decodedIdToken = JSON.parse(
+          Buffer.from(tokens.id_token.split('.')[1], 'base64').toString()
+        );
+        userEmail = decodedIdToken.email || null;
+        log.debug('GoogleOAuth', 'Extracted email from ID token', { userEmail });
+      }
+    } catch (idTokenError: any) {
+      log.warn('GoogleOAuth', 'Failed to extract email from ID token', {
+        error: idTokenError?.message
+      });
+    }
+
+    // Prepare credentials with metadata
+    const credentialsWithMetadata = {
+      ...credentials,
+      email: userEmail
+    };
+
+    try {
+      log.debug('GoogleOAuth', 'Storing credentials with metadata', {
+        orgId,
+        hasEmail: !!userEmail,
+        email: userEmail
+      });
+
       await IntegrationDecryptor.storeCredentials(
         orgId,
         'google_calendar',
-        credentials
+        credentialsWithMetadata
       );
+
+      log.info('GoogleOAuth', 'Tokens stored successfully', {
+        orgId,
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        email: userEmail,
+        timestamp: new Date().toISOString()
+      });
     } catch (storageError: any) {
       log.error('GoogleOAuth', 'Failed to store tokens', {
         orgId,
-        error: storageError.message
+        error: storageError.message,
+        errorCode: storageError?.code,
+        stack: storageError?.stack
       });
       throw new Error(`Failed to store tokens: ${storageError.message}`);
     }
 
-    log.info('GoogleOAuth', 'Tokens stored successfully', {
-      orgId,
-      hasAccessToken: !!tokens.access_token,
-      hasRefreshToken: !!tokens.refresh_token
-    });
-
-    return { orgId, success: true };
+    return { orgId, success: true, email: userEmail || undefined };
   } catch (error: any) {
     log.error('GoogleOAuth', 'Failed to exchange code for tokens', {
       error: error?.message,

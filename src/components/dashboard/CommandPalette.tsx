@@ -113,7 +113,7 @@ export default function CommandPalette() {
     },
     {
       id: 'inbound-config',
-      title: 'Inbound Configuration',
+      title: 'Telephony',
       category: 'INTEGRATIONS',
       icon: <Phone className="w-4 h-4" />,
       action: () => {

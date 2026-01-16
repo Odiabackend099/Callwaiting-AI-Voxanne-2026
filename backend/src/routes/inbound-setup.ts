@@ -97,32 +97,14 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
-    // Get Vapi API key from integrations
-    console.log('[InboundSetup] Fetching Vapi API key', { requestId });
-    const { data: vapiIntegration, error: vapiIntegrationError } = await supabase
-      .from('integrations')
-      .select('config')
-      .eq('org_id', orgId)
-      .eq('provider', 'vapi')
-      .maybeSingle();
+    // Get Vapi API key from environment (Platform Provider Model)
+    console.log('[InboundSetup] using Platform Vapi Key', { requestId });
+    const vapiApiKey = process.env.VAPI_API_KEY;
 
-    if (vapiIntegrationError) {
-      console.error('[InboundSetup] Failed to fetch Vapi integration', {
-        requestId,
-        error: vapiIntegrationError,
-        code: vapiIntegrationError.code,
-        message: vapiIntegrationError.message,
-        details: vapiIntegrationError.details,
-        hint: vapiIntegrationError.hint
-      });
-      res.status(500).json({ error: 'Failed to fetch Vapi integration', requestId });
-      return;
-    }
-
-    const vapiApiKey = vapiIntegration?.config?.vapi_api_key;
     if (!vapiApiKey) {
-      res.status(400).json({
-        error: 'Vapi API key not configured. Please configure Vapi credentials first.',
+      console.error('[CRITICAL] VAPI_API_KEY missing in environment variables');
+      res.status(500).json({
+        error: 'System configuration error: Telephony provider unavailable.',
         requestId
       });
       return;
@@ -365,7 +347,7 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
     const orgId = req.user?.orgId;
 
     if (!orgId) {
-      console.error('[InboundSetup][status] Missing orgId', { 
+      console.error('[InboundSetup][status] Missing orgId', {
         user: req.user,
         hasAuthHeader: !!req.headers.authorization,
         nodeEnv: process.env.NODE_ENV
