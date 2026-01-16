@@ -77,6 +77,7 @@ import analyticsRouter from './routes/analytics';
 import calendarOAuthRouter from './routes/calendar-oauth'; // default export
 import vapiCalendarToolsRouter from './routes/vapi-tools'; // default export
 import { authRouter } from './routes/health';
+import healthIntegrationsRouter from './routes/health-integrations'; // default export
 import orgsRouter from './routes/orgs'; // default export
 import oauthTestRouter from './routes/oauth-test';
 
@@ -187,6 +188,11 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.tracingHandler());
 }
 
+// Tenant Resolver Middleware: Automatically injects org_id for users missing it
+// This ensures existing users with stale JWTs still work without manual fixes
+import { tenantResolver } from './middleware/tenant-resolver';
+app.use(tenantResolver);
+
 // Routes
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/webhooks', smsStatusWebhookRouter);
@@ -221,7 +227,9 @@ app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/calendar', calendarOAuthRouter);
 app.use('/api/vapi', vapiCalendarToolsRouter);
 app.use('/api/google-oauth', googleOAuthRouter);
+app.use('/api/health', healthIntegrationsRouter);
 log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
+log.info('Server', 'Health integrations diagnostic endpoint registered at /api/health/integrations');
 log.info('Server', 'Contacts, appointments, notifications, calendar, and org validation routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
 

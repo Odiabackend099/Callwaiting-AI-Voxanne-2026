@@ -2,6 +2,7 @@ import { google, calendar_v3 } from 'googleapis';
 import { supabase } from '../services/supabase-client';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { log } from '../services/logger';
+import { safeCall, withTokenRefresh } from '../services/safe-call';
 
 let oauth2Client: any = null;
 
