@@ -122,8 +122,8 @@ async function vapiCreateOrUpdateQueryTool(params: {
           { type: 'request-complete', content: 'Found it!' },
           { type: 'request-complete', content: 'Here is what I found:' },
           { type: 'request-failed', content: 'I could not find that information.' },
-          { type: 'request-delayed', content: 'Still searching...' },
-          { type: 'request-delayed', content: 'This is taking a moment...' }
+          { type: 'request-response-delayed', content: 'Still searching...' },
+          { type: 'request-response-delayed', content: 'This is taking a moment...' }
         ]
       })
     });
