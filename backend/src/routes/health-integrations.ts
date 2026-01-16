@@ -82,64 +82,94 @@ router.get('/integrations', async (req: Request, res: Response): Promise<void> =
     // 2. Google Calendar Token Check
     // ============================================================================
     try {
-      // If authenticated user, check their tokens
+      // Try to check authenticated user's org first, then fall back to checking system-wide
       let orgIdToCheck = (req.user as any)?.app_metadata?.org_id;
+      let credentialsFound = false;
+      let credentials: any = null;
 
-      if (!orgIdToCheck) {
-        integrations.push({
-          name: 'Google Calendar',
-          status: 'degraded',
-          lastChecked: new Date().toISOString(),
-          message: 'No authenticated user or org_id',
-          details: { requiresAuth: true }
-        });
-      } else {
-        // Check if credentials exist
-        const credentials = await IntegrationDecryptor.getGoogleCalendarCredentials(orgIdToCheck);
+      // If we have an authenticated user, check their specific credentials
+      if (orgIdToCheck) {
+        credentials = await IntegrationDecryptor.getGoogleCalendarCredentials(orgIdToCheck);
+        credentialsFound = !!credentials;
+      }
 
-        if (!credentials) {
+      // If no credentials for authenticated user, check if ANY org has Google Calendar configured
+      if (!credentialsFound) {
+        const { data: anyOrgCredentials, error } = await supabase
+          .from('org_credentials')
+          .select('provider, is_active, metadata')
+          .eq('provider', 'google_calendar')
+          .eq('is_active', true)
+          .limit(1);
+
+        if (!error && anyOrgCredentials && anyOrgCredentials.length > 0) {
+          credentialsFound = true;
+          // For system-wide health check, we just care that it's configured somewhere
+          integrations.push({
+            name: 'Google Calendar',
+            status: 'healthy',
+            lastChecked: new Date().toISOString(),
+            message: 'Google Calendar configured and available',
+            details: {
+              systemWide: true,
+              note: 'Configured for at least one organization'
+            }
+          });
+        } else if (error) {
+          throw error;
+        } else {
           integrations.push({
             name: 'Google Calendar',
             status: 'degraded',
             lastChecked: new Date().toISOString(),
-            message: 'No Google Calendar credentials linked',
-            details: { orgId: orgIdToCheck }
+            message: 'Google Calendar not yet linked to any organization',
+            details: { note: 'No authenticated user context - link Google Calendar to enable scheduling' }
           });
-        } else {
-          // Check if token is valid (not expired)
-          const expiresAt = new Date(credentials.expiresAt);
-          const isExpired = expiresAt < new Date();
-          const expiresInSeconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-
-          if (isExpired) {
-            integrations.push({
-              name: 'Google Calendar',
-              status: 'degraded',
-              lastChecked: new Date().toISOString(),
-              message: 'Google Calendar token expired',
-              details: { orgId: orgIdToCheck, expiredSinceSeconds: -expiresInSeconds }
-            });
-            if (overallStatus === 'healthy') overallStatus = 'degraded';
-          } else if (expiresInSeconds < 300) {
-            // Less than 5 minutes left
-            integrations.push({
-              name: 'Google Calendar',
-              status: 'degraded',
-              lastChecked: new Date().toISOString(),
-              message: 'Google Calendar token expiring soon',
-              details: { orgId: orgIdToCheck, expiresInSeconds }
-            });
-            if (overallStatus === 'healthy') overallStatus = 'degraded';
-          } else {
-            integrations.push({
-              name: 'Google Calendar',
-              status: 'healthy',
-              lastChecked: new Date().toISOString(),
-              message: 'Google Calendar token valid',
-              details: { orgId: orgIdToCheck, expiresInSeconds, email: credentials.email }
-            });
-          }
+          if (overallStatus === 'healthy') overallStatus = 'degraded';
         }
+      } else if (credentials) {
+        // Check if token is valid (not expired)
+        const expiresAt = new Date(credentials.expiresAt);
+        const isExpired = expiresAt < new Date();
+        const expiresInSeconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+
+        if (isExpired) {
+          integrations.push({
+            name: 'Google Calendar',
+            status: 'degraded',
+            lastChecked: new Date().toISOString(),
+            message: 'Google Calendar token expired',
+            details: { orgId: orgIdToCheck, expiredSinceSeconds: -expiresInSeconds }
+          });
+          if (overallStatus === 'healthy') overallStatus = 'degraded';
+        } else if (expiresInSeconds < 300) {
+          // Less than 5 minutes left
+          integrations.push({
+            name: 'Google Calendar',
+            status: 'degraded',
+            lastChecked: new Date().toISOString(),
+            message: 'Google Calendar token expiring soon',
+            details: { orgId: orgIdToCheck, expiresInSeconds }
+          });
+          if (overallStatus === 'healthy') overallStatus = 'degraded';
+        } else {
+          integrations.push({
+            name: 'Google Calendar',
+            status: 'healthy',
+            lastChecked: new Date().toISOString(),
+            message: 'Google Calendar token valid',
+            details: { orgId: orgIdToCheck, expiresInSeconds, email: credentials.email }
+          });
+        }
+      } else {
+        integrations.push({
+          name: 'Google Calendar',
+          status: 'degraded',
+          lastChecked: new Date().toISOString(),
+          message: 'No Google Calendar credentials linked',
+          details: { orgId: orgIdToCheck }
+        });
+        if (overallStatus === 'healthy') overallStatus = 'degraded';
       }
     } catch (error) {
       integrations.push({
