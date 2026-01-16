@@ -2,9 +2,9 @@
  * Frontend API Route: GET /api/auth/google-calendar/authorize
  *
  * Purpose: Bridge between React component and backend OAuth service
- * FIXED: Now properly fetches org_id from Supabase session + database
+ * FIXED: Now extracts org_id from JWT app_metadata (single source of truth)
  * - Gets user from Supabase auth
- * - Fetches org_id from profiles table (REAL data, not broken cookies)
+ * - Extracts org_id from JWT's app_metadata (cryptographically signed)
  * - Calls backend to generate Google OAuth consent URL
  * - Returns URL to frontend for redirect
  */
@@ -51,53 +51,58 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Step 2: Fetch tenant_id from DATABASE (not broken cookies/metadata)
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', session.user.id)
-      .single();
+    // Step 2: Extract org_id from JWT app_metadata (single source of truth)
+    const orgId = session.user.app_metadata?.org_id as string | undefined;
 
-    if (profileError || !profile?.tenant_id) {
-      console.error('[Google OAuth] User profile not found or tenant_id missing:', profileError?.message);
+    if (!orgId) {
+      console.error('[Google OAuth] User missing org_id in JWT:', session.user.id);
       return NextResponse.json(
-        { error: 'Organization not found. Please log in again.' },
+        { error: 'Organization not found. Please contact support.' },
         { status: 401 }
       );
     }
 
-    const orgId = profile.tenant_id;
-    console.log(`[Google OAuth] Got tenant_id from database: ${orgId}`);
+    console.log(`[Google OAuth] Got org_id from JWT: ${orgId}`);
 
     // Step 3: Call backend with the REAL org_id
     const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-    
-    const response = await fetch(
-      `${backendUrl}/api/calendar/auth/url?org_id=${encodeURIComponent(orgId)}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    console.log(`[Google OAuth] Using backend URL: ${backendUrl}`);
+
+    // CRITICAL FIX: Call the unified OAuth endpoint
+    // /api/google-oauth/authorize is the single source of truth for all OAuth flows
+    const fullUrl = `${backendUrl}/api/google-oauth/authorize?org_id=${encodeURIComponent(orgId)}`;
+    console.log(`[Google OAuth] Calling unified endpoint: ${fullUrl}`);
+
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json', // Request JSON response from backend
+      },
+    });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       console.error('[Google OAuth] Backend error:', error);
-      
+
       return NextResponse.json(
-        { error: error.message || 'Failed to generate authorization URL' },
+        { error: error.message || error.error || 'Failed to generate authorization URL' },
         { status: response.status }
       );
     }
 
     const data = await response.json();
 
-    console.log('[Google OAuth] Auth URL generated successfully');
+    console.log('[Google OAuth] Auth URL generated successfully', { hasUrl: !!data.url });
+
+    // Backend returns either 'url' or 'authUrl' - support both for compatibility
+    const authUrl = data.authUrl || data.url;
+    if (!authUrl) {
+      throw new Error('Backend returned no authorization URL');
+    }
 
     return NextResponse.json({
-      authUrl: data.url,
+      authUrl,
       success: true,
     });
   } catch (error) {

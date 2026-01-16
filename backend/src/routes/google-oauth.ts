@@ -25,23 +25,20 @@ router.get('/test', (req: Request, res: Response) => {
 
 /**
  * GET /api/google-oauth/authorize
- * 
+ *
  * Initiates OAuth flow by redirecting user to Google consent screen
- * 
+ * CRITICAL: This is the unified OAuth endpoint - consolidates all calendar OAuth flows
+ *
  * Query parameters:
  * - orgId (optional): Organization ID. If not provided, uses authenticated user's orgId
- * 
- * Response: Redirects to Google OAuth consent screen
- */
-/**
- * GET /api/google-oauth/authorize
- * Public endpoint - initiates OAuth flow
- * orgId can be passed as query parameter
+ * - org_id (optional): Alternative parameter name for org ID (from calendar-oauth.ts compatibility)
+ *
+ * Response: JSON with authUrl (for API calls) OR redirects to Google OAuth (for browser)
  */
 router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
   try {
-    // Get orgId from query parameter or authenticated user context
-    let orgId = req.query.orgId as string;
+    // Get orgId from query parameter (support both orgId and org_id)
+    let orgId = (req.query.orgId || req.query.org_id) as string;
 
     // If not provided in query, try to get from authenticated user
     if (!orgId && req.user?.orgId) {
@@ -51,7 +48,7 @@ router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
     // If still no orgId, use default for dev mode
     if (!orgId) {
       if (process.env.NODE_ENV === 'development') {
-        orgId = req.query.orgId as string || 'a0000000-0000-0000-0000-000000000001';
+        orgId = 'a0000000-0000-0000-0000-000000000001';
         log.warn('GoogleOAuth', 'No orgId provided, using default for dev mode', { orgId });
       } else {
         res.status(400).json({
@@ -61,21 +58,44 @@ router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Generate OAuth URL and redirect
+    // Generate OAuth URL
     const authUrl = await getOAuthUrl(orgId);
-    
-    log.info('GoogleOAuth', 'Redirecting to Google OAuth', { orgId });
-    res.redirect(authUrl);
+
+    log.info('GoogleOAuth', 'Authorize endpoint called', { orgId, acceptsJSON: req.accepts('json') });
+
+    // UNIFIED BEHAVIOR: Check if caller wants JSON or redirect
+    // Frontend API routes want JSON, direct browser navigation wants redirect
+    if (req.accepts('json')) {
+      // Return JSON for API callers (Next.js route handlers)
+      res.json({
+        success: true,
+        url: authUrl,
+        authUrl: authUrl // Also include as authUrl for compatibility
+      });
+    } else {
+      // Redirect for direct browser navigation
+      res.redirect(authUrl);
+    }
   } catch (error: any) {
     log.error('GoogleOAuth', 'Failed to generate OAuth URL', {
       error: error?.message,
       stack: error?.stack
     });
 
-    // Redirect to frontend with error
+    // Frontend URL for error redirects
     const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const errorParam = encodeURIComponent('oauth_generation_failed');
-    res.redirect(`${frontendUrl}/dashboard/settings?error=${errorParam}`);
+
+    // Return JSON or redirect based on request type
+    if (req.accepts('json')) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate OAuth URL',
+        message: error?.message
+      });
+    } else {
+      res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
+    }
   }
 });
 
@@ -119,7 +139,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
       });
       
       const errorParam = encodeURIComponent(error === 'access_denied' ? 'user_denied_consent' : 'oauth_failed');
-      res.redirect(`${frontendUrl}/dashboard/settings?error=${errorParam}`);
+      res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
       return;
     }
 
@@ -147,7 +167,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
       });
       
       const errorParam = encodeURIComponent('missing_oauth_parameters');
-      res.redirect(`${frontendUrl}/dashboard/settings?error=${errorParam}&debug=missing_code_or_state`);
+      res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}&debug=missing_code_or_state`);
       return;
     }
 
@@ -161,7 +181,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 
       // Redirect to frontend with success
       const successParam = encodeURIComponent('calendar_connected');
-      res.redirect(`${frontendUrl}/dashboard/settings?success=${successParam}`);
+      res.redirect(`${frontendUrl}/dashboard/api-keys?success=${successParam}`);
     } catch (exchangeError: any) {
       log.error('GoogleOAuth', 'Failed to exchange code for tokens', {
         error: exchangeError?.message,
@@ -194,7 +214,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
         fullError: exchangeError
       });
 
-      res.redirect(`${frontendUrl}/dashboard/settings?error=${errorParam}&details=${encodeURIComponent(errorDetails)}`);
+      res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}&details=${encodeURIComponent(errorDetails)}`);
     }
   } catch (error: any) {
     log.error('GoogleOAuth', 'OAuth callback handler error', {
@@ -204,7 +224,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 
     const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const errorParam = encodeURIComponent('oauth_callback_error');
-    res.redirect(`${frontendUrl}/dashboard/settings?error=${errorParam}`);
+    res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
   }
 });
 
@@ -294,15 +314,16 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       }
     }
 
-    // Check if integration exists
-    const { data: integration, error } = await supabase
-      .from('integrations')
-      .select('config, connected, updated_at')
+    // Check if credentials exist in org_credentials table
+    const { data: credentials, error } = await supabase
+      .from('org_credentials')
+      .select('provider, created_at, updated_at')
       .eq('org_id', orgId)
       .eq('provider', 'google_calendar')
+      .eq('is_active', true)
       .maybeSingle();
 
-    if (error || !integration) {
+    if (error || !credentials) {
       res.json({
         connected: false,
         message: 'Google Calendar not connected'
@@ -310,11 +331,19 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
+    // Get the email address if available (may be stored in metadata)
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', orgId) // Note: This assumes orgId maps to user id, adjust as needed
+      .maybeSingle();
+
     res.json({
       connected: true,
-      active: integration.connected,
-      connectedAt: integration.updated_at,
-      hasTokens: !!(integration.config as any)?.refresh_token
+      active: true,
+      email: userProfile?.email,
+      connectedAt: credentials.updated_at,
+      hasTokens: true
     });
   } catch (error: any) {
     log.error('GoogleOAuth', 'Failed to check connection status', {

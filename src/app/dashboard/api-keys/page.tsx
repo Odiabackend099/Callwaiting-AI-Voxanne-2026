@@ -12,6 +12,12 @@ interface IntegrationStatus {
     testDestination: string | null;
 }
 
+interface CalendarStatus {
+    connected: boolean;
+    email?: string;
+    connectedAt?: string;
+}
+
 export default function ApiKeysPage() {
     const router = useRouter();
     const { user, loading } = useAuth();
@@ -21,6 +27,11 @@ export default function ApiKeysPage() {
     const [status, setStatus] = useState<IntegrationStatus>({
         testDestination: null
     });
+    const [calendarStatus, setCalendarStatus] = useState<CalendarStatus>({
+        connected: false
+    });
+    const [calendarError, setCalendarError] = useState<string | null>(null);
+    const [calendarSuccess, setCalendarSuccess] = useState<string | null>(null);
 
     // Form states
     const [testDestination, setTestDestination] = useState('');
@@ -45,11 +56,78 @@ export default function ApiKeysPage() {
         }
     }, []);
 
+    const fetchCalendarStatus = useCallback(async () => {
+        try {
+            const data = await authedBackendFetch<CalendarStatus>('/api/google-oauth/status');
+            setCalendarStatus(data);
+            setCalendarError(null);
+        } catch (error) {
+            console.error('Error fetching calendar status:', error);
+            setCalendarError(error instanceof Error ? error.message : 'Failed to fetch calendar status');
+        }
+    }, []);
+
     useEffect(() => {
         if (user) {
             fetchSettings();
+            fetchCalendarStatus();
         }
-    }, [user, fetchSettings]);
+    }, [user, fetchSettings, fetchCalendarStatus]);
+
+    // Check for OAuth callback parameters in URL
+    // CRITICAL FIX: Handle all callback parameter variations from unified OAuth flow
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const error = searchParams.get('error');
+        const success = searchParams.get('success');
+        const email = searchParams.get('email');
+        const details = searchParams.get('details');
+        const calendarConnected = searchParams.get('calendar');
+        const calendarMessage = searchParams.get('message');
+
+        let handled = false;
+
+        // Handle success cases (from google-oauth.ts unified endpoint)
+        if (success === 'calendar_connected' || calendarConnected === 'connected') {
+            const successMsg = email
+                ? `Calendar connected successfully! (${email})`
+                : 'Calendar connected successfully!';
+            setCalendarSuccess(successMsg);
+            setCalendarError(null);
+            // Refresh calendar status to show connected state
+            fetchCalendarStatus();
+            handled = true;
+        }
+        // Handle error from calendar-oauth.ts (backward compatibility)
+        else if (calendarConnected === 'error') {
+            setCalendarError(calendarMessage || 'Failed to connect calendar. Please try again.');
+            setCalendarSuccess(null);
+            handled = true;
+        }
+        // Handle errors from google-oauth.ts (unified endpoint)
+        else if (error) {
+            const errorMessages: Record<string, string> = {
+                'user_denied_consent': 'You denied Google Calendar access. Please try again to grant permission.',
+                'oauth_failed': 'OAuth authorization failed. Please try again.',
+                'missing_oauth_parameters': 'OAuth parameters are missing. Please restart the process.',
+                'oauth_callback_failed': 'Failed to process OAuth callback. Please try again.',
+                'oauth_state_invalid': 'OAuth state validation failed. Security check rejected.',
+                'oauth_token_exchange_failed': details
+                    ? `Failed to exchange authorization code: ${details}`
+                    : 'Failed to exchange authorization code. Please try again.',
+                'oauth_callback_error': 'An error occurred during OAuth callback. Please try again.',
+                'oauth_generation_failed': 'Failed to generate OAuth URL. Please try again.'
+            };
+            setCalendarError(errorMessages[error] || `OAuth error: ${error}`);
+            setCalendarSuccess(null);
+            handled = true;
+        }
+
+        // Clear URL parameters if we handled a callback
+        if (handled) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }, [fetchCalendarStatus]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -148,22 +226,56 @@ export default function ApiKeysPage() {
                         Authorize Voxanne to manage your clinic&apos;s schedule.
                     </p>
 
+                    {/* Success Message */}
+                    {calendarSuccess && (
+                        <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                            <p className="text-sm text-emerald-400">{calendarSuccess}</p>
+                        </div>
+                    )}
+
+                    {/* Error Message */}
+                    {calendarError && (
+                        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                            <p className="text-sm text-red-400">{calendarError}</p>
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-between p-4 bg-black/20 border border-white/5 rounded-xl">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center">
-                                <Calendar className="text-blue-400 w-5 h-5" />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                calendarStatus.connected
+                                    ? 'bg-emerald-500/10'
+                                    : 'bg-blue-500/10'
+                            }`}>
+                                <Calendar className={`w-5 h-5 ${
+                                    calendarStatus.connected
+                                        ? 'text-emerald-400'
+                                        : 'text-blue-400'
+                                }`} />
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-white">Google Calendar</p>
-                                <p className="text-xs text-slate-500">Not Linked</p>
+                                <p className={`text-xs ${
+                                    calendarStatus.connected
+                                        ? 'text-emerald-400'
+                                        : 'text-slate-500'
+                                }`}>
+                                    {calendarStatus.connected
+                                        ? `Linked (${calendarStatus.email || 'Loading...'})`
+                                        : 'Not Linked'}
+                                </p>
                             </div>
                         </div>
                         <button
                             onClick={handleConnectCalendar}
-                            disabled={isConnectingCalendar}
-                            className="px-6 py-2 bg-white text-black text-sm font-bold rounded-lg hover:bg-slate-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={isConnectingCalendar || calendarStatus.connected}
+                            className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${
+                                calendarStatus.connected
+                                    ? 'bg-slate-700 text-slate-400 cursor-default'
+                                    : 'bg-white text-black hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed'
+                            }`}
                         >
-                            {isConnectingCalendar ? 'Connecting...' : 'Link My Google Calendar'}
+                            {isConnectingCalendar ? 'Connecting...' : calendarStatus.connected ? 'Connected' : 'Link My Google Calendar'}
                         </button>
                     </div>
                 </div>
