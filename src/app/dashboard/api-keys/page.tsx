@@ -183,8 +183,10 @@ export default function ApiKeysPage() {
                     continue;
                   }
 
-                  // Directly call status endpoint with retry
-                  const statusResponse = await fetch(`/api/google-oauth/status/${orgId}`, {
+                  // Directly call backend status endpoint with retry
+                  // Use explicit backend URL (port 3001) instead of relative path
+                  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+                  const statusResponse = await fetch(`${backendUrl}/api/google-oauth/status/${orgId}`, {
                     headers: {
                       'Content-Type': 'application/json',
                     }

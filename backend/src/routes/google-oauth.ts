@@ -437,7 +437,7 @@ router.post('/revoke', requireAuthOrDev, async (req: Request, res: Response): Pr
  * 
  * Response: JSON with connection status
  */
-router.get('/status/:orgId?', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
+router.get('/status/:orgId?', async (req: Request, res: Response): Promise<void> => {
   try {
     // Get orgId from path, query, or authenticated user (in order of precedence)
     let orgId = req.params.orgId || req.query.orgId as string;

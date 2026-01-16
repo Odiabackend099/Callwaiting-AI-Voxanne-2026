@@ -1,91 +1,106 @@
 import { google, calendar_v3 } from 'googleapis';
 import { supabase } from '../services/supabase-client';
-import { decrypt, encrypt } from './encryption';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
+import { log } from '../services/logger';
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+let oauth2Client: any = null;
+
+function getOAuth2Client() {
+  if (!oauth2Client) {
+    oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+  }
+  return oauth2Client;
+}
 
 /**
  * Get and refresh tokens if needed
+ * Uses the unified org_credentials table and IntegrationDecryptor
  * @param orgId - Organization ID
  * @returns Object with access_token and calendar client
  */
 export async function getCalendarClient(
   orgId: string
 ): Promise<{ accessToken: string; calendar: calendar_v3.Calendar }> {
-  // Fetch calendar connection from database
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .select('access_token, refresh_token, token_expiry')
-    .eq('org_id', orgId)
-    .single();
+  try {
+    // Fetch stored Google Calendar credentials using IntegrationDecryptor
+    const credentials = await IntegrationDecryptor.getGoogleCalendarCredentials(orgId);
 
-  if (error || !data) {
-    throw new Error(`No calendar connection found for org ${orgId}`);
-  }
-
-  let accessToken = decrypt(data.access_token);
-  let refreshToken = decrypt(data.refresh_token);
-  let tokenExpiry = new Date(data.token_expiry);
-
-  // Check if token is expired or expiring soon (within 5 minutes)
-  const now = new Date();
-  const expiringThreshold = new Date(now.getTime() + 5 * 60 * 1000);
-
-  if (tokenExpiry < expiringThreshold) {
-    console.log(`Token expired for org ${orgId}, refreshing...`);
-
-    try {
-      // Refresh the token
-      oauth2Client.setCredentials({
-        refresh_token: refreshToken,
-      });
-
-      const { credentials } = await oauth2Client.refreshAccessToken();
-
-      if (!credentials.access_token) {
-        throw new Error('Failed to get new access token');
-      }
-
-      accessToken = credentials.access_token;
-
-      // Update token expiry
-      if (credentials.expiry_date) {
-        tokenExpiry = new Date(credentials.expiry_date);
-      }
-
-      // Update database with new encrypted token
-      const encryptedAccessToken = encrypt(accessToken);
-      await supabase
-        .from('calendar_connections')
-        .update({
-          access_token: encryptedAccessToken,
-          token_expiry: tokenExpiry,
-          updated_at: new Date(),
-        })
-        .eq('org_id', orgId);
-
-      console.log(`Token refreshed successfully for org ${orgId}`);
-    } catch (refreshError) {
-      console.error('Error refreshing token:', refreshError);
-      throw new Error('Failed to refresh calendar access token');
+    if (!credentials) {
+      throw new Error(`No calendar connection found for org ${orgId}`);
     }
+
+    let accessToken = credentials.accessToken;
+    let refreshToken = credentials.refreshToken;
+    let tokenExpiry = new Date(credentials.expiresAt);
+
+    // Check if token is expired or expiring soon (within 5 minutes)
+    const now = new Date();
+    const expiringThreshold = new Date(now.getTime() + 5 * 60 * 1000);
+
+    if (tokenExpiry < expiringThreshold) {
+      log.info('GoogleCalendar', 'Token expired, refreshing...', { orgId });
+
+      try {
+        // Refresh the token
+        const client = getOAuth2Client();
+        client.setCredentials({
+          refresh_token: refreshToken,
+        });
+
+        const { credentials: newCredentials } = await client.refreshAccessToken();
+
+        if (!newCredentials.access_token) {
+          throw new Error('Failed to get new access token');
+        }
+
+        accessToken = newCredentials.access_token;
+
+        // Update token expiry
+        if (newCredentials.expiry_date) {
+          tokenExpiry = new Date(newCredentials.expiry_date);
+        }
+
+        // Update database with new encrypted token
+        await IntegrationDecryptor.storeCredentials(orgId, 'google_calendar', {
+          accessToken,
+          refreshToken,
+          expiresAt: tokenExpiry.toISOString(),
+          email: credentials.email
+        });
+
+        log.info('GoogleCalendar', 'Token refreshed successfully', { orgId });
+      } catch (refreshError) {
+        log.error('GoogleCalendar', 'Error refreshing token', {
+          orgId,
+          error: refreshError instanceof Error ? refreshError.message : String(refreshError)
+        });
+        throw new Error('Failed to refresh calendar access token');
+      }
+    }
+
+    // Create and return calendar client with valid token
+    const client = getOAuth2Client();
+    client.setCredentials({
+      access_token: accessToken,
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: client });
+
+    return {
+      accessToken,
+      calendar,
+    };
+  } catch (error) {
+    log.error('GoogleCalendar', 'Failed to get calendar client', {
+      orgId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
   }
-
-  // Create and return calendar client with valid token
-  oauth2Client.setCredentials({
-    access_token: accessToken,
-  });
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-  return {
-    accessToken,
-    calendar,
-  };
 }
 
 /**
