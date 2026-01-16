@@ -14,19 +14,8 @@
  */
 
 import { EncryptionService } from './encryption';
-import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      persistSession: false,
-    },
-  }
-);
+import { supabase } from './supabase-client';
 
 // ============================================
 // Type Definitions
