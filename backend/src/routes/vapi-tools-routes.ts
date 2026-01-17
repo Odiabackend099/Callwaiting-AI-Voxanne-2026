@@ -6,6 +6,9 @@ import { smsComplianceService } from '../services/sms-compliance-service';
 import { log } from '../services/logger';
 import { AtomicBookingService } from '../services/atomic-booking-service';
 import { BookingConfirmationService } from '../services/booking-confirmation-service';
+import { createCalendarEvent } from '../services/calendar-integration';
+import { normalizeDate, normalizeTime } from '../services/date-normalizer';
+import { bookingDeduplicator } from '../services/booking-deduplicator';
 
 const router = Router();
 
@@ -48,7 +51,16 @@ async function resolveTenantId(tenantId?: string, inboundPhoneNumber?: string): 
 
 // Middleware to extract arguments regardless of Vapi payload format
 const extractArgs = (req: any) => {
-    return req.body.toolCall?.arguments || req.body;
+    // 1. Try Vapi "Live Call" nested structure: message.toolCall.function.arguments OR message.toolCall.arguments
+    if (req.body.message?.toolCall) {
+        return req.body.message.toolCall.function?.arguments || req.body.message.toolCall.arguments || {};
+    }
+    // 2. Try direct structure (simpler tests): toolCall.function.arguments OR toolCall.arguments
+    if (req.body.toolCall) {
+        return req.body.toolCall.function?.arguments || req.body.toolCall.arguments || {};
+    }
+    // 3. Fallback: arguments at root (raw curl)
+    return req.body.arguments || req.body;
 };
 
 /**
@@ -653,6 +665,539 @@ router.post('/server', (req, res) => {
     } catch (error: any) {
         log.error('VapiTools', 'Error in server endpoint', { error: error.message });
         return res.status(500).send();
+    }
+});
+
+/**
+ * BOOK CLINIC APPOINTMENT TOOL
+ * Creates an appointment in both Supabase and Google Calendar
+ * Uses org_id from metadata to fetch Google Calendar credentials
+ * 
+ * Vapi sends:
+ * {
+ *   "toolCall": {
+ *     "name": "bookClinicAppointment",
+ *     "arguments": {
+ *       "appointmentDate": "2026-01-19",
+ *       "appointmentTime": "09:00",
+ *       "patientEmail": "patient@example.com",
+ *       "patientPhone": "555-0123",
+ *       "duration": 30
+ *     }
+ *   },
+ *   "customer": {
+ *     "metadata": {
+ *       "org_id": "46cf2995-2bee-44e3-838b-24151486fe4e"
+ *     }
+ *   }
+ * }
+ */
+/**
+ * MULTI-TENANT TOOL: Book Clinic Appointment
+ * 
+ * Extracts org_id from Vapi customer metadata (NOT hardcoded).
+ * Queries tenant_integrations for Google Calendar credentials.
+ * Creates appointment in tenant-scoped schema.
+ */
+router.post('/tools/bookClinicAppointment', async (req, res) => {
+    const bookingStartTime = Date.now();
+    try {
+        log.info('VapiTools', '[BOOKING START] 🔹 Received booking request', {
+            timestamp: new Date().toISOString()
+        });
+
+        const args = extractArgs(req);
+        const customer = req.body.customer || {};
+        const metadata = customer.metadata || {};
+
+        // ========================================
+        // STEP 1: EXTRACT ORG_ID FROM METADATA
+        // ========================================
+        // ========================================
+        // STEP 1: EXTRACT ORG_ID FROM METADATA
+        // ========================================
+        // Handle both direct and nested Vapi structures
+        const incomingCustomer = req.body.customer || req.body.message?.customer || {};
+        const incomingMetadata = incomingCustomer.metadata || {};
+
+        const orgId = incomingMetadata.org_id || args.org_id;
+
+        let {
+            appointmentDate,
+            appointmentTime,
+            patientEmail,
+            patientPhone,
+            patientName,
+            serviceType = 'consultation',
+            duration = 30
+        } = args;
+
+        log.info('VapiTools', '🔹 MULTI-TENANT BOOKING', {
+            orgId,
+            appointmentDate: appointmentDate ? appointmentDate.substring(0, 10) : 'N/A',
+            appointmentTime,
+            patientEmail,
+            source: metadata.org_id ? 'metadata' : 'args'
+        });
+
+        // DEBUG: Log raw request to file
+        const fs = require('fs');
+        const debugLogPath = require('path').join(process.cwd(), 'vapi-debug.log');
+        const logEntry = `[${new Date().toISOString()}] ${JSON.stringify({ headers: req.headers, body: req.body, args })}\n`;
+        fs.appendFile(debugLogPath, logEntry, (err: any) => { if (err) console.error('Failed to write debug log', err); });
+
+        // Validate inputs before normalization
+        if (!orgId || !appointmentDate || !appointmentTime || !patientEmail) {
+            const errorMsg = `Missing required fields: org_id (in metadata), appointmentDate, appointmentTime, patientEmail. Received: orgId=${orgId}, argsKeys=${Object.keys(args).join(',')}`;
+            log.warn('VapiTools', 'Invalid booking request', { args, metadata });
+
+            // Determine which field is missing for better speech
+            let missingField = '';
+            if (!patientEmail) missingField = 'email address';
+            else if (!appointmentDate) missingField = 'date';
+            else if (!appointmentTime) missingField = 'time';
+
+            return res.status(400).json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: errorMsg,
+                        debug: {
+                            args,
+                            orgId,
+                            bodyKeys: Object.keys(req.body)
+                        }
+                    })
+                },
+                speech: `I'm missing your ${missingField}. Could you please assume I didn't hear it and say it again?`
+            });
+        }
+
+        // ========================================
+        // STEP 1B: NORMALIZE DATE AND TIME
+        // ========================================
+        try {
+            appointmentDate = normalizeDate(appointmentDate);
+            appointmentTime = normalizeTime(appointmentTime);
+
+            log.info('VapiTools', '✅ Normalized date and time', {
+                appointmentDate,
+                appointmentTime
+            });
+        } catch (normalizationError: any) {
+            log.warn('VapiTools', 'Date/time normalization failed', {
+                error: normalizationError.message,
+                originalDate: args.appointmentDate,
+                originalTime: args.appointmentTime
+            });
+
+            return res.status(400).json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: 'INVALID_DATE_TIME',
+                        message: normalizationError.message,
+                        action: 'ESCALATE'
+                    })
+                },
+                speech: 'I had trouble parsing that date and time. Could you please repeat it more clearly? For example, "Tuesday at 2 PM"?'
+            });
+        }
+
+        // ========================================
+        // STEP 1C: DEDUPLICATION CHECK
+        // ========================================
+        if (!args.force) {
+            const cachedResult = bookingDeduplicator.getCachedResult(
+                orgId,
+                appointmentDate,
+                appointmentTime,
+                patientEmail
+            );
+
+            if (cachedResult) {
+                log.info('VapiTools', '🔄 Returning cached booking result (duplicate prevented)');
+                return res.status(200).json({
+                    toolResult: {
+                        content: JSON.stringify(cachedResult)
+                    },
+                    speech: 'Your appointment has been confirmed. You should have received a confirmation message.'
+                });
+            }
+        } else {
+            log.info('VapiTools', '⚠️ Forcing booking (bypassing deduplication request)', {
+                orgId,
+                patientEmail
+            });
+        }
+
+        // ========================================
+        // STEP 2: VERIFY ORG EXISTS
+        // ========================================
+        const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('id, name')
+            .eq('id', orgId)
+            .maybeSingle();
+
+        if (orgError || !org) {
+            log.error('VapiTools', 'Organization not found', { orgId });
+            return res.status(400).json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: `Organization not found: ${orgId}`
+                    })
+                }
+            });
+        }
+
+        log.info('VapiTools', '✅ Verified organization', { orgId, orgName: org.name });
+
+        // ========================================
+        // STEP 2.5: CREATE OR FIND CONTACT
+        // ========================================
+        // First try to find existing contact by email within this org
+        let contact: any = null;
+        let foundExisting = false;
+
+        const { data: existingContact } = await supabase
+            .from('contacts')
+            .select('id')
+            .eq('org_id', orgId)
+            .eq('email', patientEmail)
+            .single();
+
+        if (existingContact) {
+            contact = existingContact;
+            foundExisting = true;
+            log.info('VapiTools', '✅ Found existing contact', {
+                contactId: contact.id,
+                patientEmail
+            });
+        } else {
+            // Create new contact
+            const { data: newContact, error: createError } = await supabase
+                .from('contacts')
+                .insert({
+                    org_id: orgId,
+                    email: patientEmail,
+                    name: patientName || patientEmail.split('@')[0],
+                    phone: patientPhone || null
+                })
+                .select('id')
+                .single();
+
+            if (createError || !newContact) {
+                log.error('VapiTools', '❌ CRITICAL: Failed to create contact', {
+                    error: createError?.message,
+                    orgId,
+                    patientEmail
+                });
+                return res.status(500).json({
+                    toolResult: {
+                        content: JSON.stringify({
+                            success: false,
+                            error: 'CONTACT_CREATION_FAILED',
+                            message: createError?.message || 'Unknown error creating contact'
+                        })
+                    },
+                    speech: 'I encountered an issue processing your contact information. Please try again.'
+                });
+            }
+
+            contact = newContact;
+            foundExisting = false;
+            log.info('VapiTools', '✅ Created new contact', {
+                contactId: contact.id,
+                patientEmail
+            });
+        }
+
+        // ========================================
+        // STEP 3: CREATE APPOINTMENT RECORD
+        // ========================================
+        const appointmentId = require('crypto').randomUUID();
+        const now = new Date();
+        const scheduledTime = new Date(`${appointmentDate}T${appointmentTime}`);
+
+        // Store patient info in metadata JSONB field
+        const appointmentMetadata = {
+            patientEmail,
+            patientPhone,
+            patientName: patientName || patientEmail.split('@')[0],
+            serviceType,
+            bookedViaVapi: true,
+            bookedAt: now.toISOString()
+        };
+
+        // ========================================
+        // STEP 3: Appointment Payload WITH contact_id
+        // CRITICAL FIX: Now properly linked to contact
+        // ========================================
+        const insertPayload: any = {
+            id: appointmentId,
+            org_id: orgId,
+            contact_id: contact.id,
+            service_type: serviceType,
+            scheduled_at: scheduledTime.toISOString(),
+            status: 'confirmed',
+            confirmation_sent: false,
+            created_at: now.toISOString(),
+            updated_at: now.toISOString()
+        };
+
+        log.info('VapiTools', '📝 APPOINTMENT PAYLOAD (WITH contact_id link)', {
+            appointmentId,
+            orgId,
+            contactId: contact.id,
+            patientEmail,
+            serviceType,
+            hasMetadata: !!appointmentMetadata,
+            payloadKeys: Object.keys(insertPayload)
+        });
+
+        const { error: appointmentError, data: appointmentData } = await supabase
+            .from('appointments')
+            .insert(insertPayload)
+            .select('*')
+            .single();
+
+        if (appointmentError) {
+            log.error('VapiTools', '❌ CRITICAL: Failed to create appointment in Supabase', {
+                error: appointmentError.message,
+                errorCode: appointmentError.code,
+                orgId,
+                appointmentDate,
+                hint: 'Ensure contact_id column is NULLABLE and no FK constraint exists'
+            });
+            return res.status(500).json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: 'APPOINTMENT_CREATION_FAILED',
+                        message: appointmentError.message,
+                        details: `Database error: ${appointmentError.message}`
+                    })
+                }
+            });
+        }
+
+        log.info('VapiTools', '✅ Appointment created in Supabase', {
+            appointmentId,
+            orgId,
+            supabaseRowId: appointmentData.id
+        });
+
+        // ========================================
+        // STEP 4: FETCH TENANT'S GOOGLE CALENDAR CREDENTIALS
+        // ========================================
+        let calendarEventId = null;
+        let calendarUrl = null;
+        let calendarSyncError = null;
+
+        try {
+            // Query org_credentials for this org's Google Calendar credentials
+            const { data: integration, error: integrationError } = await supabase
+                .from('org_credentials')
+                .select('*')
+                .eq('org_id', orgId)
+                .eq('provider', 'google_calendar')
+                .eq('is_active', true)
+                .maybeSingle();
+
+            if (integrationError) {
+                log.warn('VapiTools', 'Error querying tenant_integrations', {
+                    orgId,
+                    error: integrationError.message
+                });
+                calendarSyncError = {
+                    code: 'INTEGRATION_QUERY_ERROR',
+                    message: integrationError.message
+                };
+            }
+
+            if (!integration) {
+                log.info('VapiTools', 'Google Calendar not configured for this org - skipping calendar sync', { orgId });
+                calendarSyncError = {
+                    code: 'GOOGLE_CALENDAR_NOT_CONNECTED',
+                    message: 'Google Calendar not connected for this organization'
+                };
+            } else {
+                log.info('VapiTools', 'Found Google Calendar integration', {
+                    orgId,
+                    integrationId: integration.id
+                });
+
+                // ========================================
+                // STEP 5: CREATE GOOGLE CALENDAR EVENT - VERIFIED HANDSHAKE
+                // ========================================
+                const startDate = new Date(scheduledTime);
+                const endDate = new Date(startDate);
+                endDate.setMinutes(endDate.getMinutes() + duration);
+
+                const calendarEvent = {
+                    title: `Appointment - ${patientName || patientEmail}`,
+                    description: `Clinic appointment for patient: ${patientEmail}${patientPhone ? '\nPhone: ' + patientPhone : ''}\nService: ${serviceType}\nBooked via: Vapi Assistant`,
+                    startTime: startDate.toISOString(),
+                    endTime: endDate.toISOString(),
+                    attendeeEmail: patientEmail
+                };
+
+                try {
+                    // VERIFIED HANDSHAKE: Google must return eventId before we mark success
+                    log.info('VapiTools', '[CALENDAR-SYNC] Calling createCalendarEvent', {
+                        orgId,
+                        appointmentId,
+                        patientEmail
+                    });
+
+                    const calendarResult = await createCalendarEvent(orgId, calendarEvent);
+
+                    log.info('VapiTools', '[CALENDAR-SYNC] createCalendarEvent returned successfully', {
+                        orgId,
+                        appointmentId,
+                        eventId: calendarResult?.eventId,
+                        hasUrl: !!calendarResult?.eventUrl
+                    });
+
+                    // Production check: Google MUST return a valid eventId
+                    if (!calendarResult?.eventId) {
+                        throw new Error('Google Calendar API did not return event ID');
+                    }
+
+                    calendarEventId = calendarResult.eventId;
+                    calendarUrl = calendarResult.eventUrl;
+
+                    log.info('VapiTools', 'Google Calendar event created successfully', {
+                        appointmentId,
+                        orgId,
+                        calendarEventId,
+                        calendarUrl
+                    });
+
+                    // CRITICAL: Only update appointment if we have a verified eventId from Google
+                    const { error: updateError } = await supabase
+                        .from('appointments')
+                        .update({
+                            google_calendar_event_id: calendarEventId,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', appointmentId);
+
+                    if (updateError) {
+                        log.error('VapiTools', 'Failed to update appointment with calendar event ID', {
+                            appointmentId,
+                            calendarEventId,
+                            error: updateError.message
+                        });
+                    }
+                } catch (googleError: any) {
+                    // CRITICAL: Google Calendar sync failed - this is NOW a real error we must report
+                    calendarSyncError = {
+                        code: 'GOOGLE_CALENDAR_SYNC_FAILED',
+                        message: googleError?.message || 'Failed to create Google Calendar event',
+                        details: googleError?.toString()
+                    };
+
+                    log.error('VapiTools', 'Google Calendar event creation failed - calendar sync NOT completed', {
+                        appointmentId,
+                        orgId,
+                        error: googleError?.message,
+                        errorCode: calendarSyncError.code
+                    });
+                }
+            }
+        } catch (calendarError: any) {
+            // Catch any other calendar integration errors
+            calendarSyncError = {
+                code: 'CALENDAR_INTEGRATION_ERROR',
+                message: calendarError?.message || 'Calendar integration error',
+                details: calendarError?.toString()
+            };
+
+            log.error('VapiTools', 'Calendar integration error', {
+                appointmentId,
+                orgId,
+                error: calendarError?.message,
+                errorCode: calendarSyncError.code
+            });
+        }
+
+        // ========================================
+        // STEP 6: RETURN TENANT-SPECIFIC PROOF WITH CALENDAR STATUS
+        // ========================================
+
+        // Determine if we should report full success or partial success
+        const calendarSynced = !!calendarEventId; // Only true if Google returned an eventId
+
+        const responseData = {
+            success: true,
+            appointmentId,
+            orgId,
+            supabaseRowId: appointmentData.id,
+            scheduledAt: appointmentData.scheduled_at,
+            calendarEventId: calendarEventId || null,
+            calendarUrl: calendarUrl || null,
+            calendarSynced: calendarSynced, // NEW: Tell AI if calendar sync actually worked
+            calendarSyncError: calendarSyncError || null, // NEW: If calendar failed, tell AI why
+            executionTimeMs: Date.now() - bookingStartTime, // NEW: Monitor Vapi timeout risks
+            message: calendarSynced
+                ? `✅ Appointment confirmed for ${appointmentDate} at ${appointmentTime} and added to your calendar`
+                : `✅ Appointment confirmed for ${appointmentDate} at ${appointmentTime}${calendarSyncError ? ` (Note: Calendar sync not completed - ${calendarSyncError.message})` : ''}`,
+            confirmationDetails: {
+                date: appointmentDate,
+                time: appointmentTime,
+                duration: duration,
+                patientEmail: patientEmail,
+                patientName: patientName || patientEmail.split('@')[0],
+                serviceType: serviceType,
+                org: org.name
+            }
+        };
+
+        log.info('VapiTools', '✅ [BOOKING COMPLETE] MULTI-TENANT SUCCESS', {
+            appointmentId,
+            orgId,
+            calendarSynced,
+            calendarEventId,
+            hasError: !!calendarSyncError,
+            totalExecutionTimeMs: Date.now() - bookingStartTime,
+            message: responseData.message,
+            timestamp: new Date().toISOString()
+        });
+
+        // Cache successful booking result for deduplication
+        bookingDeduplicator.cacheResult(
+            orgId,
+            appointmentDate,
+            appointmentTime,
+            patientEmail,
+            responseData
+        );
+
+        return res.status(200).json({
+            toolResult: {
+                content: JSON.stringify(responseData)
+            },
+            speech: calendarSynced
+                ? `Perfect! I've scheduled your appointment for ${appointmentDate} at ${appointmentTime} and added it to your calendar. A confirmation has been sent to ${patientEmail}.`
+                : `Perfect! I've scheduled your appointment for ${appointmentDate} at ${appointmentTime}. A confirmation has been sent to ${patientEmail}. ${calendarSyncError ? `(Note: I couldn't sync it to your calendar - ${calendarSyncError.message})` : ''}`
+        });
+
+    } catch (error: any) {
+        log.error('VapiTools', '❌ Error in bookClinicAppointment', {
+            error: error.message,
+            stack: error.stack
+        });
+        return res.status(500).json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: false,
+                    error: 'Internal server error: ' + error.message
+                })
+            }
+        });
     }
 });
 
