@@ -5,14 +5,15 @@
  */
 
 import axios from 'axios';
+import { config } from '../config/index';
 
-const VAPI_API_KEY = process.env.VAPI_API_KEY;
+const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
 const VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/vapi/webhook';
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
-if (!VAPI_API_KEY) {
-  console.error('❌ VAPI_API_KEY environment variable not set');
+if (!VAPI_PRIVATE_KEY) {
+  console.error('❌ VAPI_PRIVATE_KEY environment variable not set');
   process.exit(1);
 }
 
@@ -24,7 +25,7 @@ if (!VAPI_ASSISTANT_ID) {
 const vapiClient = axios.create({
   baseURL: 'https://api.vapi.ai',
   headers: {
-    'Authorization': `Bearer ${VAPI_API_KEY}`,
+    'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
     'Content-Type': 'application/json'
   }
 });

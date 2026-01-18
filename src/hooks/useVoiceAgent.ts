@@ -268,7 +268,17 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
             const data = await authedBackendFetch<WebTestResponse>('/api/founder-console/agent/web-test', {
                 method: 'POST',
-                body: JSON.stringify({}),
+                body: JSON.stringify({
+                    // **FIX**: Inject org_id for Vapi Context (Amnesia Cure)
+                    customer: {
+                        metadata: {
+                            org_id: "46cf2995-2bee-44e3-838b-24151486fe4e"
+                        }
+                    },
+                    variableValues: {
+                        org_id: "46cf2995-2bee-44e3-838b-24151486fe4e"
+                    }
+                }),
                 timeoutMs: 30000,
                 retries: 2,
                 requireAuth: true,

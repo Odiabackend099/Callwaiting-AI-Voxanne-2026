@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { config } from '../config/index';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -104,7 +105,7 @@ async function main() {
         const twilioInt = integrations?.find(i => i.provider === 'twilio'); // OR inside VAPI config?
 
         // VAPI Keys
-        const vapiApiKey = vapiInt?.config?.vapi_api_key || process.env.VAPI_API_KEY;
+        const vapiApiKey = vapiInt?.config?.vapi_api_key || config.VAPI_PRIVATE_KEY;
         console.log(`VAPI API Key found: ${vapiApiKey ? 'YES' : 'NO'}`);
 
         // 3. VAPI Cleanup

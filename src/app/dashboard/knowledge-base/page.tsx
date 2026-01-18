@@ -185,24 +185,7 @@ export default function KnowledgeBasePage() {
         }
       );
 
-      setSuccess(isUpdate ? 'Document updated! Syncing to AI...' : 'Document created! Syncing to AI...');
-
-      // Auto-sync to both agents after save
-      try {
-        await authedBackendFetch<any>('/api/knowledge-base/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            toolName: 'knowledge-search',
-            assistantRoles: ['inbound', 'outbound']
-          }),
-          timeoutMs: 30000,
-          retries: 1,
-        });
-        setSuccess(`✅ ${isUpdate ? 'Updated' : 'Created'} & synced! Your agents now have access to this document.`);
-      } catch (syncErr: any) {
-        setSuccess(`✅ ${isUpdate ? 'Updated' : 'Created'} successfully, but sync to AI failed. Try clicking "Sync to AI" button.`);
-      }
-
+      setSuccess(isUpdate ? '✅ Document updated.' : '✅ Document created.');
       beginNew();
       await loadItems();
     } catch (e: any) {
@@ -228,25 +211,8 @@ export default function KnowledgeBasePage() {
         retries: 1,
       });
 
-      setSuccess('Document deleted! Syncing changes to AI...');
-
-      // Auto-sync to both agents after delete
-      try {
-        await authedBackendFetch<any>('/api/knowledge-base/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            toolName: 'knowledge-search',
-            assistantRoles: ['inbound', 'outbound']
-          }),
-          timeoutMs: 30000,
-          retries: 1,
-        });
-        setSuccess('✅ Document deleted & synced! Your agents no longer have access to it.');
-      } catch (syncErr: any) {
-        setSuccess('✅ Document deleted, but sync to AI failed. Try clicking "Sync to AI" button.');
-      }
-
-      setItems(prev => prev.filter(i => i.id !== id));
+      setSuccess('✅ Document deleted.');
+      await loadItems();
       if (draft.id === id) beginNew();
     } catch (e: any) {
       setError(e?.message || 'Delete failed');

@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { createLogger } from './logger';
+import { config } from '../config/index';
 
 const logger = createLogger('VapiClient');
 
@@ -97,15 +98,15 @@ export class VapiClient {
 
   constructor(apiKey?: string) {
     // CRITICAL: Sanitize API key to prevent "Invalid character in header content" errors
-    // Use passed key or fallback to environment variable
-    const keySource = apiKey || process.env.VAPI_API_KEY || '';
+    // Use passed key or fallback to VAPI_PRIVATE_KEY from centralized config
+    const keySource = apiKey || config.VAPI_PRIVATE_KEY || '';
 
     const sanitizedKey = keySource
       .trim()
       .replace(/[\r\n\t\x00-\x1F\x7F]/g, ''); // Remove all control characters
 
     if (!sanitizedKey) {
-      throw new Error('VapiClient: API key is required and cannot be empty (checked constructor arg and VAPI_API_KEY env var)');
+      throw new Error('VapiClient: API key is required and cannot be empty (checked constructor arg and VAPI_PRIVATE_KEY from config)');
     }
 
     this.apiKey = sanitizedKey;
@@ -453,6 +454,31 @@ export class VapiClient {
           requestFailed: [
             'I\'m having trouble sending the text. Let me try once more...',
             'Unable to send the SMS at the moment.'
+          ]
+        }
+      },
+      {
+        type: 'server',
+        name: 'bookClinicAppointment',
+        description: 'Books a clinic appointment on the patient\'s preferred date and time. Creates a booking record in the database and syncs the event to Google Calendar. Use this tool to finalize the appointment booking.',
+        server: {
+          url: `${url}/api/vapi-tools/tools/bookClinicAppointment`,
+          method: 'POST'
+        },
+        messages: {
+          requestStart: [
+            'Booking your appointment now...',
+            'Just a moment while I save that to the calendar...',
+            'Recording your appointment...'
+          ],
+          requestComplete: [
+            'Perfect! Your appointment is confirmed and added to your calendar.',
+            'All set! I\'ve booked your appointment and sent a confirmation.',
+            'Great! Your appointment is confirmed for that date and time.'
+          ],
+          requestFailed: [
+            'I\'m having trouble booking that appointment. Let me try again...',
+            'Unable to complete the booking at the moment. Can you provide your email again?'
           ]
         }
       }

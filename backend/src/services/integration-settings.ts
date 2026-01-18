@@ -1,3 +1,4 @@
+import { config } from '../config/index';
 import { getApiKey } from './secrets-manager';
 import { supabase } from './supabase-client';
 
@@ -88,9 +89,9 @@ export class IntegrationSettingsService {
 
         // Fallback to global env keys (if allowed/configured)
         // This supports the transition period or "platform" defaults
-        if (process.env.VAPI_API_KEY) {
+        if (config.VAPI_PRIVATE_KEY) {
             return {
-                apiKey: process.env.VAPI_API_KEY,
+                apiKey: config.VAPI_PRIVATE_KEY,
                 assistantId: process.env.VAPI_ASSISTANT_ID!,
                 phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID
             };

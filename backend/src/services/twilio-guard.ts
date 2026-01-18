@@ -49,6 +49,16 @@ interface TwilioGuardOptions {
 }
 
 /**
+ * Twilio credentials that can be passed to override global defaults
+ * (for multi-tenant scenarios where each org has its own Twilio account)
+ */
+interface TwilioGuardCredentials {
+  accountSid: string;
+  authToken: string;
+  phoneNumber: string;
+}
+
+/**
  * Circuit breaker state for Twilio service
  */
 interface CircuitBreakerState {
@@ -165,13 +175,23 @@ function classifyTwilioError(error: any): 'temporary' | 'permanent' {
 
 /**
  * Initialize Twilio client
+ * @param credentials Optional org-specific credentials. Falls back to env vars if not provided.
  */
-function getTwilioClient(): Twilio {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+function getTwilioClient(credentials?: TwilioGuardCredentials): Twilio {
+  let accountSid: string | undefined;
+  let authToken: string | undefined;
+
+  // Use provided credentials, or fall back to environment variables
+  if (credentials) {
+    accountSid = credentials.accountSid;
+    authToken = credentials.authToken;
+  } else {
+    accountSid = process.env.TWILIO_ACCOUNT_SID;
+    authToken = process.env.TWILIO_AUTH_TOKEN;
+  }
 
   if (!accountSid || !authToken) {
-    throw new Error('Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN environment variables');
+    throw new Error('Missing Twilio credentials: provide credentials parameter or set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN environment variables');
   }
 
   return new Twilio(accountSid, authToken);
@@ -184,12 +204,14 @@ function getTwilioClient(): Twilio {
  * @param toPhoneNumber - Recipient phone number in E.164 format
  * @param messageBody - SMS message content
  * @param options - Retry and timeout options
+ * @param credentials - Optional org-specific Twilio credentials. If provided, uses these instead of env vars.
  */
 export async function sendSmsWithGuard(
   organizationId: string,
   toPhoneNumber: string,
   messageBody: string,
-  options: TwilioGuardOptions = {}
+  options: TwilioGuardOptions = {},
+  credentials?: TwilioGuardCredentials
 ): Promise<TwilioGuardResult> {
   const {
     retries = 3,
@@ -226,15 +248,29 @@ export async function sendSmsWithGuard(
   let errorType: 'temporary' | 'permanent' = 'temporary';
   const startTime = Date.now();
 
-  // Get Twilio client
+  // Get Twilio client and determine "from" phone number
   let client: Twilio;
+  let fromPhoneNumber: string;
+
   try {
-    client = getTwilioClient();
+    client = getTwilioClient(credentials);
+
+    // Use org-specific phone number if credentials provided, otherwise fall back to env var
+    if (credentials) {
+      fromPhoneNumber = credentials.phoneNumber;
+    } else {
+      fromPhoneNumber = process.env.TWILIO_PHONE_NUMBER || '';
+    }
+
+    if (!fromPhoneNumber) {
+      throw new Error('No Twilio phone number configured');
+    }
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    log.error('TwilioGuard', 'Failed to initialize Twilio client', {
+    log.error('TwilioGuard', 'Failed to initialize Twilio client or get phone number', {
       error: err.message,
-      orgId: organizationId
+      orgId: organizationId,
+      hasCredentials: !!credentials
     });
     recordFailure(organizationId);
     return {
@@ -242,19 +278,6 @@ export async function sendSmsWithGuard(
       attempts: 0,
       error: err,
       userMessage: 'SMS service configuration error. Our team has been notified.'
-    };
-  }
-
-  const fromPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
-  if (!fromPhoneNumber) {
-    const err = new Error('TWILIO_PHONE_NUMBER not configured');
-    log.error('TwilioGuard', 'Missing Twilio phone number', { orgId: organizationId });
-    recordFailure(organizationId);
-    return {
-      success: false,
-      attempts: 0,
-      error: err,
-      userMessage: 'SMS service is not configured properly.'
     };
   }
 
@@ -360,15 +383,17 @@ export async function sendSmsWithGuard(
 /**
  * Batch send SMS messages (e.g., to multiple recipients)
  * Sends in parallel but each respects individual circuit breakers
+ * @param credentials Optional org-specific Twilio credentials
  */
 export async function sendSmsBatch(
   organizationId: string,
   recipients: Array<{ phone: string; message: string }>,
-  options?: TwilioGuardOptions
+  options?: TwilioGuardOptions,
+  credentials?: TwilioGuardCredentials
 ): Promise<TwilioGuardResult[]> {
   return Promise.all(
     recipients.map(({ phone, message }) =>
-      sendSmsWithGuard(organizationId, phone, message, options)
+      sendSmsWithGuard(organizationId, phone, message, options, credentials)
     )
   );
 }
@@ -406,3 +431,5 @@ export default {
   getTwilioCircuitBreakerStatus,
   resetTwilioCircuitBreaker
 };
+
+export type { TwilioGuardCredentials };

@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { config } from '../config/index';
 import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
 import { requireAuth } from '../middleware/auth';
@@ -6,7 +7,7 @@ import { requireAuth } from '../middleware/auth';
 export const assistantsRouter = express.Router();
 
 function getVapiClient(): VapiClient | null {
-  const vapiApiKey = process.env.VAPI_API_KEY;
+  const vapiApiKey = config.VAPI_PRIVATE_KEY;
   if (!vapiApiKey) {
     return null;
   }
@@ -19,7 +20,7 @@ function requireVapi(res: Response): VapiClient | null {
   if (!client) {
     res.status(503).json({
       error: 'Vapi not configured',
-      message: 'Missing VAPI_API_KEY environment variable'
+      message: 'Missing VAPI_PRIVATE_KEY environment variable'
     });
     return null;
   }
@@ -210,10 +211,10 @@ assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response):
     // PLATFORM VAPI CLIENT INIT
     // Use system API Key for all tenants
     // =================================================================
-    const dynamicApiKey = process.env.VAPI_API_KEY;
+    const dynamicApiKey = config.VAPI_PRIVATE_KEY;
 
     if (!dynamicApiKey) {
-      res.status(500).json({ error: 'System Error: VAPI_API_KEY missing in environment' });
+      res.status(500).json({ error: 'System Error: VAPI_PRIVATE_KEY missing in environment' });
       return;
     }
 
@@ -501,8 +502,8 @@ assistantsRouter.post('/auto-sync', requireAuth, async (req: Request, res: Respo
 
     // 2. Get VAPI API key (using fallback to env for now if not in integrations)
     // 2. Get VAPI API key (Platform Mode)
-    const apiKey = process.env.VAPI_API_KEY;
-    if (!apiKey) throw new Error('System Error: VAPI_API_KEY missing');
+    const apiKey = config.VAPI_PRIVATE_KEY;
+    if (!apiKey) throw new Error('System Error: VAPI_PRIVATE_KEY missing');
 
     const client = new VapiClient(apiKey);
 

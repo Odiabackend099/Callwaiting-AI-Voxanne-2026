@@ -6,7 +6,7 @@ const logger = createLogger('SentimentAnalysis');
 // Initialize OpenAI client
 // Note: Requires OPENAI_API_KEY in environment variables
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY
 });
 
 export interface SentimentAnalysisResult {

@@ -13,6 +13,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { config } from '../config/index';
 import { log } from '../services/logger';
 
 const router = Router();
@@ -42,7 +43,7 @@ function getIntegrationStatus() {
   return {
     integrations: {
       // Vapi Integration
-      vapi: isSecretConfigured(process.env.VAPI_API_KEY),
+      vapi: isSecretConfigured(config.VAPI_PRIVATE_KEY),
       
       // OpenAI Integration
       openai: isSecretConfigured(process.env.OPENAI_API_KEY),

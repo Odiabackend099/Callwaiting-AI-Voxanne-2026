@@ -69,8 +69,7 @@ export async function getCalendarClient(
         await IntegrationDecryptor.storeCredentials(orgId, 'google_calendar', {
           accessToken,
           refreshToken,
-          expiresAt: tokenExpiry.toISOString(),
-          email: credentials.email
+          expiresAt: tokenExpiry.toISOString()
         });
 
         log.info('GoogleCalendar', 'Token refreshed successfully', { orgId });
@@ -105,6 +104,71 @@ export async function getCalendarClient(
 }
 
 /**
+ * Helper: Execute a calendar API call with 401 retry logic
+ * If the API returns 401 (Unauthorized), this will force a token refresh
+ * and retry the operation once.
+ */
+async function executeWithRetryOn401<T>(
+  orgId: string,
+  operation: (calendar: calendar_v3.Calendar) => Promise<T>,
+  retryCount: number = 0
+): Promise<T> {
+  const maxRetries = 1;
+
+  try {
+    const { calendar } = await getCalendarClient(orgId);
+    return await operation(calendar);
+  } catch (error: any) {
+    // Check if this is a 401 Unauthorized error
+    const statusCode = error?.response?.status || error?.code;
+    const isUnauthorized = statusCode === 401 ||
+                          error?.message?.includes('401') ||
+                          error?.message?.includes('Unauthorized');
+
+    if (isUnauthorized && retryCount < maxRetries) {
+      log.warn('GoogleCalendar', `Received 401, force-refreshing token and retrying`, {
+        orgId,
+        attempt: retryCount + 1
+      });
+
+      try {
+        // Force refresh by invalidating and re-fetching credentials
+        const credentials = await IntegrationDecryptor.getGoogleCalendarCredentials(orgId);
+        if (credentials?.refreshToken) {
+          const client = getOAuth2Client();
+          client.setCredentials({
+            refresh_token: credentials.refreshToken,
+          });
+
+          const { credentials: newCredentials } = await client.refreshAccessToken();
+          if (newCredentials.access_token) {
+            await IntegrationDecryptor.storeCredentials(orgId, 'google_calendar', {
+              accessToken: newCredentials.access_token,
+              refreshToken: credentials.refreshToken,
+              expiresAt: new Date(newCredentials.expiry_date || Date.now() + 3600000).toISOString()
+            });
+
+            log.info('GoogleCalendar', 'Forced token refresh succeeded, retrying operation', { orgId });
+
+            // Retry the operation with fresh token
+            return executeWithRetryOn401(orgId, operation, retryCount + 1);
+          }
+        }
+      } catch (refreshError) {
+        log.error('GoogleCalendar', 'Failed to recover from 401', {
+          orgId,
+          refreshError: refreshError instanceof Error ? refreshError.message : String(refreshError)
+        });
+        // Fall through to throw original error
+      }
+    }
+
+    // Either not a 401, or retries exhausted
+    throw error;
+  }
+}
+
+/**
  * Check availability for a time slot
  * @param orgId - Organization ID
  * @param startTime - ISO 8601 start time
@@ -121,31 +185,33 @@ export async function checkAvailability(
   suggestions?: string[];
 }> {
   try {
-    const { calendar } = await getCalendarClient(orgId);
+    const result = await executeWithRetryOn401(orgId, async (calendar) => {
+      // Query freebusy endpoint
+      const response = await calendar.freebusy.query({
+        requestBody: {
+          timeMin: startTime,
+          timeMax: endTime,
+          items: [{ id: 'primary' }],
+        },
+      });
 
-    // Query freebusy endpoint
-    const response = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: startTime,
-        timeMax: endTime,
-        items: [{ id: 'primary' }],
-      },
+      const busyTimes = response.data.calendars?.primary?.busy || [];
+
+      if (busyTimes.length === 0) {
+        return {
+          available: true,
+          message: `The requested time slot is available.`,
+        };
+      }
+
+      return {
+        available: false,
+        message: `That time slot is already booked. Let me find an available time for you.`,
+        suggestions: [], // Can be populated with alternative times
+      };
     });
 
-    const busyTimes = response.data.calendars?.primary?.busy || [];
-
-    if (busyTimes.length === 0) {
-      return {
-        available: true,
-        message: `The requested time slot is available.`,
-      };
-    }
-
-    return {
-      available: false,
-      message: `That time slot is already booked. Let me find an available time for you.`,
-      suggestions: [], // Can be populated with alternative times
-    };
+    return result;
   } catch (error) {
     console.error('Error checking availability:', error);
     throw new Error('Failed to check calendar availability');
@@ -171,42 +237,47 @@ export async function bookAppointment(
   }
 ): Promise<{ eventId: string; htmlLink: string }> {
   try {
-    const { calendar } = await getCalendarClient(orgId);
-
-    // Create calendar event
-    const calendarEvent: calendar_v3.Schema$Event = {
-      summary: `${event.procedureType || 'Appointment'} - ${event.patientName}`,
-      description: `Patient: ${event.patientName}\nPhone: ${event.patientPhone || 'N/A'}\nNotes: ${event.notes || 'None'}`,
-      start: {
-        dateTime: event.start,
-        timeZone: 'UTC',
-      },
-      end: {
-        dateTime: event.end,
-        timeZone: 'UTC',
-      },
-      attendees: [
-        {
-          email: event.patientEmail,
-          responseStatus: 'needsAction',
+    const result = await executeWithRetryOn401(orgId, async (calendar) => {
+      // Create calendar event
+      const calendarEvent: calendar_v3.Schema$Event = {
+        summary: `${event.procedureType || 'Appointment'} - ${event.patientName}`,
+        description: `Patient: ${event.patientName}\nPhone: ${event.patientPhone || 'N/A'}\nNotes: ${event.notes || 'None'}`,
+        start: {
+          dateTime: event.start,
+          timeZone: 'UTC',
         },
-      ],
-      reminders: {
-        useDefault: true,
-      },
-    };
+        end: {
+          dateTime: event.end,
+          timeZone: 'UTC',
+        },
+        attendees: [
+          {
+            email: event.patientEmail,
+            responseStatus: 'needsAction',
+          },
+        ],
+        reminders: {
+          useDefault: true,
+        },
+      };
 
-    const response = await calendar.events.insert({
-      calendarId: 'primary',
-      requestBody: calendarEvent,
-      sendUpdates: 'all', // Send calendar invite to patient
+      const response = await calendar.events.insert({
+        calendarId: 'primary',
+        requestBody: calendarEvent,
+        sendUpdates: 'all', // Send calendar invite to patient
+      });
+
+      if (!response.data.id) {
+        throw new Error('Failed to create calendar event');
+      }
+
+      return {
+        eventId: response.data.id,
+        htmlLink: response.data.htmlLink || '',
+      };
     });
 
-    if (!response.data.id) {
-      throw new Error('Failed to create calendar event');
-    }
-
-    // Log the booking
+    // Log the booking after successful creation
     await supabase.from('appointment_bookings').insert({
       org_id: orgId,
       patient_name: event.patientName,
@@ -216,13 +287,10 @@ export async function bookAppointment(
       appointment_end: event.end,
       procedure_type: event.procedureType,
       notes: event.notes,
-      google_event_id: response.data.id,
+      google_event_id: result.eventId,
     });
 
-    return {
-      eventId: response.data.id,
-      htmlLink: response.data.htmlLink || '',
-    };
+    return result;
   } catch (error) {
     console.error('Error booking appointment:', error);
     throw new Error('Failed to book appointment');
@@ -244,69 +312,71 @@ export async function getAvailableSlots(
   slotDurationMinutes: number = 30
 ): Promise<string[]> {
   try {
-    const { calendar } = await getCalendarClient(orgId);
+    const slots = await executeWithRetryOn401(orgId, async (calendar) => {
+      // Get all events in the date range
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: dateStart,
+        timeMax: dateEnd,
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
 
-    // Get all events in the date range
-    const response = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: dateStart,
-      timeMax: dateEnd,
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
+      const events = response.data.items || [];
 
-    const events = response.data.items || [];
+      // Find gaps between events
+      const resultSlots: string[] = [];
+      const startDate = new Date(dateStart);
+      const endDate = new Date(dateEnd);
 
-    // Find gaps between events
-    const slots: string[] = [];
-    const startDate = new Date(dateStart);
-    const endDate = new Date(dateEnd);
+      // Define working hours (9 AM to 5 PM)
+      const workingHourStart = 9;
+      const workingHourEnd = 17;
 
-    // Define working hours (9 AM to 5 PM)
-    const workingHourStart = 9;
-    const workingHourEnd = 17;
+      let currentSlotStart = new Date(startDate);
+      currentSlotStart.setHours(workingHourStart, 0, 0, 0);
 
-    let currentSlotStart = new Date(startDate);
-    currentSlotStart.setHours(workingHourStart, 0, 0, 0);
+      while (currentSlotStart < endDate) {
+        const currentSlotEnd = new Date(
+          currentSlotStart.getTime() + slotDurationMinutes * 60 * 1000
+        );
 
-    while (currentSlotStart < endDate) {
-      const currentSlotEnd = new Date(
-        currentSlotStart.getTime() + slotDurationMinutes * 60 * 1000
-      );
+        // Check if slot is within working hours
+        if (
+          currentSlotStart.getHours() >= workingHourStart &&
+          currentSlotEnd.getHours() <= workingHourEnd
+        ) {
+          // Check if slot is free
+          const hasConflict = events.some((event) => {
+            const eventStart = new Date(event.start?.dateTime || event.start?.date!);
+            const eventEnd = new Date(event.end?.dateTime || event.end?.date!);
 
-      // Check if slot is within working hours
-      if (
-        currentSlotStart.getHours() >= workingHourStart &&
-        currentSlotEnd.getHours() <= workingHourEnd
-      ) {
-        // Check if slot is free
-        const hasConflict = events.some((event) => {
-          const eventStart = new Date(event.start?.dateTime || event.start?.date!);
-          const eventEnd = new Date(event.end?.dateTime || event.end?.date!);
+            return (
+              (currentSlotStart >= eventStart && currentSlotStart < eventEnd) ||
+              (currentSlotEnd > eventStart && currentSlotEnd <= eventEnd) ||
+              (currentSlotStart <= eventStart && currentSlotEnd >= eventEnd)
+            );
+          });
 
-          return (
-            (currentSlotStart >= eventStart && currentSlotStart < eventEnd) ||
-            (currentSlotEnd > eventStart && currentSlotEnd <= eventEnd) ||
-            (currentSlotStart <= eventStart && currentSlotEnd >= eventEnd)
-          );
-        });
+          if (!hasConflict) {
+            resultSlots.push(currentSlotStart.toISOString());
+          }
+        }
 
-        if (!hasConflict) {
-          slots.push(currentSlotStart.toISOString());
+        // Move to next slot
+        currentSlotStart = new Date(
+          currentSlotStart.getTime() + slotDurationMinutes * 60 * 1000
+        );
+
+        // Reset to working hours start for next day
+        if (currentSlotStart.getHours() >= workingHourEnd) {
+          currentSlotStart.setDate(currentSlotStart.getDate() + 1);
+          currentSlotStart.setHours(workingHourStart, 0, 0, 0);
         }
       }
 
-      // Move to next slot
-      currentSlotStart = new Date(
-        currentSlotStart.getTime() + slotDurationMinutes * 60 * 1000
-      );
-
-      // Reset to working hours start for next day
-      if (currentSlotStart.getHours() >= workingHourEnd) {
-        currentSlotStart.setDate(currentSlotStart.getDate() + 1);
-        currentSlotStart.setHours(workingHourStart, 0, 0, 0);
-      }
-    }
+      return resultSlots;
+    });
 
     return slots;
   } catch (error) {

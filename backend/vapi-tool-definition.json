@@ -1,0 +1,54 @@
+{
+    "type": "function",
+    "function": {
+        "name": "bookClinicAppointment",
+        "description": "Book a confirmed appointment for a patient. Checks availability in real-time. If the slot is taken, returns alternative times.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "appointmentDate": {
+                    "type": "string",
+                    "description": "The date of the appointment in YYYY-MM-DD format (e.g., 2026-01-20)."
+                },
+                "appointmentTime": {
+                    "type": "string",
+                    "description": "The time of the appointment in HH:MM 24-hour format (e.g., 14:30)."
+                },
+                "patientEmail": {
+                    "type": "string",
+                    "description": "The patient's email address for confirmation."
+                },
+                "patientName": {
+                    "type": "string",
+                    "description": "The full name of the patient."
+                },
+                "patientPhone": {
+                    "type": "string",
+                    "description": "The patient's phone number for SMS reminders."
+                },
+                "serviceType": {
+                    "type": "string",
+                    "description": "The type of service being booked.",
+                    "enum": [
+                        "consultation",
+                        "checkup",
+                        "follow_up",
+                        "teeth_whitening",
+                        "botox",
+                        "generic"
+                    ]
+                },
+                "duration": {
+                    "type": "number",
+                    "description": "Duration in minutes. Defaults to 30."
+                }
+            },
+            "required": [
+                "appointmentDate",
+                "appointmentTime",
+                "patientEmail"
+            ]
+        }
+    },
+    "async": true
+}

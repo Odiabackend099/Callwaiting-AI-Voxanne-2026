@@ -76,6 +76,7 @@ import { notificationsRouter } from './routes/notifications';
 import analyticsRouter from './routes/analytics';
 import calendarOAuthRouter from './routes/calendar-oauth'; // default export
 import vapiCalendarToolsRouter from './routes/vapi-tools'; // default export
+import toolSyncRouter from './routes/tool-sync'; // default export
 import { authRouter } from './routes/health';
 import healthIntegrationsRouter from './routes/health-integrations'; // default export
 import orgsRouter from './routes/orgs'; // default export
@@ -210,6 +211,7 @@ app.use('/api/vapi', vapiRagRouter);
 app.use('/api/vapi', vapiWebhookRouter);
 app.use('/api/vapi', vapiSetupRouter);
 app.use('/api/vapi', vapiToolsRouter);
+app.use('/api/vapi', toolSyncRouter);
 app.use('/api/handoff', handoffRouter);
 app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);

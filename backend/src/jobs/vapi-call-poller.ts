@@ -5,13 +5,14 @@
  */
 
 import { supabase } from '../services/supabase-client';
+import { config } from '../config/index';
 import { log as logger } from '../services/logger';
 import axios from 'axios';
 
 // CRITICAL: API key must be provided via environment variable
-const VAPI_API_KEY = process.env.VAPI_API_KEY;
-if (!VAPI_API_KEY) {
-  throw new Error('VAPI_API_KEY environment variable is required. Please set it in your .env file.');
+const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
+if (!VAPI_PRIVATE_KEY) {
+  throw new Error('VAPI_PRIVATE_KEY environment variable is required. Please set it in your .env file.');
 }
 
 interface VapiCall {
@@ -43,7 +44,7 @@ export async function pollVapiCalls(): Promise<void> {
         'https://api.vapi.ai/call',
         {
           headers: {
-            'Authorization': `Bearer ${VAPI_API_KEY}`,
+            'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
             'Content-Type': 'application/json'
           },
           params: {
@@ -76,7 +77,7 @@ export async function pollVapiCalls(): Promise<void> {
             `https://api.vapi.ai/call/${call.id}`,
             {
               headers: {
-                'Authorization': `Bearer ${VAPI_API_KEY}`,
+                'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
                 'Content-Type': 'application/json'
               },
               timeout: 10000

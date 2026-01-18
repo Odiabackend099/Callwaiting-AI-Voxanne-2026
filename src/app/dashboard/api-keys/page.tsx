@@ -152,97 +152,97 @@ export default function ApiKeysPage() {
                 : 'Calendar connected successfully!';
             setCalendarSuccess(successMsg);
             setCalendarError(null);
-            
+
             // CRITICAL: Re-fetch calendar status with retry logic
             // Add longer delay and retry logic to ensure credentials are written to database
             console.log('[OAuth Callback] Calendar connected, waiting for database...');
 
             const checkStatusWithRetry = async (maxAttempts = 4) => {
-              let lastStatus: CalendarStatus = { connected: false };
-              let lastError: Error | null = null;
+                let lastStatus: CalendarStatus = { connected: false };
+                let lastError: Error | null = null;
 
-              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                // Exponential backoff: 2s, 4s, 8s, 16s (allows schema cache to refresh)
-                const delayMs = attempt === 1 ? 2000 : 2000 * Math.pow(2, attempt - 2);
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    // Exponential backoff: 2s, 4s, 8s, 16s (allows schema cache to refresh)
+                    const delayMs = attempt === 1 ? 2000 : 2000 * Math.pow(2, attempt - 2);
 
-                console.log(`[OAuth Callback] Waiting ${delayMs}ms before status check attempt ${attempt}/${maxAttempts}`);
-                await new Promise(resolve => setTimeout(resolve, delayMs));
+                    console.log(`[OAuth Callback] Waiting ${delayMs}ms before status check attempt ${attempt}/${maxAttempts}`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
 
-                console.log(`[OAuth Callback] Checking status (attempt ${attempt}/${maxAttempts})`);
+                    console.log(`[OAuth Callback] Checking status (attempt ${attempt}/${maxAttempts})`);
 
-                try {
-                  // Get org_id - try multiple sources
-                  let orgId = (user as any)?.app_metadata?.org_id;
-                  if (!orgId) {
-                    orgId = (user as any)?.user_metadata?.org_id;
-                  }
+                    try {
+                        // Get org_id - try multiple sources
+                        let orgId = (user as any)?.app_metadata?.org_id;
+                        if (!orgId) {
+                            orgId = (user as any)?.user_metadata?.org_id;
+                        }
 
-                  if (!orgId) {
-                    console.error('[OAuth Callback] Cannot get org_id from user - no org_id in app_metadata or user_metadata');
-                    lastError = new Error('Cannot determine organization ID');
-                    continue;
-                  }
+                        if (!orgId) {
+                            console.error('[OAuth Callback] Cannot get org_id from user - no org_id in app_metadata or user_metadata');
+                            lastError = new Error('Cannot determine organization ID');
+                            continue;
+                        }
 
-                  // Directly call backend status endpoint with retry
-                  // Use explicit backend URL (port 3001) instead of relative path
-                  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-                  const statusResponse = await fetch(`${backendUrl}/api/google-oauth/status/${orgId}`, {
-                    headers: {
-                      'Content-Type': 'application/json',
+                        // Directly call backend status endpoint with retry
+                        // Use explicit backend URL (port 3001) instead of relative path
+                        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+                        const statusResponse = await fetch(`${backendUrl}/api/google-oauth/status/${orgId}`, {
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
+                        });
+
+                        const statusData = await statusResponse.json();
+
+                        // Log all attempts for debugging
+                        console.log(`[OAuth Callback] Status check attempt ${attempt}:`, {
+                            httpStatus: statusResponse.status,
+                            connected: statusData.connected,
+                            email: statusData.email,
+                            hasTokens: statusData.hasTokens,
+                            isSchemaRefreshing: statusData.isSchemaRefreshing
+                        });
+
+                        if (statusResponse.ok) {
+                            lastStatus = statusData;
+
+                            // Success: connected with email
+                            if (statusData.connected && statusData.email) {
+                                console.log('[OAuth Callback] Status confirmed as connected with email!');
+                                setCalendarStatus(statusData);
+                                return; // Exit early on success
+                            }
+
+                            // Schema cache still refreshing - continue retrying
+                            if (statusData.isSchemaRefreshing) {
+                                console.log('[OAuth Callback] Schema cache still refreshing, retrying...');
+                                lastError = new Error('Supabase schema cache refreshing');
+                                continue;
+                            }
+
+                            // Connected but no email yet - still valid
+                            if (statusData.connected) {
+                                console.log('[OAuth Callback] Status confirmed as connected!');
+                                setCalendarStatus(statusData);
+                                return; // Exit on success
+                            }
+                        } else {
+                            lastError = new Error(`Status endpoint returned ${statusResponse.status}`);
+                            console.warn(`[OAuth Callback] Status check failed:`, statusData);
+                        }
+                    } catch (statusError) {
+                        lastError = statusError instanceof Error ? statusError : new Error(String(statusError));
+                        console.error(`[OAuth Callback] Status check error on attempt ${attempt}:`, lastError);
                     }
-                  });
-
-                  const statusData = await statusResponse.json();
-
-                  // Log all attempts for debugging
-                  console.log(`[OAuth Callback] Status check attempt ${attempt}:`, {
-                    httpStatus: statusResponse.status,
-                    connected: statusData.connected,
-                    email: statusData.email,
-                    hasTokens: statusData.hasTokens,
-                    isSchemaRefreshing: statusData.isSchemaRefreshing
-                  });
-
-                  if (statusResponse.ok) {
-                    lastStatus = statusData;
-
-                    // Success: connected with email
-                    if (statusData.connected && statusData.email) {
-                      console.log('[OAuth Callback] Status confirmed as connected with email!');
-                      setCalendarStatus(statusData);
-                      return; // Exit early on success
-                    }
-
-                    // Schema cache still refreshing - continue retrying
-                    if (statusData.isSchemaRefreshing) {
-                      console.log('[OAuth Callback] Schema cache still refreshing, retrying...');
-                      lastError = new Error('Supabase schema cache refreshing');
-                      continue;
-                    }
-
-                    // Connected but no email yet - still valid
-                    if (statusData.connected) {
-                      console.log('[OAuth Callback] Status confirmed as connected!');
-                      setCalendarStatus(statusData);
-                      return; // Exit on success
-                    }
-                  } else {
-                    lastError = new Error(`Status endpoint returned ${statusResponse.status}`);
-                    console.warn(`[OAuth Callback] Status check failed:`, statusData);
-                  }
-                } catch (statusError) {
-                  lastError = statusError instanceof Error ? statusError : new Error(String(statusError));
-                  console.error(`[OAuth Callback] Status check error on attempt ${attempt}:`, lastError);
                 }
-              }
 
-              // Update state with final status (will show "not connected" if all retries failed)
-              console.warn('[OAuth Callback] All retry attempts exhausted', { lastError, lastStatus });
-              setCalendarStatus(lastStatus);
+                // Update state with final status (will show "not connected" if all retries failed)
+                console.warn('[OAuth Callback] All retry attempts exhausted', { lastError, lastStatus });
+                setCalendarStatus(lastStatus);
             };
 
             checkStatusWithRetry();
-            
+
             handled = true;
         }
         // Handle error from calendar-oauth.ts (backward compatibility)
@@ -407,57 +407,79 @@ export default function ApiKeysPage() {
 
                             {/* Debug info in development */}
                             {process.env.NODE_ENV === 'development' && (
-                              <details className="mt-2">
-                                <summary className="text-xs text-red-300 cursor-pointer font-medium">Debug Info</summary>
-                                <pre className="mt-2 text-xs text-red-300 overflow-auto bg-black/30 p-2 rounded">
-                                  {JSON.stringify({
-                                    timestamp: new Date().toISOString(),
-                                    calendarStatus,
-                                    userOrgId: user?.user_metadata?.org_id
-                                  }, null, 2)}
-                                </pre>
-                              </details>
+                                <details className="mt-2">
+                                    <summary className="text-xs text-red-300 cursor-pointer font-medium">Debug Info</summary>
+                                    <pre className="mt-2 text-xs text-red-300 overflow-auto bg-black/30 p-2 rounded">
+                                        {JSON.stringify({
+                                            timestamp: new Date().toISOString(),
+                                            calendarStatus,
+                                            userOrgId: user?.user_metadata?.org_id
+                                        }, null, 2)}
+                                    </pre>
+                                </details>
                             )}
                         </div>
                     )}
 
                     <div className="flex items-center justify-between p-4 bg-black/20 border border-white/5 rounded-xl">
                         <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                calendarStatus.connected
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${calendarStatus.connected
                                     ? 'bg-emerald-500/10'
                                     : 'bg-blue-500/10'
-                            }`}>
-                                <Calendar className={`w-5 h-5 ${
-                                    calendarStatus.connected
+                                }`}>
+                                <Calendar className={`w-5 h-5 ${calendarStatus.connected
                                         ? 'text-emerald-400'
                                         : 'text-blue-400'
-                                }`} />
+                                    }`} />
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-white">Google Calendar</p>
-                                <p className={`text-xs ${
-                                    calendarStatus.connected
+                                <p className={`text-xs ${calendarStatus.connected
                                         ? 'text-emerald-400'
                                         : 'text-slate-500'
-                                }`}>
+                                    }`}>
                                     {calendarStatus.connected
-                                        ? `Linked (${calendarStatus.email || 'Loading...'})`
+                                        ? 'Connected'
                                         : 'Not Linked'}
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={handleConnectCalendar}
-                            disabled={isConnectingCalendar || calendarStatus.connected}
-                            className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${
-                                calendarStatus.connected
-                                    ? 'bg-slate-700 text-slate-400 cursor-default'
-                                    : 'bg-white text-black hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed'
-                            }`}
-                        >
-                            {isConnectingCalendar ? 'Connecting...' : calendarStatus.connected ? 'Connected' : 'Link My Google Calendar'}
-                        </button>
+                        <div className="flex gap-2">
+                            {calendarStatus.connected && (
+                                <button
+                                    onClick={async () => {
+                                        if (!confirm('Are you sure you want to disconnect Google Calendar?')) return;
+                                        setIsConnectingCalendar(true);
+                                        try {
+                                            await authedBackendFetch('/api/google-oauth/revoke', {
+                                                method: 'POST',
+                                                body: JSON.stringify({ orgId: (user as any)?.app_metadata?.org_id })
+                                            });
+                                            await fetchCalendarStatus();
+                                        } catch (err) {
+                                            console.error(err);
+                                            alert('Failed to disconnect');
+                                        } finally {
+                                            setIsConnectingCalendar(false);
+                                        }
+                                    }}
+                                    disabled={isConnectingCalendar}
+                                    className="px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                >
+                                    Disconnect
+                                </button>
+                            )}
+                            <button
+                                onClick={handleConnectCalendar}
+                                disabled={isConnectingCalendar || calendarStatus.connected}
+                                className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${calendarStatus.connected
+                                        ? 'bg-emerald-500/10 text-emerald-400 cursor-default border border-emerald-500/20'
+                                        : 'bg-white text-black hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed'
+                                    }`}
+                            >
+                                {isConnectingCalendar ? 'Working...' : calendarStatus.connected ? 'Connected' : 'Link My Google Calendar'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

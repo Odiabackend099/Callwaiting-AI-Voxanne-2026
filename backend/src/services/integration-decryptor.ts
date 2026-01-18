@@ -14,8 +14,19 @@
  */
 
 import { EncryptionService } from './encryption';
+import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
-import { supabase } from './supabase-client';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false,
+    },
+  }
+);
 
 // ============================================
 // Type Definitions
@@ -404,13 +415,11 @@ export class IntegrationDecryptor {
         metadata.email = credentials.email;
       }
 
-      log.info('IntegrationDecryptor', 'Preparing to upsert credentials', {
+      log.debug('IntegrationDecryptor', 'Preparing to upsert credentials', {
         orgId,
         provider,
         hasMetadata: Object.keys(metadata).length > 0,
-        metadataKeys: Object.keys(metadata),
-        metadataValues: metadata, // Log actual values for debugging
-        timestamp: new Date().toISOString()
+        metadataKeys: Object.keys(metadata)
       });
 
       const { data, error } = await supabase
@@ -421,6 +430,7 @@ export class IntegrationDecryptor {
             provider,
             encrypted_config: encryptedConfig,
             is_active: true,
+            last_verified_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             metadata: Object.keys(metadata).length > 0 ? metadata : null,
           },
@@ -457,6 +467,7 @@ export class IntegrationDecryptor {
                   provider,
                   encrypted_config: encryptedConfig,
                   is_active: true,
+                  last_verified_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                   metadata: Object.keys(metadata).length > 0 ? metadata : null,
                 },
@@ -490,6 +501,14 @@ export class IntegrationDecryptor {
             code: lastError?.code
           });
           throw lastError;
+
+          log.info('IntegrationDecryptor', 'Credentials stored successfully after retry', {
+            orgId,
+            provider,
+            timestamp: new Date().toISOString(),
+            dataCount: retryData?.length || 0
+          });
+          return;
         }
 
         log.error('IntegrationDecryptor', 'Supabase upsert error', {
@@ -505,11 +524,9 @@ export class IntegrationDecryptor {
       log.info('IntegrationDecryptor', 'Credentials stored successfully', {
         orgId,
         provider,
-        insertedId: data?.[0]?.id,
-        credentialMetadata: data?.[0]?.metadata, // Verify metadata was stored
+        timestamp: new Date().toISOString(),
         rowsAffected: data?.length || 0,
-        hasMetadata: Object.keys(metadata).length > 0,
-        timestamp: new Date().toISOString()
+        hasMetadata: Object.keys(metadata).length > 0
       });
 
       // Invalidate cache after successful storage
@@ -586,6 +603,7 @@ export class IntegrationDecryptor {
         .from('org_credentials')
         .update({
           verification_error: isValid ? null : 'Verification failed',
+          last_verified_at: new Date().toISOString(),
         })
         .eq('org_id', orgId)
         .eq('provider', provider);
@@ -612,6 +630,7 @@ export class IntegrationDecryptor {
 
       return {
         success: isValid,
+        lastVerified: new Date().toISOString(),
       };
     } catch (error: any) {
       log.error('IntegrationDecryptor', 'Credential verification error', {
@@ -625,6 +644,7 @@ export class IntegrationDecryptor {
         .from('org_credentials')
         .update({
           verification_error: error?.message || 'Verification error',
+          last_verified_at: new Date().toISOString(),
         })
         .eq('org_id', orgId)
         .eq('provider', provider)
@@ -709,7 +729,7 @@ export class IntegrationDecryptor {
       // Query org_credentials table
       const { data, error } = await supabase
         .from('org_credentials')
-        .select('encrypted_config, is_active')
+        .select('encrypted_config, is_active, last_verified_at')
         .eq('org_id', orgId)
         .eq('provider', provider)
         .eq('is_active', true)
@@ -776,6 +796,7 @@ export class IntegrationDecryptor {
       log.info('IntegrationDecryptor', 'Credentials retrieved', {
         orgId,
         provider,
+        lastVerified: data.last_verified_at,
         cacheSize: credentialCache.size,
       });
 

@@ -23,6 +23,7 @@ import { withTimeout } from '../utils/timeout-helper';
 import { validateE164Format } from '../utils/phone-validation';
 import { phoneNumbersRouter } from './phone-numbers';
 import { createWebVoiceSession, endWebVoiceSession } from '../services/web-voice-bridge';
+import { config } from '../config/index';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
 import {
@@ -117,8 +118,9 @@ function isValidLanguage(language: string): boolean {
 async function getOrgAndVapiConfig(
   req: Request,
   res: Response,
-  requestId: string
-): Promise<{ orgId: string; vapiApiKey: string; vapiIntegration: any } | null> {
+  requestId: string,
+  requireApiKey: boolean = true  // Allow callers to opt-out of requiring Vapi API key
+): Promise<{ orgId: string; vapiApiKey: string | undefined; vapiIntegration: any } | null> {
   const { data: org } = await supabase
     .from('organizations')
     .select('id')
@@ -140,21 +142,30 @@ async function getOrgAndVapiConfig(
   const vapiApiKey: string | undefined =
     vapiIntegration?.config?.vapi_api_key ||
     vapiIntegration?.config?.vapi_secret_key ||
-    process.env.VAPI_API_KEY; // Fallback to global key for default org/single-tenant
+    config.VAPI_PRIVATE_KEY; // Fallback to global key for default org/single-tenant
 
-  if (!vapiApiKey) {
+  // OPTIONAL: Block only if requireApiKey is true and no key is found
+  // This allows browser-only mode for web-test endpoint
+  if (requireApiKey && !vapiApiKey) {
     res.status(400).json({ error: 'Vapi connection not configured', requestId });
     return null;
   }
 
-  logger.info('Vapi key resolved for request', {
-    requestId,
-    orgId: org.id,
-    source: vapiIntegration?.config?.vapi_api_key
-      ? 'integrations.config.vapi_api_key'
-      : 'integrations.config.vapi_secret_key',
-    keyLast4: vapiApiKey.slice(-4)
-  });
+  if (vapiApiKey) {
+    logger.info('Vapi key resolved for request', {
+      requestId,
+      orgId: org.id,
+      source: vapiIntegration?.config?.vapi_api_key
+        ? 'integrations.config.vapi_api_key'
+        : 'integrations.config.vapi_secret_key',
+      keyLast4: vapiApiKey.slice(-4)
+    });
+  } else {
+    logger.warn('Vapi key not available (browser-only mode may be limited)', {
+      requestId,
+      orgId: org.id
+    });
+  }
 
   return { orgId: org.id, vapiApiKey, vapiIntegration };
 }
@@ -595,6 +606,12 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
   // NOTE: Vapi expects assistant payload shape with model/voice/transcriber.
   // Using non-standard keys like systemPrompt/voiceId/serverUrl can cause 400 Bad Request.
+  // CRITICAL: Custom server tools MUST be embedded at creation time (PATCH doesn't support them)
+  const vapiClientForTools = new VapiClient(vapiApiKey);
+  const appointmentTools = vapiClientForTools.getAppointmentBookingTools(
+    process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || 'http://localhost:3001'
+  );
+
   const assistantCreatePayload = {
     name: agent.name || 'CallWaiting AI Outbound',
     model: {
@@ -616,7 +633,10 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     firstMessage: resolvedFirstMessage,
     maxDurationSeconds: resolvedMaxDurationSeconds,
     serverUrl: webhookUrl,
-    serverMessages: ['function-call', 'hang', 'status-update', 'end-of-call-report', 'transcript']
+    serverMessages: ['function-call', 'hang', 'status-update', 'end-of-call-report', 'transcript'],
+    // CRITICAL FIX: Include appointment booking tools at creation time
+    // Custom server tools cannot be added via PATCH, only during initial creation
+    tools: appointmentTools
   };
 
   // 3. Initialize Vapi client with error handling
@@ -692,12 +712,12 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   }
 
   // 5. CREATE new assistant with retry
-  // Ensure we do NOT pass 'tools' property even if it exists on payload type
-  const { tools, ...cleanPayload } = assistantCreatePayload as any;
+  // NOTE: We DO include 'tools' here for initial creation (Vapi API requires tools at creation time)
+  // For updates, tools will be preserved via toolIds, not re-sent
 
   let assistant;
   try {
-    assistant = await withRetry(() => vapiClient.createAssistant(cleanPayload));
+    assistant = await withRetry(() => vapiClient.createAssistant(assistantCreatePayload));
   } catch (createErr: any) {
     const status: number | undefined = createErr?.response?.status;
     const details = createErr?.response?.data?.message || createErr?.response?.data || createErr?.message;
@@ -1798,34 +1818,29 @@ router.post(
 
       const org = orgs[0];
 
-      // Get the stored Vapi API key
-      const envKey = process.env.VAPI_API_KEY;
+      // Get the stored Vapi API key (OPTIONAL for browser-only agents)
+      const envKey = config.VAPI_PRIVATE_KEY;
       console.log('DEBUG: Resolving Vapi Key. Env Key exists:', !!envKey, 'Length:', envKey?.length);
       console.log('DEBUG: vapiIntegration config:', vapiIntegration?.config);
 
-      let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key || process.env.VAPI_API_KEY;
+      let vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key || config.VAPI_PRIVATE_KEY;
 
-      console.log('DEBUG: Resolved vapiApiKey:', vapiApiKey ? 'FOUND' : 'MISSING');
+      console.log('DEBUG: Resolved vapiApiKey:', vapiApiKey ? 'FOUND' : 'MISSING (browser-only mode)');
 
-      if (!vapiApiKey) {
-        logger.error('VAPI_API_KEY missing in environment variables', { requestId });
-        res.status(500).json({
-          error: 'System configuration error: Telephony provider unavailable.',
-          requestId
-        });
-        return;
-      }
-
-      // No sanitization needed for env var (assumed safe), but keeping for safety if source changes
-      try {
-        vapiApiKey = sanitizeVapiKey(vapiApiKey);
-      } catch (sanitizeErr: any) {
-        logger.error('Failed to sanitize Vapi key', { orgId, requestId, error: sanitizeErr.message });
-        res.status(400).json({
-          error: 'Vapi connection is not valid. Please save connection again.',
-          requestId
-        });
-        return;
+      // Sanitize Vapi key if present (no longer a blocking error)
+      if (vapiApiKey) {
+        try {
+          vapiApiKey = sanitizeVapiKey(vapiApiKey);
+        } catch (sanitizeErr: any) {
+          logger.error('Failed to sanitize Vapi key', { orgId, requestId, error: sanitizeErr.message });
+          res.status(400).json({
+            error: 'Vapi connection is not valid. Please save connection again.',
+            requestId
+          });
+          return;
+        }
+      } else {
+        logger.warn('VAPI_PRIVATE_KEY not available - agent will be saved in browser-only mode (no Vapi sync)', { requestId, orgId });
       }
 
 
@@ -1948,85 +1963,105 @@ router.post(
         return;
       }
 
-      // Parallel Vapi Sync for updated agents
-      logger.info('Syncing agents to Vapi', {
-        agentIds: agentIdsToSync,
-        requestId,
-        inboundUpdated: Boolean(inboundPayload),
-        outboundUpdated: Boolean(outboundPayload)
-      });
+      // Conditional Vapi Sync: Only sync if API key is available
+      if (vapiApiKey) {
+        logger.info('Syncing agents to Vapi', {
+          agentIds: agentIdsToSync,
+          requestId,
+          inboundUpdated: Boolean(inboundPayload),
+          outboundUpdated: Boolean(outboundPayload)
+        });
 
-      // CRITICAL FIX: Capture individual agent success/failure instead of using Promise.allSettled
-      const syncPromises = agentIdsToSync.map(async (id) => {
-        try {
-          const assistantId = await ensureAssistantSynced(id, vapiApiKey!);
-          return { agentId: id, assistantId, success: true };
-        } catch (error: any) {
-          return { agentId: id, success: false, error: error.message || String(error) };
+        // CRITICAL FIX: Capture individual agent success/failure instead of using Promise.allSettled
+        const syncPromises = agentIdsToSync.map(async (id) => {
+          try {
+            const assistantId = await ensureAssistantSynced(id, vapiApiKey!);
+            return { agentId: id, assistantId, success: true };
+          } catch (error: any) {
+            return { agentId: id, success: false, error: error.message || String(error) };
+          }
+        });
+
+        const syncResults = await Promise.all(syncPromises);
+
+        const successfulSyncs = syncResults.filter(r => r.success);
+        const failedSyncs = syncResults.filter(r => !r.success);
+
+        // CRITICAL FIX: Return error if ANY agent failed to sync (not just if ALL failed)
+        // This ensures database and Vapi stay in sync
+        if (failedSyncs.length > 0) {
+          const failureDetails = failedSyncs.map(f => ({
+            agentId: f.agentId,
+            error: f.error
+          }));
+
+          const errorMessage = failedSyncs.map(f => f.error).join('; ');
+
+          logger.error('Agent sync to Vapi failed', {
+            failedAgents: failureDetails,
+            successCount: successfulSyncs.length,
+            failCount: failedSyncs.length,
+            requestId
+          });
+
+          res.status(500).json({
+            success: false,
+            error: `Failed to sync ${failedSyncs.length} agent(s) to Vapi: ${errorMessage}`,
+            details: {
+              succeeded: successfulSyncs.map((s: any) => ({ agentId: s.agentId, assistantId: s.assistantId })),
+              failed: failureDetails
+            },
+            requestId
+          });
+          return;
         }
-      });
 
-      const syncResults = await Promise.all(syncPromises);
+        // Verify voice was synced by checking agent records
+        const { data: syncedAgents = [] } = await supabase
+          .from('agents')
+          .select('id, role, voice, vapi_assistant_id')
+          .in('id', agentIdsToSync);
 
-      const successfulSyncs = syncResults.filter(r => r.success);
-      const failedSyncs = syncResults.filter(r => !r.success);
-
-      // CRITICAL FIX: Return error if ANY agent failed to sync (not just if ALL failed)
-      // This ensures database and Vapi stay in sync
-      if (failedSyncs.length > 0) {
-        const failureDetails = failedSyncs.map(f => ({
-          agentId: f.agentId,
-          error: f.error
+        const agentDetails = (syncedAgents || []).map(a => ({
+          role: a.role,
+          voice: a.voice,
+          vapiAssistantId: a.vapi_assistant_id
         }));
 
-        const errorMessage = failedSyncs.map(f => f.error).join('; ');
-
-        logger.error('Agent sync to Vapi failed', {
-          failedAgents: failureDetails,
-          successCount: successfulSyncs.length,
-          failCount: failedSyncs.length,
-          requestId
+        logger.info('All agents synced successfully to Vapi', {
+          count: successfulSyncs.length,
+          requestId,
+          agents: agentDetails
         });
 
-        res.status(500).json({
-          success: false,
-          error: `Failed to sync ${failedSyncs.length} agent(s) to Vapi: ${errorMessage}`,
-          details: {
-            succeeded: successfulSyncs.map((s: any) => ({ agentId: s.agentId, assistantId: s.assistantId })),
-            failed: failureDetails
-          },
-          requestId
-        });
-        return;
-      }
-
-      // Verify voice was synced by checking agent records
-      const { data: syncedAgents = [] } = await supabase
-        .from('agents')
-        .select('id, role, voice, vapi_assistant_id')
-        .in('id', agentIdsToSync);
-
-      const agentDetails = (syncedAgents || []).map(a => ({
-        role: a.role,
-        voice: a.voice,
-        vapiAssistantId: a.vapi_assistant_id
-      }));
-
-      logger.info('All agents synced successfully to Vapi', {
-        count: successfulSyncs.length,
-        requestId,
-        agents: agentDetails
-      });
-
-      res.status(200).json({
-        success: true,
-        syncedAgentIds: successfulSyncs.map((s: any) => s.assistantId),
-        message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated.`,
+        res.status(200).json({
+          success: true,
+          syncedAgentIds: successfulSyncs.map((s: any) => s.assistantId),
+          message: `Agent configuration saved and synced to Vapi. ${successfulSyncs.length} assistant(s) updated.`,
         voiceSynced: true,
         knowledgeBaseSynced: true,
         agentDetails: agentDetails,
         requestId
       });
+      } else {
+        // Browser-only mode: Agent saved without Vapi sync
+        logger.info('Agent configuration saved in browser-only mode (no Vapi key)', {
+          agentIds: agentIdsToSync,
+          requestId,
+          mode: 'browser-testing'
+        });
+
+        res.status(200).json({
+          success: true,
+          syncedAgentIds: agentIdsToSync,
+          message: `Agent configuration saved in browser-only mode. Vapi sync will be available once telephony is configured.`,
+          mode: 'browser-only',
+          vapiSynced: false,
+          voiceSynced: false,
+          knowledgeBaseSynced: false,
+          requestId
+        });
+      }
 
     } catch (error: any) {
       logger.error('Failed to save agent behavior', {
@@ -2064,10 +2099,10 @@ router.post(
       // Fetch integration settings from database (keys stored securely)
       const settings = await getIntegrationSettings();
 
-      const vapiApiKey = process.env.VAPI_API_KEY;
+      const vapiApiKey = config.VAPI_PRIVATE_KEY;
 
       if (!vapiApiKey) {
-        logger.error('VAPI_API_KEY missing in environment variables', { requestId });
+        logger.error('VAPI_PRIVATE_KEY missing in environment variables', { requestId });
         res.status(500).json({ error: 'System configuration error: Telephony provider unavailable.', requestId });
         return;
       }
@@ -2331,10 +2366,20 @@ router.post(
         return;
       }
 
-      // Use helper to eliminate code duplication
-      const config = await getOrgAndVapiConfig(req, res, requestId);
+      // Use helper to eliminate code duplication (requireApiKey: false allows checking for key)
+      const config = await getOrgAndVapiConfig(req, res, requestId, false);
       if (!config) return;
       const { orgId, vapiApiKey, vapiIntegration } = config;
+
+      // CRITICAL: Web test REQUIRES Vapi API key (unlike agent behavior save which is browser-only)
+      if (!vapiApiKey) {
+        res.status(400).json({
+          error: 'Vapi connection not configured. Please configure your Vapi API key to test voice calls.',
+          hint: 'You can still save agent behavior without Vapi, but testing voice calls requires Vapi credentials.',
+          requestId
+        });
+        return;
+      }
 
       const { data: agent } = await supabase
         .from('agents')
@@ -3334,7 +3379,7 @@ router.post(
           let ghostFound = false;
           try {
             const vapiConfig = await getApiKey('vapi', orgId || 'default');
-            const apiKey = process.env.VAPI_API_KEY || vapiConfig?.vapi_api_key;
+            const apiKey = config.VAPI_PRIVATE_KEY || vapiConfig?.vapi_api_key;
 
             if (apiKey) {
               const vapiClient = new VapiClient(apiKey);
@@ -3414,15 +3459,15 @@ router.post(
       }
 
       // Enforce Platform Provider Model: Use environment variable only
-      const vapiApiKey = process.env.VAPI_API_KEY;
+      const vapiApiKey = config.VAPI_PRIVATE_KEY;
 
       logger.debug('Vapi credentials check', {
         hasApiKey: !!vapiApiKey,
-        source: 'env'
+        source: 'config'
       });
 
       if (!vapiApiKey) {
-        logger.error('VAPI_API_KEY missing in environment variables', { orgId });
+        logger.error('VAPI_PRIVATE_KEY missing in environment variables', { orgId });
         res.status(500).json({
           error: 'System configuration error: Telephony provider unavailable.',
           requestId

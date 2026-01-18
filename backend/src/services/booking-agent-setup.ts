@@ -10,6 +10,7 @@
  */
 
 import { VapiClient, AssistantConfig } from './vapi-client';
+import { config } from '../config/index';
 import { APPOINTMENT_BOOKING_PROMPT, generatePromptContext } from '../config/system-prompts';
 import { log } from './logger';
 import { supabase } from './supabase-client';
@@ -283,9 +284,9 @@ export class BookingAgentSetup {
  * Create from environment or import as needed
  */
 export function createBookingAgentSetup(vapiApiKey?: string): BookingAgentSetup {
-  const key = vapiApiKey || process.env.VAPI_API_KEY;
+  const key = vapiApiKey || config.VAPI_PRIVATE_KEY;
   if (!key) {
-    throw new Error('VAPI_API_KEY is required');
+    throw new Error('VAPI_PRIVATE_KEY is required');
   }
   return new BookingAgentSetup(key);
 }

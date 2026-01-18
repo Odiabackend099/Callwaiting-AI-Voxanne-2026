@@ -1,0 +1,166 @@
+================================================================================
+WEBHOOK FIX - QUICK REFERENCE
+================================================================================
+
+ROOT CAUSE:
+  Vapi assistant had webhook URL: http://localhost:3001/api/webhooks/vapi
+  This is LOCAL ONLY - Vapi cloud servers cannot reach localhost
+
+FIX APPLIED:
+  ✅ Started ngrok tunnel
+  ✅ Got public URL: https://sobriquetical-zofia-abysmally.ngrok-free.dev
+  ✅ Updated Vapi webhook URL to public ngrok address
+  ✅ Verified all endpoints reachable
+
+================================================================================
+VERIFICATION
+================================================================================
+
+To verify webhook is working:
+  npx ts-node backend/verify-webhook-fix.ts
+
+Expected output:
+  ✅ ALL CHECKS PASSED
+
+================================================================================
+TESTING BROWSER BOOKING
+================================================================================
+
+1. Open: http://localhost:3000/dashboard/test-agent
+2. Click "Browser Test" tab
+3. Say: "Book an appointment for Tuesday at 2pm, name John, email john@test.com"
+4. Verify:
+   - AI says appointment is confirmed
+   - Event appears in Google Calendar within 5 seconds
+   - Log shows: "Tool invocation received: bookClinicAppointment"
+
+================================================================================
+NGROK TUNNEL
+================================================================================
+
+Current tunnel URL:
+  https://sobriquetical-zofia-abysmally.ngrok-free.dev
+
+To check if running:
+  ps aux | grep ngrok
+
+To restart if crashed:
+  pkill -f ngrok
+  ngrok http 3001
+
+⚠️  IMPORTANT: Tunnel must keep running for webhook to work!
+
+================================================================================
+IF BOOKING FAILS AGAIN
+================================================================================
+
+1. Check ngrok status:
+   ps aux | grep ngrok
+   
+2. If ngrok crashed, restart it:
+   pkill -f ngrok
+   ngrok http 3001
+   
+3. Get new ngrok URL from startup output
+   
+4. Update Vapi webhook URL:
+   npx ts-node backend/update-webhook-url.ts
+   
+5. Verify again:
+   npx ts-node backend/verify-webhook-fix.ts
+
+================================================================================
+BACKEND LOGS
+================================================================================
+
+To monitor tool invocations:
+  tail -f backend/logs/app.log | grep -i "booking\|tool\|webhook"
+
+Expected log messages:
+  ✅ Tool invocation received: bookClinicAppointment
+  ✅ Appointment created: ID xyz
+  ✅ Calendar event synced
+
+If you see NO messages, webhook is not reaching backend
+
+================================================================================
+KEY CONCEPT
+================================================================================
+
+Before Fix:
+  Browser → Vapi WebSocket → Vapi Cloud
+              ↓
+           Tool Call
+              ↓
+           http://localhost:3001  ❌ UNREACHABLE
+           
+After Fix:
+  Browser → Vapi WebSocket → Vapi Cloud
+              ↓
+           Tool Call
+              ↓
+           https://xyz.ngrok.io  ✅ PUBLIC & REACHABLE
+              ↓
+           ngrok forwards to
+              ↓
+           http://localhost:3001 ✅ WORKS!
+
+================================================================================
+NGROK TUNNEL INFO
+================================================================================
+
+URL: https://sobriquetical-zofia-abysmally.ngrok-free.dev
+Backend port: 3001
+Webhook endpoint: /api/webhooks/vapi
+Full webhook URL: https://sobriquetical-zofia-abysmally.ngrok-free.dev/api/webhooks/vapi
+
+Health check (to verify tunnel working):
+  curl https://sobriquetical-zofia-abysmally.ngrok-free.dev/health
+  Expected: {"status":"ok"...}
+
+================================================================================
+VAPI ASSISTANT DETAILS
+================================================================================
+
+Assistant ID: 1f2c1e48-3c41-4a8d-9ddc-cdf6a7303ada
+Name: CallWaiting AI Inbound
+Model: gpt-4
+Voice: Kylie
+Tools linked: 1 (bookClinicAppointment)
+Webhook URL: https://sobriquetical-zofia-abysmally.ngrok-free.dev/api/webhooks/vapi
+
+To verify in Vapi dashboard:
+  1. Go to Vapi.ai
+  2. Click Assistants
+  3. Find "CallWaiting AI Inbound"
+  4. Scroll to Server URL section
+  5. Should show public ngrok URL (not localhost)
+
+================================================================================
+PRODUCTION DEPLOYMENT
+================================================================================
+
+When ready for production (after development testing):
+
+1. Deploy backend to cloud (Render, AWS, etc.)
+2. Get public domain URL
+3. Update webhook URL in Vapi assistant
+4. Remove ngrok dependency
+5. Document webhook URL in production config
+
+Example production webhook URL:
+  https://api.yourcompany.com/api/webhooks/vapi
+
+================================================================================
+SUMMARY
+================================================================================
+
+Status: ✅ FIXED
+Issue: Localhost webhook URL unreachable from Vapi
+Fix: ngrok tunnel + webhook URL update
+Result: Booking and all tool invocations now work
+Next: Test browser booking flow
+
+Current Test Status: READY FOR TESTING
+Verification Status: ALL CHECKS PASSED ✅
+

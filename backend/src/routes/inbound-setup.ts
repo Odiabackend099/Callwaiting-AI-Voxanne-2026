@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { config } from '../config/index';
 import { supabase } from '../services/supabase-client';
 import { VapiClient } from '../services/vapi-client';
 import { requireAuthOrDev } from '../middleware/auth';
@@ -99,10 +100,10 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
 
     // Get Vapi API key from environment (Platform Provider Model)
     console.log('[InboundSetup] using Platform Vapi Key', { requestId });
-    const vapiApiKey = process.env.VAPI_API_KEY;
+    const vapiApiKey = config.VAPI_PRIVATE_KEY;
 
     if (!vapiApiKey) {
-      console.error('[CRITICAL] VAPI_API_KEY missing in environment variables');
+      console.error('[CRITICAL] VAPI_PRIVATE_KEY missing in environment variables');
       res.status(500).json({
         error: 'System configuration error: Telephony provider unavailable.',
         requestId

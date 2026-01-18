@@ -1,4 +1,5 @@
 import express from 'express';
+import { config } from '../config/index';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
@@ -582,12 +583,12 @@ async function handleCallStarted(event: VapiEvent) {
 
     // Platform Provider Model: Always use system API key
     // Ignore any key returned from legacy DB configs
-    vapiApiKey = process.env.VAPI_API_KEY || null;
+    vapiApiKey = config.VAPI_PRIVATE_KEY || null;
 
     if (!vapiApiKey) {
-      logger.error('webhooks', 'CRITICAL: VAPI_API_KEY missing in environment');
+      logger.error('webhooks', 'CRITICAL: VAPI_PRIVATE_KEY missing in environment');
     } else {
-      logger.debug('webhooks', 'Using Platform VAPI_API_KEY');
+      logger.debug('webhooks', 'Using Platform VAPI_PRIVATE_KEY');
     }
 
     // Fetch RAG context from knowledge base and inject into agent

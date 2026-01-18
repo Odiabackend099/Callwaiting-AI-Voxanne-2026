@@ -11,7 +11,7 @@ let openai: OpenAI | null = null;
 
 try {
   openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || 'sk-proj-placeholder'
+    apiKey: process.env.OPENAI_API_KEY
   });
 } catch (error: any) {
   log.warn('Embeddings', 'OpenAI client initialization failed', {

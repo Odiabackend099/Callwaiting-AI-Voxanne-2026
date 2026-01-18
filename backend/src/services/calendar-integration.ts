@@ -145,15 +145,32 @@ export async function createCalendarEvent(
   event: CalendarEvent
 ): Promise<{ eventId: string; eventUrl: string }> {
   try {
+    log.info('CalendarIntegration', '[START] createCalendarEvent', { orgId, title: event.title });
+    
     // Get authenticated calendar client
+    log.info('CalendarIntegration', '[STEP 1] Fetching calendar client', { orgId });
     const calendar = await getCalendarClient(orgId);
+    log.info('CalendarIntegration', '[STEP 2] Calendar client ready', { orgId });
 
     // Parse dates
     const startDate = new Date(event.startTime);
     const endDate = new Date(event.endTime);
 
-    // Create event using googleapis
-    const result = await calendar.events.insert({
+    log.info('CalendarIntegration', '[STEP 3] Parsed dates, preparing Google API call', {
+      orgId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      attendee: event.attendeeEmail
+    });
+
+    // Create event using googleapis with 5-second timeout
+    log.info('CalendarIntegration', '[STEP 4] Calling calendar.events.insert with 5s timeout', { orgId });
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Google Calendar API timeout: No response within 5 seconds')), 5000);
+    });
+
+    const insertPromise = calendar.events.insert({
       calendarId: 'primary',
       requestBody: {
       summary: event.title,
@@ -186,7 +203,9 @@ export async function createCalendarEvent(
       }
     });
 
-    log.info('CalendarIntegration', 'Calendar event created', {
+    const result = await Promise.race([insertPromise, timeoutPromise]);
+
+    log.info('CalendarIntegration', '[STEP 5] ✅ Calendar event created successfully', {
       orgId,
       eventId: result.data.id,
       title: event.title,
@@ -194,15 +213,25 @@ export async function createCalendarEvent(
       htmlLink: result.data.htmlLink
     });
 
-    return {
+    const returnValue = {
       eventId: result.data.id || '',
       eventUrl: result.data.htmlLink || ''
     };
-  } catch (error: any) {
-    log.error('CalendarIntegration', 'Failed to create calendar event', {
+    
+    log.info('CalendarIntegration', '[END] createCalendarEvent SUCCESS', {
       orgId,
-      error: error?.message,
-      stack: error?.stack
+      eventId: returnValue.eventId
+    });
+
+    return returnValue;
+  } catch (error: any) {
+    log.error('CalendarIntegration', '[CRITICAL ERROR] createCalendarEvent FAILED', {
+      orgId,
+      errorMessage: error?.message,
+      errorCode: error?.code,
+      errorStatus: error?.status,
+      stack: error?.stack?.substring(0, 500),
+      timestamp: new Date().toISOString()
     });
     throw error;
   }

@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { config } from '../config/index';
 import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
@@ -31,7 +32,7 @@ async function getVapiApiKeyForOrg(orgId: string): Promise<string | null> {
     .limit(1)
     .single();
 
-  const key = (vapiIntegration as any)?.config?.vapi_api_key || process.env.VAPI_API_KEY;
+  const key = (vapiIntegration as any)?.config?.vapi_api_key || config.VAPI_PRIVATE_KEY;
   return key || null;
 }
 

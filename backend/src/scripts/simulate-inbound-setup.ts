@@ -1,5 +1,6 @@
 
 import path from 'path';
+import { config } from '../config/index';
 import dotenv from 'dotenv';
 // Explicitly load from backend/.env
 dotenv.config({ path: path.join(__dirname, '../../.env') });
@@ -8,7 +9,7 @@ import { VapiClient } from '../services/vapi-client';
 async function simulateInboundSetup() {
     // Validate all required credentials are provided via environment variables
     // Never hardcode credentials in source code
-    const requiredEnvVars = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER', 'VAPI_API_KEY'];
+    const requiredEnvVars = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER', 'VAPI_PRIVATE_KEY'];
     const missingVars = requiredEnvVars.filter(v => !process.env[v]);
 
     if (missingVars.length > 0) {
@@ -26,14 +27,14 @@ async function simulateInboundSetup() {
 
     console.log('--- Simulating Inbound Setup (Platform Provider Model) ---');
     console.log('1. Checking Environment Variables...');
-    if (!process.env.VAPI_API_KEY) {
-        console.error('CRITICAL: VAPI_API_KEY is missing from environment!');
+    if (!config.VAPI_PRIVATE_KEY) {
+        console.error('CRITICAL: VAPI_PRIVATE_KEY is missing from environment!');
         process.exit(1);
     }
-    console.log('   VAPI_API_KEY found (length: ' + process.env.VAPI_API_KEY.length + ')');
+    console.log('   VAPI_PRIVATE_KEY found (length: ' + config.VAPI_PRIVATE_KEY.length + ')');
 
     console.log('\n2. Initializing VapiClient with Platform Key...');
-    // This uses the default constructor which pulls from process.env.VAPI_API_KEY
+    // This uses the default constructor which pulls from config.VAPI_PRIVATE_KEY
     // verifying our code change in vapi-client.ts
     const vapi = new VapiClient();
 

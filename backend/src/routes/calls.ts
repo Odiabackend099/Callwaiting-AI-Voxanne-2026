@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { config } from '../config/index';
 import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
 import { requireAuth } from '../middleware/auth';
@@ -9,7 +10,7 @@ export const callsRouter = express.Router();
 // Protect all routes
 callsRouter.use(requireAuth);
 
-const vapiApiKey = process.env.VAPI_API_KEY;
+const vapiApiKey = config.VAPI_PRIVATE_KEY;
 const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
 
 const vapi = vapiApiKey ? new VapiClient(vapiApiKey) : (null as any);
@@ -100,11 +101,11 @@ callsRouter.post('/start', async (req: Request, res: Response): Promise<void> =>
     }
 
     // Create Vapi client with user's API key from env (backend still needs this for API calls)
-    const backendVapiKey = process.env.VAPI_API_KEY;
+    const backendVapiKey = config.VAPI_PRIVATE_KEY;
     if (!backendVapiKey) {
       res.status(500).json({
         error: 'Backend Vapi API key not configured',
-        action: 'Contact administrator to configure VAPI_API_KEY'
+        action: 'Contact administrator to configure VAPI_PRIVATE_KEY'
       });
       return;
     }

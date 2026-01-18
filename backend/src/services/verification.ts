@@ -1,3 +1,4 @@
+import { config } from '../config/index';
 import { IntegrationSettingsService } from './integration-settings';
 import { TwilioCredentials } from './twilio-service';
 import VapiClient from './vapi-client';
@@ -111,9 +112,9 @@ export class VerificationService {
     static async verifyVapi(orgId: string): Promise<VerificationResult> {
         try {
             // 1. Platform Health Check: Ensure System API Key is valid
-            const platformKey = process.env.VAPI_API_KEY;
+            const platformKey = config.VAPI_PRIVATE_KEY;
             if (!platformKey) {
-                throw new Error('System Error: VAPI_API_KEY missing in backend environment');
+                throw new Error('System Error: VAPI_PRIVATE_KEY missing in backend environment');
             }
 
             // 2. Tenant Configuration Check: Get Assistant ID

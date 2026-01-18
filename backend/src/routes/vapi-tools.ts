@@ -1,10 +1,14 @@
 import { Router, Request, Response } from 'express';
+import { safeCall, getCircuitBreakerStatus } from '../services/safe-call';
 import {
   checkAvailability,
   bookAppointment,
-  getAvailableSlots,
+  getAvailableSlots
 } from '../utils/google-calendar';
+import { getRagContext } from '../services/rag-context-provider';
 import { supabase } from '../services/supabase-client';
+import TwilioGuard from '../services/twilio-guard';
+import { IntegrationSettingsService } from '../services/integration-settings';
 
 const router = Router();
 
@@ -57,6 +61,10 @@ router.post('/tools', async (req: Request, res: Response) => {
       return handleBookAppointment(orgId, parameters, res);
     } else if (functionName === 'get_available_slots') {
       return handleGetAvailableSlots(orgId, parameters, res);
+    } else if (functionName === 'query_knowledge_base') {
+      return handleQueryKnowledgeBase(orgId, parameters, res);
+    } else if (functionName === 'check_service_health') {
+      return handleCheckServiceHealth(orgId, parameters, res);
     } else {
       return res.status(400).json({
         success: false,
@@ -119,90 +127,131 @@ async function handleCheckAvailability(
 }
 
 /**
+ * Normalize parameters from both old and new schemas
+ */
+function normalizeBookingParameters(params: any) {
+  return {
+    customer_name: params.customerName || params.customer_name,
+    customer_phone: params.customerPhone || params.customer_phone,
+    customer_email: params.customerEmail || params.customer_email,
+    service_type: params.serviceType || params.service_type,
+    scheduled_at: params.scheduled_at || 
+                 (params.preferredDate && params.preferredTime
+                   ? `${params.preferredDate}T${params.preferredTime}:00Z` 
+                   : params.scheduled_at),
+    duration_minutes: params.duration_minutes || 45,
+    notes: params.notes
+  };
+}
+
+/**
  * Handler for book_appointment function
  * Called by Vapi when patient confirms the appointment
  */
 async function handleBookAppointment(
   orgId: string,
-  parameters: {
-    patient_name: string;
-    patient_email: string;
-    patient_phone?: string;
-    start: string;
-    end: string;
-    procedure_type?: string;
-    notes?: string;
-  },
+  parameters: any,
   res: Response
 ): Promise<void> {
   try {
-    const {
-      patient_name: patientName,
-      patient_email: patientEmail,
-      patient_phone: patientPhone,
-      start,
-      end,
-      procedure_type: procedureType,
-      notes,
-    } = parameters;
-
+    const normalizedParams = normalizeBookingParameters(parameters);
+    
     // Validate required parameters
-    if (!patientName || !patientEmail || !start || !end) {
+    if (!normalizedParams.customer_name || 
+        !normalizedParams.customer_phone || 
+        !normalizedParams.service_type || 
+        !normalizedParams.scheduled_at) {
       res.status(400).json({
         success: false,
-        message:
-          'Missing required parameters: patient_name, patient_email, start, end',
+        message: 'Missing required parameters: customer_name, customer_phone, service_type, scheduled_at'
       });
       return;
     }
 
-    // Check availability one more time (atomic check)
-    const availabilityCheck = await checkAvailability(orgId, start, end);
+    // Check availability with SafeCall wrapper
+    const availabilityCheck = await safeCall(
+      'calendar_check_availability',
+      async () => checkAvailability(orgId, normalizedParams.scheduled_at, normalizedParams.scheduled_at),
+      { retries: 3, backoffMs: 500 }
+    );
 
-    if (!availabilityCheck.available) {
+    if (!availabilityCheck.success || !availabilityCheck.data.available) {
       res.json({
         success: false,
-        message:
-          'I apologize, but that time slot is no longer available. Please select another time.',
+        message: availabilityCheck.userMessage || 
+                'I apologize, but that time slot is no longer available. Please select another time.'
       });
       return;
     }
 
-    // Book the appointment
-    const booking = await bookAppointment(orgId, {
-      patientName,
-      patientEmail,
-      patientPhone,
-      start,
-      end,
-      procedureType,
-      notes,
-    });
+    // Book the appointment with SafeCall wrapper
+    const booking = await safeCall(
+      'calendar_book_appointment',
+      async () => bookAppointment(orgId, {
+        patientName: normalizedParams.customer_name,
+        patientPhone: normalizedParams.customer_phone,
+        patientEmail: normalizedParams.customer_email,
+        start: normalizedParams.scheduled_at,
+        end: new Date(new Date(normalizedParams.scheduled_at).getTime() + 
+                     normalizedParams.duration_minutes * 60000).toISOString(),
+        procedureType: normalizedParams.service_type,
+        notes: normalizedParams.notes
+      }),
+      { retries: 3, backoffMs: 1000 }
+    );
 
-    // Get clinic email for confirmation
-    const { data: calendarData } = await supabase
-      .from('calendar_connections')
-      .select('google_email')
-      .eq('org_id', orgId)
-      .single();
+    if (!booking.success) {
+      res.json({
+        success: false,
+        message: booking.userMessage || 
+                'I encountered an issue booking your appointment. Please contact the clinic directly or try again shortly.'
+      });
+      return;
+    }
 
-    const clinicEmail = calendarData?.google_email || 'the clinic';
+    // Format success response
+    const clinicName = 'our clinic';
+    const voiceMessage = `Perfect! I've booked you with ${clinicName} for ${normalizedParams.service_type} on ${new Date(normalizedParams.scheduled_at).toLocaleDateString()} at ${new Date(normalizedParams.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
 
-    const voiceMessage = `Perfect! I've booked you with ${clinicEmail} for ${procedureType || 'your appointment'} on ${new Date(start).toLocaleDateString()} at ${new Date(start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. You'll receive a calendar invite at ${patientEmail}. Thank you for choosing us!`;
+    // Fetch org-specific Twilio credentials for multi-tenant SMS delivery
+    let twilioCredentials;
+    try {
+      const creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+      twilioCredentials = {
+        accountSid: creds.accountSid,
+        authToken: creds.authToken,
+        phoneNumber: creds.phoneNumber
+      };
+    } catch (credError) {
+      // If org-specific credentials not found, TwilioGuard will fall back to env vars
+      // (This allows backward compatibility with global Twilio config)
+      console.warn(`No org-specific Twilio credentials for ${orgId}, falling back to env vars`, {
+        error: credError instanceof Error ? credError.message : String(credError)
+      });
+    }
+
+    // Send SMS confirmation with TwilioGuard, using org-specific credentials if available
+    const smsResult = await TwilioGuard.sendSmsWithGuard(
+      orgId,
+      normalizedParams.customer_phone,
+      `Appointment confirmed for ${new Date(normalizedParams.scheduled_at).toLocaleString()}. Reply STOP to unsubscribe.`,
+      {}, // options: use defaults
+      twilioCredentials // CRITICAL: Pass org-specific credentials to ensure correct "from" number
+    );
 
     res.json({
       success: true,
       message: voiceMessage,
-      eventId: booking.eventId,
-      confirmationLink: booking.htmlLink,
+      eventId: booking.data.eventId,
+      confirmationLink: booking.data.htmlLink,
+      smsStatus: smsResult.success ? 'sent' : 'failed',
+      nextAction: smsResult.success ? 'CONFIRMATION_SENT' : 'CONFIRMATION_PENDING'
     });
   } catch (error) {
     console.error('Error booking appointment:', error);
-
     res.json({
       success: false,
-      message:
-        'I encountered an issue booking your appointment. Please contact the clinic directly or try again shortly.',
+      message: 'I encountered an issue booking your appointment. Please contact the clinic directly or try again shortly.'
     });
   }
 }
@@ -281,6 +330,114 @@ async function handleGetAvailableSlots(
       slots: [],
       message:
         'I\'m having trouble checking availability. Could you contact the clinic directly?',
+    });
+  }
+}
+
+/**
+ * Handler for knowledge base queries
+ */
+async function handleQueryKnowledgeBase(
+  orgId: string,
+  parameters: { query: string; category?: string },
+  res: Response
+): Promise<void> {
+  try {
+    const { query, category } = parameters;
+
+    if (!query) {
+      res.status(400).json({
+        success: false,
+        message: 'Missing required parameter: query'
+      });
+      return;
+    }
+
+    // Use SafeCall wrapper for RAG query with explicit timeout
+    // Vapi typically has 10-20s timeout for tool calls, so RAG query must complete <5s
+    const result = await safeCall(
+      'rag_query',
+      async () => getRagContext(query, orgId),
+      { retries: 1, backoffMs: 300, timeoutMs: 5000 } // 5 second max for RAG query
+    );
+
+    // If RAG times out or fails, proceed without context instead of blocking the call
+    if (!result.success) {
+      // Log the failure but don't block the booking/conversation
+      console.warn('RAG query failed or timed out', {
+        orgId,
+        query: query.substring(0, 50),
+        error: result.error?.message
+      });
+
+      // Proceed without KB context - AI will still help the patient
+      res.json({
+        success: true, // Still successful, just without KB context
+        answer: "I'll help you, though I don't have specific documentation on that right now.",
+        sources: 0,
+        confidence: 'low',
+        nextAction: 'CONTINUE_CONVERSATION' // Continue helping patient without transferring
+      });
+      return;
+    }
+
+    // Format for AI consumption
+    res.json({
+      success: true,
+      answer: result.data.context,
+      sources: result.data.chunkCount,
+      confidence: result.data.hasContext ? 'high' : 'low',
+      nextAction: 'CONTINUE_CONVERSATION'
+    });
+  } catch (error) {
+    console.error('Error querying knowledge base:', error);
+    res.json({
+      success: false,
+      answer: "I'm having trouble accessing our knowledge base. Let me connect you with our team.",
+      nextAction: 'OFFER_TRANSFER'
+    });
+  }
+}
+
+/**
+ * Handler for service health checks
+ */
+async function handleCheckServiceHealth(
+  orgId: string,
+  parameters: { service: string },
+  res: Response
+): Promise<void> {
+  try {
+    const { service } = parameters;
+    
+    // Get health status from circuit breakers
+    const circuitStatus = getCircuitBreakerStatus();
+    const healthStatus = {
+      calendar: !circuitStatus['google_calendar']?.isOpen,
+      sms: !circuitStatus[`twilio_${orgId}`]?.isOpen,
+      timestamp: new Date().toISOString()
+    };
+
+    // Generate recommendation based on status
+    const recommendation = 
+      !healthStatus.calendar && !healthStatus.sms
+        ? 'Both services degraded - offer to call back when systems recover'
+        : !healthStatus.calendar
+          ? 'Calendar unavailable - offer to take manual message'
+          : !healthStatus.sms
+            ? 'SMS unavailable - book appointment but warn customer to check email'
+            : 'All systems operational';
+
+    res.json({
+      status: healthStatus,
+      recommendation,
+      nextAction: !healthStatus.calendar ? 'MANUAL_BOOKING' : 'PROCEED_NORMAL'
+    });
+  } catch (error) {
+    console.error('Error checking service health:', error);
+    res.json({
+      success: false,
+      message: 'Unable to check service status'
     });
   }
 }

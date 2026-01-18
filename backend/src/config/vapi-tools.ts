@@ -6,6 +6,8 @@
  * 1. Check appointment availability in real-time
  * 2. Book appointments directly during calls
  * 3. Alert clinic managers about high-value leads
+ * 4. Query the clinic knowledge base for specific information
+ * 5. Check service health status
  *
  * All tools are processed by the webhook handler at /api/webhooks/vapi
  */
@@ -43,40 +45,36 @@ export const VAPI_TOOLS = {
     type: 'function',
     function: {
       name: 'book_appointment',
-      description: 'Books an appointment for a customer after confirming all details. Use this only after customer has explicitly confirmed: service type, preferred date, preferred time, and provided phone number. Always offer the customer to ask questions before booking.',
+      description: 'Books an appointment for a customer after confirming all details. Use this only after customer has explicitly confirmed: service type, scheduled time, and provided phone number.',
       parameters: {
         type: 'object',
         properties: {
-          customerName: {
+          // New schema (matches database)
+          customer_name: {
             type: 'string',
             description: 'Full name of the customer (e.g., "Sarah Johnson")'
           },
-          customerPhone: {
+          customer_phone: {
             type: 'string',
             description: 'Customer phone number in E.164 format (e.g., +12345678900 or +44 for UK)',
             pattern: '^\\+[1-9]\\d{1,14}$'
           },
-          customerEmail: {
+          customer_email: {
             type: 'string',
             description: 'Customer email address (optional)',
             nullable: true
           },
-          serviceType: {
+          service_type: {
             type: 'string',
             description: 'Type of service the customer wants to book',
             enum: ['Botox', 'Dermal Filler', 'Laser Treatment', 'Chemical Peel', 'Consultation', 'HydraFacial', 'Other']
           },
-          preferredDate: {
+          scheduled_at: {
             type: 'string',
-            description: 'Preferred appointment date in YYYY-MM-DD format (e.g., 2026-02-01)',
-            pattern: '^\\d{4}-\\d{2}-\\d{2}$'
+            description: 'Appointment time in ISO 8601 format (e.g., 2026-02-01T14:00:00Z)',
+            format: 'date-time'
           },
-          preferredTime: {
-            type: 'string',
-            description: 'Preferred time in 24-hour HH:MM format (e.g., "14:00" for 2 PM, "09:30" for 9:30 AM)',
-            pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
-          },
-          durationMinutes: {
+          duration_minutes: {
             type: 'integer',
             description: 'Appointment duration in minutes (default: 45). Typical appointments are 30-60 minutes.',
             default: 45,
@@ -87,9 +85,33 @@ export const VAPI_TOOLS = {
             type: 'string',
             description: 'Any special requests or notes from the customer (e.g., "First time customer", "sensitive skin")',
             nullable: true
+          },
+          // Legacy fields (backward compatibility)
+          customerName: {
+            type: 'string',
+            description: '[LEGACY] Full name of the customer',
+            nullable: true
+          },
+          customerPhone: {
+            type: 'string',
+            description: '[LEGACY] Customer phone number',
+            pattern: '^\\+[1-9]\\d{1,14}$',
+            nullable: true
+          },
+          preferredDate: {
+            type: 'string',
+            description: '[LEGACY] Preferred appointment date in YYYY-MM-DD format',
+            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+            nullable: true
+          },
+          preferredTime: {
+            type: 'string',
+            description: '[LEGACY] Preferred time in 24-hour HH:MM format',
+            pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$',
+            nullable: true
           }
         },
-        required: ['customerName', 'customerPhone', 'serviceType', 'preferredDate', 'preferredTime']
+        required: ['customer_name', 'customer_phone', 'service_type', 'scheduled_at']
       }
     }
   },
@@ -135,6 +157,58 @@ export const VAPI_TOOLS = {
         required: ['leadName', 'leadPhone', 'serviceInterest', 'summary']
       }
     }
+  },
+
+  /**
+   * Query the clinic knowledge base for specific information
+   * Used when customer asks about services, pricing, policies
+   */
+  query_knowledge_base: {
+    type: 'function',
+    function: {
+      name: 'query_knowledge_base',
+      description: 'Searches the clinic knowledge base for specific information like pricing, services offered, policies, or FAQs. Use this when customer asks questions about services, costs, or clinic details that require accurate answers.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The customer question or topic to search for (e.g., "Botox pricing", "clinic hours", "cancellation policy")'
+          },
+          category: {
+            type: 'string',
+            enum: ['products_services', 'operations', 'ai_guidelines', 'general'],
+            description: 'Category filter (optional - leave empty to search all)',
+            nullable: true
+          }
+        },
+        required: ['query']
+      }
+    }
+  },
+
+  /**
+   * Check service health status
+   * Used when previous operations fail to determine fallback options
+   */
+  check_service_health: {
+    type: 'function',
+    function: {
+      name: 'check_service_health',
+      description: 'Checks if calendar and SMS services are operational. Use this if previous booking or SMS attempts failed, to determine next best action.',
+      parameters: {
+        type: 'object',
+        properties: {
+          service: {
+            type: 'string',
+            enum: ['calendar', 'sms', 'all'],
+            description: 'Which service to check',
+            default: 'all'
+          }
+        },
+        required: ['service']
+      }
+    }
   }
 };
 
@@ -143,7 +217,7 @@ export const VAPI_TOOLS = {
  * Usage: Include VAPI_TOOLS.check_availability, etc. when creating/updating VAPI assistants
  */
 export function getToolDefinitions() {
-  return [VAPI_TOOLS.check_availability, VAPI_TOOLS.book_appointment, VAPI_TOOLS.notify_hot_lead];
+  return [VAPI_TOOLS.check_availability, VAPI_TOOLS.book_appointment, VAPI_TOOLS.notify_hot_lead, VAPI_TOOLS.query_knowledge_base, VAPI_TOOLS.check_service_health];
 }
 
 /**
@@ -152,5 +226,7 @@ export function getToolDefinitions() {
 export const TOOL_NAMES = {
   CHECK_AVAILABILITY: 'check_availability',
   BOOK_APPOINTMENT: 'book_appointment',
-  NOTIFY_HOT_LEAD: 'notify_hot_lead'
+  NOTIFY_HOT_LEAD: 'notify_hot_lead',
+  QUERY_KNOWLEDGE_BASE: 'query_knowledge_base',
+  CHECK_SERVICE_HEALTH: 'check_service_health'
 } as const;

@@ -13,6 +13,7 @@
  */
 
 import express from 'express';
+import { config } from '../config/index';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { log } from '../services/logger';
 import { requireAuthOrDev } from '../middleware/auth';
@@ -138,7 +139,7 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
       .single();
 
     // If no tenant key, check for global fallback (Default Org/Single Tenant Mode)
-    if (process.env.VAPI_API_KEY) {
+    if (config.VAPI_PRIVATE_KEY) {
       // Continue execution with global key
     } else {
       // Strict multi-tenancy: No key = no numbers.
@@ -158,8 +159,8 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
     }
 
     // Fallback if not set by decryption
-    if (!apiKey && process.env.VAPI_API_KEY) {
-      apiKey = process.env.VAPI_API_KEY;
+    if (!apiKey && config.VAPI_PRIVATE_KEY) {
+      apiKey = config.VAPI_PRIVATE_KEY;
     }
 
     if (!apiKey) {
@@ -221,14 +222,14 @@ integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res:
       return res.status(400).json({ success: false, error: 'Inbound agent not configured or synced to Vapi' });
     }
 
-    const VAPI_API_KEY = process.env.VAPI_API_KEY;
-    if (!VAPI_API_KEY) throw new Error('VAPI_API_KEY missing');
+    const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
+    if (!VAPI_PRIVATE_KEY) throw new Error('VAPI_PRIVATE_KEY missing');
 
     // 2. Assign Assistant in Vapi
     const updateRes = await fetch(`https://api.vapi.ai/phone-number/${vapiPhoneId}`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${VAPI_API_KEY}`,
+        'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ assistantId: agent.vapi_assistant_id })

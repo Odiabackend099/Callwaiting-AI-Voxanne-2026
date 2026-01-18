@@ -2,15 +2,16 @@
  * Test: Vapi Platform Provider Model Refactor
  * 
  * Verifies that:
- * 1. VAPI_API_KEY is used from environment variables only (not from request body)
+ * 1. VAPI_PRIVATE_KEY is used from environment variables only (not from request body)
  * 2. Frontend doesn't send vapiApiKey in request payload
- * 3. Backend rejects requests missing VAPI_API_KEY from env
+ * 3. Backend rejects requests missing VAPI_PRIVATE_KEY from env
  * 4. /api/inbound/setup works correctly with Platform Provider model
  * 
  * Usage: npx ts-node src/scripts/test-inbound-setup-refactor.ts
  */
 
 import axios from 'axios';
+import { config } from '../config/index';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -18,7 +19,7 @@ import * as path from 'path';
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
-const VAPI_API_KEY = process.env.VAPI_API_KEY;
+const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
 
 // Mock test credentials
 const MOCK_TWILIO_CREDS = {
@@ -48,19 +49,19 @@ function addResult(name: string, passed: boolean, message: string, details?: any
 async function testEnvironmentSetup() {
   console.log('\n--- Test 1: Environment Setup ---');
   
-  if (!VAPI_API_KEY) {
+  if (!VAPI_PRIVATE_KEY) {
     addResult(
-      'VAPI_API_KEY Environment Variable',
+      'VAPI_PRIVATE_KEY Environment Variable',
       false,
-      'VAPI_API_KEY is not set in .env file - this is CRITICAL for production'
+      'VAPI_PRIVATE_KEY is not set in .env file - this is CRITICAL for production'
     );
     return false;
   }
   
   addResult(
-    'VAPI_API_KEY Environment Variable',
+    'VAPI_PRIVATE_KEY Environment Variable',
     true,
-    `VAPI_API_KEY is configured (last 4 chars: ...${VAPI_API_KEY.slice(-4)})`
+    `VAPI_PRIVATE_KEY is configured (last 4 chars: ...${VAPI_PRIVATE_KEY.slice(-4)})`
   );
   return true;
 }
@@ -109,7 +110,7 @@ async function testInboundSetupWithoutVapiKey() {
     // We expect either:
     // - 401 (auth failure)
     // - 400 (validation error on Twilio creds)
-    // - 500 (if VAPI_API_KEY missing from env)
+    // - 500 (if VAPI_PRIVATE_KEY missing from env)
     // We DON'T expect a validation error about missing vapiApiKey
 
     if (response.status === 500) {
@@ -223,19 +224,19 @@ async function testRequestValidationSchema() {
 async function testVapiClientUsesEnvKey() {
   console.log('\n--- Test 5: VapiClient Uses Environment Key ---');
   
-  if (!VAPI_API_KEY) {
+  if (!VAPI_PRIVATE_KEY) {
     addResult(
-      'VapiClient Reads VAPI_API_KEY from Environment',
+      'VapiClient Reads VAPI_PRIVATE_KEY from Environment',
       false,
-      'Cannot verify - VAPI_API_KEY not set in environment'
+      'Cannot verify - VAPI_PRIVATE_KEY not set in environment'
     );
     return false;
   }
 
   addResult(
-    'VapiClient Reads VAPI_API_KEY from Environment',
+    'VapiClient Reads VAPI_PRIVATE_KEY from Environment',
     true,
-    'VAPI_API_KEY is available from environment'
+    'VAPI_PRIVATE_KEY is available from environment'
   );
   return true;
 }
@@ -246,11 +247,11 @@ async function testCodeReview() {
   const checkpoints = [
     {
       name: 'inbound-setup.ts line 102',
-      description: 'Fetches VAPI_API_KEY from process.env'
+      description: 'Fetches VAPI_PRIVATE_KEY from process.env'
     },
     {
       name: 'inbound-setup.ts line 104-109',
-      description: 'Rejects request if VAPI_API_KEY is missing from env'
+      description: 'Rejects request if VAPI_PRIVATE_KEY is missing from env'
     },
     {
       name: 'inbound-setup.ts line 48',
@@ -262,7 +263,7 @@ async function testCodeReview() {
     },
     {
       name: 'vapi-client.ts constructor',
-      description: 'Uses process.env.VAPI_API_KEY as fallback'
+      description: 'Uses config.VAPI_PRIVATE_KEY as fallback'
     }
   ];
 
@@ -287,8 +288,8 @@ async function runAllTests() {
 
   const envOk = await testEnvironmentSetup();
   if (!envOk) {
-    console.log('\n⚠️  WARNING: VAPI_API_KEY not configured.');
-    console.log('  Fix: Set VAPI_API_KEY in backend/.env');
+    console.log('\n⚠️  WARNING: VAPI_PRIVATE_KEY not configured.');
+    console.log('  Fix: Set VAPI_PRIVATE_KEY in backend/.env');
   }
 
   const backendOk = await testBackendHealth();

@@ -11,13 +11,14 @@
 
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
+import { enhanceSystemPrompt } from './prompt-injector';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
 
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     auth: {
       persistSession: false,
@@ -110,7 +111,7 @@ export class VapiAssistantManager {
             assistantId,
           });
 
-          await vapi.updateAssistant(assistantId, {
+          const updatePayload: any = {
             name: config.name,
             model: {
               provider: config.modelProvider || 'openai',
@@ -118,7 +119,7 @@ export class VapiAssistantManager {
               messages: [
                 {
                   role: 'system',
-                  content: config.systemPrompt,
+                  content: enhanceSystemPrompt(config.systemPrompt),
                 },
               ],
             },
@@ -128,11 +129,60 @@ export class VapiAssistantManager {
             },
             firstMessage: config.firstMessage || 'Hello! How can I help you today?',
             maxDurationSeconds: config.maxDurationSeconds || 600,
-            ...(config.serverUrl && { serverUrl: config.serverUrl }),
-            ...(config.serverMessages && { serverMessages: config.serverMessages }),
-            ...(config.transcriber && { transcriber: config.transcriber }),
-            ...(config.functions && { functions: config.functions }),
-          });
+          };
+
+          // Auto-attach webhook URL if not provided
+          if (!config.serverUrl && process.env.BACKEND_URL) {
+            updatePayload.serverUrl = `${process.env.BACKEND_URL}/api/vapi/webhook`;
+          } else if (config.serverUrl) {
+            updatePayload.serverUrl = config.serverUrl;
+          }
+
+          // Auto-attach booking tool if not provided
+          if (!config.functions || config.functions.length === 0) {
+            updatePayload.functions = [{
+              type: 'function',
+              function: {
+                name: 'bookClinicAppointment',
+                description: 'Book a confirmed appointment for a patient.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    appointmentDate: {
+                      type: 'string',
+                      description: 'The date of the appointment in YYYY-MM-DD format',
+                      pattern: '^\\d{4}-\\d{2}-\\d{2}$'
+                    },
+                    appointmentTime: {
+                      type: 'string',
+                      description: 'The time of the appointment in 24-hour HH:MM format',
+                      pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+                    },
+                    patientName: { type: 'string', description: 'The full name of the patient' },
+                    patientEmail: { type: 'string', description: 'The patient\'s email address' },
+                    patientPhone: { type: 'string', description: 'The patient\'s phone number (optional)' },
+                    serviceType: { type: 'string', description: 'The type of service being booked' },
+                    duration: { type: 'number', description: 'Duration in minutes', default: 30 }
+                  },
+                  required: ['appointmentDate', 'appointmentTime', 'patientName', 'patientEmail']
+                }
+              }
+            }];
+          } else if (config.functions) {
+            updatePayload.functions = config.functions;
+          }
+
+          // Add server messages if provided
+          if (config.serverMessages) {
+            updatePayload.serverMessages = config.serverMessages;
+          }
+
+          // Add transcriber if provided
+          if (config.transcriber) {
+            updatePayload.transcriber = config.transcriber;
+          }
+
+          await vapi.updateAssistant(assistantId, updatePayload);
 
           log.info('VapiAssistantManager', 'Assistant updated successfully', {
             orgId,
@@ -179,9 +229,9 @@ export class VapiAssistantManager {
           name: config.name,
         });
 
-        const created = await vapi.createAssistant({
+        const createPayload: any = {
           name: config.name,
-          systemPrompt: config.systemPrompt,
+          systemPrompt: enhanceSystemPrompt(config.systemPrompt),
           firstMessage: config.firstMessage || 'Hello! How can I help you today?',
           voiceId: config.voiceId || 'Paige',
           voiceProvider: config.voiceProvider || 'vapi',
@@ -189,15 +239,60 @@ export class VapiAssistantManager {
           modelName: config.modelName || 'gpt-4',
           language: config.language || 'en',
           maxDurationSeconds: config.maxDurationSeconds || 600,
-          serverUrl: config.serverUrl,
-          serverMessages: config.serverMessages,
           transcriber: config.transcriber || {
             provider: 'deepgram',
             model: 'nova-2',
             language: 'en-US'
-          },
-          functions: config.functions,
-        });
+          }
+        };
+
+        // Auto-attach webhook URL if not provided
+        if (!config.serverUrl && process.env.BACKEND_URL) {
+          createPayload.serverUrl = `${process.env.BACKEND_URL}/api/vapi/webhook`;
+        } else if (config.serverUrl) {
+          createPayload.serverUrl = config.serverUrl;
+        }
+
+        // Auto-attach booking tool if not provided
+        if (!config.functions || config.functions.length === 0) {
+          createPayload.functions = [{
+            type: 'function',
+            function: {
+              name: 'bookClinicAppointment',
+              description: 'Book a confirmed appointment for a patient.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  appointmentDate: {
+                    type: 'string',
+                    description: 'The date of the appointment in YYYY-MM-DD format',
+                    pattern: '^\\d{4}-\\d{2}-\\d{2}$'
+                  },
+                  appointmentTime: {
+                    type: 'string',
+                    description: 'The time of the appointment in 24-hour HH:MM format',
+                    pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+                  },
+                  patientName: { type: 'string', description: 'The full name of the patient' },
+                  patientEmail: { type: 'string', description: 'The patient\'s email address' },
+                  patientPhone: { type: 'string', description: 'The patient\'s phone number (optional)' },
+                  serviceType: { type: 'string', description: 'The type of service being booked' },
+                  duration: { type: 'number', description: 'Duration in minutes', default: 30 }
+                },
+                required: ['appointmentDate', 'appointmentTime', 'patientName', 'patientEmail']
+              }
+            }
+          }];
+        } else if (config.functions) {
+          createPayload.functions = config.functions;
+        }
+
+        // Add server messages if provided
+        if (config.serverMessages) {
+          createPayload.serverMessages = config.serverMessages;
+        }
+
+        const created = await vapi.createAssistant(createPayload);
 
         assistantId = created.id;
 

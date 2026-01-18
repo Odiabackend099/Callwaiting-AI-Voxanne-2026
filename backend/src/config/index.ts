@@ -111,7 +111,8 @@ export const config = {
   // ========================================================================
   // VAPI VOICE AI SERVICE - APPROVED PRODUCTION CREDENTIALS
   // ========================================================================
-  VAPI_API_KEY: getRequired('VAPI_API_KEY'),
+  VAPI_PRIVATE_KEY: getRequired('VAPI_PRIVATE_KEY'),
+  VAPI_PUBLIC_KEY: getOptional('VAPI_PUBLIC_KEY'),
   VAPI_PHONE_NUMBER_ID: getOptional('VAPI_PHONE_NUMBER_ID'),
   VAPI_ASSISTANT_ID: getOptional('VAPI_ASSISTANT_ID'),
   VAPI_WEBHOOK_SECRET: getOptional('VAPI_WEBHOOK_SECRET'),
@@ -251,7 +252,7 @@ export const config = {
       // 'TWILIO_ACCOUNT_SID',    // No longer required globally
       // 'TWILIO_AUTH_TOKEN',     // No longer required globally
       // 'TWILIO_PHONE_NUMBER',   // No longer required globally
-      'VAPI_API_KEY',
+      'VAPI_PRIVATE_KEY',
       // 'GOOGLE_CLIENT_ID',      // No longer required globally
       // 'GOOGLE_CLIENT_SECRET',  // No longer required globally
       // 'GOOGLE_ENCRYPTION_KEY'  // No longer required globally

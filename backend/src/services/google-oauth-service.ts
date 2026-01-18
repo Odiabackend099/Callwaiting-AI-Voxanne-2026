@@ -21,11 +21,11 @@ function getOAuth2Client() {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/google-oauth/callback`;
-    
+
     if (!clientId || !clientSecret) {
       throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required');
     }
-    
+
     oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
   }
   return oauth2Client;
@@ -45,13 +45,16 @@ function getOAuth2Client() {
 export async function getOAuthUrl(orgId: string): Promise<string> {
   const client = getOAuth2Client();
   const state = Buffer.from(JSON.stringify({ orgId })).toString('base64url');
-  
+
   // Strictly follows Google's OAuth protocol for offline access
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     response_type: 'code',
-    scope: ['https://www.googleapis.com/auth/calendar.events'],
+    scope: [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
+    ],
     state
   });
 }
@@ -74,7 +77,7 @@ export async function exchangeCodeForTokens(
     try {
       const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
       orgId = stateData.orgId;
-      
+
       if (!orgId || typeof orgId !== 'string') {
         throw new Error('Invalid state: orgId missing or invalid');
       }
@@ -88,13 +91,13 @@ export async function exchangeCodeForTokens(
 
     // Exchange code for tokens
     const client = getOAuth2Client();
-    
+
     log.debug('GoogleOAuth', 'Exchanging authorization code for tokens', {
       codeLength: code.length,
       hasCode: !!code,
       redirectUri: client.credentials?.redirect_uri || 'not set'
     });
-    
+
     let tokens: any;
     try {
       const response = await client.getToken(code);
@@ -106,7 +109,7 @@ export async function exchangeCodeForTokens(
         errorResponse: tokenError?.response?.data,
         stack: tokenError?.stack
       });
-      
+
       // Provide more helpful error messages
       if (tokenError?.message?.includes('redirect_uri_mismatch')) {
         throw new Error('Redirect URI mismatch. Ensure http://localhost:3001/api/google-oauth/callback is added to Google Cloud Console authorized redirect URIs.');
@@ -178,6 +181,15 @@ export async function exchangeCodeForTokens(
         credentialsWithMetadata
       );
 
+      // Update the exposed email column for UI
+      if (userEmail) {
+        await supabase
+          .from('org_credentials')
+          .update({ connected_calendar_email: userEmail })
+          .eq('org_id', orgId)
+          .eq('provider', 'google_calendar');
+      }
+
       console.log('[GoogleOAuth] storeCredentials() completed successfully');
 
       log.info('GoogleOAuth', 'Tokens stored successfully', {
@@ -219,14 +231,24 @@ export async function exchangeCodeForTokens(
  */
 export async function getCalendarClient(orgId: string): Promise<any> {
   try {
+    log.info('GoogleOAuth', '[TOKEN-FLOW START] getCalendarClient', { orgId, timestamp: new Date().toISOString() });
+
     // Fetch and decrypt stored tokens using IntegrationDecryptor
     let googleCreds;
     try {
-      googleCreds = await IntegrationDecryptor.getGoogleCalendarCredentials(orgId);
-    } catch (error: any) {
-      log.error('GoogleOAuth', 'Failed to retrieve Google Calendar credentials', {
+      log.info('GoogleOAuth', '[TOKEN] Fetching credentials from storage', { orgId });
+      googleCreds = await IntegrationDecryptor.getGoogleCalendarCredentials(orgId, true);
+      log.info('GoogleOAuth', '[TOKEN] Credentials retrieved', {
         orgId,
-        error: error?.message
+        hasAccessToken: !!googleCreds.accessToken,
+        hasRefreshToken: !!googleCreds.refreshToken,
+        expiresAt: googleCreds.expiresAt
+      });
+    } catch (error: any) {
+      log.error('GoogleOAuth', '[TOKEN-CRITICAL] Failed to retrieve Google Calendar credentials', {
+        orgId,
+        error: error?.message,
+        timestamp: new Date().toISOString()
       });
       throw new Error('Google Calendar not connected. Please reconnect your Google account.');
     }
@@ -242,24 +264,43 @@ export async function getCalendarClient(orgId: string): Promise<any> {
       expiry_date: googleCreds.expiresAt ? new Date(googleCreds.expiresAt).getTime() : undefined
     });
 
-    // Check if access token is expired and refresh if needed
-    if (client.isAccessTokenExpired()) {
+    log.info('GoogleOAuth', '[TOKEN] Credentials set on OAuth client', { orgId });
+
+    // OPTIMIZATION: Only refresh if expired or expiring soon (within 5 minutes)
+    // This prevents hitting Google API and DB on every request (saving ~1-2s latency)
+    const now = Date.now();
+    const expiryTime = client.credentials.expiry_date || 0;
+    const isExpiringSoon = expiryTime - now < 5 * 60 * 1000; // 5 minutes buffer
+
+    log.info('GoogleOAuth', '[TOKEN-CHECK] Checking token expiry', {
+      orgId,
+      expiryTime: new Date(expiryTime).toISOString(),
+      isExpiringSoon,
+      gapMs: expiryTime - now
+    });
+
+    if (isExpiringSoon || !client.credentials.access_token) {
+      log.info('GoogleOAuth', '[TOKEN-REFRESH] Token expired or expiring soon - refreshing', { orgId });
+
       try {
-        log.info('GoogleOAuth', 'Access token expired, refreshing', { orgId });
+        const { credentials: refreshedCreds } = await client.refreshAccessToken();
 
-        const { credentials } = await client.refreshAccessToken();
-
-        if (!credentials.access_token) {
+        if (!refreshedCreds.access_token) {
           throw new Error('Refresh token exchange did not return access token');
         }
 
+        log.info('GoogleOAuth', '[TOKEN-REFRESH] ✅ Refresh successful', {
+          orgId,
+          newAccessToken: refreshedCreds.access_token ? refreshedCreds.access_token.substring(0, 20) + '...' : 'MISSING',
+          expiryDate: refreshedCreds.expiry_date
+        });
+
         // Update stored access token using IntegrationDecryptor
-        // Keep refresh token unchanged, only update access token and expiry
         const updatedCreds = {
-          accessToken: credentials.access_token,
+          accessToken: refreshedCreds.access_token,
           refreshToken: refreshToken, // Keep existing refresh token
-          expiresAt: credentials.expiry_date
-            ? new Date(credentials.expiry_date).toISOString()
+          expiresAt: refreshedCreds.expiry_date
+            ? new Date(refreshedCreds.expiry_date).toISOString()
             : new Date(Date.now() + 3600000).toISOString()
         };
 
@@ -271,31 +312,51 @@ export async function getCalendarClient(orgId: string): Promise<any> {
 
         // Update the client with fresh access token
         client.setCredentials({
-          access_token: credentials.access_token,
+          access_token: refreshedCreds.access_token,
           refresh_token: refreshToken,
-          expiry_date: credentials.expiry_date
+          expiry_date: refreshedCreds.expiry_date
         });
 
-        log.info('GoogleOAuth', 'Access token refreshed and stored', { orgId });
-      } catch (refreshError: any) {
-        log.error('GoogleOAuth', 'Token refresh failed', {
+        log.info('GoogleOAuth', '[TOKEN-REFRESH] ✅ New token stored and client updated', { orgId });
+      } catch (forceRefreshError: any) {
+        log.error('GoogleOAuth', '[TOKEN-REFRESH-CRITICAL] Failed to refresh token', {
           orgId,
-          error: refreshError?.message
+          error: forceRefreshError?.message,
+          timestamp: new Date().toISOString()
         });
-        throw new Error(
-          'Token refresh failed. Your Google Calendar connection may have been revoked. ' +
-          'Please reconnect Google Calendar in settings.'
-        );
+        // Propagate error if we really needed a token
+        throw forceRefreshError;
       }
+    } else {
+      log.info('GoogleOAuth', '[TOKEN-OPTIMIZED] cached token is valid - skipping refresh', { orgId });
+    }
+
+    // OLD CHECK: This is now redundant since we forced refresh above, but keeping for defensive coding
+    const isExpired = client.credentials.expiry_date
+      ? client.credentials.expiry_date <= Date.now()
+      : false;
+
+    if (isExpired) {
+      // This should rarely happen now due to forced refresh above
+      log.warn('GoogleOAuth', '[TOKEN-LATE-CHECK] Token still appears expired after force refresh', { orgId });
     }
 
     // Return authenticated calendar client
+    log.info('GoogleOAuth', '[TOKEN-FLOW] Creating calendar instance with authenticated client', { orgId });
     const calendar = google.calendar({ version: 'v3', auth: client });
+
+    log.info('GoogleOAuth', '[TOKEN-FLOW END] getCalendarClient SUCCESS - calendar client ready', {
+      orgId,
+      timestamp: new Date().toISOString()
+    });
+
     return calendar;
   } catch (error: any) {
-    log.error('GoogleOAuth', 'Failed to get calendar client', {
+    log.error('GoogleOAuth', '[CRITICAL] Failed to get calendar client', {
       orgId,
-      error: error?.message
+      errorMessage: error?.message,
+      errorCode: error?.code,
+      timestamp: new Date().toISOString()
     });
     throw error;
   }
@@ -303,18 +364,20 @@ export async function getCalendarClient(orgId: string): Promise<any> {
 
 /**
  * Revoke Google Calendar access for organization
- * Deletes stored tokens from database
+ * Deletes stored tokens from database and logs the security event
  * 
  * @param orgId - Organization ID
+ * @param userId - ID of user performing the action (for audit)
+ * @param ipAddress - IP address of request (for audit)
  */
-export async function revokeAccess(orgId: string): Promise<void> {
+export async function revokeAccess(orgId: string, userId?: string, ipAddress?: string): Promise<void> {
   try {
-    // Note: We don't revoke with Google API (that requires additional API call and permission)
-    // Just invalidate the stored credentials by marking as inactive
+    // 1. Soft delete the credential and clear email
     const { error: updateError } = await supabase
       .from('org_credentials')
       .update({
         is_active: false,
+        connected_calendar_email: null, // Clear the visible email
         updated_at: new Date().toISOString()
       })
       .eq('org_id', orgId)
@@ -328,10 +391,21 @@ export async function revokeAccess(orgId: string): Promise<void> {
       throw new Error(`Failed to revoke access: ${updateError.message}`);
     }
 
-    // Invalidate cache
+    // 2. Invalidate cache
     IntegrationDecryptor.invalidateCache(orgId, 'google_calendar');
 
-    log.info('GoogleOAuth', 'Access revoked successfully', { orgId });
+    // 3. Security Audit Log
+    if (userId) {
+      await supabase.from('security_audit_log').insert({
+        org_id: orgId,
+        user_id: userId,
+        action: 'UNLINK_GOOGLE_CALENDAR',
+        details: { provider: 'google_calendar', reason: 'User requested disconnect' },
+        ip_address: ipAddress || 'unknown'
+      });
+    }
+
+    log.info('GoogleOAuth', 'Access revoked successfully', { orgId, userId });
   } catch (error: any) {
     log.error('GoogleOAuth', 'Failed to revoke access', {
       orgId,

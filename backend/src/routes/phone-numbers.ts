@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { config } from '../config/index';
 import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
 import { z } from 'zod'; // Assuming zod is available, if not fallback to manual validation
@@ -53,10 +54,10 @@ function getEffectiveOrgId(req: Request): string {
 
 async function getOrgVapiClient(orgId: string): Promise<VapiClient> {
   // Platform Provider Model: Use system key for all tenants
-  const apiKey = process.env.VAPI_API_KEY;
+  const apiKey = config.VAPI_PRIVATE_KEY;
 
   if (!apiKey) {
-    logger.error('VAPI_API_KEY missing in environment variables');
+    logger.error('VAPI_PRIVATE_KEY missing in environment variables');
     throw new Error('System Configuration Error: Telephony provider unavailable');
   }
 

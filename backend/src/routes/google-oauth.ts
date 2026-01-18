@@ -239,12 +239,12 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
   console.log('Full URL:', req.url);
   console.log('Query Params:', req.query);
   console.log('Headers:', req.headers);
-  
+
   try {
     const { code, state, error } = req.query;
     console.log('[DEBUG] Code:', code?.toString().slice(0, 10) + '...');
     console.log('[DEBUG] State:', state);
-    
+
     // Get frontend URL for redirects
     const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -266,7 +266,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
         error,
         errorDescription: req.query.error_description
       });
-      
+
       const errorParam = encodeURIComponent(error === 'access_denied' ? 'user_denied_consent' : 'oauth_failed');
       res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
       return;
@@ -285,7 +285,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
           'user-agent': req.headers['user-agent']
         }
       });
-      
+
       // Also log to console for immediate visibility
       console.error('[OAuth Callback Debug]', {
         url: req.url,
@@ -294,7 +294,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
         hasState: !!state,
         allQueryKeys: Object.keys(req.query)
       });
-      
+
       const errorParam = encodeURIComponent('missing_oauth_parameters');
       res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}&debug=missing_code_or_state`);
       return;
@@ -335,7 +335,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
       // Determine error type with more specific error messages
       let errorParam = 'oauth_callback_failed';
       let errorDetails = exchangeError?.message || 'Unknown error';
-      
+
       if (exchangeError?.message?.includes('state')) {
         errorParam = 'oauth_state_invalid';
       } else if (exchangeError?.message?.includes('redirect_uri_mismatch')) {
@@ -406,9 +406,12 @@ router.post('/revoke', requireAuthOrDev, async (req: Request, res: Response): Pr
     }
 
     // Revoke access (delete tokens)
-    await revokeAccess(orgId);
+    const userId = req.user?.id || 'unknown';
+    const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
 
-    log.info('GoogleOAuth', 'Access revoked successfully', { orgId });
+    await revokeAccess(orgId, userId, ipAddress);
+
+    log.info('GoogleOAuth', 'Access revoked successfully', { orgId, userId });
 
     res.json({
       success: true,
@@ -467,7 +470,7 @@ router.get('/status/:orgId?', async (req: Request, res: Response): Promise<void>
       });
     }
 
-    log.debug('GoogleOAuth', 'Status endpoint called', { 
+    log.debug('GoogleOAuth', 'Status endpoint called', {
       orgId,
       path: req.path,
       method: req.method
@@ -482,7 +485,7 @@ router.get('/status/:orgId?', async (req: Request, res: Response): Promise<void>
     for (let attempt = 1; attempt <= 3; attempt++) {
       const { data, error } = await supabase
         .from('org_credentials')
-        .select('provider, created_at, updated_at, metadata, is_active, encrypted_config')
+        .select('provider, created_at, updated_at, metadata, is_active, encrypted_config, connected_calendar_email')
         .eq('org_id', orgId)
         .eq('provider', 'google_calendar')
         .eq('is_active', true)
@@ -544,18 +547,25 @@ router.get('/status/:orgId?', async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Get email from metadata (set during OAuth callback)
-    let email = credentials.metadata?.email || null;
+    // Get email priority: 1. DB Column 2. Metadata 3. Decrypted Config
+    let email = credentials.connected_calendar_email || credentials.metadata?.email || null;
 
-    // Fallback: Try to decrypt email from encrypted_config if not in metadata
+    // Fallback: Try to decrypt email from encrypted_config if not in metadata or column
     if (!email && credentials.encrypted_config) {
       try {
         const decrypted = EncryptionService.decryptObject(credentials.encrypted_config);
         email = decrypted.email || null;
         if (email) {
-          log.debug('GoogleOAuth', 'Email recovered from encrypted config', {
-            orgId
-          });
+          // Self-healing: Backfill the email to the column for next time
+          log.debug('GoogleOAuth', 'Email recovered from encrypted config - triggering backfill', { orgId });
+          // Fire and forget update to save optimized lookup for next time
+          supabase.from('org_credentials')
+            .update({ connected_calendar_email: email })
+            .eq('org_id', orgId)
+            .eq('provider', 'google_calendar')
+            .then(({ error }) => {
+              if (error) log.warn('GoogleOAuth', 'Background email backfill failed', { error: error.message });
+            });
         }
       } catch (decryptError) {
         log.debug('GoogleOAuth', 'Could not decrypt email from config', {
@@ -569,8 +579,7 @@ router.get('/status/:orgId?', async (req: Request, res: Response): Promise<void>
       orgId,
       connected: true,
       email: email || 'no email found',
-      hasMetadata: !!credentials.metadata?.email,
-      hasEncrypted: !!credentials.encrypted_config,
+      source: credentials.connected_calendar_email ? 'column' : (credentials.metadata?.email ? 'metadata' : 'encrypted'),
       timestamp: new Date().toISOString()
     });
 
@@ -721,7 +730,7 @@ router.get('/test-flow', async (req: Request, res: Response) => {
   try {
     const orgId = '550e8400-e29b-41d4-a716-446655440000';
     const authUrl = await getOAuthUrl(orgId);
-    
+
     res.send(`
       <html>
         <body>
@@ -798,7 +807,7 @@ router.get('/test-success', async (req: Request, res: Response) => {
       refreshToken: 'test_refresh_token',
       expiresAt: new Date(Date.now() + 3600000).toISOString()
     };
-    
+
     await IntegrationDecryptor.storeCredentials(orgId, 'google_calendar', credentials);
     res.json({ success: true });
   } catch (error) {

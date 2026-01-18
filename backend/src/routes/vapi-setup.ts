@@ -5,6 +5,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { config } from '../config/index';
 import axios from 'axios';
 import { log } from '../services/logger';
 import { supabase } from '../services/supabase-client';
@@ -13,7 +14,7 @@ import { requireAuth } from '../middleware/auth';
 const vapiSetupRouter = Router();
 
 // Fallback to env vars if provided (for backwards compatibility/single tenant dev)
-const ENV_VAPI_API_KEY = process.env.VAPI_API_KEY;
+const ENV_VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
 const ENV_VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
 const ENV_WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/vapi/webhook';
 
@@ -31,7 +32,7 @@ const ENV_WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/va
 vapiSetupRouter.post('/setup/configure-webhook', requireAuth, async (req: Request, res: Response) => {
   try {
     // Platform Provider Model: Only use system API key
-    const vapiApiKey = process.env.VAPI_API_KEY;
+    const vapiApiKey = config.VAPI_PRIVATE_KEY;
 
     let vapiAssistantId = req.body.vapiAssistantId || ENV_VAPI_ASSISTANT_ID;
     const webhookUrl = req.body.webhookUrl || ENV_WEBHOOK_URL;
@@ -51,7 +52,7 @@ vapiSetupRouter.post('/setup/configure-webhook', requireAuth, async (req: Reques
     }
 
     if (!vapiApiKey) {
-      log.error('Vapi-Setup', 'Critical: VAPI_API_KEY missing in environment');
+      log.error('Vapi-Setup', 'Critical: VAPI_PRIVATE_KEY missing in environment');
       return res.status(500).json({ error: 'System configuration error' });
     }
 
