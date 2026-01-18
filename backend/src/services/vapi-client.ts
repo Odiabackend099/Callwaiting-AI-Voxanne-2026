@@ -269,6 +269,39 @@ export class VapiClient {
   }
 
   /**
+   * Update assistant's server URL (webhook endpoint)
+   * Used to dynamically update webhook URLs when ngrok restarts
+   *
+   * @param assistantId - The Vapi assistant ID
+   * @param webhookUrl - The new webhook URL (e.g., https://xyz.ngrok-free.dev/api/webhooks/vapi)
+   * @returns Updated assistant object
+   */
+  async updateAssistantWebhook(
+    assistantId: string,
+    webhookUrl: string
+  ): Promise<any> {
+    const updates = {
+      serverUrl: webhookUrl,
+      serverMessages: [
+        'assistant-request',
+        'end-of-call-report',
+        'function-call',
+        'hang',
+        'speech-update',
+        'status-update',
+        'transcript'
+      ]
+    };
+
+    logger.info('Updating assistant webhook URL', {
+      assistantId,
+      webhookUrl
+    });
+
+    return await this.updateAssistant(assistantId, updates);
+  }
+
+  /**
    * CRITICAL: Sync appointment booking tools to agent
    * Reads from vapi-tool-definitions.json and wires them into the agent's tools array
    * 

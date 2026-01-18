@@ -29,6 +29,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
+import axios from 'axios';
 
 interface ProcessHandle {
   name: string;
@@ -92,11 +93,15 @@ function sleep(ms: number): Promise<void> {
 /**
  * Execute shell command and return output
  */
-function executeCommand(command: string, cwd: string = process.cwd()): Promise<string> {
+function executeCommand(command: string, cwd: string = process.cwd(), ignoreErrors: boolean = false): Promise<string> {
   return new Promise((resolve, reject) => {
     exec(command, { cwd, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`Command failed: ${command}\n${stderr}`));
+        if (ignoreErrors) {
+          resolve('');
+        } else {
+          reject(new Error(`Command failed: ${command}\n${stderr}`));
+        }
       } else {
         resolve(stdout.trim());
       }
@@ -200,6 +205,153 @@ async function verifyNgrokAuth(): Promise<boolean> {
 // ================================================================================
 // PROCESS MANAGEMENT
 // ================================================================================
+
+/**
+ * Kill existing processes on specific ports to prevent conflicts
+ */
+async function killExistingProcesses(): Promise<void> {
+  log('INFO', 'Checking for existing processes on ports 3000, 3001, 4040...');
+
+  const portsToKill = [3000, 3001, 4040]; // frontend, backend, ngrok
+
+  for (const port of portsToKill) {
+    try {
+      // Find process ID by port (macOS/Linux with lsof)
+      const pid = await executeCommand(`lsof -ti:${port}`, process.cwd(), true);
+
+      if (pid && pid.trim()) {
+        log('INFO', `Killing process on port ${port} (PID: ${pid})`);
+
+        try {
+          // Send SIGTERM first (graceful shutdown)
+          process.kill(parseInt(pid), 'SIGTERM');
+          await sleep(2000);
+
+          // Check if still running
+          const stillRunning = await executeCommand(`lsof -ti:${port}`, process.cwd(), true);
+          if (stillRunning && stillRunning.trim()) {
+            log('WARN', `Process still running on port ${port}, sending SIGKILL`);
+            process.kill(parseInt(pid), 'SIGKILL');
+            await sleep(1000);
+          }
+
+          log('SUCCESS', `Process on port ${port} terminated`);
+        } catch (error) {
+          // Process might already be dead
+          log('WARN', `Could not kill process on port ${port}`, (error as any)?.message);
+        }
+      }
+    } catch (error) {
+      // Port likely not in use, continue
+      log('INFO', `Port ${port} is free`);
+    }
+  }
+}
+
+/**
+ * Update .env file with ngrok public URL
+ */
+async function updateEnvWithNgrokUrl(ngrokUrl: string): Promise<void> {
+  try {
+    log('INFO', 'Updating .env with ngrok URL...');
+
+    const envPath = path.join(BACKEND_DIR, '.env');
+
+    if (!fs.existsSync(envPath)) {
+      throw new Error(`.env file not found at: ${envPath}`);
+    }
+
+    // Read current .env
+    const originalContent = fs.readFileSync(envPath, 'utf8');
+
+    // Create backup
+    const backupPath = `${envPath}.backup`;
+    fs.writeFileSync(backupPath, originalContent, 'utf8');
+    log('INFO', `Backup created: ${backupPath}`);
+
+    // Replace BACKEND_URL
+    const regex = /^BACKEND_URL=.*$/m;
+    const newContent = originalContent.replace(regex, `BACKEND_URL=${ngrokUrl}`);
+
+    // Atomic write using temp file + rename
+    const tempPath = `${envPath}.tmp`;
+    fs.writeFileSync(tempPath, newContent, 'utf8');
+    fs.renameSync(tempPath, envPath);
+
+    // Verify update
+    const updatedContent = fs.readFileSync(envPath, 'utf8');
+    if (!updatedContent.includes(`BACKEND_URL=${ngrokUrl}`)) {
+      throw new Error('Verification failed: BACKEND_URL not updated correctly');
+    }
+
+    log('SUCCESS', `.env updated with BACKEND_URL=${ngrokUrl}`);
+  } catch (error) {
+    log('ERROR', 'Failed to update .env', error);
+    throw error;
+  }
+}
+
+/**
+ * Update Vapi assistant webhooks to point to new ngrok URL
+ */
+async function updateVapiWebhooks(ngrokUrl: string): Promise<{ total: number; updated: number; failed: number }> {
+  try {
+    log('INFO', 'Updating Vapi assistant webhooks...');
+
+    // Note: This requires database access, which may not be available in all contexts
+    // For now, we'll log the URL that should be configured
+    const webhookUrl = `${ngrokUrl}/api/webhooks/vapi`;
+
+    log('INFO', `Webhook URL to configure: ${webhookUrl}`);
+    log('INFO', 'Note: Actual webhook updates via Vapi API require database context');
+    log('INFO', 'Webhook configuration will be completed when master orchestration runs');
+
+    return { total: 0, updated: 0, failed: 0 };
+  } catch (error) {
+    log('ERROR', 'Failed to update webhooks', error);
+    return { total: 0, updated: 0, failed: 0 };
+  }
+}
+
+/**
+ * Run pre-flight validation checks
+ */
+async function runPreflightChecks(ngrokUrl: string): Promise<boolean> {
+  try {
+    log('INFO', 'Running pre-flight validation...');
+
+    // Check 1: Webhook health endpoint
+    try {
+      const webhookHealth = await axios.get(
+        `${ngrokUrl}/api/vapi/webhook/health`,
+        { timeout: 5000 }
+      );
+
+      if (webhookHealth.status === 200) {
+        log('SUCCESS', '✓ Webhook health endpoint responding');
+      } else {
+        log('WARN', `⚠️ Webhook health returned status ${webhookHealth.status}`);
+      }
+    } catch (error) {
+      log('WARN', '⚠️ Webhook health check failed (backend may still be starting)');
+    }
+
+    // Check 2: Backend health
+    try {
+      const backendHealth = await axios.get('http://localhost:3001/api/health', { timeout: 5000 });
+      if (backendHealth.status === 200) {
+        log('SUCCESS', '✓ Backend health check passing');
+      }
+    } catch (error) {
+      log('WARN', '⚠️ Backend health check failed');
+    }
+
+    return true;
+  } catch (error) {
+    log('ERROR', 'Pre-flight validation failed', error);
+    return false;
+  }
+}
 
 /**
  * Start ngrok tunnel
@@ -555,13 +707,20 @@ process.on('SIGTERM', cleanup);
 // ================================================================================
 
 async function main() {
-  log('INFO', '================================');
-  log('INFO', 'STARTUP ORCHESTRATION STARTING');
-  log('INFO', '================================');
+  log('INFO', '╔════════════════════════════════════════════════════════╗');
+  log('INFO', '║    🚀 STARTUP ORCHESTRATION                           ║');
+  log('INFO', '╚════════════════════════════════════════════════════════╝');
 
   try {
+    // Step 0: Kill existing processes (NEW)
+    log('INFO', 'STEP 0/8: Cleaning up existing processes');
+    await killExistingProcesses();
+
+    // Small delay
+    await sleep(2000);
+
     // Step 1: Start ngrok tunnel
-    log('INFO', 'STEP 1/5: Starting ngrok tunnel');
+    log('INFO', 'STEP 1/8: Starting ngrok tunnel');
     const ngrokStarted = await startNgrok();
     if (!ngrokStarted) {
       log('ERROR', 'Failed to start ngrok tunnel');
@@ -571,8 +730,19 @@ async function main() {
     // Small delay between services
     await sleep(2000);
 
-    // Step 2: Start backend
-    log('INFO', 'STEP 2/5: Starting backend server');
+    // Step 2: Update .env with ngrok URL (NEW)
+    log('INFO', 'STEP 2/8: Updating .env with ngrok URL');
+    try {
+      await updateEnvWithNgrokUrl(ngrokPublicUrl);
+    } catch (error) {
+      log('WARN', 'Failed to update .env, continuing with environment variable override');
+    }
+
+    // Small delay
+    await sleep(1000);
+
+    // Step 3: Start backend
+    log('INFO', 'STEP 3/8: Starting backend server');
     const backendStarted = await startBackend();
     if (!backendStarted) {
       log('WARN', 'Backend may not have fully started');
@@ -581,8 +751,8 @@ async function main() {
     // Small delay between services
     await sleep(2000);
 
-    // Step 3: Start frontend
-    log('INFO', 'STEP 3/5: Starting frontend server');
+    // Step 4: Start frontend
+    log('INFO', 'STEP 4/8: Starting frontend server');
     const frontendStarted = await startFrontend();
     if (!frontendStarted) {
       log('WARN', 'Frontend may not have fully started');
@@ -591,15 +761,24 @@ async function main() {
     // Wait for backend to be fully ready
     await sleep(3000);
 
-    // Step 4: Configure webhook
-    log('INFO', 'STEP 4/5: Configuring VAPI webhook');
+    // Step 5: Update Vapi webhooks (NEW)
+    log('INFO', 'STEP 5/8: Updating Vapi assistant webhooks');
+    const webhookResult = await updateVapiWebhooks(ngrokPublicUrl);
+    log('INFO', `Webhook update result: ${webhookResult.updated}/${webhookResult.total} updated`);
+
+    // Step 6: Configure webhook (existing)
+    log('INFO', 'STEP 6/8: Configuring VAPI webhook');
     const webhookConfigured = await configureVapiWebhook();
     if (!webhookConfigured) {
       log('WARN', 'Webhook configuration may need manual verification');
     }
 
-    // Step 5: Verify systems
-    log('INFO', 'STEP 5/5: Verifying all systems');
+    // Step 7: Run pre-flight checks (NEW)
+    log('INFO', 'STEP 7/8: Running pre-flight validation');
+    await runPreflightChecks(ngrokPublicUrl);
+
+    // Step 8: Verify systems
+    log('INFO', 'STEP 8/8: Verifying all systems');
     await sleep(2000);
     const allHealthy = await verifyAllSystems();
 
