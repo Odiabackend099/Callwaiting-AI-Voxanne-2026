@@ -27,10 +27,17 @@ import * as dotenv from 'dotenv';
 import { ToolSyncService } from '../src/services/tool-sync-service';
 import { log } from '../src/services/logger';
 
-// Load environment variables
+// Load environment variables from backend/.env
 const envPath = path.resolve(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
+}
+
+// Verify backend Vapi API key is available (platform is sole provider)
+const vapiApiKey = process.env.VAPI_PRIVATE_KEY;
+if (!vapiApiKey) {
+  console.error('❌ Missing VAPI_PRIVATE_KEY in .env - backend must provide Vapi API credentials');
+  process.exit(1);
 }
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
@@ -66,11 +73,17 @@ async function migrateExistingTools() {
 
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
   console.log('║  Phase 6: Migrate Existing Organizations - Tool Registration  ║');
+  console.log('║  Platform Mode: Using backend Vapi API key (sole provider)    ║');
   console.log('╚════════════════════════════════════════════════════════════════╝\n');
 
   if (dryRun) {
     console.log('🔍 DRY RUN MODE: No changes will be made\n');
   }
+
+  console.log('📋 Platform Architecture:')
+  console.log('   - Tools registered ONCE globally using backend Vapi API key')
+  console.log('   - All organizations share the same registered tools')
+  console.log('   - Each org\'s assistant links to the global tools\n');
 
   try {
     // Step 1: Get organizations

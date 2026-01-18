@@ -79,12 +79,17 @@ export class ToolSyncService {
       log.info('ToolSyncService', '🔄 Starting tool synchronization', {
         orgId,
         assistantId,
-        backendUrl
+        backendUrl,
+        mode: 'platform'  // Platform mode: backend is sole Vapi provider
       });
 
-      // Get Vapi credentials
-      const vapiCreds = await IntegrationDecryptor.getVapiCredentials(orgId);
-      const vapi = new VapiClient(vapiCreds.apiKey);
+      // Get backend's Vapi API key (platform is sole provider in multi-tenant mode)
+      const vapiApiKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiApiKey) {
+        throw new Error('VAPI_PRIVATE_KEY not configured in backend environment - platform cannot sync tools');
+      }
+
+      const vapi = new VapiClient(vapiApiKey);
 
       // Get system tools blueprint
       const systemTools = await this.getSystemToolsBlueprint();
@@ -189,6 +194,10 @@ export class ToolSyncService {
 
   /**
    * Sync a single tool for an organization with retry logic
+   *
+   * In multi-tenant platform mode, tools are registered ONCE globally using the backend's
+   * Vapi API key, then linked to each organization's assistants. This method handles
+   * registration and linking.
    */
   private static async syncSingleTool(
     orgId: string,
@@ -200,46 +209,47 @@ export class ToolSyncService {
       throw new Error(`Unsupported tool: ${toolBlueprint.name}`);
     }
 
-    // Step 1: Get Vapi credentials early (needed for tool definition)
-    let vapiCreds;
-    try {
-      vapiCreds = await IntegrationDecryptor.getVapiCredentials(orgId);
-    } catch (err: any) {
-      log.error('ToolSyncService', '❌ Failed to get Vapi credentials', {
-        orgId,
-        error: err.message
-      });
-      throw new Error(`Cannot register tool: Missing Vapi credentials for org ${orgId}`);
+    // Step 1: Use backend's Vapi API key (platform is sole provider)
+    // In multi-tenant platform mode, the backend has the single Vapi API key
+    const vapiApiKey = process.env.VAPI_PRIVATE_KEY;
+    if (!vapiApiKey) {
+      throw new Error('VAPI_PRIVATE_KEY not configured in backend environment - platform cannot register tools');
     }
 
-    const vapi = new VapiClient(vapiCreds.apiKey);
+    const vapi = new VapiClient(vapiApiKey);
 
     // Step 2: Build tool definition with webhook URL
     const toolDef = getUnifiedBookingTool(backendUrl);
     const currentHash = this.getToolDefinitionHash(toolDef);
 
-    // Step 3: Check if tool already registered for this org
-    const { data: existingTool, error: checkError } = await supabase
+    // Step 3: Check if tool already registered GLOBALLY (by any org)
+    // In platform mode, tools are registered once and shared across orgs
+    const { data: globalTools, error: globalCheckError } = await supabase
       .from('org_tools')
-      .select('vapi_tool_id, definition_hash')
-      .eq('org_id', orgId)
+      .select('vapi_tool_id, definition_hash, org_id')
       .eq('tool_name', 'bookClinicAppointment')
-      .maybeSingle();
+      .limit(1);
 
-    // If tool exists and hash matches, return cached tool_id
-    if (!checkError && existingTool?.vapi_tool_id) {
-      if (existingTool.definition_hash === currentHash) {
-        log.info('ToolSyncService', '📌 Tool already registered with current definition', {
+    let existingToolId: string | null = null;
+    let existingHash: string | null = null;
+
+    if (!globalCheckError && globalTools && globalTools.length > 0) {
+      existingToolId = globalTools[0].vapi_tool_id;
+      existingHash = globalTools[0].definition_hash;
+
+      if (existingHash === currentHash) {
+        log.info('ToolSyncService', '📌 Tool already registered globally with current definition', {
           orgId,
-          toolId: existingTool.vapi_tool_id,
-          hash: currentHash.substring(0, 8)
+          toolId: existingToolId,
+          hash: currentHash.substring(0, 8),
+          registeredByOrg: globalTools[0].org_id.substring(0, 8)
         });
-        return existingTool.vapi_tool_id;
+        return existingToolId;
       } else {
         // Definition changed - need to re-register
-        log.info('ToolSyncService', '🔄 Tool definition changed - re-registering', {
+        log.info('ToolSyncService', '🔄 Tool definition changed - re-registering globally', {
           orgId,
-          oldHash: existingTool.definition_hash?.substring(0, 8),
+          oldHash: existingHash?.substring(0, 8),
           newHash: currentHash.substring(0, 8)
         });
       }
@@ -271,8 +281,10 @@ export class ToolSyncService {
       throw err;
     }
 
-    // Step 5: Save tool reference to database
+    // Step 5: Save org's reference to the (globally-registered) tool
     try {
+      // In platform mode, the same tool (same toolId) is shared across all orgs
+      // Each org gets an entry in org_tools linking to the global tool
       const { error: saveError } = await supabase
         .from('org_tools')
         .upsert({
@@ -287,16 +299,17 @@ export class ToolSyncService {
         });
 
       if (saveError) {
-        log.warn('ToolSyncService', '⚠️  Failed to save tool reference to database', {
+        log.warn('ToolSyncService', '⚠️  Failed to save org tool reference to database', {
           orgId,
           toolId,
           error: saveError.message
         });
         // Continue anyway - tool is registered with Vapi, just not in our tracking table
       } else {
-        log.info('ToolSyncService', '💾 Tool reference saved to org_tools table', {
+        log.info('ToolSyncService', '💾 Org tool reference saved to org_tools table', {
           orgId,
-          toolId
+          toolId,
+          registeredGlobally: !existingToolId  // true if we just registered it
         });
       }
     } catch (err: any) {
