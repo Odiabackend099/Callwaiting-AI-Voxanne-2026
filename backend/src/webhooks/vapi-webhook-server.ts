@@ -48,12 +48,20 @@ class VAPIWebhookServer {
 
   private verifySignature(req: Request, res: Response, next: express.NextFunction): void {
     if (!this.vapiSecret) {
-      console.warn('[VAPI Webhook] Warning: VAPI_WEBHOOK_SECRET not configured, skipping signature verification');
-      return next();
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[VAPI Webhook] Warning: VAPI_WEBHOOK_SECRET not configured, skipping signature verification (DEV MODE)');
+        return next();
+      }
+      console.warn('[VAPI Webhook] Warning: VAPI_WEBHOOK_SECRET not configured, blocking request (PRODUCTION)');
+      return res.status(500).json({ error: 'Server configuration error' });
     }
 
     const signature = req.headers['x-vapi-signature'] as string;
     if (!signature) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[VAPI Webhook] Warning: Missing signature header, skipping verification (DEV MODE)');
+        return next();
+      }
       return res.status(401).json({ error: 'Missing signature header' });
     }
 

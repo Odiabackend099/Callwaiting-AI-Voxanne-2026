@@ -12,6 +12,7 @@
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { enhanceSystemPrompt } from './prompt-injector';
+import { ToolSyncService } from './tool-sync-service';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
 
@@ -138,39 +139,8 @@ export class VapiAssistantManager {
             updatePayload.serverUrl = config.serverUrl;
           }
 
-          // Auto-attach booking tool if not provided
-          if (!config.functions || config.functions.length === 0) {
-            updatePayload.functions = [{
-              type: 'function',
-              function: {
-                name: 'bookClinicAppointment',
-                description: 'Book a confirmed appointment for a patient.',
-                parameters: {
-                  type: 'object',
-                  properties: {
-                    appointmentDate: {
-                      type: 'string',
-                      description: 'The date of the appointment in YYYY-MM-DD format',
-                      pattern: '^\\d{4}-\\d{2}-\\d{2}$'
-                    },
-                    appointmentTime: {
-                      type: 'string',
-                      description: 'The time of the appointment in 24-hour HH:MM format',
-                      pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
-                    },
-                    patientName: { type: 'string', description: 'The full name of the patient' },
-                    patientEmail: { type: 'string', description: 'The patient\'s email address' },
-                    patientPhone: { type: 'string', description: 'The patient\'s phone number (optional)' },
-                    serviceType: { type: 'string', description: 'The type of service being booked' },
-                    duration: { type: 'number', description: 'Duration in minutes', default: 30 }
-                  },
-                  required: ['appointmentDate', 'appointmentTime', 'patientName', 'patientEmail']
-                }
-              }
-            }];
-          } else if (config.functions) {
-            updatePayload.functions = config.functions;
-          }
+          // NOTE: Tools are now registered separately by ToolSyncService
+          // Don't modify toolIds during updates - they're managed independently
 
           // Add server messages if provided
           if (config.serverMessages) {
@@ -253,39 +223,18 @@ export class VapiAssistantManager {
           createPayload.serverUrl = config.serverUrl;
         }
 
-        // Auto-attach booking tool if not provided
-        if (!config.functions || config.functions.length === 0) {
-          createPayload.functions = [{
-            type: 'function',
-            function: {
-              name: 'bookClinicAppointment',
-              description: 'Book a confirmed appointment for a patient.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  appointmentDate: {
-                    type: 'string',
-                    description: 'The date of the appointment in YYYY-MM-DD format',
-                    pattern: '^\\d{4}-\\d{2}-\\d{2}$'
-                  },
-                  appointmentTime: {
-                    type: 'string',
-                    description: 'The time of the appointment in 24-hour HH:MM format',
-                    pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
-                  },
-                  patientName: { type: 'string', description: 'The full name of the patient' },
-                  patientEmail: { type: 'string', description: 'The patient\'s email address' },
-                  patientPhone: { type: 'string', description: 'The patient\'s phone number (optional)' },
-                  serviceType: { type: 'string', description: 'The type of service being booked' },
-                  duration: { type: 'number', description: 'Duration in minutes', default: 30 }
-                },
-                required: ['appointmentDate', 'appointmentTime', 'patientName', 'patientEmail']
-              }
-            }
-          }];
-        } else if (config.functions) {
-          createPayload.functions = config.functions;
-        }
+        // Set up model with system prompt (tools will be registered separately by ToolSyncService)
+        createPayload.model = {
+          provider: config.modelProvider || 'openai',
+          model: config.modelName || 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: enhanceSystemPrompt(config.systemPrompt),
+            },
+          ],
+          toolIds: []  // Empty initially - ToolSyncService will populate this
+        };
 
         // Add server messages if provided
         if (config.serverMessages) {
@@ -368,6 +317,37 @@ export class VapiAssistantManager {
         role,
         config.name
       );
+
+      // Step 7: Fire-and-forget tool synchronization
+      // This ensures tools are registered without blocking the response
+      (async () => {
+        try {
+          log.info('VapiAssistantManager', '🔄 Starting async tool sync', {
+            orgId,
+            assistantId,
+            role
+          });
+
+          await ToolSyncService.syncAllToolsForAssistant({
+            orgId,
+            assistantId,
+            backendUrl: process.env.BACKEND_URL,
+            skipIfExists: false  // Always sync to pick up definition changes
+          });
+
+          log.info('VapiAssistantManager', '✅ Async tool sync completed', {
+            orgId,
+            assistantId
+          });
+        } catch (syncErr: any) {
+          log.error('VapiAssistantManager', '❌ Async tool sync failed (non-blocking)', {
+            orgId,
+            assistantId,
+            error: syncErr.message
+          });
+          // Error is logged but doesn't fail the assistant save operation
+        }
+      })();
 
       return {
         assistantId,

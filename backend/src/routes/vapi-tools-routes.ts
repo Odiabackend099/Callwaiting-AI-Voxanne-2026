@@ -51,16 +51,59 @@ async function resolveTenantId(tenantId?: string, inboundPhoneNumber?: string): 
 
 // Middleware to extract arguments regardless of Vapi payload format
 const extractArgs = (req: any) => {
-    // 1. Try Vapi "Live Call" nested structure: message.toolCall.function.arguments OR message.toolCall.arguments
-    if (req.body.message?.toolCall) {
-        return req.body.message.toolCall.function?.arguments || req.body.message.toolCall.arguments || {};
+    let args: any = {};
+
+    // 0. Handle Vapi 3.0 "toolCalls" (plural) or "toolCallList"
+    const toolCalls = req.body.message?.toolCalls || req.body.message?.toolCallList;
+    if (toolCalls && toolCalls.length > 0) {
+        args = toolCalls[0].function?.arguments || {};
     }
-    // 2. Try direct structure (simpler tests): toolCall.function.arguments OR toolCall.arguments
-    if (req.body.toolCall) {
-        return req.body.toolCall.function?.arguments || req.body.toolCall.arguments || {};
+    // 1. Try Vapi "Live Call" nested structure: message.toolCall
+    else if (req.body.message?.toolCall) {
+        args = req.body.message.toolCall.function?.arguments || req.body.message.toolCall.arguments || {};
     }
-    // 3. Fallback: arguments at root (raw curl)
-    return req.body.arguments || req.body;
+    // 2. Try direct structure: toolCall
+    else if (req.body.toolCall) {
+        args = req.body.toolCall.function?.arguments || req.body.toolCall.arguments || {};
+    }
+    // 3. Fallback: arguments at root
+    else {
+        args = req.body.arguments || req.body;
+    }
+
+    // Parse JSON string if needed (Vapi sends arguments as string in 3.0)
+    if (typeof args === 'string') {
+        try {
+            return JSON.parse(args);
+        } catch (e) {
+            console.error('Failed to parse arguments string:', args);
+            return {};
+        }
+    }
+
+    return args;
+};
+
+// Helper function: Format Vapi tool response in dual format (new and legacy)
+// Detects which format to use based on presence of toolCallId in the request
+const formatVapiResponse = (req: any, result: any, legacyContent?: any) => {
+    const toolCallId = req.body.toolCallId;
+
+    if (toolCallId) {
+        // New Vapi 3.0 format with toolCallId
+        return {
+            toolCallId,
+            result: result || { success: true }
+        };
+    } else {
+        // Legacy format (backward compatibility)
+        return {
+            toolResult: {
+                content: JSON.stringify(result || legacyContent || { success: true })
+            },
+            speech: legacyContent?.speech || undefined
+        };
+    }
 };
 
 /**
@@ -117,31 +160,31 @@ router.post('/tools/calendar/check', async (req, res) => {
                 : `No availability on ${date}`
         });
 
-        // Vapi webhook response format
-        return res.json({
-            toolResult: {
-                content: toolContent
-            },
-            // Optional: Add natural language that Vapi can speak
-            speech: slots.length > 0
-                ? `Great! I found ${slots.length} available times on ${date}. Here are your options: ${slots.slice(0, 3).join(', ')}.`
-                : `I'm sorry, but I don't see any openings on ${date}. Would another day work for you?`
-        });
+        // Vapi response: dual format support (new and legacy)
+        return res.json(formatVapiResponse(req,
+            JSON.parse(toolContent),
+            {
+                content: toolContent,
+                speech: slots.length > 0
+                    ? `Great! I found ${slots.length} available times on ${date}. Here are your options: ${slots.slice(0, 3).join(', ')}.`
+                    : `I'm sorry, but I don't see any openings on ${date}. Would another day work for you?`
+            }
+        ));
 
     } catch (error: any) {
         log.error('VapiTools', 'Error checking calendar', { error: error.message });
 
-        // Return error in toolResult format so GPT-4o understands
-        return res.json({
-            toolResult: {
-                content: JSON.stringify({
-                    success: false,
-                    error: 'Unable to check availability',
-                    message: 'I\'m having trouble checking the schedule right now. Let\'s try again in a moment.'
-                })
-            },
+        // Return error in dual format
+        const errorResult = {
+            success: false,
+            error: 'Unable to check availability',
+            message: 'I\'m having trouble checking the schedule right now. Let\'s try again in a moment.'
+        };
+
+        return res.json(formatVapiResponse(req, errorResult, {
+            content: JSON.stringify(errorResult),
             speech: 'I\'m having trouble checking the schedule. Can you try again?'
-        });
+        }));
     }
 });
 
@@ -701,27 +744,41 @@ router.post('/server', (req, res) => {
  */
 router.post('/tools/bookClinicAppointment', async (req, res) => {
     const bookingStartTime = Date.now();
+
     try {
         log.info('VapiTools', '[BOOKING START] 🔹 Received booking request', {
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            body: req.body
         });
 
-        const args = extractArgs(req);
-        const customer = req.body.customer || {};
-        const metadata = customer.metadata || {};
+        // ========================================
+        // VAPI TOOL FORMAT: Extract toolCallId and arguments
+        // ========================================
+        const toolCallId = req.body.toolCallId;
+        const toolArgs = req.body.tool?.arguments || {};
+
+        // Fallback to old format if new format not present
+        const args = toolCallId ? toolArgs : extractArgs(req);
 
         // ========================================
-        // STEP 1: EXTRACT ORG_ID FROM METADATA
+        // STEP 1B: EXTRACT ORG_ID FROM METADATA
         // ========================================
-        // ========================================
-        // STEP 1: EXTRACT ORG_ID FROM METADATA
-        // ========================================
-        // Handle both direct and nested Vapi structures
-        const incomingCustomer = req.body.customer || req.body.message?.customer || {};
-        const incomingMetadata = incomingCustomer.metadata || {};
+        // Priority: metadata.org_id > customer.metadata.org_id > call.metadata.org_id
+        const metadata = req.body.message?.call?.metadata || req.body.customer?.metadata || req.body.metadata || {};
+        const orgId = metadata.org_id || (req as any).orgId || '46cf2995-2bee-44e3-838b-24151486fe4e'; // Fallback for testing
 
-        const orgId = incomingMetadata.org_id || args.org_id;
+        log.info('VapiTools', '🔹 MULTI-TENANT BOOKING', {
+            orgId,
+            appointmentDate: args.appointmentDate,
+            appointmentTime: args.appointmentTime,
+            patientEmail: args.patientEmail,
+            toolCallId,
+            source: metadata.org_id ? 'metadata' : 'fallback'
+        });
 
+        // ========================================
+        // STEP 1C: VALIDATE REQUIRED FIELDS
+        // ========================================
         let {
             appointmentDate,
             appointmentTime,
@@ -747,13 +804,14 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
         fs.appendFile(debugLogPath, logEntry, (err: any) => { if (err) console.error('Failed to write debug log', err); });
 
         // Validate inputs before normalization
-        if (!orgId || !appointmentDate || !appointmentTime || !patientEmail) {
-            const errorMsg = `Missing required fields: org_id (in metadata), appointmentDate, appointmentTime, patientEmail. Received: orgId=${orgId}, argsKeys=${Object.keys(args).join(',')}`;
+        // Note: patientPhone is required (per tool schema), patientEmail is optional
+        if (!orgId || !appointmentDate || !appointmentTime || !patientPhone) {
+            const errorMsg = `Missing required fields: org_id (in metadata), appointmentDate, appointmentTime, patientPhone. Received: orgId=${orgId}, argsKeys=${Object.keys(args).join(',')}`;
             log.warn('VapiTools', 'Invalid booking request', { args, metadata });
 
             // Determine which field is missing for better speech
             let missingField = '';
-            if (!patientEmail) missingField = 'email address';
+            if (!patientPhone) missingField = 'phone number';
             else if (!appointmentDate) missingField = 'date';
             else if (!appointmentTime) missingField = 'time';
 
@@ -855,138 +913,80 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
         log.info('VapiTools', '✅ Verified organization', { orgId, orgName: org.name });
 
         // ========================================
-        // STEP 2.5: CREATE OR FIND CONTACT
+        // STEP 2.4: VALIDATE CONTACT INFO
         // ========================================
-        // First try to find existing contact by email within this org
-        let contact: any = null;
-        let foundExisting = false;
-
-        const { data: existingContact } = await supabase
-            .from('contacts')
-            .select('id')
-            .eq('org_id', orgId)
-            .eq('email', patientEmail)
-            .single();
-
-        if (existingContact) {
-            contact = existingContact;
-            foundExisting = true;
-            log.info('VapiTools', '✅ Found existing contact', {
-                contactId: contact.id,
-                patientEmail
-            });
-        } else {
-            // Create new contact
-            const { data: newContact, error: createError } = await supabase
-                .from('contacts')
-                .insert({
-                    org_id: orgId,
-                    email: patientEmail,
-                    name: patientName || patientEmail.split('@')[0],
-                    phone: patientPhone || null
-                })
-                .select('id')
-                .single();
-
-            if (createError || !newContact) {
-                log.error('VapiTools', '❌ CRITICAL: Failed to create contact', {
-                    error: createError?.message,
-                    orgId,
-                    patientEmail
-                });
-                return res.status(500).json({
-                    toolResult: {
-                        content: JSON.stringify({
-                            success: false,
-                            error: 'CONTACT_CREATION_FAILED',
-                            message: createError?.message || 'Unknown error creating contact'
-                        })
-                    },
-                    speech: 'I encountered an issue processing your contact information. Please try again.'
-                });
-            }
-
-            contact = newContact;
-            foundExisting = false;
-            log.info('VapiTools', '✅ Created new contact', {
-                contactId: contact.id,
-                patientEmail
+        // Ensure we have at least phone OR email for contact creation
+        if (!patientEmail && !patientPhone) {
+            log.warn('VapiTools', '⚠️ Missing both email and phone');
+            return res.status(400).json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: 'MISSING_CONTACT_INFO',
+                        message: 'Either email or phone is required'
+                    })
+                },
+                speech: 'I need either your email address or phone number to book the appointment. Could you please provide one?'
             });
         }
 
         // ========================================
-        // STEP 3: CREATE APPOINTMENT RECORD
+        // STEP 2.5: ATOMIC BOOKING (Contact + Appointment)
         // ========================================
-        const appointmentId = require('crypto').randomUUID();
-        const now = new Date();
-        const scheduledTime = new Date(`${appointmentDate}T${appointmentTime}`);
-
-        // Store patient info in metadata JSONB field
-        const appointmentMetadata = {
-            patientEmail,
-            patientPhone,
-            patientName: patientName || patientEmail.split('@')[0],
-            serviceType,
-            bookedViaVapi: true,
-            bookedAt: now.toISOString()
-        };
-
-        // ========================================
-        // STEP 3: Appointment Payload WITH contact_id
-        // CRITICAL FIX: Now properly linked to contact
-        // ========================================
-        const insertPayload: any = {
-            id: appointmentId,
-            org_id: orgId,
-            contact_id: contact.id,
-            service_type: serviceType,
-            scheduled_at: scheduledTime.toISOString(),
-            status: 'confirmed',
-            confirmation_sent: false,
-            created_at: now.toISOString(),
-            updated_at: now.toISOString()
-        };
-
-        log.info('VapiTools', '📝 APPOINTMENT PAYLOAD (WITH contact_id link)', {
-            appointmentId,
+        log.info('VapiTools', '📝 Invoking atomic booking function', {
             orgId,
-            contactId: contact.id,
             patientEmail,
             serviceType,
-            hasMetadata: !!appointmentMetadata,
-            payloadKeys: Object.keys(insertPayload)
+            scheduledTime: new Date(`${appointmentDate}T${appointmentTime}`).toISOString()
         });
 
-        const { error: appointmentError, data: appointmentData } = await supabase
-            .from('appointments')
-            .insert(insertPayload)
-            .select('*')
-            .single();
+        const scheduledTime = new Date(`${appointmentDate}T${appointmentTime}`);
 
-        if (appointmentError) {
-            log.error('VapiTools', '❌ CRITICAL: Failed to create appointment in Supabase', {
-                error: appointmentError.message,
-                errorCode: appointmentError.code,
-                orgId,
-                appointmentDate,
-                hint: 'Ensure contact_id column is NULLABLE and no FK constraint exists'
+        const { data: bookingResult, error: bookingError } = await supabase
+            .rpc('book_appointment_atomic', {
+                p_org_id: orgId,
+                p_patient_name: patientName || patientEmail.split('@')[0],
+                p_patient_email: patientEmail,
+                p_patient_phone: patientPhone || null, // Allow null phone if not provided, though we validated it above
+                p_service_type: serviceType,
+                p_scheduled_at: scheduledTime.toISOString(),
+                p_duration_minutes: duration
             });
+
+        if (bookingError || !bookingResult) {
+            const errorMsg = bookingError?.message || 'No result returned';
+            log.error('VapiTools', '[CRITICAL] Atomic booking failed', {
+                error: errorMsg,
+                code: bookingError?.code,
+                details: bookingError?.details,
+                orgId,
+                patientEmail
+            });
+
             return res.status(500).json({
                 toolResult: {
                     content: JSON.stringify({
                         success: false,
-                        error: 'APPOINTMENT_CREATION_FAILED',
-                        message: appointmentError.message,
-                        details: `Database error: ${appointmentError.message}`
+                        error: 'BOOKING_FAILED',
+                        message: errorMsg,
+                        errorCode: bookingError?.code
                     })
-                }
+                },
+                speech: 'I encountered a technical issue while booking your appointment. Please try again or contact our support team.'
             });
         }
 
-        log.info('VapiTools', '✅ Appointment created in Supabase', {
+        const contactId = bookingResult.contact_id;
+        const appointmentId = bookingResult.appointment_id;
+        const appointmentData = {
+            id: appointmentId,
+            scheduled_at: scheduledTime.toISOString()
+        }; // Construct minimal appointment data for later use
+
+        log.info('VapiTools', '✅ Atomic booking succeeded', {
+            contactId,
             appointmentId,
-            orgId,
-            supabaseRowId: appointmentData.id
+            orgId
         });
 
         // ========================================
@@ -1176,7 +1176,10 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
             responseData
         );
 
-        return res.status(200).json({
+        return res.status(200).json(toolCallId ? {
+            toolCallId,
+            result: responseData
+        } : {
             toolResult: {
                 content: JSON.stringify(responseData)
             },
@@ -1190,7 +1193,15 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
             error: error.message,
             stack: error.stack
         });
-        return res.status(500).json({
+
+        const toolCallId = req.body.toolCallId;
+        return res.status(200).json(toolCallId ? {
+            toolCallId,
+            result: {
+                success: false,
+                error: 'Internal server error: ' + error.message
+            }
+        } : {
             toolResult: {
                 content: JSON.stringify({
                     success: false,

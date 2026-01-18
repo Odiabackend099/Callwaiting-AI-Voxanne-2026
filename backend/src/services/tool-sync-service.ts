@@ -10,8 +10,14 @@
  * - Assistant update
  * - Prompt save
  * - Tool blueprint changes
+ *
+ * Phase 7 Feature: Tool versioning via definition hashes
+ * - Tracks SHA-256 hash of tool definitions
+ * - Automatically re-registers tools when definitions change
+ * - Enables safe, zero-downtime tool updates
  */
 
+import * as crypto from 'crypto';
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { getUnifiedBookingTool } from '../config/unified-booking-tool';
@@ -35,6 +41,16 @@ export interface ToolSyncResult {
 }
 
 export class ToolSyncService {
+  /**
+   * Calculate SHA-256 hash of a tool definition for versioning
+   * @param toolDef - Tool definition object
+   * @returns SHA-256 hash as hex string
+   */
+  static getToolDefinitionHash(toolDef: any): string {
+    const content = JSON.stringify(toolDef);
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
   /**
    * Synchronize all system tools for an organization's assistant
    *
@@ -172,7 +188,7 @@ export class ToolSyncService {
   }
 
   /**
-   * Sync a single tool for an organization
+   * Sync a single tool for an organization with retry logic
    */
   private static async syncSingleTool(
     orgId: string,
@@ -184,80 +200,231 @@ export class ToolSyncService {
       throw new Error(`Unsupported tool: ${toolBlueprint.name}`);
     }
 
-    // Get or create tool ID for this org
-    const { data: orgTool, error: toolError } = await supabase
+    // Step 1: Get Vapi credentials early (needed for tool definition)
+    let vapiCreds;
+    try {
+      vapiCreds = await IntegrationDecryptor.getVapiCredentials(orgId);
+    } catch (err: any) {
+      log.error('ToolSyncService', '❌ Failed to get Vapi credentials', {
+        orgId,
+        error: err.message
+      });
+      throw new Error(`Cannot register tool: Missing Vapi credentials for org ${orgId}`);
+    }
+
+    const vapi = new VapiClient(vapiCreds.apiKey);
+
+    // Step 2: Build tool definition with webhook URL
+    const toolDef = getUnifiedBookingTool(backendUrl);
+    const currentHash = this.getToolDefinitionHash(toolDef);
+
+    // Step 3: Check if tool already registered for this org
+    const { data: existingTool, error: checkError } = await supabase
       .from('org_tools')
-      .select('vapi_tool_id')
+      .select('vapi_tool_id, definition_hash')
       .eq('org_id', orgId)
       .eq('tool_name', 'bookClinicAppointment')
       .maybeSingle();
 
-    if (!toolError && orgTool?.vapi_tool_id) {
-      log.info('ToolSyncService', 'Tool already registered for org', {
-        orgId,
-        toolId: orgTool.vapi_tool_id
-      });
-      return orgTool.vapi_tool_id;
+    // If tool exists and hash matches, return cached tool_id
+    if (!checkError && existingTool?.vapi_tool_id) {
+      if (existingTool.definition_hash === currentHash) {
+        log.info('ToolSyncService', '📌 Tool already registered with current definition', {
+          orgId,
+          toolId: existingTool.vapi_tool_id,
+          hash: currentHash.substring(0, 8)
+        });
+        return existingTool.vapi_tool_id;
+      } else {
+        // Definition changed - need to re-register
+        log.info('ToolSyncService', '🔄 Tool definition changed - re-registering', {
+          orgId,
+          oldHash: existingTool.definition_hash?.substring(0, 8),
+          newHash: currentHash.substring(0, 8)
+        });
+      }
     }
 
-    // Register new tool with Vapi
-    const vapiCreds = await IntegrationDecryptor.getVapiCredentials(orgId);
-    const vapi = new VapiClient(vapiCreds.apiKey);
-
-    const toolDef = getUnifiedBookingTool(backendUrl);
-
-    const toolResponse = await (vapi as any).client.post('/tool', toolDef);
-    const toolId = toolResponse.data.id;
-
-    log.info('ToolSyncService', 'Registered new tool with Vapi', {
+    log.info('ToolSyncService', '📤 Registering tool with Vapi API', {
       orgId,
-      toolId,
-      toolName: 'bookClinicAppointment'
+      toolName: toolBlueprint.name,
+      backendUrl
     });
 
-    // Save tool reference to database
-    const { error: saveError } = await supabase
-      .from('org_tools')
-      .upsert({
-        org_id: orgId,
-        tool_name: 'bookClinicAppointment',
-        vapi_tool_id: toolId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
+    // Step 4: Register tool with Vapi with retry logic
+    let toolId: string;
+    try {
+      const toolResponse = await this.registerToolWithRetry(vapi, toolDef, orgId);
+      toolId = toolResponse.id;
 
-    if (saveError) {
-      log.warn('ToolSyncService', 'Failed to save tool reference', {
-        error: saveError.message
+      log.info('ToolSyncService', '✅ Tool registered with Vapi', {
+        orgId,
+        toolId,
+        toolName: 'bookClinicAppointment'
       });
-      // Continue anyway - tool is registered, just not tracked
+    } catch (err: any) {
+      log.error('ToolSyncService', '❌ Failed to register tool with Vapi', {
+        orgId,
+        toolName: toolBlueprint.name,
+        error: err.message
+      });
+      throw err;
+    }
+
+    // Step 5: Save tool reference to database
+    try {
+      const { error: saveError } = await supabase
+        .from('org_tools')
+        .upsert({
+          org_id: orgId,
+          tool_name: 'bookClinicAppointment',
+          vapi_tool_id: toolId,
+          description: toolBlueprint.description,
+          enabled: true,
+          definition_hash: currentHash,  // Phase 7: Track tool definition version
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (saveError) {
+        log.warn('ToolSyncService', '⚠️  Failed to save tool reference to database', {
+          orgId,
+          toolId,
+          error: saveError.message
+        });
+        // Continue anyway - tool is registered with Vapi, just not in our tracking table
+      } else {
+        log.info('ToolSyncService', '💾 Tool reference saved to org_tools table', {
+          orgId,
+          toolId
+        });
+      }
+    } catch (err: any) {
+      log.warn('ToolSyncService', '⚠️  Database save error (continuing anyway)', {
+        error: err.message
+      });
     }
 
     return toolId;
   }
 
   /**
-   * Link tools to assistant via Vapi API
+   * Register tool with Vapi API with exponential backoff retry logic
+   */
+  private static async registerToolWithRetry(
+    vapi: VapiClient,
+    toolDef: any,
+    orgId: string,
+    maxRetries: number = 3
+  ): Promise<any> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        log.info('ToolSyncService', `🔄 Vapi API call attempt ${attempt}/${maxRetries}`, {
+          orgId,
+          toolName: toolDef.function.name
+        });
+
+        // Access the Vapi client's axios instance directly
+        const response = await (vapi as any).client.post('/tool', toolDef);
+
+        log.info('ToolSyncService', '✅ Vapi API request succeeded', {
+          orgId,
+          attempt,
+          toolId: response.data.id
+        });
+
+        return response.data;
+      } catch (error: any) {
+        lastError = error;
+        const status = error.response?.status;
+        const message = error.response?.data?.message || error.message;
+
+        log.warn('ToolSyncService', `⚠️  Attempt ${attempt} failed`, {
+          orgId,
+          status,
+          message,
+          attempt,
+          maxRetries
+        });
+
+        // Don't retry on 4xx errors (except 429 for rate limit)
+        if (status && status >= 400 && status < 500 && status !== 429) {
+          throw new Error(`Vapi API error (${status}): ${message}`);
+        }
+
+        // If this was the last attempt, throw
+        if (attempt === maxRetries) {
+          throw new Error(
+            `Failed to register tool with Vapi after ${maxRetries} attempts: ${message}`
+          );
+        }
+
+        // Exponential backoff: 2^attempt * 1000ms (2s, 4s, 8s)
+        const delayMs = Math.pow(2, attempt) * 1000;
+        log.info('ToolSyncService', `⏳ Retrying in ${delayMs}ms...`, {
+          orgId,
+          nextAttempt: attempt + 1
+        });
+
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    // This should never be reached, but just in case
+    throw lastError || new Error('Unknown error registering tool with Vapi');
+  }
+
+  /**
+   * Link tools to assistant via Vapi API using modern toolIds pattern
+   *
+   * Modern Vapi API (v3.0+) uses model.toolIds instead of embedding tools directly.
+   * This updates the assistant to link the registered tools.
    */
   private static async linkToolsToAssistant(
     vapi: VapiClient,
     assistantId: string,
     toolIds: string[]
   ): Promise<void> {
+    if (!toolIds || toolIds.length === 0) {
+      log.warn('ToolSyncService', 'No tool IDs provided for linking', {
+        assistantId
+      });
+      return;
+    }
+
     try {
-      // For modern Vapi API, tools are linked via model.functions
-      // We'll attempt to link, but if it fails, just log it
-      // The tool is still registered and can be manually linked
-      log.info('ToolSyncService', 'Tools registered with Vapi', {
+      log.info('ToolSyncService', '🔗 Linking tools to assistant', {
         assistantId,
-        toolIds,
-        note: 'Manual linking in Vapi Dashboard may be required'
+        toolCount: toolIds.length,
+        toolIds: toolIds.slice(0, 3)  // Log first 3 for brevity
+      });
+
+      // Call Vapi API to update assistant with toolIds
+      const updatePayload = {
+        model: {
+          toolIds: toolIds
+        }
+      };
+
+      // Use the updateAssistant method which handles retries and errors
+      await vapi.updateAssistant(assistantId, updatePayload);
+
+      log.info('ToolSyncService', '✅ Tools linked to assistant successfully', {
+        assistantId,
+        toolCount: toolIds.length
       });
     } catch (error: any) {
-      log.error('ToolSyncService', 'Failed to link tools to assistant', {
+      log.error('ToolSyncService', '❌ Failed to link tools to assistant', {
+        assistantId,
+        toolCount: toolIds.length,
         error: error.message,
-        note: 'Tools are registered but may need manual linking'
+        note: 'Tools are registered with Vapi but may need manual linking in dashboard'
       });
+
+      // Don't throw - tools are still registered, just not linked
+      // User can manually link in Vapi dashboard or next save attempt may succeed
     }
   }
 

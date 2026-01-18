@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import twilio from 'twilio';
 import { supabase } from '../services/supabase-client';
 import { VapiClient } from '../services/vapi-client';
+import { ToolSyncService } from '../services/tool-sync-service';
 import { storeApiKey, getApiKey } from '../services/secrets-manager';
 import { buildOutboundSystemPrompt, getDefaultPromptConfig, buildCallContextBlock, buildTierSpecificPrompt } from '../prompts/outbound-agent-template';
 import { CallOutcome, CallStatus, isActiveCall } from '../types/call-outcome';
@@ -606,19 +607,14 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
   // NOTE: Vapi expects assistant payload shape with model/voice/transcriber.
   // Using non-standard keys like systemPrompt/voiceId/serverUrl can cause 400 Bad Request.
-  // CRITICAL: Custom server tools MUST be embedded at creation time (PATCH doesn't support them)
-  const vapiClientForTools = new VapiClient(vapiApiKey);
-  const appointmentTools = vapiClientForTools.getAppointmentBookingTools(
-    process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || 'http://localhost:3001'
-  );
-
+  // MODERN APPROACH: Tools are registered separately by ToolSyncService, not embedded here
   const assistantCreatePayload = {
     name: agent.name || 'CallWaiting AI Outbound',
     model: {
       provider: VAPI_DEFAULTS.MODEL_PROVIDER,
       model: VAPI_DEFAULTS.MODEL_NAME,
       messages: [{ role: 'system', content: resolvedSystemPrompt }],
-      // CRITICAL: Ensure toolIds is an empty array if no tools, to prevent legacy auto-population if that's a thing
+      // toolIds will be populated by ToolSyncService after creation
       toolIds: []
     },
     voice: {
@@ -633,10 +629,8 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     firstMessage: resolvedFirstMessage,
     maxDurationSeconds: resolvedMaxDurationSeconds,
     serverUrl: webhookUrl,
-    serverMessages: ['function-call', 'hang', 'status-update', 'end-of-call-report', 'transcript'],
-    // CRITICAL FIX: Include appointment booking tools at creation time
-    // Custom server tools cannot be added via PATCH, only during initial creation
-    tools: appointmentTools
+    serverMessages: ['function-call', 'hang', 'status-update', 'end-of-call-report', 'transcript']
+    // NOTE: Tools will be synced by ToolSyncService (removed from here to use modern Vapi API pattern)
   };
 
   // 3. Initialize Vapi client with error handling
@@ -766,6 +760,52 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
       agentId,
       assistantId: assistant.id
     });
+
+    // PHASE 4: Fire-and-forget tool synchronization
+    // This ensures tools are registered without blocking the response
+    (async () => {
+      try {
+        logger.info('Starting async tool sync for founder console agent', {
+          agentId,
+          assistantId: assistant.id
+        });
+
+        // Get org_id for tool sync (query from agents table)
+        const { data: agentData, error: agentFetchError } = await supabase
+          .from('agents')
+          .select('org_id')
+          .eq('id', agentId)
+          .maybeSingle();
+
+        if (agentFetchError || !agentData?.org_id) {
+          logger.warn('Could not fetch org_id for tool sync', {
+            agentId,
+            error: agentFetchError?.message
+          });
+          return;
+        }
+
+        await ToolSyncService.syncAllToolsForAssistant({
+          orgId: agentData.org_id,
+          assistantId: assistant.id,
+          backendUrl: process.env.BACKEND_URL,
+          skipIfExists: false  // Always sync to pick up definition changes
+        });
+
+        logger.info('Async tool sync completed for founder console agent', {
+          agentId,
+          assistantId: assistant.id
+        });
+      } catch (syncErr: any) {
+        logger.error('Async tool sync failed for founder console agent (non-blocking)', {
+          agentId,
+          assistantId: assistant.id,
+          error: syncErr.message
+        });
+        // Error is logged but doesn't fail the agent save operation
+      }
+    })();
+
     return assistant.id;
   }
 

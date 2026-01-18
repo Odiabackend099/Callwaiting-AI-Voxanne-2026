@@ -462,7 +462,7 @@ export class VapiClient {
         name: 'bookClinicAppointment',
         description: 'Books a clinic appointment on the patient\'s preferred date and time. Creates a booking record in the database and syncs the event to Google Calendar. Use this tool to finalize the appointment booking.',
         server: {
-          url: `${url}/api/vapi-tools/tools/bookClinicAppointment`,
+          url: `${url}/api/vapi/tools/bookClinicAppointment`,
           method: 'POST'
         },
         messages: {
