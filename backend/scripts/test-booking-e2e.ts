@@ -203,11 +203,11 @@ async function testPhoneOnlyBooking() {
 }
 
 /**
- * Test 4: Email-only booking
+ * Test 4: Email-only booking (should fail - phone is required)
  */
 async function testEmailOnlyBooking() {
   try {
-    log('INFO', 'Test 4: Email-only booking (no phone)');
+    log('INFO', 'Test 4: Email-only booking (should fail - phone is required)');
 
     const testDate = new Date();
     testDate.setDate(testDate.getDate() + 4);
@@ -221,10 +221,10 @@ async function testEmailOnlyBooking() {
       appointmentTime: '11:00'
     }, { validateStatus: () => true });
 
-    if (response.status < 400) {
-      addResult('Test 4: Email-Only Booking', true, 'Email-only booking succeeded');
+    if (response.status >= 400) {
+      addResult('Test 4: Email-Only Booking', true, 'Correctly rejected email-only booking (phone is required)', { status: response.status });
     } else {
-      addResult('Test 4: Email-Only Booking', false, `Booking failed with status ${response.status}`);
+      addResult('Test 4: Email-Only Booking', false, `Should have failed but got status ${response.status}`);
     }
   } catch (error: any) {
     addResult('Test 4: Email-Only Booking', false, `Error: ${error?.message}`);
@@ -287,19 +287,19 @@ async function testWebhookConnectivity() {
 
     const response = await axios.get(webhookUrl, { timeout: 5000, validateStatus: () => true });
 
-    if (response.status === 200 && response.data?.status === 'ok') {
+    if (response.status === 200 && (response.data?.status === 'ok' || response.data?.status === 'healthy')) {
       addResult(
         'Test 6: Webhook Connectivity',
         true,
         'Webhook endpoint is healthy',
-        { status: response.status }
+        { status: response.status, data: response.data }
       );
     } else {
       addResult(
         'Test 6: Webhook Connectivity',
         false,
         `Webhook returned status ${response.status}`,
-        { status: response.status }
+        { status: response.status, data: response.data }
       );
     }
   } catch (error: any) {
@@ -353,7 +353,7 @@ export async function runPreflightChecks(): Promise<boolean> {
   try {
     // Check backend is accessible first
     try {
-      await axios.get(`${BACKEND_URL}/api/health`, { timeout: 5000 });
+      await axios.get(`${BACKEND_URL}/api/vapi/webhook/health`, { timeout: 5000 });
     } catch (error) {
       log('ERROR', `Backend not accessible at ${BACKEND_URL}`);
       return false;

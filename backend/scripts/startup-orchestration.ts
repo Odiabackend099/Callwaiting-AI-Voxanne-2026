@@ -338,7 +338,7 @@ async function runPreflightChecks(ngrokUrl: string): Promise<boolean> {
 
     // Check 2: Backend health
     try {
-      const backendHealth = await axios.get('http://localhost:3001/api/health', { timeout: 5000 });
+      const backendHealth = await axios.get('http://localhost:3001/api/vapi/webhook/health', { timeout: 5000 });
       if (backendHealth.status === 200) {
         log('SUCCESS', '✓ Backend health check passing');
       }
