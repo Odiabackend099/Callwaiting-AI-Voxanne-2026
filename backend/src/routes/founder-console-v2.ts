@@ -584,7 +584,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
   // 2. Build config from DB state (using constants)
   // Set server.url to webhook endpoint for programmatic event delivery
-  const webhookUrl = `${process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000'}/api/webhooks/vapi`;
+  const webhookUrl = `${process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || process.env.BASE_URL || 'http://localhost:3001'}/api/vapi/webhook`;
 
   const resolvedSystemPrompt = agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig());
   const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
