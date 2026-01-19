@@ -81,6 +81,8 @@ import { authRouter } from './routes/health';
 import healthIntegrationsRouter from './routes/health-integrations'; // default export
 import orgsRouter from './routes/orgs'; // default export
 import oauthTestRouter from './routes/oauth-test';
+import internalApiRoutes from './routes/internal-api-routes'; // default export
+import integrationsApiRouter from './routes/integrations-api'; // default export
 
 // Initialize logger
 initLogger();
@@ -226,6 +228,8 @@ app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/orgs', orgsRouter); // Organization validation routes
+app.use('/api/internal', internalApiRoutes); // Internal API routes (webhook configuration, etc.)
+app.use('/api/integrations', integrationsApiRouter); // Fetch decrypted credentials
 app.use('/api/calendar', calendarOAuthRouter);
 app.use('/api/vapi', vapiCalendarToolsRouter);
 app.use('/api/google-oauth', googleOAuthRouter);

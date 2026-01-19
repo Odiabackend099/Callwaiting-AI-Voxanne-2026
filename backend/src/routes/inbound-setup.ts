@@ -9,6 +9,7 @@ import { supabase } from '../services/supabase-client';
 import { VapiClient } from '../services/vapi-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import twilio from 'twilio';
+import { EncryptionService } from '../services/encryption';
 
 const router = Router();
 
@@ -276,21 +277,30 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
 
     // Store Twilio credentials in integrations table
     console.log('[InboundSetup] Storing Twilio credentials', { requestId, orgId });
+
+    // Encrypt credentials before storage
+    const credentialsToEncrypt = {
+      accountSid: twilioAccountSid,
+      authToken: twilioAuthToken,
+      phoneNumber: twilioPhoneNumber,
+      vapiPhoneNumberId,
+      vapiAssistantId,
+      vapiApiKeyLast4Used: currentVapiKeyLast4
+    };
+
+    const encryptedConfig = EncryptionService.encryptObject(credentialsToEncrypt);
+
     const { error: integrationError } = await supabase
       .from('integrations')
       .upsert(
         {
           org_id: orgId,
-          provider: 'twilio_inbound',
-          config: {
-            accountSid: twilioAccountSid,
-            authToken: twilioAuthToken,
+          provider: 'TWILIO', // Unified provider name
+          encrypted_config: encryptedConfig,
+          config: { // Keep non-sensitive metadata in config if needed, or just status
             phoneNumber: twilioPhoneNumber,
-            vapiPhoneNumberId,
-            vapiAssistantId,
             status: 'active',
             activatedAt: new Date().toISOString(),
-            vapiApiKeyLast4Used: currentVapiKeyLast4,
             last_error: null,
             last_attempted_at: new Date().toISOString()
           },

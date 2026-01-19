@@ -151,14 +151,14 @@ export class BookingConfirmationService {
 
       log.info('[BookingConfirmation] SMS confirmation sent', {
         appointmentId,
-        messageId,
+        messageId: result.message_sid,
         patientPhone,
       });
 
       return {
         success: true,
         messageSent: true,
-        messageId,
+        messageId: result.message_sid,
         content: messageContent,
       };
     } catch (error) {

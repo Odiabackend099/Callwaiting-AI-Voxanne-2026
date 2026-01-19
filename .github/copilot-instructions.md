@@ -1,8 +1,10 @@
-# Copilot Instructions for CallWaiting AI - Voxanne
+# Copilot Instructions for Voxanne AI - 2026
 
 ## Quick Context
 
-**CallWaiting AI** is an AI voice receptionist platform for medical clinics. It uses Next.js (frontend), Express (backend), Supabase (database), Vapi (voice agent), and Twilio (SMS). The architecture emphasizes **multi-tenant isolation**, **resilience patterns** (idempotency, retry, circuit breaker), and **real-time synchronization**.
+**Voxanne AI** is a multi-tenant AI Voice-as-a-Service (VaaS) platform for medical clinics. Built with Next.js (frontend), Express (backend), Supabase (DB + RLS), Vapi (voice AI), and Twilio (SMS). 
+
+**Critical Architecture Rule**: The backend is the SOLE Vapi provider. ONE `VAPI_PRIVATE_KEY` is shared across ALL organizations. Tools are registered globally once, then linked to each org's assistants via the `org_tools` table.
 
 ---
 
@@ -84,17 +86,57 @@ Located in `backend/src/utils/error-recovery.ts`:
 
 Used throughout booking flow to prevent one failing service from blocking others.
 
-### 3. **Real-Time Synchronization**
-`backend/src/services/realtime-sync.ts` + WebSocket server (`server.ts` line ~600):
-- After booking created, emits `RealtimeSyncEvent`
-- All connected clients receive update via WebSocket
-- UI updates without polling or manual refresh
-- Handles client subscriptions per org_id (isolation)
+### 3. **Vapi Tool Registration Automation** ✅ (ALL 7 PHASES DEPLOYED)
 
-**Frontend Integration** (`src/hooks/mutations/useSyncMutation.ts` line ~434):
-- `useOfflineQueueSync()` hook monitors network status
-- Auto-syncs offline queue when connection restored
-- Realtime events trigger React state updates
+**The "Invisible Hand"**: Automatically registers and links tools for new assistants without manual intervention.
+
+**Critical Pattern**: Backend holds `VAPI_PRIVATE_KEY`. Tools registered globally ONCE, shared across all orgs.
+
+**Main Service** (`backend/src/services/tool-sync-service.ts`):
+- `syncAllToolsForAssistant(options)` - Main entry point (async, fire-and-forget)
+- `syncSingleTool(orgId, toolDef, backendUrl)` - Register tool with Vapi + save to `org_tools` table
+- `registerToolWithRetry(vapi, toolDef, orgId)` - Exponential backoff (2s, 4s, 8s) for Vapi API failures
+- `linkToolsToAssistant(vapi, assistantId, toolIds)` - Links tools via `model.toolIds` (modern Vapi pattern)
+- `getToolDefinitionHash(toolDef)` - SHA-256 hashing for detecting definition changes (Phase 7)
+
+**Database**: `org_tools` table tracks which orgs use which global tools:
+- `org_id`, `tool_name`, `vapi_tool_id`, `definition_hash`, timestamps
+- Unique constraint: `(org_id, tool_name)` - prevents duplicates
+
+**Trigger Point**: `/api/founders/save-agent` or assistant creation → async call to `ToolSyncService.syncAllToolsForAssistant()`
+
+**What Happens**:
+1. Get system tools blueprint (hardcoded `bookClinicAppointment` for now)
+2. Check if already registered globally in `org_tools` table
+3. If not: `POST /tool` to Vapi API, capture returned `toolId`
+4. Save reference to `org_tools` with hash
+5. Link tool to assistant via `PATCH /assistant` with `model.toolIds`
+6. Return immediately (don't block agent save response)
+
+**Why This Matters**: No more manual tool setup per org. Deploy once, works for all.
+
+---
+
+### 3.5. **Multi-Tenant Isolation (Defense-in-Depth)**
+
+**Three Layers of Protection**:
+
+1. **JWT Layer**: `backend/src/middleware/auth.ts`
+   - Extracts `org_id` from JWT `app_metadata` (server-set, immutable)
+   - Caches decoded JWTs (5min TTL) for performance
+   - Rejects requests without valid JWT
+
+2. **Application Layer**: `backend/src/middleware/tenant-resolver.ts`
+   - Validates URL `:orgId` parameter matches JWT `org_id`
+   - Returns 403 if mismatch
+   - Example: `GET /api/org/:orgId/bookings` → reject if `:orgId` ≠ JWT org_id
+
+3. **Database Layer**: RLS policies on all multi-tenant tables
+   - Supabase PostgreSQL Row-Level Security enforced at DB level
+   - Filters all queries: `WHERE org_id = (SELECT auth.jwt() -> 'app_metadata' ->> 'org_id')`
+   - Even service role bypasses require explicit org_id parameter
+
+**Critical Test**: Run `npm run test:integration -- multi-tenant-isolation.test.ts` to verify no cross-org data leakage.
 
 ---
 
@@ -299,11 +341,33 @@ describe('Idempotency Middleware', () => {
 ## Common Tasks
 
 ### Adding a New Vapi Agent Tool
-1. Create service in `backend/src/services/my-new-tool-service.ts`
-2. Define Zod schema in `backend/src/schemas/my-new-tool.ts`
-3. Add route in `backend/src/routes/vapi-tools-routes.ts` (POST `/api/vapi/tools/my-tool`)
-4. Register tool with Vapi: `backend/src/routes/vapi-setup.ts` (add to tool list)
-5. Test: `npm run test:integration -- my-new-tool.test.ts`
+1. Create tool definition in `backend/src/config/` (e.g., `my-new-tool.ts`)
+2. Update `ToolSyncService.getSystemToolsBlueprint()` to include new tool
+3. Add route handler in `backend/src/routes/vapi-tools-routes.ts` (POST `/api/vapi/tools/my-tool`)
+4. Create service in `backend/src/services/my-tool-service.ts` with business logic
+5. Tools auto-sync on next agent save (no manual Vapi registration needed)
+6. Test: `npm run test:integration -- tool-sync-service.test.ts`
+
+**Key Pattern**: Don't register tools per-org. Add to blueprint → backend auto-registers globally → links to all assistants.
+
+### Debugging Vapi Tool Sync Issues
+
+**Tool not registering?**
+- Check `VAPI_PRIVATE_KEY` in `.env` (backend must have it)
+- Check logs: `grep -i "ToolSyncService" backend logs`
+- Verify `org_tools` table exists: `SELECT * FROM org_tools LIMIT 5;` in Supabase SQL editor
+- Check Vapi dashboard: https://dashboard.vapi.ai/tools - tools should appear there
+
+**Tool link failed to assistant?**
+- Click "Save Agent" again (sync is idempotent, safe to retry)
+- Check error in backend logs: `Failed to link tools`
+- Fallback: Manually add `toolId` to assistant in Vapi dashboard
+
+**Tool definition changed?**
+- Update blueprint in `backend/src/config/`
+- New hash will be calculated on next sync
+- If hashes differ, tool will be re-registered automatically
+- Old tools remain registered, no cleanup needed
 
 ### Adding a Dashboard Page
 1. Create component in `src/components/dashboard/MyDashboard.tsx` (Client Component with `"use client"`)
@@ -333,28 +397,51 @@ describe('Idempotency Middleware', () => {
 |------|---------|-------------|
 | `backend/src/middleware/auth.ts` | JWT validation + caching | Trust nothing, cache everything |
 | `backend/src/middleware/idempotency.ts` | Deduplication | Same request = same response |
+| `backend/src/middleware/tenant-resolver.ts` | Org validation | URL :orgId must match JWT org_id |
+| `backend/src/services/tool-sync-service.ts` | Tool registration automation | Global tools, org linking |
 | `backend/src/services/atomic-booking-service.ts` | Booking logic | All-or-nothing atomicity |
+| `backend/src/services/vapi-client.ts` | Vapi integration | Master Vapi API key usage |
+| `backend/src/services/vapi-assistant-manager.ts` | Assistant lifecycle | Create/update assistants |
 | `src/hooks/mutations/useSyncMutation.ts` | Frontend mutations | Retry + offline + realtime |
 | `backend/src/services/realtime-sync.ts` | WebSocket events | All clients see changes |
 | `backend/src/services/encryption.ts` | Credential encryption | Secure multi-tenant secrets |
-| `backend/src/server.ts` | Server setup | All routes + middleware |
 | `src/app/(auth)/` | Auth flows | Login, logout, signup |
 | `src/app/dashboard/` | Protected pages | Org-specific UI |
-| `vitest.config.mjs` | Frontend test config | Happy-DOM, no jsdom |
-| `backend/vitest.config.mjs` | Backend test config | Mock-first, fixtures |
 
 ---
 
 ## Gotchas & Common Pitfalls
 
-1. **JWT Token Expiry**: Default 24h TTL. If testing long-running flows, mock time or refresh manually.
-2. **RLS Policies**: Query fails silently if missing org_id in WHERE clause. Always include in Supabase queries.
-3. **Idempotency Key Scope**: Must be unique per operation type. Don't reuse across different endpoints.
-4. **Timezone Handling**: Bookings use UTC in database. Frontend must convert to user's local timezone.
-5. **WebSocket Reconnect**: Clients auto-reconnect after 30s. No manual intervention needed.
-6. **Offline Queue Persistence**: Uses localStorage. Won't survive app uninstall. OK for web, consider upgrade for mobile PWA.
-7. **Vapi Tool Registration**: Changes require redeploy to Vapi (via setup endpoint). Test locally with mock first.
-8. **SMS Rate Limiting**: Twilio has per-account limits. Circuit breaker opens if threshold hit.
+### Critical Vapi Architecture Mistakes
+
+1. **Per-Org Vapi Credentials** ❌
+   - **Wrong**: Trying to get Vapi credentials from org_credentials table
+   - **Right**: Organizations have ZERO Vapi API keys. Use backend's `VAPI_PRIVATE_KEY` only
+   - **Pattern**: `const vapiKey = process.env.VAPI_PRIVATE_KEY;` (backend only)
+
+2. **Registering Tools Per Organization** ❌
+   - **Wrong**: Calling `registerTool()` once per org (creates duplicates in Vapi)
+   - **Right**: Register ONCE globally, save reference in `org_tools` table, link many times
+   - **Pattern**: Check if tool exists globally before registering
+
+3. **Blocking Agent Save on Tool Sync** ❌
+   - **Wrong**: `const result = await ToolSyncService.sync(); return result;` (user waits 2-5s)
+   - **Right**: Fire-and-forget async pattern - return immediately, sync in background
+   - **Pattern**: `(async () => { await sync(); })();` // Don't await
+
+4. **Tool Definition Changes Not Detected** ❌
+   - **Wrong**: Updating tool blueprint but not tracking changes
+   - **Right**: Each tool has SHA-256 hash in `definition_hash` column (Phase 7)
+   - **Pattern**: Hash changes trigger automatic re-registration with Vapi
+
+### Other Critical Pitfalls
+
+5. **JWT Token Expiry**: Default 24h TTL. If testing long-running flows, mock time or refresh manually.
+6. **RLS Policies**: Query fails silently if missing org_id in WHERE clause. Always include in Supabase queries.
+7. **Idempotency Key Scope**: Must be unique per operation type. Don't reuse across different endpoints.
+8. **Timezone Handling**: Bookings use UTC in database. Frontend must convert to user's local timezone.
+9. **WebSocket Reconnect**: Clients auto-reconnect after 30s. No manual intervention needed.
+10. **SMS Rate Limiting**: Twilio has per-account limits. Circuit breaker opens if threshold hit.
 
 ---
 
@@ -380,6 +467,7 @@ Monitor via:
 
 ---
 
-**Last Updated**: January 17, 2026  
+**Last Updated**: January 19, 2026  
 **Maintained By**: Architecture Team  
-**Next Review**: When major patterns change (new resilience pattern, new service category, etc.)
+**Status**: Vapi Tool Registration Automation - All 7 Phases Complete ✅  
+**Next Review**: When adding new tools or if Vapi API patterns change

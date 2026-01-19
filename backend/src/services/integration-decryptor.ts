@@ -127,7 +127,7 @@ export class IntegrationDecryptor {
   static async getTwilioCredentials(orgId: string): Promise<TwilioCredentials> {
     return this.getCredentials<TwilioCredentials>(
       orgId,
-      'twilio',
+      'TWILIO',
       (decrypted) => {
         // Handle multiple possible field names
         const accountSid =
@@ -165,7 +165,8 @@ export class IntegrationDecryptor {
    * @throws Error if credentials not found or token refresh fails
    */
   static async getGoogleCalendarCredentials(
-    orgId: string
+    orgId: string,
+    allowExpired: boolean = false
   ): Promise<GoogleCalendarCredentials> {
     const credentials = await this.getCredentials<GoogleCalendarCredentials>(
       orgId,
@@ -185,7 +186,7 @@ export class IntegrationDecryptor {
 
     // Check if token is expired
     const expiresAt = new Date(credentials.expiresAt);
-    if (expiresAt < new Date()) {
+    if (expiresAt < new Date() && !allowExpired) {
       log.info('IntegrationDecryptor', 'Google token expired, needs refresh', {
         orgId,
         expiresAt: credentials.expiresAt,
@@ -423,16 +424,18 @@ export class IntegrationDecryptor {
       });
 
       const { data, error } = await supabase
-        .from('org_credentials')
+        .from('integrations')
         .upsert(
           {
             org_id: orgId,
             provider,
             encrypted_config: encryptedConfig,
-            is_active: true,
-            last_verified_at: new Date().toISOString(),
+            config: {
+              status: 'active',
+              last_verified_at: new Date().toISOString(),
+              metadata: Object.keys(metadata).length > 0 ? metadata : null
+            },
             updated_at: new Date().toISOString(),
-            metadata: Object.keys(metadata).length > 0 ? metadata : null,
           },
           { onConflict: 'org_id,provider' }
         )
@@ -458,9 +461,9 @@ export class IntegrationDecryptor {
             });
 
             await new Promise(resolve => setTimeout(resolve, delayMs));
-            
+
             const { data: retryData, error: retryError } = await supabase
-              .from('org_credentials')
+              .from('integrations')
               .upsert(
                 {
                   org_id: orgId,
@@ -600,7 +603,7 @@ export class IntegrationDecryptor {
 
       // Update verification status in database
       const { error } = await supabase
-        .from('org_credentials')
+        .from('integrations')
         .update({
           verification_error: isValid ? null : 'Verification failed',
           last_verified_at: new Date().toISOString(),
@@ -641,7 +644,7 @@ export class IntegrationDecryptor {
 
       // Update database with error
       await supabase
-        .from('org_credentials')
+        .from('integrations')
         .update({
           verification_error: error?.message || 'Verification error',
           last_verified_at: new Date().toISOString(),
@@ -726,13 +729,12 @@ export class IntegrationDecryptor {
     }
 
     try {
-      // Query org_credentials table
+      // Query integrations table
       const { data, error } = await supabase
-        .from('org_credentials')
-        .select('encrypted_config, is_active, last_verified_at')
+        .from('integrations')
+        .select('encrypted_config, config')
         .eq('org_id', orgId)
         .eq('provider', provider)
-        .eq('is_active', true)
         .maybeSingle();
 
       if (error) {

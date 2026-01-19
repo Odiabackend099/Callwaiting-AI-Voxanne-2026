@@ -1,6 +1,6 @@
 
 import { sendSmsTwilio, TwilioResult } from './twilio-service';
-import { IntegrationSettingsService } from './integration-settings';
+import { IntegrationDecryptor } from './integration-decryptor';
 import { supabase } from './supabase-client';
 import { log } from './logger';
 
@@ -25,7 +25,7 @@ export class SmsComplianceService {
 
             // 2. Get Twilio Creds
             // This will throw if not configured, which is correct
-            const creds = await IntegrationSettingsService.getTwilioCredentials(tenantId);
+            const creds = await IntegrationDecryptor.getTwilioCredentials(tenantId);
 
             // 3. Construct 10DLC compliant message
             // Ensure specific opt-out language is present

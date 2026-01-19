@@ -61,5 +61,6 @@ export function createCacheFreeSuperbaseClient() {
   });
 }
 
+export const supabaseService = supabase;
 export default supabase;
 

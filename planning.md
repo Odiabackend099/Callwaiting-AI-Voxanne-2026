@@ -1,53 +1,229 @@
-# 📜 Planning Document: Vapi Tool Registration Automation
+# � Implementation Plan: Vapi Configuration Verification & Fix
 
-**Feature**: Automate Vapi tool registration and fix existing integration issues
-**Date**: 2026-01-18
-**Status**: READY FOR EXECUTION
-
----
-
-## What Problem This Solves
-
-**Current Issues:**
-1. Tool calls from Vapi AI assistants are not reaching the backend
-2. Tools are embedded incorrectly (legacy API pattern)
-3. No automatic tool registration in database blueprint
-4. Existing users have broken tool integrations
-5. Response formats are inconsistent
-
-**Solution:**
-Implement automatic tool registration using modern Vapi API patterns when users click "Save Agent", ensuring both new and existing users have working tool integrations.
+**Status**: ✅ IN PROGRESS  
+**Date**: January 18, 2026  
+**Owner**: AI Assistant  
+**Duration**: ~30 minutes total
 
 ---
 
-## Inputs, Outputs, and Constraints
+## 📋 Overview
 
-### Inputs
-- User clicks "Save Agent" button in Inbound or Outbound agent configuration
-- Tool definitions from `unified-booking-tool.ts`
-- Vapi credentials from encrypted `org_credentials` table
-- Organization ID and Assistant ID
+The live booking test exposed 3 critical Vapi configuration issues:
+1. **Server URLs pointing to localhost** (unreachable from Vapi cloud)
+2. **patientPhone not in required parameters** (Sarah never asks for it)
+3. **Incorrect endpoint path** in tool configuration
 
-### Outputs
-- Tools registered with Vapi (returns `tool_id`)
-- Tool IDs saved in `org_tools` table (blueprint registry)
-- Assistant linked to tools via `model.toolIds` array
-- Tool calls successfully reach backend endpoints
-- Consistent response format for all tool endpoints
-
-### Constraints
-- Must not break existing users during migration
-- Tool sync should be non-blocking (async)
-- Must be idempotent (safe to run multiple times)
-- Must support both old and new Vapi response formats during transition
+This plan verifies the fixes and validates end-to-end booking flow.
 
 ---
 
-## Dependencies and Assumptions
+## 🎯 Implementation Phases
 
-### Dependencies
-- Vapi API (vapi.ai REST endpoints)
-- Supabase database (PostgreSQL with RLS)
+### Phase 1: Verify Assistant & Tool Configurations
+**Objective**: Confirm Sarah and Test Assistant are correctly configured in Vapi.
+
+**Tasks**:
+- [ ] Query Vapi API for "CallWaiting AI Inbound" (Sarah) assistant
+  - Verify `serverUrl` = `https://sobriquetical-zofia-abysmally.ngrok-free.dev/api/vapi/webhook`
+  - Confirm tool ID `c8617e87-be85-45b9-ba53-1fed059cb5e9` is attached
+- [ ] Query booking tool from Vapi API
+  - Verify `server.url` = `https://sobriquetical-zofia-abysmally.ngrok-free.dev/api/vapi/tools/bookClinicAppointment`
+  - Confirm `required` = `["patientName", "patientPhone", "appointmentDate", "appointmentTime"]`
+  - Confirm properties include `patientPhone` with description mentioning REQUIRED
+- [ ] Query Test Assistant
+  - Verify inline booking tool has correct required parameters
+  - Confirm server URL is ngrok, not localhost
+
+**Acceptance Criteria**:
+- [ ] Sarah assistant serverUrl = ngrok URL ✓
+- [ ] Booking tool server URL = ngrok URL ✓
+- [ ] patientPhone is in required array ✓
+- [ ] Tool parameters match backend schema ✓
+
+**Evidence**: API responses showing correct configuration
+
+---
+
+### Phase 2: Test Endpoint Connectivity
+**Objective**: Verify ngrok tunnel and backend endpoint are working.
+
+**Tasks**:
+- [ ] Confirm ngrok tunnel is active
+  - Check `curl http://localhost:4040/api/tunnels` returns active tunnel
+  - Extract ngrok public URL
+- [ ] Test backend bookClinicAppointment endpoint directly
+  - Make POST request with correct payload format
+  - Use correct org_id from database (46cf2995-2bee-44e3-838b-24151486fe4e)
+  - Include patientName, patientPhone, appointmentDate, appointmentTime
+  - Verify response contains `success: true` and `appointmentId`
+
+**Acceptance Criteria**:
+- [ ] ngrok tunnel is active and forwarding ✓
+- [ ] Backend endpoint responds with 200 OK ✓
+- [ ] Appointment record created with correct org_id ✓
+- [ ] Response includes appointmentId and scheduledAt ✓
+
+**Evidence**: Successful booking response with appointment ID
+
+---
+
+### Phase 3: Live Call Verification
+**Objective**: Execute live Vapi call and verify complete booking flow.
+
+**Tasks**:
+- [ ] User performs live test call with Sarah assistant
+  - Say: "I'd like to book an appointment"
+  - Provide: name, email, date, time
+  - **IMPORTANT**: Sarah MUST ask for phone number
+  - Verify: Sarah confirms booking without errors
+- [ ] Check database for appointment record
+  - Query appointments for test contact
+  - Verify all fields populated correctly
+  - Check contact record created/updated
+- [ ] Monitor backend logs
+  - Confirm webhook received Vapi tool call
+  - Verify no errors in booking logic
+  - Check SMS compliance checks passed
+
+**Acceptance Criteria**:
+- [ ] Sarah asks for phone number during call ✓
+- [ ] Booking completes without "technical difficulty" error ✓
+- [ ] Appointment appears in database ✓
+- [ ] Contact record contains phone number ✓
+- [ ] Backend logs show successful booking ✓
+
+**Evidence**: Appointment in database + backend logs + no errors in call
+
+---
+
+## 🔧 Technical Requirements
+
+### API Endpoints Used
+```
+GET  https://api.vapi.ai/assistant/{id}           # Query assistant config
+PATCH https://api.vapi.ai/assistant/{id}          # Update assistant (already done)
+GET  https://api.vapi.ai/tool/{id}                # Query tool config
+PATCH https://api.vapi.ai/tool/{id}               # Update tool (already done)
+
+POST https://[NGROK_URL]/api/vapi/tools/bookClinicAppointment  # Test endpoint
+GET  http://localhost:4040/api/tunnels            # Check ngrok tunnel
+```
+
+### Database Query
+```sql
+SELECT * FROM appointments 
+WHERE created_at > NOW() - INTERVAL '10 minutes'
+ORDER BY created_at DESC
+LIMIT 5;
+
+SELECT * FROM contacts
+WHERE phone = '+1[test_phone]'
+LIMIT 1;
+```
+
+### Payload Format (Vapi to Backend)
+```json
+{
+  "toolCallId": "unique-id",
+  "tool": {
+    "arguments": {
+      "patientName": "string",
+      "patientPhone": "+1234567890",
+      "patientEmail": "email@example.com",
+      "appointmentDate": "YYYY-MM-DD",
+      "appointmentTime": "HH:MM"
+    }
+  },
+  "customer": {
+    "metadata": {
+      "org_id": "46cf2995-2bee-44e3-838b-24151486fe4e"
+    }
+  }
+}
+```
+
+### Configuration Status (Pre-Fix vs Post-Fix)
+
+| Component | Before | After | Status |
+|-----------|--------|-------|--------|
+| Sarah serverUrl | ❌ localhost | ✅ ngrok | Fixed |
+| Tool server URL | ❌ /api/vapi-tools/ | ✅ /api/vapi/tools/ | Fixed |
+| Required params | ❌ No phone | ✅ Has phone | Fixed |
+| System prompt | ❌ No phone mention | ✅ Phone required | Fixed |
+
+---
+
+## 📊 Testing Criteria
+
+### Unit/Integration Tests
+- [x] Booking endpoint accepts correct payload ✓ (verified Jan 18)
+- [x] Endpoint returns success with appointmentId ✓ (verified Jan 18)
+- [x] Database record created with org_id isolation ✓ (verified Jan 18)
+
+### E2E/Live Tests (Pending)
+- [ ] Sarah assistant requests phone number
+- [ ] Vapi can reach endpoint via ngrok (no timeout)
+- [ ] Booking completes without error
+- [ ] Appointment record visible in database
+- [ ] Contact record includes phone number
+
+### Validation Checklist
+- [ ] No "technical difficulty" error in call transcript
+- [ ] All required info collected: name, phone, email, date, time
+- [ ] Backend logs show successful execution
+- [ ] Appointment scheduledAt matches user's requested date/time
+- [ ] SMS compliance checks passed (if SMS enabled)
+
+---
+
+## 🚀 Execution Timeline
+
+| Phase | Duration | Status |
+|-------|----------|--------|
+| Phase 1: API Verification | 5 min | Ready to execute |
+| Phase 2: Endpoint Testing | 5 min | Ready to execute |
+| Phase 3: Live Call | 10 min | Pending user action |
+| **Total** | **20 min** | In Progress |
+
+---
+
+## 📝 Notes & Assumptions
+
+**Assumptions**:
+- ngrok tunnel remains active (doesn't expire mid-test)
+- org_id `46cf2995-2bee-44e3-838b-24151486fe4e` is correct and active
+- Vapi API token is valid (already authenticated in previous queries)
+- Backend is running on port 3001 and responding
+
+**Known Limitations**:
+- Google Calendar sync will fail (not configured) - this is expected, not a blocker
+- SMS won't actually send without Twilio config - this is expected
+- Phone format validation is flexible (accepts various formats)
+
+**Rollback Plan** (if needed):
+- Old config backed up in Vapi dashboard version history
+- Can revert tool/assistant to previous config if booking fails
+- No database migrations or code changes, so safe to retry
+
+---
+
+## 🎯 Success Criteria (Overall)
+
+**Project is successful when**:
+1. ✅ Phase 1 verification complete - all configs correct
+2. ✅ Phase 2 endpoint test successful - backend responds
+3. ✅ Phase 3 live call succeeds - appointment booked without error
+
+**User will see**:
+- Sarah asks for phone number
+- Booking completes with confirmation
+- Appointment appears in database
+- No errors in transcript or logs
+
+---
+
+**Next Step**: Execute Phase 1 (API Verification) to confirm configuration changes were applied successfully.
 - Existing services: VapiClient, VapiAssistantManager, ToolSyncService
 - Backend environment variable: `BACKEND_URL` for webhook URLs
 

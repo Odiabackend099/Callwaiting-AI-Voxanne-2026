@@ -342,6 +342,57 @@ assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response):
   }
 });
 
+// INTERNAL: Get organization's VAPI_ASSISTANT_ID (multi-tenant safe)
+// Used by verification tests to dynamically fetch assistant ID from database
+// No auth required for internal verification endpoint
+assistantsRouter.get('/internal/org/:orgId/assistant', async (req: Request, res: Response) => {
+  try {
+    const { orgId } = req.params;
+
+    if (!orgId) {
+      res.status(400).json({ error: 'Missing orgId' });
+      return;
+    }
+
+    // Query database for organization's agent with VAPI_ASSISTANT_ID
+    const { data: agent, error } = await supabase
+      .from('agents')
+      .select('id, name, vapi_assistant_id, role')
+      .eq('org_id', orgId)
+      .eq('role', 'inbound') // Get inbound agent (primary)
+      .single();
+
+    if (error || !agent) {
+      res.status(404).json({
+        error: 'Organization not found or no agent configured',
+        details: error?.message
+      });
+      return;
+    }
+
+    if (!agent.vapi_assistant_id) {
+      res.status(400).json({
+        error: 'Organization agent not configured with VAPI_ASSISTANT_ID',
+        agentId: agent.id,
+        agentName: agent.name
+      });
+      return;
+    }
+
+    res.json({
+      org_id: orgId,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      vapi_assistant_id: agent.vapi_assistant_id
+    });
+  } catch (error: any) {
+    console.error('[GET /assistants/internal/org/:orgId/assistant] Error:', error.message);
+    res.status(500).json({
+      error: error.message || 'Failed to fetch organization assistant'
+    });
+  }
+});
+
 // Get assistant details
 // SECURITY FIX: Added requireAuth
 assistantsRouter.get('/:assistantId', requireAuth, async (req: Request, res: Response) => {
@@ -708,6 +759,59 @@ assistantsRouter.get('/:assistantId/booking-status', requireAuth, async (req: Re
     console.error('[GET /assistants/:id/booking-status] Error:', error.message);
     res.status(500).json({
       error: error.message || 'Failed to get booking status'
+    });
+  }
+});
+
+/**
+ * GET /api/assistants/internal/org/:orgId/assistant
+ * 
+ * Query organization's agent and return VAPI_ASSISTANT_ID
+ * Used for multi-tenant verification - queries database dynamically
+ * No auth required (internal verification endpoint)
+ */
+assistantsRouter.get('/internal/org/:orgId/assistant', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orgId } = req.params;
+
+    // Query agents table for organization's inbound agent
+    const { data: agent, error } = await supabase
+      .from('agents')
+      .select('id, name, org_id, vapi_assistant_id')
+      .eq('org_id', orgId)
+      .eq('role', 'inbound')
+      .single();
+
+    if (error || !agent) {
+      res.status(404).json({
+        error: 'Organization or agent not found',
+        orgId,
+        details: error?.message
+      });
+      return;
+    }
+
+    if (!agent.vapi_assistant_id) {
+      res.status(400).json({
+        error: 'VAPI_ASSISTANT_ID not configured for this organization',
+        orgId,
+        agentId: agent.id,
+        agentName: agent.name
+      });
+      return;
+    }
+
+    res.json({
+      org_id: agent.org_id,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      vapi_assistant_id: agent.vapi_assistant_id
+    });
+  } catch (error: any) {
+    console.error('[GET /assistants/internal/org/:orgId/assistant] Error:', error.message);
+    res.status(500).json({
+      error: 'Failed to retrieve organization assistant',
+      details: error.message
     });
   }
 });

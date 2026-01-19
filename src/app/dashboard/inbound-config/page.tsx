@@ -6,53 +6,24 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Phone, Save, Loader2, Check, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
-// LeftSidebar removed (now in layout)
+import { useIntegration } from '@/hooks/useIntegration';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 export default function InboundConfigPage() {
     const { user } = useAuth();
     const router = useRouter();
-    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [uiStatus, setUiStatus] = useState<string>('unknown');
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+
+    // Fetch Twilio integration config via hook (zero fallback)
+    const { status: integrationStatus, config: twilioConfig, refetch: refetchIntegration } = useIntegration('TWILIO');
 
     const [config, setConfig] = useState({
         accountSid: '',
         authToken: '',
         phoneNumber: '',
-        inboundNumber: '', // The active number
-        vapiPhoneNumberId: '',
-        activatedAt: ''
     });
-
-    useEffect(() => {
-        fetchStatus();
-    }, [user]);
-
-    const fetchStatus = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const data = await authedBackendFetch<any>('/api/inbound/status');
-
-            setUiStatus(data?.configured ? 'active' : 'not_configured');
-            if (data?.configured) {
-                setConfig(prev => ({
-                    ...prev,
-                    inboundNumber: data.inboundNumber,
-                    vapiPhoneNumberId: data.vapiPhoneNumberId,
-                    activatedAt: data.activatedAt
-                }));
-            }
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to fetch status';
-            setError(message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleSave = async () => {
         setError(null);
@@ -86,16 +57,12 @@ export default function InboundConfigPage() {
             });
 
             setSuccess('Inbound setup successful! Your agent is now live on this number.');
-            setUiStatus('active');
-            setConfig(prev => ({
-                ...prev,
-                inboundNumber: data.inboundNumber,
-                vapiPhoneNumberId: data.vapiPhoneNumberId,
-                activatedAt: new Date().toISOString()
-            }));
-
+            
             // Clear sensitive fields
             setConfig(prev => ({ ...prev, authToken: '', accountSid: '' }));
+
+            // Refetch integration to show new active number
+            await refetchIntegration();
 
         } catch (err: any) {
             setError(err.message);
@@ -117,7 +84,7 @@ export default function InboundConfigPage() {
         }
     };
 
-    if (loading) {
+    if (integrationStatus === 'loading') {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
@@ -131,11 +98,11 @@ export default function InboundConfigPage() {
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Telephony Configuration</h1>
-                    <p className="text-gray-700 dark:text-slate-400 mt-1\">Configure your Twilio number for inbound AI handling</p>
+                    <p className="text-gray-700 dark:text-slate-400 mt-1">Configure your Twilio number for inbound AI handling</p>
                 </div>
-                <div className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${uiStatus === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'
+                <div className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${integrationStatus === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'
                     }`}>
-                    {uiStatus === 'active' ? (
+                    {integrationStatus === 'active' ? (
                         <><Check className="w-4 h-4" /> Inbound Active</>
                     ) : (
                         <><AlertCircle className="w-4 h-4" /> Not Configured</>
@@ -144,7 +111,7 @@ export default function InboundConfigPage() {
             </div>
 
             {/* Prerequisite Alert */}
-            {uiStatus !== 'active' && (
+            {integrationStatus !== 'active' && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300 flex flex-col gap-2">
                     <div className="flex items-center gap-2 font-medium">
                         <AlertCircle className="w-4 h-4" />
@@ -156,8 +123,8 @@ export default function InboundConfigPage() {
                 </div>
             )}
 
-            {/* Status Card */}
-            {uiStatus === 'active' && (
+            {/* Status Card - Only show if actively configured (no fallback, no placeholders) */}
+            {integrationStatus === 'active' && twilioConfig && (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -167,10 +134,10 @@ export default function InboundConfigPage() {
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                 <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                                {config.inboundNumber}
+                                {twilioConfig.phoneNumber}
                             </h3>
                             <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
-                                Active since {new Date(config.activatedAt).toLocaleDateString()}
+                                Active Twilio Number
                             </p>
                         </div>
                         <button

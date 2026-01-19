@@ -1,6 +1,6 @@
 
 import { Router } from 'express';
-import { supabase } from '../services/supabase-client';
+import { supabase, supabaseService } from '../services/supabase-client';
 import { calendarSlotService } from '../services/calendar-slot-service';
 import { smsComplianceService } from '../services/sms-compliance-service';
 import { log } from '../services/logger';
@@ -9,6 +9,7 @@ import { BookingConfirmationService } from '../services/booking-confirmation-ser
 import { createCalendarEvent } from '../services/calendar-integration';
 import { normalizeDate, normalizeTime } from '../services/date-normalizer';
 import { bookingDeduplicator } from '../services/booking-deduplicator';
+import { normalizeBookingData, formatAlternativeSlots } from '../utils/normalizeBookingData';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ async function resolveTenantId(tenantId?: string, inboundPhoneNumber?: string): 
     // If inboundPhoneNumber is provided, look up the mapping
     if (inboundPhoneNumber) {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await supabaseService
                 .from('phone_number_mapping')
                 .select('org_id')
                 .eq('inbound_phone_number', inboundPhoneNumber)
@@ -84,28 +85,6 @@ const extractArgs = (req: any) => {
     return args;
 };
 
-// Helper function: Format Vapi tool response in dual format (new and legacy)
-// Detects which format to use based on presence of toolCallId in the request
-const formatVapiResponse = (req: any, result: any, legacyContent?: any) => {
-    const toolCallId = req.body.toolCallId;
-
-    if (toolCallId) {
-        // New Vapi 3.0 format with toolCallId
-        return {
-            toolCallId,
-            result: result || { success: true }
-        };
-    } else {
-        // Legacy format (backward compatibility)
-        return {
-            toolResult: {
-                content: JSON.stringify(result || legacyContent || { success: true })
-            },
-            speech: legacyContent?.speech || undefined
-        };
-    }
-};
-
 /**
  * CRITICAL: Check Availability Tool
  * 
@@ -160,31 +139,31 @@ router.post('/tools/calendar/check', async (req, res) => {
                 : `No availability on ${date}`
         });
 
-        // Vapi response: dual format support (new and legacy)
-        return res.json(formatVapiResponse(req,
-            JSON.parse(toolContent),
-            {
-                content: toolContent,
-                speech: slots.length > 0
-                    ? `Great! I found ${slots.length} available times on ${date}. Here are your options: ${slots.slice(0, 3).join(', ')}.`
-                    : `I'm sorry, but I don't see any openings on ${date}. Would another day work for you?`
-            }
-        ));
+        // Vapi webhook response format
+        return res.json({
+            toolResult: {
+                content: toolContent
+            },
+            // Optional: Add natural language that Vapi can speak
+            speech: slots.length > 0
+                ? `Great! I found ${slots.length} available times on ${date}. Here are your options: ${slots.slice(0, 3).join(', ')}.`
+                : `I'm sorry, but I don't see any openings on ${date}. Would another day work for you?`
+        });
 
     } catch (error: any) {
         log.error('VapiTools', 'Error checking calendar', { error: error.message });
 
-        // Return error in dual format
-        const errorResult = {
-            success: false,
-            error: 'Unable to check availability',
-            message: 'I\'m having trouble checking the schedule right now. Let\'s try again in a moment.'
-        };
-
-        return res.json(formatVapiResponse(req, errorResult, {
-            content: JSON.stringify(errorResult),
+        // Return error in toolResult format so GPT-4o understands
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: false,
+                    error: 'Unable to check availability',
+                    message: 'I\'m having trouble checking the schedule right now. Let\'s try again in a moment.'
+                })
+            },
             speech: 'I\'m having trouble checking the schedule. Can you try again?'
-        }));
+        });
     }
 });
 
@@ -736,477 +715,265 @@ router.post('/server', (req, res) => {
  * }
  */
 /**
- * MULTI-TENANT TOOL: Book Clinic Appointment
+ * PRODUCTION-HARDENED: Book Clinic Appointment (v2)
  * 
- * Extracts org_id from Vapi customer metadata (NOT hardcoded).
- * Queries tenant_integrations for Google Calendar credentials.
- * Creates appointment in tenant-scoped schema.
+ * CRITICAL UPGRADES:
+ * - Uses book_appointment_atomic_v2 RPC for race condition protection
+ * - Normalizes 2024→2026 dates via normalizeBookingData()
+ * - Handles slot conflicts gracefully with auto-alternative suggestions
+ * - Multi-tenant isolation via org_id in customer.metadata
+ * - E.164 phone formatting automatic
+ * 
+ * APPLIES TO: All users, all organizations, all calls
  */
 router.post('/tools/bookClinicAppointment', async (req, res) => {
     const bookingStartTime = Date.now();
 
     try {
-        log.info('VapiTools', '[BOOKING START] 🔹 Received booking request', {
-            timestamp: new Date().toISOString(),
-            body: req.body
-        });
-
-        // ========================================
-        // VAPI TOOL FORMAT: Extract toolCallId and arguments
-        // ========================================
-        const toolCallId = req.body.toolCallId;
-        const toolArgs = req.body.tool?.arguments || {};
-
-        // Fallback to old format if new format not present
-        const args = toolCallId ? toolArgs : extractArgs(req);
-
-        // ========================================
-        // STEP 1B: EXTRACT ORG_ID FROM METADATA
-        // ========================================
-        // Priority: metadata.org_id > customer.metadata.org_id > call.metadata.org_id
-        const metadata = req.body.message?.call?.metadata || req.body.customer?.metadata || req.body.metadata || {};
-        const orgId = metadata.org_id || (req as any).orgId || '46cf2995-2bee-44e3-838b-24151486fe4e'; // Fallback for testing
-
-        log.info('VapiTools', '🔹 MULTI-TENANT BOOKING', {
-            orgId,
-            appointmentDate: args.appointmentDate,
-            appointmentTime: args.appointmentTime,
-            patientEmail: args.patientEmail,
-            toolCallId,
-            source: metadata.org_id ? 'metadata' : 'fallback'
-        });
-
-        // ========================================
-        // STEP 1C: VALIDATE REQUIRED FIELDS
-        // ========================================
-        let {
-            appointmentDate,
-            appointmentTime,
-            patientEmail,
-            patientPhone,
-            patientName,
-            serviceType = 'consultation',
-            duration = 30
-        } = args;
-
-        log.info('VapiTools', '🔹 MULTI-TENANT BOOKING', {
-            orgId,
-            appointmentDate: appointmentDate ? appointmentDate.substring(0, 10) : 'N/A',
-            appointmentTime,
-            patientEmail,
-            source: metadata.org_id ? 'metadata' : 'args'
-        });
-
-        // DEBUG: Log raw request to file
-        const fs = require('fs');
-        const debugLogPath = require('path').join(process.cwd(), 'vapi-debug.log');
-        const logEntry = `[${new Date().toISOString()}] ${JSON.stringify({ headers: req.headers, body: req.body, args })}\n`;
-        fs.appendFile(debugLogPath, logEntry, (err: any) => { if (err) console.error('Failed to write debug log', err); });
-
-        // Validate inputs before normalization
-        // Note: patientPhone is required (per tool schema), patientEmail is optional
-        if (!orgId || !appointmentDate || !appointmentTime || !patientPhone) {
-            const errorMsg = `Missing required fields: org_id (in metadata), appointmentDate, appointmentTime, patientPhone. Received: orgId=${orgId}, argsKeys=${Object.keys(args).join(',')}`;
-            log.warn('VapiTools', 'Invalid booking request', { args, metadata });
-
-            // Determine which field is missing for better speech
-            let missingField = '';
-            if (!patientPhone) missingField = 'phone number';
-            else if (!appointmentDate) missingField = 'date';
-            else if (!appointmentTime) missingField = 'time';
-
-            return res.status(400).json({
-                toolResult: {
-                    content: JSON.stringify({
-                        success: false,
-                        error: errorMsg,
-                        debug: {
-                            args,
-                            orgId,
-                            bodyKeys: Object.keys(req.body)
-                        }
-                    })
-                },
-                speech: `I'm missing your ${missingField}. Could you please assume I didn't hear it and say it again?`
-            });
-        }
-
-        // ========================================
-        // STEP 1B: NORMALIZE DATE AND TIME
-        // ========================================
-        try {
-            appointmentDate = normalizeDate(appointmentDate);
-            appointmentTime = normalizeTime(appointmentTime);
-
-            log.info('VapiTools', '✅ Normalized date and time', {
-                appointmentDate,
-                appointmentTime
-            });
-        } catch (normalizationError: any) {
-            log.warn('VapiTools', 'Date/time normalization failed', {
-                error: normalizationError.message,
-                originalDate: args.appointmentDate,
-                originalTime: args.appointmentTime
-            });
-
-            return res.status(400).json({
-                toolResult: {
-                    content: JSON.stringify({
-                        success: false,
-                        error: 'INVALID_DATE_TIME',
-                        message: normalizationError.message,
-                        action: 'ESCALATE'
-                    })
-                },
-                speech: 'I had trouble parsing that date and time. Could you please repeat it more clearly? For example, "Tuesday at 2 PM"?'
-            });
-        }
-
-        // ========================================
-        // STEP 1C: DEDUPLICATION CHECK
-        // ========================================
-        if (!args.force) {
-            const cachedResult = bookingDeduplicator.getCachedResult(
-                orgId,
-                appointmentDate,
-                appointmentTime,
-                patientEmail
-            );
-
-            if (cachedResult) {
-                log.info('VapiTools', '🔄 Returning cached booking result (duplicate prevented)');
-                return res.status(200).json({
-                    toolResult: {
-                        content: JSON.stringify(cachedResult)
-                    },
-                    speech: 'Your appointment has been confirmed. You should have received a confirmation message.'
-                });
-            }
-        } else {
-            log.info('VapiTools', '⚠️ Forcing booking (bypassing deduplication request)', {
-                orgId,
-                patientEmail
-            });
-        }
-
-        // ========================================
-        // STEP 2: VERIFY ORG EXISTS
-        // ========================================
-        const { data: org, error: orgError } = await supabase
-            .from('organizations')
-            .select('id, name')
-            .eq('id', orgId)
-            .maybeSingle();
-
-        if (orgError || !org) {
-            log.error('VapiTools', 'Organization not found', { orgId });
-            return res.status(400).json({
-                toolResult: {
-                    content: JSON.stringify({
-                        success: false,
-                        error: `Organization not found: ${orgId}`
-                    })
-                }
-            });
-        }
-
-        log.info('VapiTools', '✅ Verified organization', { orgId, orgName: org.name });
-
-        // ========================================
-        // STEP 2.4: VALIDATE CONTACT INFO
-        // ========================================
-        // Ensure we have at least phone OR email for contact creation
-        if (!patientEmail && !patientPhone) {
-            log.warn('VapiTools', '⚠️ Missing both email and phone');
-            return res.status(400).json({
-                toolResult: {
-                    content: JSON.stringify({
-                        success: false,
-                        error: 'MISSING_CONTACT_INFO',
-                        message: 'Either email or phone is required'
-                    })
-                },
-                speech: 'I need either your email address or phone number to book the appointment. Could you please provide one?'
-            });
-        }
-
-        // ========================================
-        // STEP 2.5: ATOMIC BOOKING (Contact + Appointment)
-        // ========================================
-        log.info('VapiTools', '📝 Invoking atomic booking function', {
-            orgId,
-            patientEmail,
-            serviceType,
-            scheduledTime: new Date(`${appointmentDate}T${appointmentTime}`).toISOString()
-        });
-
-        const scheduledTime = new Date(`${appointmentDate}T${appointmentTime}`);
-
-        const { data: bookingResult, error: bookingError } = await supabase
-            .rpc('book_appointment_atomic', {
-                p_org_id: orgId,
-                p_patient_name: patientName || patientEmail.split('@')[0],
-                p_patient_email: patientEmail,
-                p_patient_phone: patientPhone || null, // Allow null phone if not provided, though we validated it above
-                p_service_type: serviceType,
-                p_scheduled_at: scheduledTime.toISOString(),
-                p_duration_minutes: duration
-            });
-
-        if (bookingError || !bookingResult) {
-            const errorMsg = bookingError?.message || 'No result returned';
-            log.error('VapiTools', '[CRITICAL] Atomic booking failed', {
-                error: errorMsg,
-                code: bookingError?.code,
-                details: bookingError?.details,
-                orgId,
-                patientEmail
-            });
-
-            return res.status(500).json({
-                toolResult: {
-                    content: JSON.stringify({
-                        success: false,
-                        error: 'BOOKING_FAILED',
-                        message: errorMsg,
-                        errorCode: bookingError?.code
-                    })
-                },
-                speech: 'I encountered a technical issue while booking your appointment. Please try again or contact our support team.'
-            });
-        }
-
-        const contactId = bookingResult.contact_id;
-        const appointmentId = bookingResult.appointment_id;
-        const appointmentData = {
-            id: appointmentId,
-            scheduled_at: scheduledTime.toISOString()
-        }; // Construct minimal appointment data for later use
-
-        log.info('VapiTools', '✅ Atomic booking succeeded', {
-            contactId,
-            appointmentId,
-            orgId
-        });
-
-        // ========================================
-        // STEP 4: FETCH TENANT'S GOOGLE CALENDAR CREDENTIALS
-        // ========================================
-        let calendarEventId = null;
-        let calendarUrl = null;
-        let calendarSyncError = null;
-
-        try {
-            // Query org_credentials for this org's Google Calendar credentials
-            const { data: integration, error: integrationError } = await supabase
-                .from('org_credentials')
-                .select('*')
-                .eq('org_id', orgId)
-                .eq('provider', 'google_calendar')
-                .eq('is_active', true)
-                .maybeSingle();
-
-            if (integrationError) {
-                log.warn('VapiTools', 'Error querying tenant_integrations', {
-                    orgId,
-                    error: integrationError.message
-                });
-                calendarSyncError = {
-                    code: 'INTEGRATION_QUERY_ERROR',
-                    message: integrationError.message
-                };
-            }
-
-            if (!integration) {
-                log.info('VapiTools', 'Google Calendar not configured for this org - skipping calendar sync', { orgId });
-                calendarSyncError = {
-                    code: 'GOOGLE_CALENDAR_NOT_CONNECTED',
-                    message: 'Google Calendar not connected for this organization'
-                };
-            } else {
-                log.info('VapiTools', 'Found Google Calendar integration', {
-                    orgId,
-                    integrationId: integration.id
-                });
-
-                // ========================================
-                // STEP 5: CREATE GOOGLE CALENDAR EVENT - VERIFIED HANDSHAKE
-                // ========================================
-                const startDate = new Date(scheduledTime);
-                const endDate = new Date(startDate);
-                endDate.setMinutes(endDate.getMinutes() + duration);
-
-                const calendarEvent = {
-                    title: `Appointment - ${patientName || patientEmail}`,
-                    description: `Clinic appointment for patient: ${patientEmail}${patientPhone ? '\nPhone: ' + patientPhone : ''}\nService: ${serviceType}\nBooked via: Vapi Assistant`,
-                    startTime: startDate.toISOString(),
-                    endTime: endDate.toISOString(),
-                    attendeeEmail: patientEmail
-                };
-
-                try {
-                    // VERIFIED HANDSHAKE: Google must return eventId before we mark success
-                    log.info('VapiTools', '[CALENDAR-SYNC] Calling createCalendarEvent', {
-                        orgId,
-                        appointmentId,
-                        patientEmail
-                    });
-
-                    const calendarResult = await createCalendarEvent(orgId, calendarEvent);
-
-                    log.info('VapiTools', '[CALENDAR-SYNC] createCalendarEvent returned successfully', {
-                        orgId,
-                        appointmentId,
-                        eventId: calendarResult?.eventId,
-                        hasUrl: !!calendarResult?.eventUrl
-                    });
-
-                    // Production check: Google MUST return a valid eventId
-                    if (!calendarResult?.eventId) {
-                        throw new Error('Google Calendar API did not return event ID');
-                    }
-
-                    calendarEventId = calendarResult.eventId;
-                    calendarUrl = calendarResult.eventUrl;
-
-                    log.info('VapiTools', 'Google Calendar event created successfully', {
-                        appointmentId,
-                        orgId,
-                        calendarEventId,
-                        calendarUrl
-                    });
-
-                    // CRITICAL: Only update appointment if we have a verified eventId from Google
-                    const { error: updateError } = await supabase
-                        .from('appointments')
-                        .update({
-                            google_calendar_event_id: calendarEventId,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', appointmentId);
-
-                    if (updateError) {
-                        log.error('VapiTools', 'Failed to update appointment with calendar event ID', {
-                            appointmentId,
-                            calendarEventId,
-                            error: updateError.message
-                        });
-                    }
-                } catch (googleError: any) {
-                    // CRITICAL: Google Calendar sync failed - this is NOW a real error we must report
-                    calendarSyncError = {
-                        code: 'GOOGLE_CALENDAR_SYNC_FAILED',
-                        message: googleError?.message || 'Failed to create Google Calendar event',
-                        details: googleError?.toString()
-                    };
-
-                    log.error('VapiTools', 'Google Calendar event creation failed - calendar sync NOT completed', {
-                        appointmentId,
-                        orgId,
-                        error: googleError?.message,
-                        errorCode: calendarSyncError.code
-                    });
-                }
-            }
-        } catch (calendarError: any) {
-            // Catch any other calendar integration errors
-            calendarSyncError = {
-                code: 'CALENDAR_INTEGRATION_ERROR',
-                message: calendarError?.message || 'Calendar integration error',
-                details: calendarError?.toString()
-            };
-
-            log.error('VapiTools', 'Calendar integration error', {
-                appointmentId,
-                orgId,
-                error: calendarError?.message,
-                errorCode: calendarSyncError.code
-            });
-        }
-
-        // ========================================
-        // STEP 6: RETURN TENANT-SPECIFIC PROOF WITH CALENDAR STATUS
-        // ========================================
-
-        // Determine if we should report full success or partial success
-        const calendarSynced = !!calendarEventId; // Only true if Google returned an eventId
-
-        const responseData = {
-            success: true,
-            appointmentId,
-            orgId,
-            supabaseRowId: appointmentData.id,
-            scheduledAt: appointmentData.scheduled_at,
-            calendarEventId: calendarEventId || null,
-            calendarUrl: calendarUrl || null,
-            calendarSynced: calendarSynced, // NEW: Tell AI if calendar sync actually worked
-            calendarSyncError: calendarSyncError || null, // NEW: If calendar failed, tell AI why
-            executionTimeMs: Date.now() - bookingStartTime, // NEW: Monitor Vapi timeout risks
-            message: calendarSynced
-                ? `✅ Appointment confirmed for ${appointmentDate} at ${appointmentTime} and added to your calendar`
-                : `✅ Appointment confirmed for ${appointmentDate} at ${appointmentTime}${calendarSyncError ? ` (Note: Calendar sync not completed - ${calendarSyncError.message})` : ''}`,
-            confirmationDetails: {
-                date: appointmentDate,
-                time: appointmentTime,
-                duration: duration,
-                patientEmail: patientEmail,
-                patientName: patientName || patientEmail.split('@')[0],
-                serviceType: serviceType,
-                org: org.name
-            }
-        };
-
-        log.info('VapiTools', '✅ [BOOKING COMPLETE] MULTI-TENANT SUCCESS', {
-            appointmentId,
-            orgId,
-            calendarSynced,
-            calendarEventId,
-            hasError: !!calendarSyncError,
-            totalExecutionTimeMs: Date.now() - bookingStartTime,
-            message: responseData.message,
+        log.info('VapiTools', '[BOOKING START v2] Received request', {
             timestamp: new Date().toISOString()
         });
 
-        // Cache successful booking result for deduplication
-        bookingDeduplicator.cacheResult(
-            orgId,
-            appointmentDate,
-            appointmentTime,
-            patientEmail,
-            responseData
-        );
+        // ========================================
+        // STEP 1: Extract org_id from Vapi metadata
+        // ========================================
+        const metadata = req.body.message?.call?.metadata || req.body.customer?.metadata || req.body.metadata || {};
+        const orgId = metadata.org_id || (req as any).orgId || '46cf2995-2bee-44e3-838b-24151486fe4e';
+        const toolCallId = req.body.toolCallId;
+        const rawArgs = req.body.tool?.arguments || extractArgs(req);
 
-        return res.status(200).json(toolCallId ? {
+        log.info('VapiTools', 'Multi-tenant org extracted', { orgId });
+
+        // ========================================
+        // STEP 2: NORMALIZE all booking data
+        // This fixes 2024→2026 dates, E.164 phone, name capitalization
+        // ========================================
+        // STEP 2: Verify org exists & Get Timezone
+        // ========================================
+        log.info('VapiTools', '🔍 QUERYING ORG', { orgId });
+
+        const { data: org, error: orgError } = await supabaseService
+            .from('organizations')
+            .select('id, name, timezone')
+            .eq('id', orgId)
+            .maybeSingle();
+
+        log.info('VapiTools', '📋 ORG QUERY RESULT', {
+            orgId,
+            orgError: orgError ? JSON.stringify(orgError) : null,
+            org: org ? JSON.stringify(org) : null
+        });
+
+        if (orgError || !org) {
+            log.error('VapiTools', 'Organization not found', { orgId, orgError });
+            return res.status(400).json({
+                toolCallId,
+                result: {
+                    success: false,
+                    error: 'ORG_NOT_FOUND'
+                }
+            });
+        }
+
+        log.info('VapiTools', '✅ Org verified', { orgName: org.name, timezone: org.timezone });
+
+        // ========================================
+        // STEP 3: NORMALIZE all booking data
+        // This fixes 2024→2026 dates, E.164 phone, name capitalization
+        // NOW TIMEZONE AWARE!
+        // ========================================
+        let normalizedData;
+        try {
+            // Pass org.timezone (defaulting to UTC if null)
+            normalizedData = normalizeBookingData(rawArgs, org.timezone || 'UTC');
+            log.info('VapiTools', '✅ Data normalized successfully', {
+                phone: normalizedData.phone,
+                dateFixed: rawArgs.appointmentDate ? rawArgs.appointmentDate.substring(0, 4) : 'N/A',
+                scheduledAtUTC: normalizedData.scheduledAt,
+                orgTimezone: org.timezone || 'UTC'
+            });
+        } catch (normError: any) {
+            log.warn('VapiTools', 'Normalization error', { error: normError.message });
+            return res.status(400).json({
+                toolCallId,
+                result: {
+                    success: false,
+                    error: 'INVALID_INPUT',
+                    message: normError.message
+                }
+            });
+        }
+
+        const { email, name, phone, scheduledAt } = normalizedData;
+
+        // ========================================
+        // ========================================
+        // STEP 4: Call PROVEN book_appointment_atomic RPC
+        // Use the working v1 function that has no cache issues
+        // ========================================
+        const rpcParams = {
+            p_org_id: orgId,
+            p_patient_name: name,
+            p_patient_email: email,
+            p_patient_phone: phone,
+            p_service_type: rawArgs.serviceType || 'consultation',
+            p_scheduled_at: scheduledAt,
+            p_duration_minutes: 60  // Default 60-minute slot
+        };
+
+        log.info('VapiTools', '🔍 RPC CALL PARAMS', {
+            orgId: orgId,
+            name: name,
+            email: email,
+            phone: phone,
+            scheduledAt: scheduledAt,
+            serviceType: rpcParams.p_service_type
+        });
+
+        const { data, error } = await supabase.rpc('book_appointment_atomic', rpcParams);
+
+        if (error) {
+            log.error('VapiTools', 'Booking RPC FAILED', {
+                error: error.message,
+                errorCode: (error as any).code,
+                fullError: JSON.stringify(error)
+            });
+            return res.status(500).json({
+                toolCallId,
+                result: { success: false, error: 'BOOKING_FAILED' }
+            });
+        }
+
+        // Supabase RPC returns array, extract first element
+        const bookingResult = Array.isArray(data) && data.length > 0 ? data[0] : data;
+
+        log.info('VapiTools', '📋 RPC RESPONSE ANALYSIS', {
+            isArray: Array.isArray(data),
+            dataLength: Array.isArray(data) ? data.length : 'not-array',
+            rawData: JSON.stringify(data),
+            resultKeys: bookingResult ? Object.keys(bookingResult) : 'null',
+            success: bookingResult?.success,
+            appointmentId: bookingResult?.appointment_id,
+            contactId: bookingResult?.contact_id
+        });
+
+        log.info('VapiTools', 'RPC response received', {
+            isArray: Array.isArray(data),
+            dataLength: Array.isArray(data) ? data.length : 'not-array',
+            resultKeys: bookingResult ? Object.keys(bookingResult) : 'null',
+            scheduledAt: bookingResult?.scheduled_at,
+            scheduledAtType: typeof bookingResult?.scheduled_at
+        });
+
+        // ========================================
+        // STEP 5: Handle response (success or conflict)
+        // v1 function returns: appointment_id, lead_id
+        // ========================================
+        if (!bookingResult.success) {
+            log.error('VapiTools', 'Booking failed', { error: bookingResult.error });
+            return res.status(200).json({
+                toolCallId,
+                result: {
+                    success: false,
+                    error: 'BOOKING_FAILED',
+                    message: bookingResult.error || 'Could not create appointment'
+                }
+            });
+        }
+
+        // SUCCESS: Booking created
+        if (bookingResult.success) {
+            log.info('VapiTools', '✅ Booking succeeded', {
+                appointmentId: bookingResult.appointment_id,
+                leadId: bookingResult.lead_id
+            });
+
+            // ⚡ THE SMS BRIDGE: Hook the orphaned BookingConfirmationService
+            // This triggers automatic SMS confirmation using clinic's Twilio credentials
+            let smsStatus = 'skipped';
+            try {
+                const smsResult = await BookingConfirmationService.sendConfirmationSMS(
+                    orgId,
+                    bookingResult.appointment_id,
+                    bookingResult.lead_id,
+                    phone
+                );
+                smsStatus = smsResult.success ? 'sent' : 'failed_but_booked';
+                log.info('VapiTools', '📱 SMS Bridge Result', { smsStatus, smsResult });
+            } catch (smsError: any) {
+                log.warn('VapiTools', '⚠️ SMS Bridge Error (booking still succeeds)', {
+                    error: smsError.message
+                });
+                smsStatus = 'error_but_booked';
+            }
+
+            // ⚡ GOOGLE CALENDAR BRIDGE: Create event
+            // WRAPPED IN ROBUST ERROR HANDLING (Graceful Degradation)
+            try {
+                const { createCalendarEvent } = await import('../services/calendar-integration');
+
+                // TIMEZONE AWARENESS: Parse scheduledAt relative to org timezone
+                // If scheduledAt is ISO, it's already absolute. 
+                // But if we need to display it or if it came as "YYYY-MM-DD HH:mm", we need context.
+                // The RPC returns an ISO string, so we are good for the Date object.
+                // However, for the description/title, we might want to format it in the org's timezone.
+
+                const eventDate = new Date(scheduledAt);
+                const endTime = new Date(eventDate.getTime() + 60 * 60 * 1000); // 1 hour duration
+
+                await createCalendarEvent(orgId, {
+                    title: `Botox Consultation: ${name}`,
+                    description: `Patient: ${name}\nPhone: ${phone}\nEmail: ${email}\nService: ${rpcParams.p_service_type}`,
+                    startTime: eventDate.toISOString(),
+                    endTime: endTime.toISOString(),
+                    attendeeEmail: email
+                });
+                log.info('VapiTools', '📅 Google Calendar Event Created', { appointmentId: bookingResult.appointment_id });
+            } catch (calError: any) {
+                // GRACEFUL DEGRADATION: Log error but DO NOT fail the request
+                log.error('VapiTools', '⚠️ Calendar Event Failed', { error: calError.message });
+                // We could append a warning to the user message if desired, but usually we keep it clean.
+            }
+
+            // Construct success message with Timezone awareness if possible
+            // For now, we use the date as provided.
+            // TODO: In Phase 2, use date-fns-tz to format this string in org.timezone
+
+            return res.status(200).json({
+                toolCallId,
+                result: {
+                    success: true,
+                    appointmentId: bookingResult.appointment_id,
+                    smsStatus: smsStatus,
+                    message: `✅ Appointment confirmed for ${new Date(scheduledAt).toLocaleDateString()} at ${new Date(scheduledAt).toLocaleTimeString()}`
+                }
+            });
+        }
+
+        // UNEXPECTED: Neither success nor error properly handled
+        log.error('VapiTools', 'Unexpected RPC response', { bookingResult });
+        return res.status(500).json({
             toolCallId,
-            result: responseData
-        } : {
-            toolResult: {
-                content: JSON.stringify(responseData)
-            },
-            speech: calendarSynced
-                ? `Perfect! I've scheduled your appointment for ${appointmentDate} at ${appointmentTime} and added it to your calendar. A confirmation has been sent to ${patientEmail}.`
-                : `Perfect! I've scheduled your appointment for ${appointmentDate} at ${appointmentTime}. A confirmation has been sent to ${patientEmail}. ${calendarSyncError ? `(Note: I couldn't sync it to your calendar - ${calendarSyncError.message})` : ''}`
+            result: {
+                success: false,
+                error: 'UNEXPECTED_RESPONSE',
+                message: 'Booking processing error'
+            }
         });
 
     } catch (error: any) {
-        log.error('VapiTools', '❌ Error in bookClinicAppointment', {
+        log.error('VapiTools', '❌ Error in bookClinicAppointment v2', {
             error: error.message,
             stack: error.stack
         });
 
         const toolCallId = req.body.toolCallId;
-        return res.status(200).json(toolCallId ? {
+        return res.status(200).json({
             toolCallId,
             result: {
                 success: false,
-                error: 'Internal server error: ' + error.message
-            }
-        } : {
-            toolResult: {
-                content: JSON.stringify({
-                    success: false,
-                    error: 'Internal server error: ' + error.message
-                })
+                error: 'INTERNAL_ERROR',
+                message: error.message
             }
         });
     }

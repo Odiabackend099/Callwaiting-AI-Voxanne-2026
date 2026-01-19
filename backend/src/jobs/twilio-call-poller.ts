@@ -6,7 +6,7 @@
 
 import { supabase } from '../services/supabase-client';
 import { log as logger } from '../services/logger';
-import { IntegrationSettingsService } from '../services/integration-settings';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
 import axios from 'axios';
 
 interface TwilioCall {
@@ -25,7 +25,7 @@ interface TwilioCall {
 async function pollForOrg(orgId: string): Promise<void> {
   let creds;
   try {
-    creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+    creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
   } catch (error) {
     logger.warn('TwilioPoller', `Skipping org ${orgId} - invalid credentials`, { error: (error as Error).message });
     return;

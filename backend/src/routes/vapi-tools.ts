@@ -8,7 +8,7 @@ import {
 import { getRagContext } from '../services/rag-context-provider';
 import { supabase } from '../services/supabase-client';
 import TwilioGuard from '../services/twilio-guard';
-import { IntegrationSettingsService } from '../services/integration-settings';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
 
 const router = Router();
 
@@ -216,7 +216,7 @@ async function handleBookAppointment(
     // Fetch org-specific Twilio credentials for multi-tenant SMS delivery
     let twilioCredentials;
     try {
-      const creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+      const creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
       twilioCredentials = {
         accountSid: creds.accountSid,
         authToken: creds.authToken,

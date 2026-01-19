@@ -5,7 +5,7 @@
  */
 
 import { log } from './logger';
-import { IntegrationSettingsService } from './integration-settings';
+import { IntegrationDecryptor } from './integration-decryptor';
 import { sendSmsTwilio, TwilioCredentials } from './twilio-service';
 
 /**
@@ -85,7 +85,7 @@ export async function sendHotLeadSMS(
 ): Promise<string> {
   try {
     // Fetch dynamic credentials for this tenant
-    const creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+    const creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
 
     if (!validatePhone(clinicManagerPhone)) {
       throw new Error(`Invalid phone number: ${clinicManagerPhone}`);
@@ -139,7 +139,7 @@ export async function sendAppointmentConfirmationSMS(
   orgId: string
 ): Promise<string> {
   try {
-    const creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+    const creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
     // TODO: Clinic Name should ideally come from org settings too
     const clinicName = process.env.CLINIC_NAME || 'Our Clinic';
 
@@ -202,7 +202,7 @@ export async function sendAppointmentReminderSMS(
   orgId: string
 ): Promise<string> {
   try {
-    const creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+    const creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
     const clinicName = process.env.CLINIC_NAME || 'Our Clinic';
 
     if (!validatePhone(customerPhone)) {
@@ -261,7 +261,7 @@ export async function sendGenericSMS(
   orgId: string
 ): Promise<string> {
   try {
-    const creds = await IntegrationSettingsService.getTwilioCredentials(orgId);
+    const creds = await IntegrationDecryptor.getTwilioCredentials(orgId);
 
     if (!validatePhone(toPhone)) {
       throw new Error(`Invalid phone number: ${toPhone}`);

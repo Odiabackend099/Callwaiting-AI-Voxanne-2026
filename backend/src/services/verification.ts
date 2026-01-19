@@ -1,5 +1,5 @@
 import { config } from '../config/index';
-import { IntegrationSettingsService } from './integration-settings';
+import { IntegrationDecryptor } from './integration-decryptor';
 import { TwilioCredentials } from './twilio-service';
 import VapiClient from './vapi-client';
 import { getCalendarClient } from './google-oauth-service';
@@ -62,7 +62,7 @@ export class VerificationService {
      */
     static async verifyTwilio(orgId: string): Promise<VerificationResult> {
         try {
-            const keys = await IntegrationSettingsService.getTwilioCredentials(orgId);
+            const keys = await IntegrationDecryptor.getTwilioCredentials(orgId);
 
             // Initialize client to test credentials
             const client = twilio(keys.accountSid, keys.authToken);
@@ -118,24 +118,33 @@ export class VerificationService {
             }
 
             // 2. Tenant Configuration Check: Get Assistant ID
-            // We use IntegrationSettingsService just to get the Assistant ID, ignoring any stored key
-            const keys = await IntegrationSettingsService.getVapiCredentials(orgId);
-            const assistantId = keys.assistantId;
+            // Vapi is backend-only - use VAPI_PRIVATE_KEY from env
+            const vapiKey = process.env.VAPI_PRIVATE_KEY;
+            if (!vapiKey) {
+              throw new Error('VAPI_PRIVATE_KEY not configured in backend environment');
+            }
 
-            if (!assistantId) {
-                return {
-                    step: 'vapi',
-                    success: false,
-                    message: 'Vapi Assistant not configured for this organization',
-                    timestamp: new Date().toISOString()
+            // Get assistant from agents table for this org
+            const { data: agent, error: agentError } = await supabase
+              .from('agents')
+              .select('vapi_assistant_id')
+              .eq('org_id', orgId)
+              .maybeSingle();
+
+            if (agentError || !agent?.vapi_assistant_id) {
+              return {
+                  step: 'vapi',
+                  success: false,
+                  message: 'Vapi Assistant not configured for this organization',
+                  timestamp: new Date().toISOString()
                 };
             }
 
             // 3. Connection Check: Use Platform Key to verify Assistant
             const vapi = new VapiClient(platformKey);
-            const assistant = await vapi.getAssistant(assistantId);
+            const assistant = await vapi.getAssistant(agent.vapi_assistant_id);
 
-            if (!assistant || assistant.id !== assistantId) {
+            if (!assistant || assistant.id !== agent.vapi_assistant_id) {
                 throw new Error('Vapi Assistant retrieval failed or ID mismatch');
             }
 

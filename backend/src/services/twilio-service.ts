@@ -12,6 +12,8 @@ export interface TwilioCredentials {
   authToken: string;
   phoneNumber: string;
   whatsappNumber?: string;
+  messagingServiceSid?: string; // For international delivery
+  senderId?: string; // Alphanumeric Sender ID (e.g., "VOXANNE")
 }
 
 // Basic message options
@@ -92,24 +94,71 @@ export async function sendSmsTwilio(
   }
 
   try {
-    // Add status callback for real delivery tracking
-    // Note: Callbacks need a publicly accessible URL
-    const statusCallbackUrl = process.env.BACKEND_URL
-      ? `${process.env.BACKEND_URL}/api/webhooks/sms-status`
+    // FIRE-AND-FORGET STRATEGY: Only use statusCallback if BACKEND_URL is valid and not ngrok
+    // This prevents 11200 errors from broken webhook URLs
+    const backendUrl = process.env.BACKEND_URL;
+    const isValidBackendUrl = backendUrl &&
+      !backendUrl.includes('ngrok') &&
+      !backendUrl.includes('localhost') &&
+      backendUrl.startsWith('http');
+
+    const statusCallbackUrl = isValidBackendUrl
+      ? `${backendUrl}/api/webhooks/sms-status`
       : undefined;
 
-    const message = await client.messages.create({
+    if (!statusCallbackUrl) {
+      console.log('[Twilio SMS] ⚠️ StatusCallback disabled (no valid BACKEND_URL). Using Fire-and-Forget mode.');
+    }
+
+    // SMART SENDER SELECTION: Prioritize Messaging Service for international numbers
+    const isInternational = !options.to.startsWith('+1');
+    const messageParams: any = {
       body: options.message,
-      from: fromNumber,
       to: options.to,
       ...(statusCallbackUrl && {
         statusCallback: statusCallbackUrl,
         statusCallbackMethod: 'POST'
       })
-    });
+    };
+
+    // Priority 1: Use Messaging Service SID if available (best for international)
+    if (credentials.messagingServiceSid) {
+      messageParams.messagingServiceSid = credentials.messagingServiceSid;
+      console.log('[Twilio SMS] Using Messaging Service SID for delivery');
+    }
+    // Priority 2: Use Alphanumeric Sender ID for international (if supported)
+    else if (isInternational && credentials.senderId) {
+      messageParams.from = credentials.senderId;
+      console.log(`[Twilio SMS] Using Alphanumeric Sender ID: ${credentials.senderId} for international delivery`);
+    }
+    // Priority 3: Fallback to phone number
+    else {
+      messageParams.from = options.from || getFromNumber(credentials);
+      if (isInternational) {
+        console.log('[Twilio SMS] ⚠️ Using US Long Code for international SMS. May be filtered by carrier.');
+        console.log('[Twilio SMS] 💡 Consider adding messagingServiceSid or senderId to integrations table.');
+      }
+    }
+
+    const message = await client.messages.create(messageParams);
 
     console.log(`[Twilio SMS] Message sent to ${options.to}`);
     console.log(`[Twilio SMS] SID: ${message.sid}`);
+    console.log(`[Twilio SMS] Initial Status: ${message.status}`);
+    console.log(`[Twilio SMS] Error Code: ${message.errorCode || 'none'}`);
+    console.log(`[Twilio SMS] Error Message: ${message.errorMessage || 'none'}`);
+
+    // CRITICAL: Log if message is queued but may fail delivery
+    if (message.status === 'queued' || message.status === 'accepted') {
+      console.log(`[Twilio SMS] ⚠️ Message ${message.sid} accepted by Twilio but delivery not yet confirmed`);
+      console.log(`[Twilio SMS] 💡 Check Twilio Console for delivery status: https://console.twilio.com/us1/monitor/logs/sms`);
+    }
+
+    if (message.status === 'failed' || message.status === 'undelivered') {
+      console.error(`[Twilio SMS] ❌ Message ${message.sid} failed immediately`);
+      console.error(`[Twilio SMS] Error Code: ${message.errorCode}`);
+      console.error(`[Twilio SMS] Error Message: ${message.errorMessage}`);
+    }
 
     return {
       success: true,
