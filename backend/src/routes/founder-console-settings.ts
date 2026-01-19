@@ -259,7 +259,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
               name: role === 'inbound' ? 'Voxanne (Inbound Coordinator)' : 'Voxanne (Outbound SDR)',
               systemPrompt: agentRow?.system_prompt?.trim() || defaultSystemPrompt,
               voiceProvider: 'vapi',
-              voiceId: agentRow?.voice || (role === 'inbound' ? 'Kylie' : 'Paige'),
+              voiceId: agentRow?.voice || (role === 'inbound' ? 'Kylie' : 'jennifer'),
               language: agentRow?.language || 'en',
               firstMessage: agentRow?.first_message || 'Hello! How can I help you today?',
               maxDurationSeconds: agentRow?.max_call_duration || 600

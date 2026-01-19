@@ -133,7 +133,7 @@ export function createMockAssistantConfig(overrides: Partial<any> = {}) {
         name: 'Test Assistant',
         systemPrompt: 'You are a helpful medical receptionist.',
         firstMessage: 'Hello! How can I help you today?',
-        voiceId: 'Paige',
+        voiceId: 'jennifer',
         voiceProvider: 'vapi',
         modelProvider: 'openai',
         modelName: 'gpt-4',

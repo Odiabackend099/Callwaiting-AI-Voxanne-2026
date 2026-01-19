@@ -126,7 +126,7 @@ export class VapiAssistantManager {
             },
             voice: {
               provider: config.voiceProvider || 'vapi',
-              voiceId: config.voiceId || 'Paige',
+              voiceId: config.voiceId || 'jennifer',
             },
             firstMessage: config.firstMessage || 'Hello! How can I help you today?',
             maxDurationSeconds: config.maxDurationSeconds || 600,
@@ -203,7 +203,7 @@ export class VapiAssistantManager {
           name: config.name,
           systemPrompt: enhanceSystemPrompt(config.systemPrompt),
           firstMessage: config.firstMessage || 'Hello! How can I help you today?',
-          voiceId: config.voiceId || 'Paige',
+          voiceId: config.voiceId || 'jennifer',
           voiceProvider: config.voiceProvider || 'vapi',
           modelProvider: config.modelProvider || 'openai',
           modelName: config.modelName || 'gpt-4',
@@ -287,7 +287,7 @@ export class VapiAssistantManager {
               vapi_assistant_id: assistantId,
               system_prompt: config.systemPrompt,
               first_message: config.firstMessage || 'Hello! How can I help you today?',
-              voice: config.voiceId || 'Paige',
+              voice: config.voiceId || 'jennifer',
               language: config.language || 'en',
               max_call_duration: config.maxDurationSeconds || 600,
             });

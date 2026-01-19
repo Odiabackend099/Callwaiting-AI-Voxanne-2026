@@ -58,7 +58,7 @@ const VOICE_REGISTRY = [
   { id: 'Harry', name: 'Harry', gender: 'male', provider: 'vapi', description: 'American, Clear, Energetic' },
   { id: 'Elliot', name: 'Elliot', gender: 'male', provider: 'vapi', description: 'Canadian, Soothing, Friendly' },
   { id: 'Lily', name: 'Lily', gender: 'female', provider: 'vapi', description: 'Asian American, Bubbly, Cheerful' },
-  { id: 'Paige', name: 'Paige', gender: 'female', provider: 'vapi', description: 'American, Deeper, Calming', default: true },
+  { id: 'jennifer', name: 'jennifer', gender: 'female', provider: 'vapi', description: 'American, Deeper, Calming', default: true },
   { id: 'Cole', name: 'Cole', gender: 'male', provider: 'vapi', description: 'American, Deeper, Calming' },
   { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'American (Southern)' },
   { id: 'Spencer', name: 'Spencer', gender: 'female', provider: 'vapi', description: 'American, Energetic, Quippy' },
@@ -73,7 +73,7 @@ const VOICE_REGISTRY = [
   { id: 'aura-luna-en', name: 'Luna', gender: 'female', provider: 'deepgram' },
 ] as const;
 
-const DEFAULT_VOICE = 'Paige';
+const DEFAULT_VOICE = 'jennifer';
 
 /**
  * Convert database voice format (Deepgram format) to Vapi voice format
@@ -82,10 +82,10 @@ const DEFAULT_VOICE = 'Paige';
  * Database: "onyx-en" → Vapi: "onyx"
  */
 function convertToVapiVoiceId(dbVoiceId: string): string {
-  if (!dbVoiceId) return 'Paige'; // Default
+  if (!dbVoiceId) return 'jennifer'; // Default
   
   // If it's already a Vapi voice ID (like "Paige", "asteria", etc.), return as-is
-  if (dbVoiceId === 'Paige' || !dbVoiceId.includes('-')) {
+  if (dbVoiceId === 'jennifer' || !dbVoiceId.includes('-')) {
     return dbVoiceId;
   }
   
@@ -1089,7 +1089,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
         id: outboundAgent.id,
         role: 'outbound',
         systemPrompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
-        voice: outboundAgent.voice || 'paige',
+        voice: outboundAgent.voice || 'jennifer',
         language: outboundAgent.language || 'en-GB',
         maxCallDuration: outboundAgent.max_call_duration || 600,
         firstMessage: outboundAgent.first_message || 'Hello! This is CallWaiting AI calling...',
@@ -1102,7 +1102,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
       publicKey: maskKey(vapiConfig.vapi_public_key),
       secretKey: maskKey(vapiConfig.vapi_api_key || vapiConfig.vapi_secret_key),
       systemPrompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
-      voice: outboundAgent.voice || 'paige',
+      voice: outboundAgent.voice || 'jennifer',
       language: outboundAgent.language || 'en-GB',
       maxCallDuration: outboundAgent.max_call_duration || 600,
       firstMessage: outboundAgent.first_message || 'Hello! This is CallWaiting AI calling...',
@@ -1111,7 +1111,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
       publicKey: maskKey(vapiConfig.vapi_public_key),
       secretKey: maskKey(vapiConfig.vapi_api_key || vapiConfig.vapi_secret_key),
       systemPrompt: buildOutboundSystemPrompt(getDefaultPromptConfig()),
-      voice: 'paige',
+      voice: 'jennifer',
       language: 'en-GB',
       maxCallDuration: 600,
       firstMessage: 'Hello! This is CallWaiting AI calling...',
@@ -3039,8 +3039,8 @@ router.post(
               messages: [{ role: 'system', content: activeConfig.system_prompt }]
             },
             voice: {
-              provider: getVoiceProvider(activeConfig.voice || 'Paige'),
-              voiceId: activeConfig.voice || 'Paige'
+              provider: getVoiceProvider(activeConfig.voice || 'jennifer'),
+              voiceId: activeConfig.voice || 'jennifer'
             },
             firstMessage: activeConfig.first_message,
             maxDurationSeconds: activeConfig.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,

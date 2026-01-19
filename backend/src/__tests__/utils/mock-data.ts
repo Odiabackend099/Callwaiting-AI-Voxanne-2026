@@ -80,7 +80,7 @@ export const MOCK_ASSISTANT_CONFIGS = {
         name: 'Voxanne - Inbound Receptionist',
         systemPrompt: 'You are Voxanne, a professional medical receptionist for a cosmetic surgery clinic. Be warm, professional, and helpful.',
         firstMessage: 'Hello! Thank you for calling. How may I help you today?',
-        voiceId: 'Paige',
+        voiceId: 'jennifer',
         voiceProvider: 'vapi',
         modelProvider: 'openai',
         modelName: 'gpt-4',

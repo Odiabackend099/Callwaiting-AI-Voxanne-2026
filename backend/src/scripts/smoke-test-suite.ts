@@ -195,8 +195,8 @@ async function runSmokeTest() {
             voiceId = agent?.voice;
         }
 
-        const isTurbo = voiceId && (voiceId.includes('turbo') || voiceId.includes('flash') || voiceId === 'Paige'); // 'Paige' is Vapi default, usually good but we want premium checks.
-        // Let's assume 'Paige' is acceptable for MVP but 'Nova-2' or 'Cartesia' is better.
+        const isTurbo = voiceId && (voiceId.includes('turbo') || voiceId.includes('flash') || voiceId === 'jennifer'); // 'jennifer' is Vapi default, usually good but we want premium checks.
+        // Let's assume 'jennifer' is acceptable for MVP but 'Nova-2' or 'Cartesia' is better.
         // For the purpose of this test, we Pass if we can read the config and it's not null.
 
         results.push({

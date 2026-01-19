@@ -62,7 +62,7 @@ describe('VapiAssistantManager', () => {
       name: 'Clinic 1 Inbound Assistant',
       systemPrompt: 'You are a helpful receptionist...',
       firstMessage: 'Hello, welcome!',
-      voiceId: 'Paige',
+      voiceId: 'jennifer',
       modelName: 'gpt-4',
     };
 
@@ -351,7 +351,7 @@ describe('VapiAssistantManager', () => {
         vapi_assistant_id: 'asst_123',
         system_prompt: 'You are helpful',
         name: 'Test Assistant',
-        voice: 'Paige',
+        voice: 'jennifer',
       };
 
       mockSupabaseClient.from().select().eq().eq().maybeSingle.mockResolvedValue({
@@ -562,7 +562,7 @@ describe('VapiAssistantManager', () => {
       expect(mockVapiClient.createAssistant).toHaveBeenCalledWith(
         expect.objectContaining({
           name: minimalConfig.name,
-          voiceId: 'Paige', // default
+          voiceId: 'jennifer', // default
           modelName: 'gpt-4', // default
         })
       );

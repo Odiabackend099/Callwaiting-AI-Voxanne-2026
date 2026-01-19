@@ -39,7 +39,7 @@ function determineVoiceProvider(voiceId: string): string {
   if (['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(id)) return 'openai';
 
   // Vapi native voices (case-insensitive)
-  const vapiVoices = ['paige', 'rohan', 'neha', 'hana', 'harry', 'elliot', 'lily', 'cole', 'savannah', 'spencer', 'kylie'];
+  const vapiVoices = ['jennifer', 'rohan', 'neha', 'hana', 'harry', 'elliot', 'lily', 'cole', 'savannah', 'spencer', 'kylie'];
   if (vapiVoices.includes(id)) return 'vapi';
 
   // ElevenLabs voices (most other named voices)
@@ -233,7 +233,7 @@ assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response):
       logger.info('Updating existing Vapi assistant', { agentId, vapiAssistantId: agent.vapi_assistant_id });
 
       // Determine voice provider from agent voice configuration
-      const voiceId = agent.voice || 'paige';
+      const voiceId = agent.voice || 'jennifer';
       const voiceProvider = determineVoiceProvider(voiceId);
 
       // CRITICAL: Fetch existing assistant to preserve query tools
@@ -295,7 +295,7 @@ assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response):
       const logger = createLogger('AssistantsSync');
       logger.info('Creating new Vapi assistant', { agentId, agentName: agent.name });
 
-      const voiceId = agent.voice || 'paige';
+      const voiceId = agent.voice || 'jennifer';
       const voiceProvider = determineVoiceProvider(voiceId);
 
       vapiAssistant = await localVapi.createAssistant({
@@ -442,7 +442,7 @@ assistantsRouter.get('/voices/available', async (req: Request, res: Response) =>
     // Comprehensive list of Vapi-supported voices
     const voices = [
       // Vapi Native Voices (11Labs-powered, optimized for low latency)
-      { id: 'Paige', name: 'Paige', gender: 'female', provider: 'vapi', isDefault: true, description: 'Warm, professional American female' },
+      { id: 'jennifer', name: 'jennifer', gender: 'female', provider: 'vapi', isDefault: true, description: 'Warm, professional American female' },
       { id: 'Rohan', name: 'Rohan', gender: 'male', provider: 'vapi', description: 'Friendly American male' },
       { id: 'Neha', name: 'Neha', gender: 'female', provider: 'vapi', description: 'Clear, articulate Indian female' },
       { id: 'Hana', name: 'Hana', gender: 'female', provider: 'vapi', description: 'Soft, calm Asian female' },
@@ -603,7 +603,7 @@ assistantsRouter.post('/auto-sync', requireAuth, async (req: Request, res: Respo
     } else {
       // Create if doesn't exist
       const context = await buildAgentContext(agent);
-      const voiceId = agent.voice || 'paige';
+      const voiceId = agent.voice || 'jennifer';
       const voiceProvider = determineVoiceProvider(voiceId);
       const newAssistant = await client.createAssistant({
         name: agent.name,

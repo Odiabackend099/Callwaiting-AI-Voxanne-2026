@@ -73,10 +73,10 @@ export class IntegrationSettingsService {
 
     /**
      * Get Vapi credentials for an organization
+     * MULTI-TENANT: Fetches Assistant ID from organizations table
      */
     static async getVapiCredentials(orgId: string): Promise<VapiCredentials> {
-        // Vapi might be configured per-org or global fallback
-        // For now, check per-org
+        // Step 1: Check for org-specific Vapi integration in integrations table
         const keys = await getApiKey('vapi', orgId);
 
         if (keys && keys.apiKey) {
@@ -87,17 +87,31 @@ export class IntegrationSettingsService {
             };
         }
 
-        // Fallback to global env keys (if allowed/configured)
-        // This supports the transition period or "platform" defaults
-        if (config.VAPI_PRIVATE_KEY) {
-            return {
-                apiKey: config.VAPI_PRIVATE_KEY,
-                assistantId: process.env.VAPI_ASSISTANT_ID!,
-                phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID
-            };
+        // Step 2: Fetch Assistant ID from organizations table (BYOA architecture)
+        const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('vapi_assistant_id, vapi_phone_number_id')
+            .eq('id', orgId)
+            .single();
+
+        if (orgError || !org) {
+            throw new Error(`Organization ${orgId} not found`);
         }
 
-        throw new Error(`Vapi configuration not found for org ${orgId} and no global default.`);
+        if (!org.vapi_assistant_id) {
+            throw new Error(`Organization ${orgId} has not configured a Vapi Assistant. Please create an assistant in the Vapi dashboard and save the Assistant ID.`);
+        }
+
+        // Step 3: Use platform-level Vapi Private Key with org's Assistant ID
+        if (!config.VAPI_PRIVATE_KEY) {
+            throw new Error(`Platform Vapi Private Key not configured. Set VAPI_PRIVATE_KEY in environment variables.`);
+        }
+
+        return {
+            apiKey: config.VAPI_PRIVATE_KEY,
+            assistantId: org.vapi_assistant_id,
+            phoneNumberId: org.vapi_phone_number_id || undefined
+        };
     }
 
     /**
