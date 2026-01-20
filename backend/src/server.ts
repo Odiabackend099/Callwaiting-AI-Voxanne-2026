@@ -118,7 +118,10 @@ app.use(cors({
       'http://localhost:3001',
       'https://callwaitingai.dev',
       'https://www.callwaitingai.dev',
-      'https://voxanne-frontend-h0pv6jv68-odia-backends-projects.vercel.app'
+      'https://voxanne-frontend-h0pv6jv68-odia-backends-projects.vercel.app',
+      // Production Vercel deployment
+      'https://callwaiting-ai-voxanne-2026.vercel.app',
+      'https://callwaiting-ai-voxanne-2026-d49b2ejye-odia-backends-projects.vercel.app'
     ];
 
     // Get additional origins from environment variable

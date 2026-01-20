@@ -50,19 +50,23 @@ class VAPIWebhookServer {
     if (!this.vapiSecret) {
       if (process.env.NODE_ENV !== 'production') {
         console.warn('[VAPI Webhook] Warning: VAPI_WEBHOOK_SECRET not configured, skipping signature verification (DEV MODE)');
-        return next();
+        next();
+        return;
       }
       console.warn('[VAPI Webhook] Warning: VAPI_WEBHOOK_SECRET not configured, blocking request (PRODUCTION)');
-      return res.status(500).json({ error: 'Server configuration error' });
+      res.status(500).json({ error: 'Server configuration error' });
+      return;
     }
 
     const signature = req.headers['x-vapi-signature'] as string;
     if (!signature) {
       if (process.env.NODE_ENV !== 'production') {
         console.warn('[VAPI Webhook] Warning: Missing signature header, skipping verification (DEV MODE)');
-        return next();
+        next();
+        return;
       }
-      return res.status(401).json({ error: 'Missing signature header' });
+      res.status(401).json({ error: 'Missing signature header' });
+      return;
     }
 
     // Verify HMAC signature
@@ -74,7 +78,8 @@ class VAPIWebhookServer {
 
     if (signature !== expectedSignature) {
       console.warn('[VAPI Webhook] Invalid signature detected');
-      return res.status(401).json({ error: 'Invalid signature' });
+      res.status(401).json({ error: 'Invalid signature' });
+      return;
     }
 
     next();
