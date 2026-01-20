@@ -145,10 +145,11 @@ export class RealtimeSyncService {
     );
 
     // Subscribe if not already
-    if (channel.state !== 'subscribed' && channel.state !== 'subscribing') {
+    const state = channel.state as any;
+    if (state !== 'SUBSCRIBED' && state !== 'SUBSCRIBING') {
       channel.subscribe((status: string) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.error(`[RealtimeSync] Channel error for ${channelKey}`);
+        if (status === 'CHANNEL_ERROR' || status !== 'SUBSCRIBED') {
+          console.error(`[RealtimeSync] Channel error for ${channelKey}: ${status}`);
           this.handleChannelError(channelKey);
         }
       });
@@ -272,19 +273,11 @@ export class RealtimeSyncService {
 
   /**
    * Setup connection monitoring
+   * Note: Connection monitoring handled at HTTP/WebSocket layer - no browser events
    */
   private setupConnectionMonitoring(): void {
-    if (typeof window === 'undefined') return; // Server-side only
-
-    window.addEventListener('online', () => {
-      console.log('[RealtimeSync] Network restored, reconnecting all channels');
-      this.reconnectAttempts = 0;
-      this.reconnectAllChannels();
-    });
-
-    window.addEventListener('offline', () => {
-      console.log('[RealtimeSync] Network lost');
-    });
+    // Server-side service - no window events available
+    // Connection state managed via HTTP/WebSocket heartbeats
   }
 
   /**
@@ -292,7 +285,8 @@ export class RealtimeSyncService {
    */
   private reconnectAllChannels(): void {
     for (const [channelKey, channel] of this.channels.entries()) {
-      if (channel.state !== 'subscribed') {
+      const state = channel.state as any;
+      if (state !== 'SUBSCRIBED') {
         channel.subscribe();
       }
     }

@@ -4,9 +4,11 @@ import { TwilioCredentials } from './twilio-service';
 import VapiClient from './vapi-client';
 import { getCalendarClient } from './google-oauth-service';
 import { createLogger } from './logger';
+import supabaseService from './supabase-client';
 import twilio from 'twilio';
 
 const logger = createLogger('VerificationService');
+const supabase = supabaseService;
 
 export interface VerificationResult {
     step: 'twilio' | 'vapi' | 'calendar' | 'system';

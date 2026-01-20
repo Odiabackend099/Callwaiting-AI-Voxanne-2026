@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { jwtDecode } from 'jwt-decode';
 import crypto from 'crypto';
-import { log as logger } from './logger';
+import { createLogger } from './logger';
+
+const logger = createLogger('VapiBookingHandler');
 
 interface VapiToolCall {
   provider_id: string;
