@@ -60,27 +60,111 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
     const message = body.message;
 
     // DEBUG
-    log.info('Vapi-Webhook', 'Received webhook', {
-      messageType: body.messageType,
+    log.info('Vapi-Webhook', 'Received webhook', { 
+      messageType: body.messageType, 
       hasToolCall: !!body.toolCall,
-      toolName: body.toolCall?.function?.name
+      toolName: body.toolCall?.function?.name 
     });
 
     // 2a. Handle Tool Calls (bookClinicAppointment)
-    // MOVED TO: vapi-tools-routes.ts (Single Source of Truth)
     if (body.messageType === 'tool-calls' && body.toolCall) {
       const { function: toolFunction } = body.toolCall;
       const toolName = toolFunction?.name;
 
       if (toolName === 'bookClinicAppointment') {
-        log.info('Vapi-Webhook', 'Redirecting tool call to vapi-tools-routes', { toolName });
-        // We do not handle it here anymore. Vapi should be configured to call /api/vapi/tools/bookClinicAppointment
-        // If this webhook is set as the Server URL, we might need to forward or just return success so Vapi continues?
-        // Actually, Vapi calls the tool URL defined in the tool definition.
-        // This webhook is likely for "Server URL" events (end-of-call, etc).
-        // If Vapi sends tool calls here, it's a misconfiguration or legacy.
-        // We will return 200 OK to acknowledge receipt but NOT execute logic.
-        return res.json({ success: true, message: 'Tool call received but handled by dedicated tool endpoint' });
+        log.info('Vapi-Webhook', 'Processing bookClinicAppointment tool call', {
+          arguments: toolFunction?.arguments
+        });
+
+        const args = toolFunction?.arguments || {};
+        const orgId = '46cf2995-2bee-44e3-838b-24151486fe4e'; // TODO: Extract from assistant metadata
+        const { appointmentDate, appointmentTime, patientEmail, patientPhone, patientName, serviceType } = args;
+
+        if (!appointmentDate || !appointmentTime || !patientEmail) {
+          return res.status(400).json({ error: 'Missing booking parameters' });
+        }
+
+        try {
+          const crypto = require('crypto');
+
+          // Use the system contact for Vapi bookings (created for each org)
+          const systemContactId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+          // Create appointment
+          const appointmentId = crypto.randomUUID();
+          const now = new Date();
+          const scheduledTime = new Date(`${appointmentDate}T${appointmentTime}`);
+
+          const { error: dbError, data: appointmentData } = await supabase
+            .from('appointments')
+            .insert({
+              id: appointmentId,
+              org_id: orgId,
+              service_type: serviceType || 'consultation',
+              scheduled_at: scheduledTime.toISOString(),
+              status: 'confirmed',
+              confirmation_sent: false,
+              created_at: now.toISOString(),
+              updated_at: now.toISOString()
+            });
+
+          log.info('Vapi-Webhook', 'Appointment insertion result', {
+            appointmentId,
+            dbError: dbError?.message,
+            appointmentData,
+            patientEmail,
+            patientPhone,
+            patientName,
+            serviceType
+          });
+
+          if (dbError) throw new Error(`DB Error: ${dbError.message}`);
+
+          // Step 3: Try to create Google Calendar event (optional - don't fail if Calendar not set up)
+          let calendarEventId = null;
+          try {
+            const { createCalendarEvent } = await import('../services/calendar-integration');
+            const endDate = new Date(scheduledTime);
+            endDate.setMinutes(endDate.getMinutes() + 30);
+
+            const calendarResult = await createCalendarEvent(orgId, {
+              title: `Appointment - ${patientName || patientEmail}`,
+              description: `Clinic appointment for patient: ${patientEmail}\nService: ${serviceType || 'consultation'}`,
+              startTime: scheduledTime.toISOString(),
+              endTime: endDate.toISOString(),
+              attendeeEmail: patientEmail
+            });
+
+            calendarEventId = calendarResult?.eventId || null;
+            log.info('Vapi-Webhook', 'Google Calendar event created', { appointmentId, calendarEventId });
+          } catch (calendarError: any) {
+            // Log but don't fail the booking
+            log.warn('Vapi-Webhook', 'Calendar sync skipped', { 
+              appointmentId, 
+              reason: calendarError?.message || 'Calendar not connected'
+            });
+          }
+
+          log.info('Vapi-Webhook', 'Appointment booked successfully', {
+            appointmentId,
+            contactId,
+            calendarEventId
+          });
+
+          return res.status(200).json({
+            result: {
+              success: true,
+              appointmentId,
+              calendarEventId,
+              message: `Appointment confirmed for ${appointmentDate} at ${appointmentTime}`
+            }
+          });
+        } catch (error: any) {
+          log.error('Vapi-Webhook', 'Booking failed', { error: error.message });
+          return res.status(500).json({
+            result: { success: false, error: error.message }
+          });
+        }
       }
     }
 

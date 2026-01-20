@@ -49,62 +49,79 @@ function sanitizeName(name: string): string {
     .trim();
 }
 
-// Single source of truth for voice configuration
+// SINGLE SOURCE OF TRUTH - Vapi 2026 ACTIVE VOICES ONLY
+// Per https://docs.vapi.ai/providers/voice/vapi-voices (Jan 2026)
+// ⚠️  All other voices (Neha, Paige, etc.) are LEGACY - new assistants rejected
 const VOICE_REGISTRY = [
-  // Vapi Standard Voices (Case Sensitive IDs)
-  { id: 'Rohan', name: 'Rohan', gender: 'male', provider: 'vapi', description: 'Indian American, Bright, Optimistic' },
-  { id: 'Neha', name: 'Neha', gender: 'female', provider: 'vapi', description: 'Indian American, Professional, Charming' },
-  { id: 'Hana', name: 'Hana', gender: 'female', provider: 'vapi', description: 'American, Soft, Soothing' },
-  { id: 'Harry', name: 'Harry', gender: 'male', provider: 'vapi', description: 'American, Clear, Energetic' },
-  { id: 'Elliot', name: 'Elliot', gender: 'male', provider: 'vapi', description: 'Canadian, Soothing, Friendly' },
-  { id: 'Lily', name: 'Lily', gender: 'female', provider: 'vapi', description: 'Asian American, Bubbly, Cheerful' },
-  { id: 'jennifer', name: 'jennifer', gender: 'female', provider: 'vapi', description: 'American, Deeper, Calming', default: true },
-  { id: 'Cole', name: 'Cole', gender: 'male', provider: 'vapi', description: 'American, Deeper, Calming' },
-  { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'American (Southern)' },
-  { id: 'Spencer', name: 'Spencer', gender: 'female', provider: 'vapi', description: 'American, Energetic, Quippy' },
-  { id: 'Kylie', name: 'Kylie', gender: 'female', provider: 'vapi', description: 'American, New/Beta' },
-
-  // Legacy/Other Provider Voices
-  { id: 'jennifer', name: 'Jennifer (PlayHT)', gender: 'female', provider: 'playht' },
-  { id: 'alloy', name: 'Alloy (OpenAI)', gender: 'neutral', provider: 'openai' },
-
-  // Deepgram Aura (Fallback support)
-  { id: 'aura-asteria-en', name: 'Asteria', gender: 'female', provider: 'deepgram' },
-  { id: 'aura-luna-en', name: 'Luna', gender: 'female', provider: 'deepgram' },
+  // Only these 3 voices support NEW assistant creation in Vapi 2026
+  { id: 'Rohan', name: 'Rohan', gender: 'male', provider: 'vapi', description: 'Professional, energetic, warm (healthcare-approved)' },
+  { id: 'Elliot', name: 'Elliot', gender: 'male', provider: 'vapi', description: 'Calm, measured, professional' },
+  { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'Warm, friendly, approachable' },
 ] as const;
 
-const DEFAULT_VOICE = 'jennifer';
+// ✅ ACTIVE default voice (Rohan replaces legacy Neha)
+const DEFAULT_VOICE = 'Rohan';
 
 /**
- * Convert database voice format (Deepgram format) to Vapi voice format
- * Database: "aura-asteria-en" → Vapi: "asteria"
- * Database: "Paige" → Vapi: "Paige"
- * Database: "onyx-en" → Vapi: "onyx"
+ * Convert database voice format to Vapi 2026 active voice
+ * Maps ALL legacy voices to 3 currently-supported voices:
+ * - Neha, Paige, Hana, Lily, Kylie, Leah, Tara, Jess, Mia, Zoe → Savannah (female replacements)
+ * - Harry, Cole, Spencer, Leo, Dan, Zac → Rohan (male replacements)
+ * - Elliot → Elliot (active, no mapping needed)
+ * - Rohan → Rohan (active, no mapping needed)
  */
 function convertToVapiVoiceId(dbVoiceId: string): string {
-  if (!dbVoiceId) return 'jennifer'; // Default
+  if (!dbVoiceId) return 'Rohan'; // Default to ACTIVE voice
+
+  const normalizedId = dbVoiceId.trim();
   
-  // If it's already a Vapi voice ID (like "Paige", "asteria", etc.), return as-is
-  if (dbVoiceId === 'jennifer' || !dbVoiceId.includes('-')) {
-    return dbVoiceId;
+  // Map LEGACY voices to ACTIVE Vapi 2026 voices
+  const legacyMap: Record<string, string> = {
+    // Female legacy → Savannah (warm, female replacement)
+    'neha': 'Savannah',
+    'paige': 'Savannah',
+    'hana': 'Savannah',
+    'lily': 'Savannah',
+    'kylie': 'Savannah',
+    'leah': 'Savannah',
+    'tara': 'Savannah',
+    'jess': 'Savannah',
+    'mia': 'Savannah',
+    'zoe': 'Savannah',
+    // Male legacy → Rohan (professional male replacement)
+    'harry': 'Rohan',
+    'cole': 'Rohan',
+    'spencer': 'Rohan',
+    'leo': 'Rohan',
+    'dan': 'Rohan',
+    'zac': 'Rohan',
+    // Old defaults
+    'jennifer': 'Rohan',  // Very old default
+    'sam': 'Rohan',       // Very old default
+    // Active voices (normalized)
+    'rohan': 'Rohan',
+    'elliot': 'Elliot',
+    'savannah': 'Savannah',
+  };
+  
+  const lowerNormalized = normalizedId.toLowerCase();
+  
+  // Check legacy mapping
+  if (legacyMap[lowerNormalized]) {
+    return legacyMap[lowerNormalized];
   }
   
-  // Convert Deepgram format: "aura-asteria-en" → "asteria"
-  // or "onyx-en" → "onyx"
-  const parts = dbVoiceId.split('-');
-  
-  // If it has aura prefix, extract the voice name (second part)
-  if (parts[0] === 'aura' && parts.length >= 2) {
-    return parts[1]; // "aura-asteria-en" → "asteria"
+  // If already valid Vapi voice, return as-is
+  if (VOICE_REGISTRY.some(v => v.id === normalizedId)) {
+    return normalizedId;
   }
   
-  // Otherwise take everything except the last part (which is typically language code)
-  // "onyx-en" → "onyx"
-  if (parts.length === 2 && /^[a-z]{2}(-[a-z]{2})?$/.test(parts[1])) {
-    return parts[0];
-  }
+  // Try case-insensitive match
+  const found = VOICE_REGISTRY.find(v => v.id.toLowerCase() === lowerNormalized);
+  if (found) return found.id;
   
-  return dbVoiceId; // Fallback: return as-is
+  // Ultimate fallback to active voice
+  return 'Rohan';
 }
 
 /**
@@ -128,6 +145,10 @@ function getAvailableVoices() {
  * Validates if a voice ID exists in the registry
  */
 function isValidVoiceId(voiceId: string): boolean {
+  // Allow empty/undefined voice (let Vapi use default)
+  if (!voiceId) {
+    return true;
+  }
   return VOICE_REGISTRY.some(v => v.id.toLowerCase() === (voiceId || '').toLowerCase());
 }
 
@@ -135,6 +156,11 @@ function isValidVoiceId(voiceId: string): boolean {
  * Validates if a language code is supported
  */
 function isValidLanguage(language: string): boolean {
+  // If language is not provided or empty, skip validation (allow default)
+  if (!language || typeof language !== 'string') {
+    return true;
+  }
+  
   const supportedLanguages = [
     'en-GB', 'en-US', 'es-ES', 'es-MX', 'fr-FR', 'de-DE', 'it-IT',
     'pt-BR', 'pt-PT', 'nl-NL', 'pl-PL', 'ru-RU', 'ja-JP',
@@ -589,7 +615,7 @@ async function withRetry<T>(
  * @returns Assistant ID (existing or newly created)
  * @throws {Error} If agent not found or Vapi API fails after retries
  */
-async function ensureAssistantSynced(agentId: string, vapiApiKey: string, importedPhoneNumberId?: string): Promise<string> {
+async function ensureAssistantSynced(agentId: string, vapiApiKey: string, importedPhoneNumberId?: string): Promise<{ assistantId: string; toolsSynced: boolean }> {
   const startTime = Date.now();
   const timerId = `ensureAssistantSynced-${agentId}`;
   console.time(timerId);
@@ -657,9 +683,8 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     model: {
       provider: VAPI_DEFAULTS.MODEL_PROVIDER,
       model: VAPI_DEFAULTS.MODEL_NAME,
-      messages: [{ role: 'system', content: resolvedSystemPrompt }],
-      // toolIds will be populated by ToolSyncService after creation
-      toolIds: []
+      messages: [{ role: 'system', content: resolvedSystemPrompt }]
+      // DO NOT include toolIds on creation - tools are synced by ToolSyncService after creation
     },
     voice: {
       provider: resolvedVoiceProvider,
@@ -778,6 +803,13 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
       firstMessage: assistantCreatePayload.firstMessage
     });
 
+    console.log('[VOICE_DEBUG] About to send to Vapi:', JSON.stringify({
+      voiceProvider: assistantCreatePayload.voice?.provider,
+      voiceId: assistantCreatePayload.voice?.voiceId,
+      voiceIdType: typeof assistantCreatePayload.voice?.voiceId,
+      fullVoice: assistantCreatePayload.voice
+    }, null, 2));
+    
     console.time(`${timerId}-vapi-create`);
     assistant = await withRetry(() => vapiClient.createAssistant(assistantCreatePayload));
     console.timeEnd(`${timerId}-vapi-create`);
@@ -839,59 +871,62 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     console.timeEnd(timerId);
     const totalDuration = Date.now() - startTime;
     console.log(`[ensureAssistantSynced] Completed for agent ${agentId} in ${totalDuration}ms`);
-    
+
     logger.info('Vapi assistant ID saved to database and verified', {
       agentId,
       assistantId: assistant.id,
       totalDurationMs: totalDuration
     });
 
-    // PHASE 4: Fire-and-forget tool synchronization
-    // This ensures tools are registered without blocking the response
-    (async () => {
-      try {
-        logger.info('Starting async tool sync for founder console agent', {
+    // CRITICAL FIX #3: Tool sync - now awaited with proper error handling
+    let toolsSynced = false;
+    try {
+      logger.info('Starting tool sync for founder console agent', {
+        agentId,
+        assistantId: assistant.id
+      });
+
+      // Get org_id for tool sync (query from agents table)
+      const { data: agentData, error: agentFetchError } = await supabase
+        .from('agents')
+        .select('org_id')
+        .eq('id', agentId)
+        .maybeSingle();
+
+      if (agentFetchError || !agentData?.org_id) {
+        logger.warn('Could not fetch org_id for tool sync', {
           agentId,
-          assistantId: assistant.id
+          error: agentFetchError?.message
         });
-
-        // Get org_id for tool sync (query from agents table)
-        const { data: agentData, error: agentFetchError } = await supabase
-          .from('agents')
-          .select('org_id')
-          .eq('id', agentId)
-          .maybeSingle();
-
-        if (agentFetchError || !agentData?.org_id) {
-          logger.warn('Could not fetch org_id for tool sync', {
-            agentId,
-            error: agentFetchError?.message
-          });
-          return;
-        }
-
+        // Continue - tools are optional
+      } else {
         await ToolSyncService.syncAllToolsForAssistant({
           orgId: agentData.org_id,
           assistantId: assistant.id,
-          backendUrl: process.env.BACKEND_URL,
+          backendUrl: process.env.BACKEND_URL || 'http://localhost:3001',
           skipIfExists: false  // Always sync to pick up definition changes
         });
 
-        logger.info('Async tool sync completed for founder console agent', {
+        toolsSynced = true;
+        logger.info('Tool sync completed successfully for founder console agent', {
           agentId,
           assistantId: assistant.id
         });
-      } catch (syncErr: any) {
-        logger.error('Async tool sync failed for founder console agent (non-blocking)', {
-          agentId,
-          assistantId: assistant.id,
-          error: syncErr.message
-        });
-        // Error is logged but doesn't fail the agent save operation
       }
-    })();
+    } catch (syncErr: any) {
+      logger.error('Tool sync failed for founder console agent', {
+        agentId,
+        assistantId: assistant.id,
+        error: syncErr.message
+      });
+      // Error is logged but doesn't fail the agent save - tools are optional
+      toolsSynced = false;
+    }
 
-    return assistant.id;
+    return {
+      assistantId: assistant.id,
+      toolsSynced
+    };
   }
 
   // Race condition: another request already saved an ID
@@ -1753,7 +1788,8 @@ router.post(
       let assistantId: string | undefined;
       if (agentId) {
         try {
-          assistantId = await ensureAssistantSynced(agentId, vapiApiKey);
+          const syncResult = await ensureAssistantSynced(agentId, vapiApiKey);
+          assistantId = syncResult.assistantId || syncResult;
           steps.assistantSynced = true;
         } catch (err: any) {
           res.status(400).json({
@@ -1939,13 +1975,13 @@ router.post(
         }
         // Accept both 'voice' and 'voiceId' for flexibility
         const voiceValue = config.voiceId || config.voice;
-        if (voiceValue !== undefined && voiceValue !== null) {
+        if (voiceValue !== undefined && voiceValue !== null && voiceValue !== '') {
           if (!isValidVoiceId(voiceValue)) {
             throw new Error(`Invalid voice selection for ${agentRole} agent`);
           }
           payload.voice = voiceValue;
         }
-        if (config.language !== undefined && config.language !== null) {
+        if (config.language !== undefined && config.language !== null && config.language !== '') {
           if (!isValidLanguage(config.language)) {
             throw new Error(`Invalid language selection for ${agentRole} agent`);
           }
@@ -2186,7 +2222,7 @@ router.post(
       if (vapiApiKey) {
         console.time(`${endpointTimer}-vapi-sync`);
         console.log(`[/agent/behavior] Starting Vapi sync for agents: ${agentIdsToSync.join(',')}`);
-        
+
         logger.info('Syncing agents to Vapi', {
           agentIds: agentIdsToSync,
           requestId,
@@ -2197,8 +2233,10 @@ router.post(
         // CRITICAL FIX: Capture individual agent success/failure instead of using Promise.allSettled
         const syncPromises = agentIdsToSync.map(async (id) => {
           try {
-            const assistantId = await ensureAssistantSynced(id, vapiApiKey!);
-            return { agentId: id, assistantId, success: true };
+            const syncResult = await ensureAssistantSynced(id, vapiApiKey!);
+            // ensureAssistantSynced now returns { assistantId, toolsSynced }
+            const assistantId = syncResult.assistantId || syncResult;
+            return { agentId: id, assistantId, toolsSynced: syncResult.toolsSynced, success: true };
           } catch (error: any) {
             return { agentId: id, success: false, error: error.message || String(error) };
           }
@@ -2330,7 +2368,7 @@ router.post(
         // Browser-only mode: Agent saved without Vapi sync
         console.timeEnd(endpointTimer);
         console.log(`[/agent/behavior] Request completed (no Vapi sync): ${requestId}`);
-        
+
         logger.info('Agent configuration saved in browser-only mode (no Vapi key)', {
           agentIds: agentIdsToSync,
           requestId,
@@ -2352,13 +2390,16 @@ router.post(
     } catch (error: any) {
       console.timeEnd(endpointTimer);
       console.log(`[/agent/behavior] Request FAILED: ${requestId}`);
-      
+
       logger.error('Failed to save agent behavior', {
         errorMessage: error?.message,
         requestId
       });
       logger.exception('Stack trace', error);
-      res.status(500).json({ error: error?.message || 'Internal server error', requestId });
+      
+      // Validation errors should return 400, not 500
+      const statusCode = error?.message?.includes('Invalid') ? 400 : 500;
+      res.status(statusCode).json({ error: error?.message || 'Internal server error', requestId });
     }
   }
 );
@@ -2453,7 +2494,8 @@ router.post(
       }
 
       // Always re-sync to pick up latest system_prompt, voice, language, and other changes
-      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+      const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
+      const assistantId = syncResult.assistantId || syncResult;
 
       // Get Twilio phone number from settings
       const twilioFromNumber = settings.twilio_from_number;
@@ -2700,7 +2742,8 @@ router.post(
       }
 
       // Always re-sync to pick up latest system_prompt, voice, language, and other changes
-      const assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+      const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
+      const assistantId = syncResult.assistantId || syncResult;
 
       // Create call_tracking row for web test
       const { data: trackingRow, error: trackingInsertError } = await supabase
@@ -3014,7 +3057,8 @@ router.post(
       if (!assistantId) {
         logger.warn('No vapi_assistant_id in outbound config, falling back to legacy agent sync', { orgId });
         try {
-          assistantId = await ensureAssistantSynced(agent.id, vapiApiKey);
+          const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
+          assistantId = syncResult.assistantId || syncResult;
         } catch (syncError: any) {
           logger.error('Failed to sync assistant from legacy agents table', { error: syncError?.message });
           res.status(500).json({
@@ -3040,7 +3084,7 @@ router.post(
             },
             voice: {
               provider: getVoiceProvider(activeConfig.voice || 'jennifer'),
-              voiceId: activeConfig.voice || 'jennifer'
+              voiceId: convertToVapiVoiceId(activeConfig.voice || 'jennifer')
             },
             firstMessage: activeConfig.first_message,
             maxDurationSeconds: activeConfig.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,

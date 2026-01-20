@@ -11,6 +11,7 @@
 
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
+import { IntegrationSettingsService } from './integration-settings'; // Use Settings Service for fallback support
 import { enhanceSystemPrompt } from './prompt-injector';
 import { ToolSyncService } from './tool-sync-service';
 import { createClient } from '@supabase/supabase-js';
@@ -59,56 +60,204 @@ export interface EnsureAssistantResult {
 
 export class VapiAssistantManager {
   /**
+   * Helper to normalize voice configuration
+   *
+   * Handles:
+   * - Legacy Vapi voices (jennifer, kylie, neha, etc.) → Azure/Jenny
+   * - Unmapped providers (vapi, undefined) → Azure/Jenny
+   * - Empty voice IDs → Azure/Jenny
+   * - Valid Azure voices → pass through unchanged
+   *
+   * This prevents 400 "Voice Not Found" errors from Vapi API
+   */
+  private static normalizeVoiceConfig(config: AssistantConfig): { provider: string; voiceId: string } {
+    const legacyVoices = new Set([
+      // Original Vapi-hosted voices (no longer supported)
+      'jennifer', 'kylie', 'neha', 'rohan', 'elliot', 'lily', 'savannah',
+      'hana', 'cole', 'harry', 'paige', 'spencer', 'leah', 'tara',
+      'jess', 'leo', 'dan', 'mia', 'zac', 'zoe'
+    ]);
+
+    const voiceId = config.voiceId?.toLowerCase() || '';
+    const voiceProvider = config.voiceProvider?.toLowerCase() || '';
+
+    // Condition 1: Voice is in legacy list
+    if (legacyVoices.has(voiceId)) {
+      log.info('VapiAssistantManager', `Normalizing legacy voice ID: ${config.voiceId}`, {
+        reason: 'legacy_vapi_voice',
+        original: config.voiceId,
+        normalized: 'en-US-JennyNeural'
+      });
+      return {
+        provider: 'azure',
+        voiceId: 'en-US-JennyNeural'
+      };
+    }
+
+    // Condition 2: Provider is 'vapi' (legacy provider)
+    if (voiceProvider === 'vapi') {
+      log.info('VapiAssistantManager', `Normalizing legacy voice provider: vapi`, {
+        reason: 'vapi_provider_deprecated',
+        voiceId: config.voiceId,
+        normalized: 'en-US-JennyNeural'
+      });
+      return {
+        provider: 'azure',
+        voiceId: 'en-US-JennyNeural'
+      };
+    }
+
+    // Condition 3: Provider is missing or empty
+    if (!voiceProvider || voiceProvider === 'undefined') {
+      log.info('VapiAssistantManager', `Setting default provider and voice`, {
+        reason: 'missing_provider',
+        voiceId: config.voiceId,
+        normalized: 'en-US-JennyNeural'
+      });
+      return {
+        provider: 'azure',
+        voiceId: 'en-US-JennyNeural'
+      };
+    }
+
+    // Condition 4: Empty voice ID with valid provider
+    if (!voiceId) {
+      log.info('VapiAssistantManager', `Setting default voice for provider ${voiceProvider}`, {
+        reason: 'empty_voice_id',
+        provider: voiceProvider,
+        normalized: 'en-US-JennyNeural'
+      });
+      return {
+        provider: voiceProvider,
+        voiceId: 'en-US-JennyNeural'
+      };
+    }
+
+    // Condition 5: Valid configuration - pass through as-is
+    log.debug('VapiAssistantManager', `Voice configuration valid`, {
+      provider: voiceProvider,
+      voiceId: voiceId
+    });
+    return {
+      provider: voiceProvider,
+      voiceId: config.voiceId || 'en-US-JennyNeural'
+    };
+  }
+
+  /**
    * Ensure Vapi assistant exists for org (idempotent operation)
    *
    * Strategy:
-   * 1. Check if assistant_id exists in agents table
-   * 2. If yes, verify it still exists in Vapi (GET /assistant/:id)
-   * 3. If found in Vapi: Update it with latest config (PATCH)
-   * 4. If not found (404): Create new assistant (POST)
-   * 5. If no assistant_id: Create new assistant
-   * 6. Register mapping in assistant_org_mapping table
+   * 1. Get Vapi credentials (uses IntegrationSettingsService with fallback)
+   * 2. Check if assistant_id exists in agents table
+   * 3. If yes, verify it still exists in Vapi (GET /assistant/:id)
+   * 4. If found in Vapi: Update it with latest config (PATCH)
+   * 5. If not found (404): Create new assistant (POST)
+   * 6. If no assistant_id: Create new assistant
+   * 7. Register mapping in assistant_org_mapping table
+   *
+   * Error Handling:
+   * - Voice normalization prevents 400 "Voice Not Found" errors
+   * - Credential fallback ensures keys are always available
+   * - 404s trigger automatic recreation
    *
    * @param orgId - Organization ID
    * @param role - Assistant role (inbound or outbound)
    * @param config - Assistant configuration
    * @returns Result object with assistantId and creation info
-   * @throws Error if operation fails
+   * @throws Error if operation fails unrecoverably
    */
   static async ensureAssistant(
     orgId: string,
     role: 'inbound' | 'outbound',
     config: AssistantConfig
   ): Promise<EnsureAssistantResult> {
+    const operationId = `${orgId}-${role}-${Date.now()}`;
+    
     try {
-      // Step 1: Get Vapi credentials
-      const vapiCreds = await IntegrationDecryptor.getVapiCredentials(orgId);
+      log.info('VapiAssistantManager', '📋 Starting ensureAssistant operation', {
+        operationId,
+        orgId,
+        role,
+        agentName: config.name,
+      });
+
+      // Step 1: Get Vapi credentials (with fallback support)
+      let vapiCreds;
+      try {
+        vapiCreds = await IntegrationSettingsService.getVapiCredentials(orgId);
+        log.info('VapiAssistantManager', '✅ Vapi credentials retrieved', {
+          operationId,
+          hasApiKey: !!vapiCreds.apiKey,
+          hasAssistantId: !!vapiCreds.assistantId,
+        });
+      } catch (credError: any) {
+        log.error('VapiAssistantManager', '❌ Failed to get Vapi credentials', {
+          operationId,
+          error: credError?.message,
+        });
+        throw new Error(`Failed to get Vapi credentials for org ${orgId}: ${credError?.message}`);
+      }
+
       const vapi = new VapiClient(vapiCreds.apiKey);
 
-      // Step 2: Check if assistant_id exists in agents table
-      const { data: agent, error: agentError } = await supabase
-        .from('agents')
-        .select('id, vapi_assistant_id')
-        .eq('org_id', orgId)
-        .eq('role', role)
-        .maybeSingle();
+      // Step 2: Normalize voice configuration (prevents 400 errors)
+      const voiceConfig = this.normalizeVoiceConfig(config);
+      log.info('VapiAssistantManager', '🎤 Voice configuration normalized', {
+        operationId,
+        original: `${config.voiceProvider}/${config.voiceId}`,
+        normalized: `${voiceConfig.provider}/${voiceConfig.voiceId}`,
+      });
 
-      if (agentError) {
-        throw new Error(`Failed to query agents table: ${agentError.message}`);
+      // Step 3: Check if assistant_id exists in agents table
+      let agent;
+      try {
+        const { data: agentData, error: agentError } = await supabase
+          .from('agents')
+          .select('id, vapi_assistant_id')
+          .eq('org_id', orgId)
+          .eq('role', role)
+          .maybeSingle();
+
+        if (agentError) {
+          log.warn('VapiAssistantManager', '⚠️ Failed to query agents table', {
+            operationId,
+            error: agentError.message,
+          });
+          // Continue with null agent - will create new one
+          agent = null;
+        } else {
+          agent = agentData;
+          log.info('VapiAssistantManager', '📊 Agent lookup complete', {
+            operationId,
+            found: !!agent,
+            hasAssistantId: !!agent?.vapi_assistant_id,
+          });
+        }
+      } catch (dbError: any) {
+        log.error('VapiAssistantManager', '❌ Database error during agent lookup', {
+          operationId,
+          error: dbError?.message,
+        });
+        throw new Error(`Failed to query agents table: ${dbError?.message}`);
       }
 
       let assistantId: string | null = agent?.vapi_assistant_id || null;
       let wasDeleted = false;
 
-      // Step 3: Verify assistant exists in Vapi (if we have an ID)
+      // Step 4: Verify assistant exists in Vapi (if we have an ID)
       if (assistantId) {
         try {
+          log.info('VapiAssistantManager', '🔍 Verifying assistant exists in Vapi', {
+            operationId,
+            assistantId,
+          });
+
           const existing = await vapi.getAssistant(assistantId);
 
           // Assistant exists - update it with latest config
-          log.info('VapiAssistantManager', 'Assistant exists, updating config', {
-            orgId,
-            role,
+          log.info('VapiAssistantManager', '✅ Assistant found in Vapi, updating config', {
+            operationId,
             assistantId,
           });
 
@@ -125,8 +274,8 @@ export class VapiAssistantManager {
               ],
             },
             voice: {
-              provider: config.voiceProvider || 'vapi',
-              voiceId: config.voiceId || 'jennifer',
+              provider: voiceConfig.provider,
+              voiceId: voiceConfig.voiceId,
             },
             firstMessage: config.firstMessage || 'Hello! How can I help you today?',
             maxDurationSeconds: config.maxDurationSeconds || 600,
@@ -152,119 +301,179 @@ export class VapiAssistantManager {
             updatePayload.transcriber = config.transcriber;
           }
 
-          await vapi.updateAssistant(assistantId, updatePayload);
+          try {
+            await vapi.updateAssistant(assistantId, updatePayload);
 
-          log.info('VapiAssistantManager', 'Assistant updated successfully', {
-            orgId,
-            role,
-            assistantId,
-          });
+            log.info('VapiAssistantManager', '✅ Assistant updated successfully', {
+              operationId,
+              assistantId,
+            });
 
-          return {
-            assistantId,
-            isNew: false,
-            wasDeleted: false,
-          };
+            return {
+              assistantId,
+              isNew: false,
+              wasDeleted: false,
+            };
+          } catch (updateError: any) {
+            const status = updateError?.response?.status;
+            const errorMsg = updateError?.response?.data?.message || updateError?.message;
+
+            log.warn('VapiAssistantManager', '⚠️ Update failed, will retry with new assistant', {
+              operationId,
+              assistantId,
+              status,
+              error: errorMsg,
+            });
+
+            // Assume assistant is in bad state - will be recreated
+            assistantId = null;
+            wasDeleted = status === 404;
+          }
         } catch (error: any) {
-          if (error?.response?.status === 404) {
+          const status = error?.response?.status;
+          const errorMsg = error?.response?.data?.message || error?.message;
+
+          if (status === 404) {
             // Assistant was deleted from Vapi - need to create new one
-            log.warn('VapiAssistantManager', 'Assistant not found in Vapi (was deleted), creating new', {
-              orgId,
-              role,
+            log.warn('VapiAssistantManager', '🔄 Assistant not found in Vapi (404), will recreate', {
+              operationId,
               oldAssistantId: assistantId,
+              error: errorMsg,
             });
             assistantId = null;
             wasDeleted = true;
-          } else if (error?.message?.includes('Unknown error')) {
-            // Vapi API error - retry with new assistant
-            log.warn('VapiAssistantManager', 'Vapi API error, will create new assistant', {
-              orgId,
-              role,
-              oldAssistantId: assistantId,
-              error: error?.message,
+          } else if (status >= 500) {
+            // Server error - log and retry
+            log.error('VapiAssistantManager', '❌ Vapi server error, will retry', {
+              operationId,
+              status,
+              error: errorMsg,
             });
-            assistantId = null;
+            throw error;
+          } else if (errorMsg?.includes('circuit breaker')) {
+            // Circuit breaker open - retry later
+            log.error('VapiAssistantManager', '❌ Vapi API circuit breaker is open', {
+              operationId,
+              error: errorMsg,
+            });
+            throw error;
+          } else if (errorMsg?.includes('voice')) {
+            // Voice-related error - should have been caught by normalization
+            log.error('VapiAssistantManager', '❌ Voice configuration error despite normalization', {
+              operationId,
+              error: errorMsg,
+              voiceConfig,
+            });
+            throw error;
           } else {
-            // Other error - rethrow
+            // Unknown error - rethrow
+            log.error('VapiAssistantManager', '❌ Unexpected Vapi API error', {
+              operationId,
+              status,
+              error: errorMsg,
+            });
             throw error;
           }
         }
       }
 
-      // Step 4: Create new assistant if needed
+      // Step 5: Create new assistant if needed
       if (!assistantId) {
-        log.info('VapiAssistantManager', 'Creating new Vapi assistant', {
-          orgId,
-          role,
-          name: config.name,
-        });
+        try {
+          log.info('VapiAssistantManager', '🆕 Creating new Vapi assistant', {
+            operationId,
+            name: config.name,
+            role,
+          });
 
-        const createPayload: any = {
-          name: config.name,
-          systemPrompt: enhanceSystemPrompt(config.systemPrompt),
-          firstMessage: config.firstMessage || 'Hello! How can I help you today?',
-          voiceId: config.voiceId || 'jennifer',
-          voiceProvider: config.voiceProvider || 'vapi',
-          modelProvider: config.modelProvider || 'openai',
-          modelName: config.modelName || 'gpt-4',
-          language: config.language || 'en',
-          maxDurationSeconds: config.maxDurationSeconds || 600,
-          transcriber: config.transcriber || {
-            provider: 'deepgram',
-            model: 'nova-2',
-            language: 'en-US'
+          const createPayload: any = {
+            name: config.name,
+            systemPrompt: enhanceSystemPrompt(config.systemPrompt),
+            firstMessage: config.firstMessage || 'Hello! How can I help you today?',
+            voiceId: voiceConfig.voiceId,
+            voiceProvider: voiceConfig.provider,
+            modelProvider: config.modelProvider || 'openai',
+            modelName: config.modelName || 'gpt-4',
+            language: config.language || 'en',
+            maxDurationSeconds: config.maxDurationSeconds || 600,
+            transcriber: config.transcriber || {
+              provider: 'deepgram',
+              model: 'nova-2',
+              language: 'en-US'
+            }
+          };
+
+          // Auto-attach webhook URL if not provided
+          if (!config.serverUrl && process.env.BACKEND_URL) {
+            createPayload.serverUrl = `${process.env.BACKEND_URL}/api/vapi/webhook`;
+          } else if (config.serverUrl) {
+            createPayload.serverUrl = config.serverUrl;
           }
-        };
 
-        // Auto-attach webhook URL if not provided
-        if (!config.serverUrl && process.env.BACKEND_URL) {
-          createPayload.serverUrl = `${process.env.BACKEND_URL}/api/vapi/webhook`;
-        } else if (config.serverUrl) {
-          createPayload.serverUrl = config.serverUrl;
+          // Set up model with system prompt (tools will be registered separately by ToolSyncService)
+          createPayload.model = {
+            provider: config.modelProvider || 'openai',
+            model: config.modelName || 'gpt-4',
+            messages: [
+              {
+                role: 'system',
+                content: enhanceSystemPrompt(config.systemPrompt),
+              },
+            ],
+            toolIds: []  // Empty initially - ToolSyncService will populate this
+          };
+
+          // Add server messages if provided
+          if (config.serverMessages) {
+            createPayload.serverMessages = config.serverMessages;
+          }
+
+          const created = await vapi.createAssistant(createPayload);
+
+          assistantId = created.id;
+
+          log.info('VapiAssistantManager', '✅ New Vapi assistant created', {
+            operationId,
+            assistantId,
+            name: config.name,
+          });
+        } catch (createError: any) {
+          const status = createError?.response?.status;
+          const errorMsg = createError?.response?.data?.message || createError?.message;
+
+          log.error('VapiAssistantManager', '❌ Failed to create assistant', {
+            operationId,
+            status,
+            error: errorMsg,
+            payload: { name: config.name, voice: voiceConfig },
+          });
+
+          throw new Error(`Failed to create Vapi assistant: ${errorMsg}`);
         }
+      }
 
-        // Set up model with system prompt (tools will be registered separately by ToolSyncService)
-        createPayload.model = {
-          provider: config.modelProvider || 'openai',
-          model: config.modelName || 'gpt-4',
-          messages: [
-            {
-              role: 'system',
-              content: enhanceSystemPrompt(config.systemPrompt),
-            },
-          ],
-          toolIds: []  // Empty initially - ToolSyncService will populate this
-        };
-
-        // Add server messages if provided
-        if (config.serverMessages) {
-          createPayload.serverMessages = config.serverMessages;
-        }
-
-        const created = await vapi.createAssistant(createPayload);
-
-        assistantId = created.id;
-
-        log.info('VapiAssistantManager', 'New Vapi assistant created', {
-          orgId,
-          role,
-          assistantId,
-          name: config.name,
-        });
-
-        // Step 5: Save assistant_id to agents table
+      // Step 6: Save assistant_id to agents table
+      try {
         if (agent?.id) {
           // Update existing agent row
+          log.info('VapiAssistantManager', '💾 Updating agent record', {
+            operationId,
+            agentId: agent.id,
+            assistantId,
+          });
+
           const { error: updateError } = await supabase
             .from('agents')
             .update({
               vapi_assistant_id: assistantId,
               updated_at: new Date().toISOString(),
+              voice: voiceConfig.voiceId
             })
             .eq('id', agent.id);
 
           if (updateError) {
-            log.error('VapiAssistantManager', 'Failed to save assistant_id to agents', {
+            log.error('VapiAssistantManager', '❌ Failed to update agent record', {
+              operationId,
               agentId: agent.id,
               assistantId,
               error: updateError.message,
@@ -272,12 +481,20 @@ export class VapiAssistantManager {
             throw new Error(`Failed to save assistant_id: ${updateError.message}`);
           }
 
-          log.info('VapiAssistantManager', 'Saved assistant_id to existing agent', {
+          log.info('VapiAssistantManager', '✅ Agent record updated', {
+            operationId,
             agentId: agent.id,
             assistantId,
           });
         } else {
           // Create new agent row
+          log.info('VapiAssistantManager', '💾 Creating new agent record', {
+            operationId,
+            orgId,
+            role,
+            assistantId,
+          });
+
           const { error: insertError } = await supabase
             .from('agents')
             .insert({
@@ -287,13 +504,14 @@ export class VapiAssistantManager {
               vapi_assistant_id: assistantId,
               system_prompt: config.systemPrompt,
               first_message: config.firstMessage || 'Hello! How can I help you today?',
-              voice: config.voiceId || 'jennifer',
+              voice: voiceConfig.voiceId,
               language: config.language || 'en',
               max_call_duration: config.maxDurationSeconds || 600,
             });
 
           if (insertError) {
-            log.error('VapiAssistantManager', 'Failed to create agent row', {
+            log.error('VapiAssistantManager', '❌ Failed to create agent record', {
+              operationId,
               orgId,
               role,
               assistantId,
@@ -302,28 +520,47 @@ export class VapiAssistantManager {
             throw new Error(`Failed to create agent: ${insertError.message}`);
           }
 
-          log.info('VapiAssistantManager', 'Created new agent row', {
+          log.info('VapiAssistantManager', '✅ Agent record created', {
+            operationId,
             orgId,
             role,
             assistantId,
           });
         }
+      } catch (dbError: any) {
+        log.error('VapiAssistantManager', '❌ Database operation failed', {
+          operationId,
+          error: dbError?.message,
+        });
+        throw dbError;
       }
 
-      // Step 6: Register assistant-to-org mapping
-      await IntegrationDecryptor.registerAssistantMapping(
-        assistantId,
-        orgId,
-        role,
-        config.name
-      );
+      // Step 7: Register assistant-to-org mapping
+      try {
+        await IntegrationDecryptor.registerAssistantMapping(
+          assistantId,
+          orgId,
+          role,
+          config.name
+        );
+        log.info('VapiAssistantManager', '✅ Assistant mapping registered', {
+          operationId,
+          assistantId,
+        });
+      } catch (mappingError: any) {
+        log.warn('VapiAssistantManager', '⚠️ Failed to register assistant mapping (non-critical)', {
+          operationId,
+          error: mappingError?.message,
+        });
+        // Non-critical - continue
+      }
 
-      // Step 7: Fire-and-forget tool synchronization
+      // Step 8: Fire-and-forget tool synchronization
       // This ensures tools are registered without blocking the response
       (async () => {
         try {
           log.info('VapiAssistantManager', '🔄 Starting async tool sync', {
-            orgId,
+            operationId,
             assistantId,
             role
           });
@@ -336,12 +573,12 @@ export class VapiAssistantManager {
           });
 
           log.info('VapiAssistantManager', '✅ Async tool sync completed', {
-            orgId,
+            operationId,
             assistantId
           });
         } catch (syncErr: any) {
           log.error('VapiAssistantManager', '❌ Async tool sync failed (non-blocking)', {
-            orgId,
+            operationId,
             assistantId,
             error: syncErr.message
           });
@@ -349,16 +586,25 @@ export class VapiAssistantManager {
         }
       })();
 
+      log.info('VapiAssistantManager', '✅ ensureAssistant completed successfully', {
+        operationId,
+        assistantId,
+        isNew: !agent?.vapi_assistant_id,
+        wasDeleted,
+      });
+
       return {
         assistantId,
         isNew: !agent?.vapi_assistant_id,
         wasDeleted,
       };
     } catch (error: any) {
-      log.error('VapiAssistantManager', 'Failed to ensure assistant', {
+      log.error('VapiAssistantManager', '❌ ensureAssistant failed', {
+        operationId,
         orgId,
         role,
         error: error?.message,
+        stack: error?.stack?.split('\n').slice(0, 3).join('\n'),
       });
       throw error;
     }
@@ -437,13 +683,13 @@ export class VapiAssistantManager {
         voiceId: updates.voiceId || current.voiceId,
         language: updates.language || current.language,
         maxDurationSeconds: updates.maxDurationSeconds || current.maxDurationSeconds,
-        voiceProvider: updates.voiceProvider,
-        modelProvider: updates.modelProvider,
-        modelName: updates.modelName,
-        serverUrl: updates.serverUrl,
-        serverMessages: updates.serverMessages,
-        transcriber: updates.transcriber,
-        functions: updates.functions,
+        voiceProvider: updates.voiceProvider || current.voiceProvider,
+        modelProvider: updates.modelProvider || current.modelProvider,
+        modelName: updates.modelName || current.modelName,
+        serverUrl: updates.serverUrl || current.serverUrl,
+        serverMessages: updates.serverMessages || current.serverMessages,
+        transcriber: updates.transcriber || current.transcriber,
+        functions: updates.functions || current.functions,
       };
 
       // Ensure assistant exists (will create if needed)

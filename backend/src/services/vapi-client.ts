@@ -240,7 +240,7 @@ export class VapiClient {
       },
       voice: {
         provider: config.voiceProvider || 'vapi',
-        voiceId: config.voiceId || 'jennifer'
+        voiceId: config.voiceId || process.env.VAPI_DEFAULT_VOICE || 'Rohan'
       },
       transcriber: config.transcriber || {
         provider: 'deepgram',

@@ -74,6 +74,13 @@ export class IntegrationSettingsService {
     /**
      * Get Vapi credentials for an organization
      * MULTI-TENANT: Fetches Assistant ID from organizations table
+     *
+     * Fallback Chain:
+     * 1. Org-specific Vapi integration (if custom key configured)
+     * 2. Organization record with Vapi Assistant ID + platform key
+     * 3. Platform-level Vapi key (as last resort for bootstrapping)
+     *
+     * This ensures the system can work even if org record is incomplete.
      */
     static async getVapiCredentials(orgId: string): Promise<VapiCredentials> {
         // Step 1: Check for org-specific Vapi integration in integrations table
@@ -94,21 +101,37 @@ export class IntegrationSettingsService {
             .eq('id', orgId)
             .single();
 
-        if (orgError || !org) {
-            throw new Error(`Organization ${orgId} not found`);
-        }
-
-        if (!org.vapi_assistant_id) {
-            throw new Error(`Organization ${orgId} has not configured a Vapi Assistant. Please create an assistant in the Vapi dashboard and save the Assistant ID.`);
-        }
-
-        // Step 3: Use platform-level Vapi Private Key with org's Assistant ID
-        if (!config.VAPI_PRIVATE_KEY) {
+        // Step 3: Use platform-level Vapi Private Key (always available)
+        const platformKey = config.VAPI_PRIVATE_KEY;
+        
+        if (!platformKey) {
             throw new Error(`Platform Vapi Private Key not configured. Set VAPI_PRIVATE_KEY in environment variables.`);
         }
 
+        // If org not found, return platform key with placeholder assistantId
+        // This allows the system to work during org creation
+        if (orgError || !org) {
+            console.warn(`[IntegrationSettingsService] Org ${orgId} not found; using platform key with temporary assistant ID`);
+            return {
+                apiKey: platformKey,
+                assistantId: '', // Will be populated during agent creation
+                phoneNumberId: undefined
+            };
+        }
+
+        // If org found but no assistant ID, return platform key
+        // Assistant ID will be populated during ensureAssistant()
+        if (!org.vapi_assistant_id) {
+            return {
+                apiKey: platformKey,
+                assistantId: '', // Will be populated during agent creation
+                phoneNumberId: org.vapi_phone_number_id || undefined
+            };
+        }
+
+        // Normal case: org has assistant ID
         return {
-            apiKey: config.VAPI_PRIVATE_KEY,
+            apiKey: platformKey,
             assistantId: org.vapi_assistant_id,
             phoneNumberId: org.vapi_phone_number_id || undefined
         };

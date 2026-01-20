@@ -2,9 +2,11 @@
 
 ## Quick Context
 
-**Voxanne AI** is a multi-tenant AI Voice-as-a-Service (VaaS) platform for medical clinics. Built with Next.js (frontend), Express (backend), Supabase (DB + RLS), Vapi (voice AI), and Twilio (SMS). 
+**Voxanne AI** is a multi-tenant AI Voice-as-a-Service (VaaS) platform for medical clinics. Built with Next.js 14 (frontend), Express (backend), Supabase (DB + RLS), Vapi (voice AI), and Twilio (SMS/calls).
 
-**Critical Architecture Rule**: The backend is the SOLE Vapi provider. ONE `VAPI_PRIVATE_KEY` is shared across ALL organizations. Tools are registered globally once, then linked to each org's assistants via the `org_tools` table.
+**Critical Architecture Rule**: Backend is the SOLE Vapi provider. ONE `VAPI_PRIVATE_KEY` shared across ALL orgs. Tools registered globally once, linked to orgs via `org_tools` table. **Never give orgs their own Vapi credentials.**
+
+**Development Status (Jan 2026)**: MVP feature-complete. Focus is on production hardening, performance, and HIPAA compliance. 10 core features deployed. Post-launch backlog exists for advanced features.
 
 ---
 
@@ -142,7 +144,7 @@ Used throughout booking flow to prevent one failing service from blocking others
 
 ## Development Workflows
 
-### Starting Development
+### Starting Development (3-Terminal Setup)
 ```bash
 # Terminal 1: Frontend (port 3000)
 npm run dev
@@ -150,34 +152,39 @@ npm run dev
 # Terminal 2: Backend (port 3001)
 cd backend && npm run dev
 
-# Terminal 3: Expose backend to Vapi webhooks (for local dev)
-ngrok http 3001
+# Terminal 3: Tunnel Vapi webhooks locally
+ngrok http 3001  # Copy public URL and update backend/.env VAPI_WEBHOOK_URL
 ```
 
-Update backend/.env `VAPI_WEBHOOK_URL` with ngrok public URL.
+**Note**: Check `backend/.env.example` for required vars. Use `npm run dev:all` from root for concurrent start (recommended).
 
 ### Running Tests
 
 **Frontend** (Vitest, happy-dom environment):
 ```bash
-npm run test:frontend          # Run tests once
+npm run test:frontend          # Run once
 npm run test:frontend:watch    # Watch mode
 npm run test:frontend:ui       # Test UI dashboard
 ```
 
-**Backend** (Jest + Vitest, multiple configs):
+**Backend** (Jest + Vitest, multiple test suits):
 ```bash
 cd backend
-npm run test:unit              # Unit tests (no integration)
-npm run test:integration       # Integration tests (databases, APIs)
-npm run test:backend:watch     # Vitest watch mode
+npm run test:unit              # Unit tests only (no DB/API)
+npm run test:integration       # Integration tests (real DB, services)
+npm run test:backend           # Vitest runner
+npm run test:backend:watch     # Watch mode
 npm run test:backend:coverage  # Coverage report
 ```
 
-Test patterns found in `backend/src/__tests__/`:
-- Mock-first approach (no external API calls)
-- Service mocks in `__mocks__/` subdirs
-- Fixtures for test data in each test file
+**Performance & Validation**:
+```bash
+npm run perf:test              # Full suite (DB, API, load)
+npm run test:booking           # E2E booking flow (Vitest)
+npm run verify:webhook         # Test Vapi webhook integration
+```
+
+Key pattern: `__tests__/` directories mirror source structure. Mock external services (Vapi, Twilio, Supabase) for unit tests.
 
 ### Building & Deployment
 
@@ -204,100 +211,95 @@ Deployed via:
 
 ## Code Conventions & Project-Specific Patterns
 
-### File Organization
-```
-src/
-  ├── app/                    # Next.js pages/routes (App Router)
-  ├── components/             # React components (no app logic)
-  ├── hooks/                  # React hooks (custom logic)
-  │   └── mutations/          # useSyncMutation variants
-  ├── contexts/               # React contexts (Auth, Theme, VoiceAgent)
-  ├── lib/                    # Utilities (no React)
-  ├── types/                  # TypeScript interfaces
-  └── __tests__/              # Test files (mirrored structure)
+### Backend Service Architecture (50+ Services)
 
-backend/src/
-  ├── routes/                 # Express route handlers (~30 routes for Vapi tools, webhooks, etc.)
-  ├── services/               # Business logic (50+ services)
-  ├── middleware/             # Auth, idempotency, rate-limiting, tenant resolver
-  ├── agent-tools/            # AI agent tools (booked-slots, send-sms, etc.)
-  ├── agents/                 # LLM prompt orchestration (Groq, Anthropic)
-  ├── jobs/                   # Background jobs (job scheduler)
-  ├── webhooks/               # Webhook handlers (Vapi, SMS status, etc.)
-  ├── config/                 # Centralized config from env vars
-  ├── schemas/                # Zod/input validation schemas
-  ├── types/                  # TypeScript interfaces
-  └── __tests__/              # Test suite (unit, integration, stress)
-```
+Key services in `backend/src/services/`:
 
-### Import Aliases
-- Frontend: `@/*` resolves to `src/`
-- Backend: Uses relative paths (no alias)
+| Service | Purpose | Key Pattern |
+|---------|---------|------------|
+| **vapi-client.ts** | Master Vapi API calls | Uses `VAPI_PRIVATE_KEY` only (backend exclusive) |
+| **vapi-assistant-manager.ts** | Create/update/sync Vapi assistants | Auto-creates if missing, idempotent operations |
+| **tool-sync-service.ts** | Register tools globally & link to orgs | Fire-and-forget async, auto-hash detection |
+| **atomic-booking-service.ts** | Transactional booking with double-booking prevention | SERIALIZABLE isolation, circuit breaker |
+| **booking-confirmation-service.ts** | SMS sending + compliance checks | Twilio + PII redaction |
+| **org-validation.ts** | JWT verification + org context | Cached 5min, extracts `org_id` from JWT |
+| **encryption.ts** | Encrypt/decrypt org credentials (BYOC) | AES-256-GCM, per-org keys |
+| **realtime-sync.ts** | WebSocket broadcasts for live updates | Subscriptions scoped to org_id |
+| **calendar-integration.ts** | Google Calendar OAuth + slot fetching | Credential refresh + error recovery |
+| **webhook-deduplicator.ts** | Prevent duplicate webhook processing | Idempotency table with TTL |
+| **logger.ts** | Structured logging with PII redaction | Pino + correlation IDs |
 
-### Env Variables Structure
-**Frontend** (`.env.local`):
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
-NEXT_PUBLIC_VAPI_PUBLIC_KEY
-NEXT_PUBLIC_APP_NAME=Voxanne
-```
+**Pattern**: All services export async functions, use dependency injection for testability, handle their own error logging.
 
-**Backend** (`.env`):
-```
-NODE_ENV=development
-SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY    # DB access
-VAPI_API_KEY, VAPI_PUBLIC_KEY               # Voice agent
-TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, etc. # SMS (encrypted per-org)
-GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET  # OAuth
-JWT_SECRET                                 # Session signing
-SENTRY_DSN                                 # Error monitoring
-```
+### Frontend Hook Architecture
 
-All sensitive data encrypted per-organization using `encryption.ts`.
+Key hooks in `src/hooks/mutations/`:
 
-### Type Safety
+| Hook | Purpose | Pattern |
+|------|---------|---------|
+| **useSyncMutation.ts** | HTTP mutation with retry + offline support | Auto-generates idempotency key, optimistic UI, exponential backoff |
+| **useOrgValidation.ts** | Protect routes by org membership | Extract org_id from JWT, validate URL params |
+| **useVoiceAgent.ts** | Vapi agent lifecycle | Handle call state, transcript updates |
+
+**Pattern**: Mutations send `X-Idempotency-Key` header. Failed requests auto-queue to localStorage, sync on reconnect.
+
+### Middleware Stack (Auth, Tenant Validation, Idempotency)
+
+Key middleware in `backend/src/middleware/`:
+
+1. **auth.ts** - JWT validation + 5min cache (reduces Supabase calls 80%)
+2. **tenant-resolver.ts** - Validates URL `:orgId` matches JWT org_id (403 if mismatch)
+3. **idempotency.ts** - Cache with 60s TTL (mounted on mutations like POST `/api/booking/confirm`)
+4. **rate-limit.ts** - Tiered by subscription (starter: 100 req/min, pro: 1000 req/min)
+
+**Critical Pattern**: Middleware runs BEFORE route handlers. Auth extracts org_id once, all downstream code uses it.
+
+### Type Safety & Validation
+
 - **TypeScript strict mode** enabled (`tsconfig.json`)
 - **Zod schemas** for input validation (`backend/src/schemas/`)
-- **SWR for data fetching** (`useSyncMutation` is higher-level wrapper)
-- **Named exports preferred** for services/utilities
+  - Every route validates request body/params with Zod
+  - Example: `const schema = z.object({ orgId: z.string().uuid(), bookingId: z.string().uuid() });`
+- **Named exports preferred** (for discoverability in 50+ services)
+- **Error types**: Custom `AppError` with status codes, thrown from services, caught by error middleware
 
 ### Testing Conventions
-- **Mock-first**: No external API calls in tests
-- **Fixture data**: Define in test file top (or `fixtures/` subdirs)
-- **Describe blocks**: Test behavior, not implementation
-- **Setup/teardown**: Use `beforeEach`/`afterEach` for isolation
-- **Async tests**: Always `await` promises, handle race conditions
-- **Integration tests**: Run full request→middleware→service→response cycle
 
-**Example Test** (`backend/src/__tests__/patterns/pattern-library.test.ts`):
+**Mock-first approach**:
+```bash
+# Unit tests (no Supabase, Vapi, or Twilio)
+npm run test:unit
+
+# Integration tests (real DB, mocked external APIs)
+npm run test:integration
+```
+
+**Patterns**:
+- Fixtures in test file tops (or `__fixtures__/` subdirs)
+- Describe blocks test behavior, not implementation
+- Setup/teardown with `beforeEach`/`afterEach`
+- Async tests: Always `await` promises
+- No external API calls in unit tests (mock everything)
+
+**Example** (`backend/src/__tests__/services/atomic-booking.test.ts`):
 ```typescript
-describe('Idempotency Middleware', () => {
-  let middleware: any;
-  
+describe('Atomic Booking', () => {
+  let db: any;
   beforeEach(() => {
-    middleware = createIdempotencyMiddleware();
-    clearIdempotencyCache();
+    db = createMockDb(); // Mock Supabase
   });
   
-  it('returns cached response for duplicate idempotency key', async () => {
-    const req = mockRequest({ headers: { 'x-idempotency-key': 'key-1' } });
-    const res = mockResponse();
+  it('prevents double-booking with SERIALIZABLE isolation', async () => {
+    const slot = { org_id: 'org1', scheduled_at: '2026-02-01T14:00:00Z' };
     
-    // First call
-    await middleware(req, res, () => {
-      res.json({ status: 'created' });
-    });
+    // Two concurrent attempts for SAME slot
+    const results = await Promise.allSettled([
+      bookAppointment(slot),
+      bookAppointment(slot)
+    ]);
     
-    // Second call - should use cache
-    const res2 = mockResponse();
-    await middleware(req, res2, () => {
-      res2.json({ status: 'created-again' }); // Won't reach here
-    });
-    
-    expect(res2._getStatusCode()).toBe(200);
-    expect(res2._getJSONData()).toEqual({ status: 'created' }); // Cached!
+    // Exactly ONE succeeds, ONE fails
+    expect(results[0].status).not.toBe(results[1].status);
   });
 });
 ```
@@ -338,9 +340,34 @@ describe('Idempotency Middleware', () => {
 
 ---
 
-## Common Tasks
+## Common Developer Tasks
 
-### Adding a New Vapi Agent Tool
+### Agent Save Flow (Critical Pattern - Zero Tolerance for Errors)
+
+**When fixing agent save issues, follow this checklist:**
+
+1. **Input Validation**: Use defensive validation that allows empty/undefined fields
+   - Don't reject empty language/voice - use defaults instead
+   - Check field existence AND type AND non-empty: `if (field && typeof field === 'string' && field !== '')`
+   - Validation errors should throw errors that return HTTP 400, not 500
+
+2. **Payload Building**: Only include fields that are actually provided
+   - Skip fields that are `undefined`, `null`, or empty strings
+   - Let the database use column defaults for unspecified fields
+   - Example: `if (voice && voice !== '') { payload.voice = voice; }`
+
+3. **Error Handling**: Distinguish validation errors from server errors
+   - Validation errors (bad input) → HTTP 400
+   - Server errors (DB, Vapi, etc.) → HTTP 500
+   - Pattern: `const statusCode = error?.message?.includes('Invalid') ? 400 : 500;`
+
+4. **Multi-Field Save**: When saving both inbound and outbound agents
+   - Build separate payloads for each agent
+   - Only update agents that have payload data
+   - Log what was sent and what was saved (verify round-trip)
+   - Return 200 on success even if Vapi sync skipped (browser-only mode)
+
+**File to know**: [backend/src/routes/founder-console-v2.ts](backend/src/routes/founder-console-v2.ts) → `POST /agent/behavior` endpoint (line 1881)
 1. Create tool definition in `backend/src/config/` (e.g., `my-new-tool.ts`)
 2. Update `ToolSyncService.getSystemToolsBlueprint()` to include new tool
 3. Add route handler in `backend/src/routes/vapi-tools-routes.ts` (POST `/api/vapi/tools/my-tool`)
@@ -349,25 +376,6 @@ describe('Idempotency Middleware', () => {
 6. Test: `npm run test:integration -- tool-sync-service.test.ts`
 
 **Key Pattern**: Don't register tools per-org. Add to blueprint → backend auto-registers globally → links to all assistants.
-
-### Debugging Vapi Tool Sync Issues
-
-**Tool not registering?**
-- Check `VAPI_PRIVATE_KEY` in `.env` (backend must have it)
-- Check logs: `grep -i "ToolSyncService" backend logs`
-- Verify `org_tools` table exists: `SELECT * FROM org_tools LIMIT 5;` in Supabase SQL editor
-- Check Vapi dashboard: https://dashboard.vapi.ai/tools - tools should appear there
-
-**Tool link failed to assistant?**
-- Click "Save Agent" again (sync is idempotent, safe to retry)
-- Check error in backend logs: `Failed to link tools`
-- Fallback: Manually add `toolId` to assistant in Vapi dashboard
-
-**Tool definition changed?**
-- Update blueprint in `backend/src/config/`
-- New hash will be calculated on next sync
-- If hashes differ, tool will be re-registered automatically
-- Old tools remain registered, no cleanup needed
 
 ### Adding a Dashboard Page
 1. Create component in `src/components/dashboard/MyDashboard.tsx` (Client Component with `"use client"`)
@@ -382,12 +390,6 @@ describe('Idempotency Middleware', () => {
 - Verify org_id in backend logs: `DEBUG_AUTH=true npm run dev` in backend
 - Inspect RLS policies: Supabase dashboard → SQL Editor → query `information_schema.role_routine_grants`
 - Test isolation: Create two orgs, verify one can't read other's data
-
-### Performance Tuning
-- JWT cache stats: `GET /api/internal/auth-cache-stats` (if enabled)
-- Circuit breaker status: Check logs for `CircuitBreaker: OPEN` messages
-- DB query performance: Enable Supabase query logging, review slow queries
-- Frontend: Use Lighthouse, check waterfall in DevTools, profile React with React Profiler
 
 ---
 
@@ -410,36 +412,40 @@ describe('Idempotency Middleware', () => {
 
 ---
 
-## Gotchas & Common Pitfalls
+## Gotchas & Critical Anti-Patterns
 
 ### Critical Vapi Architecture Mistakes
 
 1. **Per-Org Vapi Credentials** ❌
    - **Wrong**: Trying to get Vapi credentials from org_credentials table
-   - **Right**: Organizations have ZERO Vapi API keys. Use backend's `VAPI_PRIVATE_KEY` only
-   - **Pattern**: `const vapiKey = process.env.VAPI_PRIVATE_KEY;` (backend only)
+   - **Right**: Organizations have ZERO Vapi API keys. Backend's `VAPI_PRIVATE_KEY` is shared
+   - **Pattern**: `const vapiKey = process.env.VAPI_PRIVATE_KEY;` (backend only, never frontend)
 
 2. **Registering Tools Per Organization** ❌
    - **Wrong**: Calling `registerTool()` once per org (creates duplicates in Vapi)
    - **Right**: Register ONCE globally, save reference in `org_tools` table, link many times
-   - **Pattern**: Check if tool exists globally before registering
+   - **Pattern**: Check if tool exists before registering; use hash detection (Phase 7)
 
 3. **Blocking Agent Save on Tool Sync** ❌
    - **Wrong**: `const result = await ToolSyncService.sync(); return result;` (user waits 2-5s)
    - **Right**: Fire-and-forget async pattern - return immediately, sync in background
-   - **Pattern**: `(async () => { await sync(); })();` // Don't await
+   - **Pattern**: `(async () => { await sync(); })();` // Don't await in route handler
 
-4. **Tool Definition Changes Not Detected** ❌
-   - **Wrong**: Updating tool blueprint but not tracking changes
-   - **Right**: Each tool has SHA-256 hash in `definition_hash` column (Phase 7)
-   - **Pattern**: Hash changes trigger automatic re-registration with Vapi
+4. **Cross-Org Data Access** ❌
+   - **Wrong**: Trusting `req.query.orgId` or `req.body.orgId` (can be spoofed)
+   - **Right**: Extract org_id from JWT (`req.auth.orgId`), validate against URL params
+   - **Pattern**: Middleware validates JWT org_id matches `:orgId` in URL path (403 if mismatch)
+
+5. **Missing RLS Policies** ❌
+   - **Wrong**: Querying Supabase without org_id filtering
+   - **Right**: ALL tables have RLS enabled; queries auto-filtered by org_id at DB layer
+   - **Pattern**: Even if app code forgets org_id, RLS blocks cross-org access
 
 ### Other Critical Pitfalls
 
-5. **JWT Token Expiry**: Default 24h TTL. If testing long-running flows, mock time or refresh manually.
-6. **RLS Policies**: Query fails silently if missing org_id in WHERE clause. Always include in Supabase queries.
-7. **Idempotency Key Scope**: Must be unique per operation type. Don't reuse across different endpoints.
-8. **Timezone Handling**: Bookings use UTC in database. Frontend must convert to user's local timezone.
+6. **JWT Token Expiry**: Default 24h TTL. Expired tokens return 401.
+7. **Idempotency Key Scope**: Must be unique per user+operation. Don't reuse across endpoints.
+8. **Timezone Handling**: Bookings stored in UTC. Frontend converts to local for display.
 9. **WebSocket Reconnect**: Clients auto-reconnect after 30s. No manual intervention needed.
 10. **SMS Rate Limiting**: Twilio has per-account limits. Circuit breaker opens if threshold hit.
 
@@ -467,7 +473,26 @@ Monitor via:
 
 ---
 
-**Last Updated**: January 19, 2026  
+---
+
+## Quick Reference: Key Files Map
+
+| File | Purpose |
+|------|---------|
+| `backend/src/middleware/auth.ts` | JWT validation + caching (5min TTL) |
+| `backend/src/middleware/idempotency.ts` | Request deduplication (60s TTL) |
+| `backend/src/middleware/tenant-resolver.ts` | Org isolation enforcement |
+| `backend/src/services/tool-sync-service.ts` | Vapi tool registration + linking |
+| `backend/src/services/atomic-booking-service.ts` | Double-booking prevention |
+| `backend/src/services/vapi-client.ts` | Master Vapi API integration |
+| `backend/src/services/vapi-assistant-manager.ts` | Assistant lifecycle management |
+| `src/hooks/mutations/useSyncMutation.ts` | Frontend: retry + offline + realtime |
+| `backend/src/config/index.ts` | Centralized env var validation |
+| `backend/src/services/logger.ts` | Structured logging + PII redaction |
+
+---
+
+**Last Updated**: January 20, 2026  
 **Maintained By**: Architecture Team  
-**Status**: Vapi Tool Registration Automation - All 7 Phases Complete ✅  
-**Next Review**: When adding new tools or if Vapi API patterns change
+**Status**: Production MVP (Jan 2026) - All Core Features Complete ✅  
+**Next Review**: Monthly during production hardening phase

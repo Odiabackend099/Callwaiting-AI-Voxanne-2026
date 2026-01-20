@@ -681,6 +681,7 @@ Voxanne AI has a **solid foundation** with excellent product-market fit. The arc
 ---
 
 **Next Steps:**  
+
 1. Review this PRD with engineering team  
 2. Prioritize Week 1 fixes (5-day sprint)  
 3. Schedule penetration test (Week 2)  

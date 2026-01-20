@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
 import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
+import { VOICE_MANIFEST } from '@/lib/voice-manifest';
 
 const AGENT_CONFIG_CONSTRAINTS = {
     MIN_DURATION_SECONDS: 60,
@@ -135,17 +136,7 @@ export default function AgentConfigPage() {
                             maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                         };
 
-                        // VALIDATE: Check if voice exists in voices array (after voices are loaded)
-                        if (voicesResult.status === 'fulfilled' && loadedConfig.voice) {
-                            const voices = Array.isArray(voicesResult.value) ? voicesResult.value : (voicesResult.value?.voices || []);
-                            const voiceExists = voices.some((v: any) => v.id === loadedConfig.voice);
-                            if (!voiceExists) {
-                                console.warn('Invalid voice in saved inbound config:', loadedConfig.voice);
-                                setError(`Warning: Saved voice "${loadedConfig.voice}" not found in available voices. Please select a new voice.`);
-                                loadedConfig.voice = ''; // Reset to force user selection
-                            }
-                        }
-
+                        
                         // Check for drafts
                         const currentStore = useAgentStore.getState().inboundConfig;
                         if (!areConfigsEqual(currentStore, loadedConfig)) {
@@ -174,20 +165,7 @@ export default function AgentConfigPage() {
                             maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                         };
 
-                        // VALIDATE: Check if voice exists in voices array (after voices are loaded)
-                        if (voicesResult.status === 'fulfilled' && loadedConfig.voice) {
-                            const voices = Array.isArray(voicesResult.value) ? voicesResult.value : (voicesResult.value?.voices || []);
-                            const voiceExists = voices.some((v: any) => v.id === loadedConfig.voice);
-                            if (!voiceExists) {
-                                console.warn('Invalid voice in saved outbound config:', loadedConfig.voice);
-                                // Only set error if not already set by inbound validation
-                                if (!error || !error.includes('not found in available voices')) {
-                                    setError(`Warning: Saved voice "${loadedConfig.voice}" not found in available voices. Please select a new voice.`);
-                                }
-                                loadedConfig.voice = ''; // Reset to force user selection
-                            }
-                        }
-
+                        
                         // Check for drafts
                         const currentStore = useAgentStore.getState().outboundConfig;
                         if (!areConfigsEqual(currentStore, loadedConfig)) {

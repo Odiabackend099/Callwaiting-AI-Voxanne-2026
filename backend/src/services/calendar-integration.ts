@@ -73,13 +73,13 @@ export async function getAvailableSlots(
         const start = new Date(period.start);
         const end = new Date(period.end);
 
-        // Mark 15-minute blocks as busy
-        let current = new Date(start);
-        while (current < end) {
-          const hour = String(current.getHours()).padStart(2, '0');
-          const minute = String(current.getMinutes()).padStart(2, '0');
-          busyTimes.add(`${hour}:${minute}`);
-          current.setMinutes(current.getMinutes() + 15);
+      // Mark 15-minute blocks as busy
+      let current = new Date(start);
+      while (current < end) {
+        const hour = String(current.getHours()).padStart(2, '0');
+        const minute = String(current.getMinutes()).padStart(2, '0');
+        busyTimes.add(`${hour}:${minute}`);
+        current.setMinutes(current.getMinutes() + 15);
         }
       }
     }
@@ -146,7 +146,7 @@ export async function createCalendarEvent(
 ): Promise<{ eventId: string; eventUrl: string }> {
   try {
     log.info('CalendarIntegration', '[START] createCalendarEvent', { orgId, title: event.title });
-
+    
     // Get authenticated calendar client
     log.info('CalendarIntegration', '[STEP 1] Fetching calendar client', { orgId });
     const calendar = await getCalendarClient(orgId);
@@ -165,32 +165,32 @@ export async function createCalendarEvent(
 
     // Create event using googleapis with 5-second timeout
     log.info('CalendarIntegration', '[STEP 4] Calling calendar.events.insert with 5s timeout', { orgId });
-
+    
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Google Calendar API timeout: No response within 10 seconds')), 10000);
+      setTimeout(() => reject(new Error('Google Calendar API timeout: No response within 5 seconds')), 5000);
     });
 
     const insertPromise = calendar.events.insert({
       calendarId: 'primary',
       requestBody: {
-        summary: event.title,
-        description: event.description,
-        start: {
-          dateTime: startDate.toISOString(),
+      summary: event.title,
+      description: event.description,
+      start: {
+        dateTime: startDate.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-        },
-        end: {
-          dateTime: endDate.toISOString(),
+      },
+      end: {
+        dateTime: endDate.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-        },
-        attendees: [
-          {
-            email: event.attendeeEmail,
-            responseStatus: 'needsAction'
-          }
-        ],
-        conferenceData: event.googleMeetUrl
-          ? {
+      },
+      attendees: [
+        {
+          email: event.attendeeEmail,
+          responseStatus: 'needsAction'
+        }
+      ],
+      conferenceData: event.googleMeetUrl
+        ? {
             entryPoints: [
               {
                 entryPointType: 'video',
@@ -217,7 +217,7 @@ export async function createCalendarEvent(
       eventId: result.data.id || '',
       eventUrl: result.data.htmlLink || ''
     };
-
+    
     log.info('CalendarIntegration', '[END] createCalendarEvent SUCCESS', {
       orgId,
       eventId: returnValue.eventId
@@ -263,7 +263,7 @@ export async function checkAvailability(
         timeMax: new Date(endTime).toISOString(),
         items: [{ id: 'primary' }],
         timeZone
-      }
+        }
     });
 
     // Check if there are any busy periods

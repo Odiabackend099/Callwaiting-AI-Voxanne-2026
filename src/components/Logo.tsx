@@ -35,7 +35,7 @@ export default function Logo({
             alt="CallWaiting AI Logo"
             width={sizePixels}
             height={sizePixels}
-            className="object-contain transition-transform duration-300 hover:scale-105"
+            className="object-contain transition-transform duration-300 hover:scale-105 w-auto h-auto"
             priority={priority}
         />
     );

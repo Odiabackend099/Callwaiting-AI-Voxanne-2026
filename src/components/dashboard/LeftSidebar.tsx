@@ -95,7 +95,7 @@ export default function LeftSidebar() {
                             alt="CallWaiting AI"
                             width={32}
                             height={32}
-                            className="object-contain"
+                            className="object-contain w-full h-full"
                             priority
                         />
                     </div>
