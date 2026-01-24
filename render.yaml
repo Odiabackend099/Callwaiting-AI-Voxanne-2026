@@ -19,7 +19,7 @@ services:
           name: callwaiting-ai-db
           property: supabaseAnonKey
       - key: NEXT_PUBLIC_BACKEND_URL
-        value: https://callwaiting-ai-backend.onrender.com
+        value: https://callwaitingai-backend-sjbi.onrender.com
       - key: NEXT_PUBLIC_GA_ID
         value: ${NEXT_PUBLIC_GA_ID}
     routes:
@@ -40,7 +40,7 @@ services:
       - key: PORT
         value: "3001"
       - key: BACKEND_URL
-        value: https://callwaiting-ai-backend.onrender.com
+        value: https://callwaitingai-backend-sjbi.onrender.com
       - key: FRONTEND_URL
         value: https://callwaiting-ai-frontend.onrender.com
       - key: SUPABASE_URL
@@ -64,7 +64,7 @@ services:
           name: callwaiting-ai-db
           property: googleClientSecret
       - key: GOOGLE_REDIRECT_URI
-        value: https://callwaiting-ai-backend.onrender.com/api/google-oauth/callback
+        value: https://callwaitingai-backend-sjbi.onrender.com/api/google-oauth/callback
       - key: VAPI_PRIVATE_KEY
         fromDatabase:
           name: callwaiting-ai-db
