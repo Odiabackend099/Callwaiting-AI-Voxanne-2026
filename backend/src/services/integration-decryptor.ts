@@ -309,22 +309,22 @@ export class IntegrationDecryptor {
       });
 
       // Update last_used_at for debugging
-      await supabase
+      const { error: updateError } = await supabase
         .from('assistant_org_mapping')
         .update({ last_used_at: new Date().toISOString() })
-        .eq('vapi_assistant_id', assistantId)
-        .then(() => {
-          log.debug('IntegrationDecryptor', 'Updated assistant last_used_at', {
-            assistantId,
-          });
-        })
-        .catch((err) => {
-          // Non-critical error - don't throw
-          log.warn('IntegrationDecryptor', 'Failed to update assistant last_used_at', {
-            assistantId,
-            error: err.message,
-          });
+        .eq('vapi_assistant_id', assistantId);
+
+      if (updateError) {
+        // Non-critical error - don't throw
+        log.warn('IntegrationDecryptor', 'Failed to update assistant last_used_at', {
+          assistantId,
+          error: updateError.message,
         });
+      } else {
+        log.debug('IntegrationDecryptor', 'Updated assistant last_used_at', {
+          assistantId,
+        });
+      }
 
       return orgId;
     } catch (error: any) {
@@ -504,14 +504,6 @@ export class IntegrationDecryptor {
             code: lastError?.code
           });
           throw lastError;
-
-          log.info('IntegrationDecryptor', 'Credentials stored successfully after retry', {
-            orgId,
-            provider,
-            timestamp: new Date().toISOString(),
-            dataCount: retryData?.length || 0
-          });
-          return;
         }
 
         log.error('IntegrationDecryptor', 'Supabase upsert error', {
@@ -650,12 +642,13 @@ export class IntegrationDecryptor {
           last_verified_at: new Date().toISOString(),
         })
         .eq('org_id', orgId)
-        .eq('provider', provider)
-        .catch((err) => {
-          log.warn('IntegrationDecryptor', 'Failed to update error status', {
-            error: err.message,
-          });
+        .eq('provider', provider);
+
+      if (error) {
+        log.warn('IntegrationDecryptor', 'Failed to update error status', {
+          error: error.message,
         });
+      }
 
       return {
         success: false,
@@ -732,7 +725,7 @@ export class IntegrationDecryptor {
       // Query integrations table
       const { data, error } = await supabase
         .from('integrations')
-        .select('encrypted_config, config')
+        .select('encrypted_config, config, last_verified_at')
         .eq('org_id', orgId)
         .eq('provider', provider)
         .maybeSingle();
@@ -798,7 +791,7 @@ export class IntegrationDecryptor {
       log.info('IntegrationDecryptor', 'Credentials retrieved', {
         orgId,
         provider,
-        lastVerified: data.last_verified_at,
+        lastVerified: (data as any).last_verified_at,
         cacheSize: credentialCache.size,
       });
 
