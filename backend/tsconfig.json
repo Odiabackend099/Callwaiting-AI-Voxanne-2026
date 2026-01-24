@@ -37,7 +37,9 @@
     "**/*.test.ts",
     "**/*.spec.ts",
     "src/tests/**/*",
-    "src/__tests__/**/*"
+    "src/__tests__/**/*",
+    "src/scripts/**/*",
+    "src/routes/system-reset.ts"
   ],
   "ts-node": {
     "transpileOnly": true,

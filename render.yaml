@@ -65,7 +65,7 @@ services:
           property: googleClientSecret
       - key: GOOGLE_REDIRECT_URI
         value: https://callwaiting-ai-backend.onrender.com/api/google-oauth/callback
-      - key: VAPI_API_KEY
+      - key: VAPI_PRIVATE_KEY
         fromDatabase:
           name: callwaiting-ai-db
           property: vapiApiKey
