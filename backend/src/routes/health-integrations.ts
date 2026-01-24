@@ -8,7 +8,7 @@
  * Returns detailed status of:
  * - Database connectivity
  * - Google Calendar token validity
- * - Twilio API key validity
+ * - Twilio availability (BYOC)
  * - Circuit breaker states
  * - System readiness
  */
@@ -186,56 +186,41 @@ router.get('/integrations', async (req: Request, res: Response): Promise<void> =
     // 3. Twilio Check
     // ============================================================================
     try {
-      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
-      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      // BYOC architecture: Twilio credentials are stored per-org in org_credentials.
+      // This endpoint typically has no org context, so we validate that Twilio is configured
+      // for at least one organization (without requiring global env vars).
+      const { data: anyOrgTwilio, error: twilioError } = await supabase
+        .from('org_credentials')
+        .select('provider, is_active')
+        .eq('provider', 'twilio')
+        .eq('is_active', true)
+        .limit(1);
 
-      if (twilioSid && twilioToken && twilioPhone) {
+      if (twilioError) {
+        integrations.push({
+          name: 'Twilio',
+          status: 'degraded',
+          lastChecked: new Date().toISOString(),
+          message: 'Failed to check Twilio BYOC configuration',
+          details: { error: twilioError.message }
+        });
+        if (overallStatus === 'healthy') overallStatus = 'degraded';
+      } else if (anyOrgTwilio && anyOrgTwilio.length > 0) {
         integrations.push({
           name: 'Twilio',
           status: 'healthy',
           lastChecked: new Date().toISOString(),
-          message: 'Twilio credentials configured',
-          details: { phoneNumber: twilioPhone.replace(/[0-9]/g, 'X').replace('X', twilioPhone[0]) }
+          message: 'Twilio configured for at least one organization (BYOC)',
+          details: { systemWide: false }
         });
       } else {
-        // BYOC-aware: if the platform isn't configured, check if ANY org has Twilio configured
-        const { data: anyOrgTwilio, error } = await supabase
-          .from('org_credentials')
-          .select('provider, is_active')
-          .eq('provider', 'twilio')
-          .eq('is_active', true)
-          .limit(1);
-
-        if (error) {
-          throw error;
-        }
-
-        if (anyOrgTwilio && anyOrgTwilio.length > 0) {
-          integrations.push({
-            name: 'Twilio',
-            status: 'healthy',
-            lastChecked: new Date().toISOString(),
-            message: 'Twilio configured via BYOC (at least one organization)',
-            details: {
-              systemWide: false,
-              hasPlatformSid: !!twilioSid,
-              hasPlatformToken: !!twilioToken,
-              hasPlatformPhone: !!twilioPhone
-            }
-          });
-        } else {
-          integrations.push({
-            name: 'Twilio',
-            status: 'degraded',
-            lastChecked: new Date().toISOString(),
-            message: 'Twilio not configured (BYOC)',
-            details: {
-              note: 'No platform Twilio env vars and no org-level Twilio credentials found'
-            }
-          });
-          if (overallStatus === 'healthy') overallStatus = 'degraded';
-        }
+        integrations.push({
+          name: 'Twilio',
+          status: 'healthy',
+          lastChecked: new Date().toISOString(),
+          message: 'Twilio not configured for any organization (BYOC)',
+          details: { systemWide: false, configuredOrgs: 0 }
+        });
       }
     } catch (error) {
       integrations.push({
@@ -324,8 +309,6 @@ function deriveRecommendations(integrations: IntegrationStatus[]): string[] {
         recommendations.push(`🟡 Google Calendar token expiring soon - refresh will happen automatically on next use`);
       } else if (integration.name === 'Google Calendar') {
         recommendations.push('🟡 Google Calendar not linked - users cannot book appointments');
-      } else if (integration.name === 'Twilio') {
-        recommendations.push('🟡 Twilio credentials incomplete - SMS confirmations will fail');
       } else if (integration.name === 'Circuit Breakers') {
         recommendations.push(`🟡 Some services are failing - they will auto-recover in 30 seconds`);
       }
