@@ -190,20 +190,7 @@ router.get('/integrations', async (req: Request, res: Response): Promise<void> =
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
 
-      if (!twilioSid || !twilioToken || !twilioPhone) {
-        integrations.push({
-          name: 'Twilio',
-          status: 'degraded',
-          lastChecked: new Date().toISOString(),
-          message: 'Twilio credentials incomplete',
-          details: {
-            hasSid: !!twilioSid,
-            hasToken: !!twilioToken,
-            hasPhone: !!twilioPhone
-          }
-        });
-        if (overallStatus === 'healthy') overallStatus = 'degraded';
-      } else {
+      if (twilioSid && twilioToken && twilioPhone) {
         integrations.push({
           name: 'Twilio',
           status: 'healthy',
@@ -211,6 +198,44 @@ router.get('/integrations', async (req: Request, res: Response): Promise<void> =
           message: 'Twilio credentials configured',
           details: { phoneNumber: twilioPhone.replace(/[0-9]/g, 'X').replace('X', twilioPhone[0]) }
         });
+      } else {
+        // BYOC-aware: if the platform isn't configured, check if ANY org has Twilio configured
+        const { data: anyOrgTwilio, error } = await supabase
+          .from('org_credentials')
+          .select('provider, is_active')
+          .eq('provider', 'twilio')
+          .eq('is_active', true)
+          .limit(1);
+
+        if (error) {
+          throw error;
+        }
+
+        if (anyOrgTwilio && anyOrgTwilio.length > 0) {
+          integrations.push({
+            name: 'Twilio',
+            status: 'healthy',
+            lastChecked: new Date().toISOString(),
+            message: 'Twilio configured via BYOC (at least one organization)',
+            details: {
+              systemWide: false,
+              hasPlatformSid: !!twilioSid,
+              hasPlatformToken: !!twilioToken,
+              hasPlatformPhone: !!twilioPhone
+            }
+          });
+        } else {
+          integrations.push({
+            name: 'Twilio',
+            status: 'degraded',
+            lastChecked: new Date().toISOString(),
+            message: 'Twilio not configured (BYOC)',
+            details: {
+              note: 'No platform Twilio env vars and no org-level Twilio credentials found'
+            }
+          });
+          if (overallStatus === 'healthy') overallStatus = 'degraded';
+        }
       }
     } catch (error) {
       integrations.push({
