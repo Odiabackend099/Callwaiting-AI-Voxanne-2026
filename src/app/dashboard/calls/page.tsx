@@ -7,6 +7,7 @@ import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, Ch
 import { useAuth } from '@/contexts/AuthContext';
 // LeftSidebar removed (now in layout)
 import { RecordingPlayer } from '@/components/RecordingPlayer';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useTranscript } from '@/hooks/useTranscript';
 import { useToast } from '@/hooks/useToast';
 import useSWR, { useSWRConfig } from 'swr';
@@ -1212,16 +1213,38 @@ const CallsPageContent = () => {
                                 </button>
                                 <button
                                     onClick={handleSendFollowup}
-                                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
+                                    disabled={loadingAction === 'followup'}
+                                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center gap-2"
                                 >
-                                    <Mail className="w-4 h-4" />
-                                    Send Follow-up
+                                    {loadingAction === 'followup' ? (
+                                        <>
+                                            <Loader className="w-4 h-4 animate-spin" />
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Mail className="w-4 h-4" />
+                                            Send Follow-up
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
                     </div>
                 )
             }
+
+            {/* Confirm Dialog */}
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                confirmText={confirmDialog.confirmText}
+                cancelText={confirmDialog.cancelText}
+                isDestructive={confirmDialog.title.includes('Delete')}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({...confirmDialog, isOpen: false})}
+            />
         </>
     );
 };
