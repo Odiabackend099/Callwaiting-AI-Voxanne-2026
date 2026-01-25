@@ -1,0 +1,247 @@
+================================================================================
+                   VOXANNE AI - SERVER STARTUP & WEBHOOKS
+                              SUMMARY (2026-01-25)
+================================================================================
+
+WHAT WAS CREATED:
+================================================================================
+
+1. 📖 SERVER_STARTUP_GUIDE.md
+   - Complete guide for starting backend, frontend, and ngrok
+   - Step-by-step instructions with troubleshooting
+   - Environment variable reference
+   - Webhook configuration checklist
+   - 2,000+ line comprehensive guide
+
+2. 📋 QUICK_REFERENCE.md
+   - One-page cheat sheet for quick lookup
+   - Common issues and solutions
+   - Commands and verification steps
+   - Links to dashboards and services
+
+3. 🔐 WEBHOOK_BEST_PRACTICES.md
+   - Security patterns (signature verification)
+   - Reliability patterns (idempotency, timeouts)
+   - Monitoring and logging patterns
+   - Code examples and testing strategies
+   - 1,500+ line reference guide
+
+4. ✅ QUICK_START_CHECKLIST
+   - This file - summary of everything
+
+================================================================================
+QUICK START (EXECUTE IN THIS ORDER):
+================================================================================
+
+Terminal 1 - Backend:
+  $ cd backend
+  $ npm run dev
+  Expected: "Listening on http://localhost:3001"
+
+Terminal 2 - Frontend:
+  $ npm run dev
+  Expected: "Ready in X seconds at http://localhost:3000"
+
+Terminal 3 - ngrok tunnel:
+  $ cd backend && npm run tunnel
+  Expected: "Forwarding https://xxxx-xxxx.ngrok-free.dev → http://localhost:3001"
+
+Terminal 4 - Update .env.local:
+  $ nano .env.local
+  Find: NEXT_PUBLIC_BACKEND_URL
+  Replace: "https://your-new-ngrok-url.ngrok-free.dev"
+  Save: Ctrl+O, Enter, Ctrl+X
+
+Terminal 2 - Restart frontend:
+  (Stop with Ctrl+C, then)
+  $ npm run dev
+
+Final Step - Update external services:
+  1. Vapi Dashboard → Webhook URL
+  2. Twilio Console → Phone webhooks
+  3. Google Cloud → OAuth redirect URI
+
+================================================================================
+VERIFICATION:
+================================================================================
+
+✓ Backend running?
+  $ curl http://localhost:3001
+  → Should NOT get CORS error
+
+✓ Frontend running?
+  $ open http://localhost:3000
+  → Should see login page
+
+✓ ngrok tunnel working?
+  $ curl https://your-ngrok-url.ngrok-free.dev
+  → Should reach backend
+
+✓ Webhooks configured?
+  Open: http://127.0.0.1:4040 (ngrok web interface)
+  Make a call → See POST requests arrive
+
+================================================================================
+FILES CREATED:
+================================================================================
+
+.agent/
+├── SERVER_STARTUP_GUIDE.md          ← Comprehensive startup guide
+├── QUICK_REFERENCE.md               ← One-page cheat sheet
+├── WEBHOOK_BEST_PRACTICES.md        ← Security & reliability patterns
+└── STARTUP_SUMMARY.txt              ← This file
+
+================================================================================
+KEY INFORMATION:
+================================================================================
+
+Frontend Port:       3000
+Backend Port:        3001
+ngrok Web UI:        4040 (at http://127.0.0.1:4040)
+
+Frontend URL:        http://localhost:3000
+Backend URL:         http://localhost:3001
+ngrok Tunnel:        https://xxxx-xxxx.ngrok-free.dev (CHANGES EVERY 2 HOURS)
+
+Webhook Endpoints:
+- /api/webhooks/vapi           ← Vapi call events
+- /api/webhooks/twilio/sms     ← Incoming SMS
+- /api/webhooks/twilio/voice   ← Incoming calls
+- /api/webhooks/twilio/status  ← Call status updates
+- /api/auth/google/callback    ← Google OAuth
+
+================================================================================
+COMMON ISSUES & FIXES:
+================================================================================
+
+Port 3000 already in use?
+  $ lsof -i :3000 | grep LISTEN | awk '{print $2}' | xargs kill -9
+
+Port 3001 already in use?
+  $ lsof -i :3001 | grep LISTEN | awk '{print $2}' | xargs kill -9
+
+CORS error?
+  1. Update NEXT_PUBLIC_BACKEND_URL in .env.local
+  2. Restart frontend (npm run dev)
+
+Webhook not reaching backend?
+  1. Check ngrok is still running
+  2. Verify webhook URL in external service matches current ngrok URL
+  3. Test with: curl https://your-ngrok-url.ngrok-free.dev/api/webhooks/vapi
+
+Database connection failed?
+  1. Check backend/.env has SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+  2. Verify keys are correct in Supabase dashboard
+
+ngrok URL expires?
+  1. Restart ngrok: npm run tunnel
+  2. Copy new URL
+  3. Update NEXT_PUBLIC_BACKEND_URL in .env.local
+  4. Restart frontend: npm run dev
+  5. Update external services (Vapi, Twilio, Google)
+
+================================================================================
+WEBHOOK SECURITY CHECKLIST:
+================================================================================
+
+✓ Verify webhook signature (x-vapi-signature, x-twilio-signature)
+✓ Return 200 OK within 5 seconds
+✓ Process asynchronously (fire-and-forget pattern)
+✓ Detect and skip duplicate events (idempotency)
+✓ Log all webhooks for debugging
+✓ Handle errors gracefully
+✓ Validate input with Zod schema
+✓ Filter by org_id for multi-tenant safety
+
+================================================================================
+MONITORING & DEBUGGING:
+================================================================================
+
+View ngrok activity:
+  http://127.0.0.1:4040
+
+View backend logs:
+  (In Terminal 1 where backend is running)
+
+View frontend logs:
+  (In Terminal 2 where frontend is running)
+  (Also: Browser DevTools → F12 → Console tab)
+
+Test webhook manually:
+  $ curl -X POST http://localhost:3001/api/webhooks/vapi \
+    -H "Content-Type: application/json" \
+    -d '{"eventId":"test","type":"call.started"}'
+
+================================================================================
+ENVIRONMENT CONFIGURATION:
+================================================================================
+
+Frontend (.env.local):
+  NEXT_PUBLIC_BACKEND_URL = https://your-ngrok-url.ngrok-free.dev
+  NEXT_PUBLIC_SUPABASE_URL = (database)
+  NEXT_PUBLIC_SUPABASE_ANON_KEY = (auth key)
+
+Backend (backend/.env):
+  NODE_ENV = development
+  VAPI_PRIVATE_KEY = (required for calls)
+  SUPABASE_URL = (database)
+  SUPABASE_SERVICE_ROLE_KEY = (service role)
+  TWILIO_ACCOUNT_SID = (SMS/calls)
+  GOOGLE_CLIENT_ID = (calendar)
+  GOOGLE_OAUTH_REDIRECT_URI = https://your-ngrok-url.ngrok-free.dev/api/auth/google/callback
+
+================================================================================
+EXTERNAL SERVICES TO CONFIGURE:
+================================================================================
+
+1. Vapi (https://dashboard.vapi.ai)
+   → Assistant → Webhook URL
+   → Update to: https://your-ngrok-url.ngrok-free.dev/api/webhooks/vapi
+
+2. Twilio (https://console.twilio.com)
+   → Phone Number → Webhooks
+   → Incoming Messages: https://your-ngrok-url.ngrok-free.dev/api/webhooks/twilio/sms
+   → Incoming Calls: https://your-ngrok-url.ngrok-free.dev/api/webhooks/twilio/voice
+   → Status Callbacks: https://your-ngrok-url.ngrok-free.dev/api/webhooks/twilio/status
+
+3. Google Cloud (https://console.cloud.google.com)
+   → OAuth 2.0 Client IDs
+   → Authorized Redirect URI: https://your-ngrok-url.ngrok-free.dev/api/auth/google/callback
+
+================================================================================
+USEFUL LINKS:
+================================================================================
+
+Vapi Dashboard:        https://dashboard.vapi.ai
+Twilio Console:        https://console.twilio.com
+Google Cloud Console:  https://console.cloud.google.com
+Supabase Dashboard:    https://app.supabase.com
+ngrok Web Interface:   http://127.0.0.1:4040 (when running)
+
+================================================================================
+NEXT STEPS:
+================================================================================
+
+1. Read SERVER_STARTUP_GUIDE.md for detailed instructions
+2. Follow the Quick Start section above
+3. Keep QUICK_REFERENCE.md open while developing
+4. Reference WEBHOOK_BEST_PRACTICES.md when implementing webhooks
+5. Monitor ngrok web interface at http://127.0.0.1:4040
+6. Test webhooks with curl or Postman before going to production
+
+================================================================================
+DOCUMENTATION LOCATIONS:
+================================================================================
+
+.agent/
+├── prd.md                           ← Master PRD (product requirements)
+├── SERVER_STARTUP_GUIDE.md          ← This guide (detailed)
+├── QUICK_REFERENCE.md               ← Quick lookup cheat sheet
+├── WEBHOOK_BEST_PRACTICES.md        ← Security & patterns guide
+└── STARTUP_SUMMARY.txt              ← This file
+
+================================================================================
+
+Last Updated: 2026-01-25
+Status: ✅ All Server Startup & Webhook Documentation Complete
+
