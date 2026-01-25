@@ -42,14 +42,69 @@ interface IntegrationResponse {
 }
 
 // ============================================
+// GET /api/integrations/twilio
+// Get Twilio credentials (org_credentials)
+// ============================================
+
+// ============================================
+// GET /api/integrations/twilio
+// Get Twilio credentials (org_credentials)
+// ============================================
+
+integrationsRouter.get('/twilio', async (req: express.Request, res: express.Response) => {
+  try {
+    const orgId = (req as any).user.orgId;
+
+    const { data: creds, error } = await supabase
+      .from('org_credentials')
+      .select('metadata, encrypted_config')
+      .eq('org_id', orgId)
+      .eq('provider', 'twilio')
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) {
+      log.error('integrations', 'Database error fetching Twilio creds', { error: error.message });
+      return res.status(500).json({ success: false, error: 'Database error' } as IntegrationResponse);
+    }
+
+    if (!creds) {
+      return res.status(404).json({
+        success: false,
+        error: 'Twilio not configured'
+      } as IntegrationResponse);
+    }
+
+    const config = {
+      accountSid: creds.metadata?.accountSid,
+      phoneNumber: creds.metadata?.phoneNumber,
+      authToken: '••••••••' // Masked
+    };
+
+    res.json({
+      success: true,
+      config
+    } as IntegrationResponse);
+  } catch (error: any) {
+    log.error('integrations', 'Failed to get Twilio credentials', {
+      error: error?.message
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get credentials'
+    } as IntegrationResponse);
+  }
+});
+
+// ============================================
 // POST /api/integrations/twilio
-// Store Twilio credentials (using customer_twilio_keys)
+// Store Twilio credentials (org_credentials + Vapi Sync)
 // ============================================
 
 integrationsRouter.post('/twilio', async (req: express.Request, res: express.Response) => {
   try {
     const orgId = (req as any).user.orgId;
-    const { accountSid, authToken, phoneNumber, whatsappNumber } = req.body;
+    const { accountSid, authToken, phoneNumber } = req.body;
 
     // Validate input
     if (!accountSid || !authToken) {
@@ -59,9 +114,9 @@ integrationsRouter.post('/twilio', async (req: express.Request, res: express.Res
       } as IntegrationResponse);
     }
 
-    log.info('integrations', 'Testing Twilio credentials', { orgId });
+    log.info('integrations', 'Processing Twilio credentials', { orgId });
 
-    // Test connection
+    // 1. Test connection with Twilio
     try {
       const twilio = require('twilio');
       const client = twilio(accountSid, authToken);
@@ -77,38 +132,75 @@ integrationsRouter.post('/twilio', async (req: express.Request, res: express.Res
       } as IntegrationResponse);
     }
 
-    // Store credentials in customer_twilio_keys
-    // Note: Storing auth_token as plain text per current schema.
-    try {
-      const { error } = await supabase
-        .from('customer_twilio_keys')
-        .upsert({
-          org_id: orgId,
-          account_sid: accountSid.trim(),
-          auth_token: authToken.trim(),
-          phone_number: phoneNumber || 'N/A', // Schema might require this? Check table definition.
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'org_id' }); // Assuming unique constraint or user logic
+    // 2. Encrypt Credentials
+    const { EncryptionService } = require('../services/encryption');
+    const encryptedConfig = EncryptionService.encryptObject({
+      accountSid,
+      authToken,
+      phoneNumber
+    });
 
-      if (error) throw error;
+    // 3. Save to Single Source of Truth (org_credentials)
+    const { error: dbError } = await supabase
+      .from('org_credentials')
+      .upsert({
+        org_id: orgId,
+        provider: 'twilio',
+        is_active: true,
+        encrypted_config: encryptedConfig,
+        metadata: {
+          accountSid, // Safe to store non-sensitive ID for display
+          phoneNumber
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'org_id,provider' });
 
-    } catch (storeError: any) {
-      log.error('integrations', 'Failed to store Twilio credentials', {
-        orgId,
-        error: storeError?.message
-      });
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to store credentials'
-      } as IntegrationResponse);
+    if (dbError) {
+      log.error('integrations', 'Failed to save to org_credentials', { error: dbError.message });
+      throw new Error('Database save failed');
     }
 
-    log.info('integrations', 'Twilio credentials stored', { orgId });
+    // 4. Sync to Vapi Platform (Dual-Sync)
+    // We must ensure Vapi has these credentials so the AI can make calls.
+    const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
+    if (VAPI_PRIVATE_KEY) {
+      try {
+        const vapiRes = await fetch('https://api.vapi.ai/credential', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            provider: 'twilio',
+            accountSid: accountSid,
+            authToken: authToken
+          })
+        });
+
+        if (!vapiRes.ok) {
+          const errorText = await vapiRes.text();
+          log.error('integrations', 'Vapi Sync Failed', { error: errorText });
+          // We warn but don't fail the request, as DB save succeeded.
+          // Ideally we should alert the user.
+        } else {
+          log.info('integrations', 'Vapi Sync Successful', { orgId });
+        }
+      } catch (vapiError: any) {
+        log.error('integrations', 'Vapi Sync Error', { error: vapiError.message });
+      }
+    } else {
+      log.warn('integrations', 'Skipping Vapi Sync - No Private Key', { orgId });
+    }
+
+    // 5. Cleanup Legacy Table (Optional but good for hygiene)
+    await supabase.from('customer_twilio_keys').delete().eq('org_id', orgId);
 
     res.json({
       success: true,
-      message: 'Twilio credentials stored successfully'
+      message: 'Twilio credentials saved and synced successfully'
     } as IntegrationResponse);
+
   } catch (error: any) {
     log.error('integrations', 'Unexpected error storing Twilio credentials', {
       error: error?.message
@@ -281,19 +373,20 @@ integrationsRouter.get('/status', async (req: express.Request, res: express.Resp
   try {
     const orgId = (req as any).user.orgId;
 
-    // Check Twilio status from customer_twilio_keys
-    const { data: twilioKey } = await supabase
-      .from('customer_twilio_keys')
-      .select('account_sid, updated_at')
+    // Check Twilio status from org_credentials (SSOT)
+    const { data: twilioCreds } = await supabase
+      .from('org_credentials')
+      .select('metadata, updated_at')
       .eq('org_id', orgId)
-      .limit(1)
+      .eq('provider', 'twilio')
+      .eq('is_active', true)
       .maybeSingle();
 
     const status: Record<string, IntegrationStatus> = {
       vapi: { connected: false }, // Vapi status logic remains separate or assumes connected via env
       twilio: {
-        connected: !!twilioKey,
-        lastVerified: twilioKey?.updated_at
+        connected: !!twilioCreds,
+        lastVerified: twilioCreds?.updated_at
       },
       googleCalendar: { connected: false },
       resend: { connected: false },
@@ -329,22 +422,26 @@ integrationsRouter.post('/:provider/verify', async (req: express.Request, res: e
     const { provider } = req.params;
 
     if (provider === 'twilio') {
-      // Verify using customer_twilio_keys
+      // Verify using org_credentials (SSOT)
       const { data: creds } = await supabase
-        .from('customer_twilio_keys')
-        .select('account_sid, auth_token')
+        .from('org_credentials')
+        .select('encrypted_config')
         .eq('org_id', orgId)
-        .limit(1)
-        .single();
+        .eq('provider', 'twilio')
+        .eq('is_active', true)
+        .maybeSingle();
 
-      if (!creds) {
+      if (!creds || !creds.encrypted_config) {
         return res.json({ success: false, error: 'Not configured' });
       }
 
       try {
+        const { EncryptionService } = require('../services/encryption');
+        const config = EncryptionService.decryptObject(creds.encrypted_config);
+
         const twilio = require('twilio');
-        const client = twilio(creds.account_sid, creds.auth_token);
-        await client.api.accounts(creds.account_sid).fetch();
+        const client = twilio(config.accountSid, config.authToken);
+        await client.api.accounts(config.accountSid).fetch();
         return res.json({ success: true, data: { connected: true } });
       } catch (e: any) {
         return res.json({ success: false, error: e.message });

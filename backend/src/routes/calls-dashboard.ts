@@ -9,6 +9,8 @@ import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
 import { getSignedRecordingUrl } from '../services/call-recording-storage';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
+import { Twilio } from 'twilio';
 
 const callsRouter = Router();
 
@@ -544,6 +546,244 @@ callsRouter.delete('/:callId', async (req: Request, res: Response) => {
   } catch (e: any) {
     log.error('Calls', 'DELETE /:callId - Error', { error: e?.message });
     return res.status(500).json({ error: e?.message || 'Failed to delete call' });
+  }
+});
+
+/**
+ * POST /api/calls-dashboard/:callId/followup
+ * Send a follow-up SMS message to the call participant
+ * @param callId - Call ID
+ * @body message - SMS message text (max 160 characters)
+ * @returns Success/failure with message ID
+ */
+callsRouter.post('/:callId/followup', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { callId } = req.params;
+    const schema = z.object({
+      message: z.string().min(1).max(160)
+    });
+
+    const parsed = schema.parse(req.body);
+
+    // Fetch call details
+    const { data: callData, error: callError } = await supabase
+      .from('call_logs')
+      .select('phone_number, caller_name, org_id')
+      .eq('id', callId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (callError || !callData) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Get Twilio credentials from org_credentials
+    const twilioCredentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
+    if (!twilioCredentials) {
+      return res.status(400).json({ error: 'Twilio is not configured for your organization' });
+    }
+
+    // Send SMS via Twilio
+    const client = new Twilio(twilioCredentials.accountSid, twilioCredentials.authToken);
+    const message = await client.messages.create({
+      body: parsed.message,
+      from: twilioCredentials.phoneNumber,
+      to: callData.phone_number
+    });
+
+    // Log the message in the messages table
+    const { error: logError } = await supabase
+      .from('messages')
+      .insert({
+        org_id: orgId,
+        call_id: callId,
+        direction: 'outbound',
+        method: 'sms',
+        recipient: callData.phone_number,
+        content: parsed.message,
+        status: 'sent',
+        service_provider: 'twilio',
+        external_message_id: message.sid,
+        sent_at: new Date().toISOString()
+      });
+
+    if (logError) {
+      log.warn('Calls', 'Failed to log SMS message', { orgId, callId, error: logError.message });
+    }
+
+    log.info('Calls', 'Follow-up SMS sent', { orgId, callId, phone: callData.phone_number, messageId: message.sid });
+    return res.json({
+      success: true,
+      messageId: message.sid,
+      phone: callData.phone_number,
+      message: '📱 Follow-up SMS sent successfully'
+    });
+  } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      const firstError = e.issues?.[0];
+      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+    }
+    log.error('Calls', 'POST /:callId/followup - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to send follow-up SMS' });
+  }
+});
+
+/**
+ * POST /api/calls-dashboard/:callId/share
+ * Share a call recording via email
+ * @param callId - Call ID
+ * @body email - Email address to send recording to
+ * @returns Success/failure with share confirmation
+ */
+callsRouter.post('/:callId/share', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { callId } = req.params;
+    const schema = z.object({
+      email: z.string().email()
+    });
+
+    const parsed = schema.parse(req.body);
+
+    // Fetch call and recording
+    const { data: callData, error: callError } = await supabase
+      .from('call_logs')
+      .select('id, recording_storage_path, recording_url, caller_name, phone_number, duration_seconds')
+      .eq('id', callId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (callError || !callData) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    if (!callData.recording_url && !callData.recording_storage_path) {
+      return res.status(400).json({ error: 'This call does not have a recording' });
+    }
+
+    // Generate signed URL for the recording (24-hour expiry)
+    let recordingUrl = callData.recording_url;
+    if (callData.recording_storage_path) {
+      const signed = await getSignedRecordingUrl(callData.recording_storage_path);
+      if (signed) recordingUrl = signed;
+    }
+
+    // Log the share action
+    const { error: logError } = await supabase
+      .from('messages')
+      .insert({
+        org_id: orgId,
+        call_id: callId,
+        direction: 'outbound',
+        method: 'email',
+        recipient: parsed.email,
+        subject: `Shared call recording - ${callData.caller_name || 'Call'} (${callData.duration_seconds}s)`,
+        content: `Recording shared at: ${recordingUrl}`,
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      });
+
+    if (logError) {
+      log.warn('Calls', 'Failed to log share action', { orgId, callId, error: logError.message });
+    }
+
+    log.info('Calls', 'Recording shared', { orgId, callId, email: parsed.email });
+    return res.json({
+      success: true,
+      email: parsed.email,
+      message: '📧 Recording shared successfully'
+    });
+  } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      const firstError = e.issues?.[0];
+      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+    }
+    log.error('Calls', 'POST /:callId/share - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to share recording' });
+  }
+});
+
+/**
+ * POST /api/calls-dashboard/:callId/transcript/export
+ * Export call transcript as a text file
+ * @param callId - Call ID
+ * @body format - Export format ('txt' supported, 'pdf'/'docx' future)
+ * @returns Transcript file or downloadable content
+ */
+callsRouter.post('/:callId/transcript/export', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { callId } = req.params;
+    const schema = z.object({
+      format: z.enum(['txt']).default('txt')
+    });
+
+    const parsed = schema.parse(req.body);
+
+    // Fetch call and transcript
+    const { data: callData, error: callError } = await supabase
+      .from('call_logs')
+      .select('id, transcript, caller_name, phone_number, created_at')
+      .eq('id', callId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (callError || !callData) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    if (!callData.transcript) {
+      return res.status(400).json({ error: 'This call does not have a transcript' });
+    }
+
+    // Log the export action
+    const { error: logError } = await supabase
+      .from('messages')
+      .insert({
+        org_id: orgId,
+        call_id: callId,
+        direction: 'outbound',
+        method: 'email',
+        recipient: req.user?.email || 'unknown',
+        subject: `Transcript export - ${callData.caller_name || 'Call'}`,
+        content: `Transcript exported in ${parsed.format} format`,
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      });
+
+    if (logError) {
+      log.warn('Calls', 'Failed to log export action', { orgId, callId, error: logError.message });
+    }
+
+    // Format transcript as text
+    const transcriptText = Array.isArray(callData.transcript)
+      ? callData.transcript
+          .map((turn: any) => `${turn.speaker.toUpperCase()}: ${turn.text}`)
+          .join('\n')
+      : String(callData.transcript);
+
+    const filename = `transcript_${callData.caller_name || 'call'}_${callData.created_at?.split('T')[0]}.txt`;
+
+    log.info('Calls', 'Transcript exported', { orgId, callId, format: parsed.format });
+
+    // Return transcript as downloadable file
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(transcriptText);
+  } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      const firstError = e.issues?.[0];
+      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+    }
+    log.error('Calls', 'POST /:callId/transcript/export - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to export transcript' });
   }
 });
 

@@ -17,6 +17,27 @@ const contactsRouter = Router();
 contactsRouter.use(requireAuthOrDev);
 
 /**
+ * Transform contact data to match frontend expectations
+ * Maps: name → contact_name, phone → phone_number
+ */
+function transformContact(contact: any) {
+  return {
+    id: contact.id,
+    contact_name: contact.name,
+    phone_number: contact.phone,
+    email: contact.email,
+    last_contact_time: contact.last_contacted_at,
+    booking_source: contact.booking_source,
+    notes: contact.notes,
+    services_interested: contact.service_interests || [],
+    lead_score: contact.lead_score,
+    lead_status: contact.lead_status,
+    created_at: contact.created_at,
+    updated_at: contact.updated_at
+  };
+}
+
+/**
  * GET /api/contacts/stats
  * Get aggregated contact statistics
  * @returns Contact counts by lead status and total
@@ -37,10 +58,10 @@ contactsRouter.get('/stats', async (req: Request, res: Response) => {
     }
 
     const stats = {
-      total: data?.length || 0,
-      hot: data?.filter(c => c.lead_status === 'hot').length || 0,
-      warm: data?.filter(c => c.lead_status === 'warm').length || 0,
-      cold: data?.filter(c => c.lead_status === 'cold').length || 0
+      total_leads: data?.length || 0,
+      hot_leads: data?.filter(c => c.lead_status === 'hot').length || 0,
+      warm_leads: data?.filter(c => c.lead_status === 'warm').length || 0,
+      cold_leads: data?.filter(c => c.lead_status === 'cold').length || 0
     };
 
     return res.json(stats);
@@ -92,10 +113,10 @@ contactsRouter.get('/', async (req: Request, res: Response) => {
     const rows = Array.isArray(data) ? data : [];
     const total = rows.length > 0 ? (rows[0] as any).total_count : 0;
 
-    // Remove total_count from response data
+    // Remove total_count from response data and transform fields
     const contacts = rows.map(row => {
       const { total_count, ...contact } = row as any;
-      return contact;
+      return transformContact(contact);
     });
 
     return res.json({
@@ -224,8 +245,9 @@ contactsRouter.get('/:id', async (req: Request, res: Response) => {
       .order('scheduled_at', { ascending: false })
       .limit(10);
 
+    const transformedContact = transformContact(contact);
     const enhancedContact = {
-      ...contact,
+      ...transformedContact,
       call_history: calls || [],
       appointment_history: appointments || [],
       total_calls: calls?.length || 0,

@@ -47,6 +47,7 @@ router.get('/auth/url', async (req: Request, res: Response) => {
       scope: [
         'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/userinfo.email', // Required for email extraction
       ],
       state, // Include state parameter for CSRF protection
       prompt: 'consent', // Force consent screen to ensure refresh_token

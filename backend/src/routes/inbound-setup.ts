@@ -184,46 +184,66 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
 
         // Key-rotation common failure: number already imported/claimed by another Vapi workspace/org.
         if (typeof vapiMessage === 'string' && vapiMessage.toLowerCase().includes('already in use')) {
-          // Persist last error for UI status visibility
-          await supabase
-            .from('integrations')
-            .upsert(
-              {
-                org_id: orgId,
-                provider: 'twilio_inbound',
-                config: {
-                  ...(existingConfig || {}),
-                  phoneNumber: twilioPhoneNumber,
-                  last_error: vapiMessage,
-                  last_attempted_at: new Date().toISOString(),
-                  vapiApiKeyLast4Used: currentVapiKeyLast4
-                },
-                updated_at: new Date().toISOString()
-              },
-              { onConflict: 'org_id,provider' }
-            );
+          console.log('[InboundSetup] Number already in use, checking if it belongs to this workspace...', { requestId });
 
-          res.status(400).json({
-            error:
-              'This Twilio number is already linked to another Vapi workspace. ' +
-              'If this is your number, unlink/release it in the other Vapi dashboard first, then retry. ' +
-              (workspaceMismatch
-                ? `We detected this number was previously linked using a different Vapi API key (workspace mismatch). `
-                : '') +
-              'If you previously linked it in this workspace, use that same workspace API key or reuse the existing mapping.',
-            details: vapiMessage,
-            workspaceMismatch,
+          // IDEMPOTENCY FIX: Check if the number exists in THIS Vapi workspace
+          try {
+            const existingNumbers = await vapiClient.listPhoneNumbers();
+            const match = existingNumbers.find((p: any) => p.number === twilioPhoneNumber);
+
+            if (match) {
+              console.log('[InboundSetup] ✅ Found existing number in Vapi workspace, reusing ID', { requestId, id: match.id });
+              vapiPhoneNumberId = match.id;
+              // Proceed with this ID
+            } else {
+              // Truly claimed by ANOTHER workspace
+              throw vapiError;
+            }
+          } catch (checkError) {
+            // If listing fails or we re-throw the original error
+            console.error('[InboundSetup] Failed to verify existing number ownership', { requestId, error: checkError });
+
+            // Persist last error for UI status visibility
+            await supabase
+              .from('integrations')
+              .upsert(
+                {
+                  org_id: orgId,
+                  provider: 'twilio_inbound',
+                  config: {
+                    ...(existingConfig || {}),
+                    phoneNumber: twilioPhoneNumber,
+                    last_error: vapiMessage,
+                    last_attempted_at: new Date().toISOString(),
+                    vapiApiKeyLast4Used: currentVapiKeyLast4
+                  },
+                  updated_at: new Date().toISOString()
+                },
+                { onConflict: 'org_id,provider' }
+              );
+
+            res.status(400).json({
+              error:
+                'This Twilio number is already linked to another Vapi workspace. ' +
+                'If this is your number, unlink/release it in the other Vapi dashboard first, then retry. ' +
+                (workspaceMismatch
+                  ? `We detected this number was previously linked using a different Vapi API key (workspace mismatch). `
+                  : '') +
+                'If you previously linked it in this workspace, use that same workspace API key or reuse the existing mapping.',
+              details: vapiMessage,
+              workspaceMismatch,
+              requestId
+            });
+            return;
+          }
+        } else {
+          console.error('[InboundSetup] ❌ Failed to import Twilio number to Vapi', { requestId, error: vapiMessage, status: statusCode });
+          res.status(statusCode >= 400 && statusCode < 500 ? 400 : 500).json({
+            error: vapiMessage,
             requestId
           });
           return;
         }
-
-        console.error('[InboundSetup] ❌ Failed to import Twilio number to Vapi', { requestId, error: vapiMessage, status: statusCode });
-        res.status(statusCode >= 400 && statusCode < 500 ? 400 : 500).json({
-          error: vapiMessage,
-          requestId
-        });
-        return;
       }
     }
 
@@ -275,8 +295,8 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
-    // Store Twilio credentials in integrations table
-    console.log('[InboundSetup] Storing Twilio credentials', { requestId, orgId });
+    // Store Twilio credentials in org_credentials (SSOT)
+    console.log('[InboundSetup] Storing Twilio credentials to org_credentials', { requestId, orgId });
 
     // Encrypt credentials before storage
     const credentialsToEncrypt = {
@@ -290,14 +310,35 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
 
     const encryptedConfig = EncryptionService.encryptObject(credentialsToEncrypt);
 
+    // 1. Save to org_credentials (SSOT)
+    const { error: orgCredsError } = await supabase
+      .from('org_credentials')
+      .upsert({
+        org_id: orgId,
+        provider: 'twilio',
+        is_active: true,
+        encrypted_config: encryptedConfig,
+        metadata: {
+          accountSid: twilioAccountSid,
+          phoneNumber: twilioPhoneNumber
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'org_id,provider' });
+
+    if (orgCredsError) {
+      console.error('[InboundSetup] Failed to save to org_credentials', { requestId, error: orgCredsError });
+      throw new Error('Database save failed');
+    }
+
+    // 2. Also update 'integrations' table for backward compatibility/status tracking (optional but good for now)
     const { error: integrationError } = await supabase
       .from('integrations')
       .upsert(
         {
           org_id: orgId,
-          provider: 'TWILIO', // Unified provider name
+          provider: 'twilio_inbound', // Keep this provider for inbound-specific config
           encrypted_config: encryptedConfig,
-          config: { // Keep non-sensitive metadata in config if needed, or just status
+          config: {
             phoneNumber: twilioPhoneNumber,
             status: 'active',
             activatedAt: new Date().toISOString(),
@@ -310,9 +351,8 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
       );
 
     if (integrationError) {
-      console.error('[InboundSetup] Failed to store Twilio credentials', { requestId, error: integrationError });
-      res.status(500).json({ error: 'Failed to store credentials', requestId });
-      return;
+      console.error('[InboundSetup] Failed to store integration config', { requestId, error: integrationError });
+      // Non-fatal if org_credentials succeeded
     }
 
     console.log('[InboundSetup] ✅ Twilio credentials stored', { requestId });
