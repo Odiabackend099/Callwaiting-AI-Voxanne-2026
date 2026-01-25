@@ -151,7 +151,7 @@ export function useOrgValidation() {
     };
 
     validateOrg();
-  }, [authLoading, user, orgId, router]);
+  }, [authLoading, user, orgId]);
 
   return {
     orgId,
