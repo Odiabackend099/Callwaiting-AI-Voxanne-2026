@@ -188,6 +188,91 @@ const CallsPageContent = () => {
         };
     }, [mutateCalls, mutateAnalytics]);
 
+    // Keyboard shortcuts for power users
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Don't trigger shortcuts when typing in input fields
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Modal-specific shortcuts
+            if (showDetailModal && selectedCall) {
+                switch (e.key.toLowerCase()) {
+                    case 'escape':
+                        e.preventDefault();
+                        setShowDetailModal(false);
+                        break;
+                    case 'd':
+                        if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            if (selectedCall.recording_status === 'completed') {
+                                handleDownloadRecording();
+                            }
+                        }
+                        break;
+                    case 's':
+                        if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            if (selectedCall.recording_status === 'completed') {
+                                handleShareRecording();
+                            }
+                        }
+                        break;
+                    case 'e':
+                        if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            if (selectedCall.has_transcript) {
+                                handleExportTranscript();
+                            }
+                        }
+                        break;
+                    case 'm':
+                        if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            setShowFollowupModal(true);
+                        }
+                        break;
+                }
+            }
+
+            // Follow-up modal shortcuts
+            if (showFollowupModal && selectedCall) {
+                switch (e.key.toLowerCase()) {
+                    case 'escape':
+                        e.preventDefault();
+                        setShowFollowupModal(false);
+                        setFollowupMessage('');
+                        break;
+                    case 'enter':
+                        if (e.ctrlKey || e.metaKey) {
+                            e.preventDefault();
+                            handleSendFollowup();
+                        }
+                        break;
+                }
+            }
+
+            // Confirmation dialog shortcuts
+            if (confirmDialog.isOpen) {
+                switch (e.key.toLowerCase()) {
+                    case 'escape':
+                        e.preventDefault();
+                        setConfirmDialog({...confirmDialog, isOpen: false});
+                        break;
+                    case 'enter':
+                        e.preventDefault();
+                        confirmDialog.onConfirm();
+                        break;
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showDetailModal, showFollowupModal, confirmDialog, selectedCall]);
+
     const fetchCallDetail = async (callId: string) => {
         try {
             const data = await authedBackendFetch<any>(`/api/calls-dashboard/${callId}`);
