@@ -385,8 +385,46 @@ export async function uploadCallRecording(
  * @param storagePath - Path in Supabase Storage
  * @returns Signed URL with configurable expiry (default 15 minutes)
  */
+/**
+ * Check if a recording file exists in storage
+ * @param storagePath - Path in Supabase Storage
+ * @returns true if file exists, false otherwise
+ */
+export async function recordingExists(storagePath: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.storage
+      .from('call-recordings')
+      .list(storagePath.substring(0, storagePath.lastIndexOf('/') + 1) || '', {
+        search: storagePath.substring(storagePath.lastIndexOf('/') + 1)
+      });
+
+    if (error) {
+      logger.warn('Failed to check file existence', {
+        storagePath,
+        error: error.message
+      });
+      return false;
+    }
+
+    return data && data.length > 0;
+  } catch (error: any) {
+    logger.warn('Error checking file existence', {
+      storagePath,
+      error: error.message
+    });
+    return false;
+  }
+}
+
 export async function getSignedRecordingUrl(storagePath: string): Promise<string | null> {
   try {
+    // Verify file exists before generating signed URL
+    const exists = await recordingExists(storagePath);
+    if (!exists) {
+      logger.warn('Recording file not found in storage', { storagePath });
+      return null;
+    }
+
     const { data, error } = await supabase.storage
       .from('call-recordings')
       .createSignedUrl(storagePath, RECORDING_CONFIG.SIGNED_URL_EXPIRY_SECONDS);

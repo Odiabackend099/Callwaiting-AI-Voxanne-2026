@@ -13,6 +13,7 @@ import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { Twilio } from 'twilio';
 import { Resend } from 'resend';
 import { rateLimitAction } from '../middleware/rate-limit-actions';
+import { withTwilioRetry, withResendRetry } from '../services/retry-strategy';
 
 const callsRouter = Router();
 
@@ -610,13 +611,15 @@ callsRouter.post('/:callId/followup', rateLimitAction('sms'), async (req: Reques
       return res.status(400).json({ error: 'Twilio is not configured for your organization' });
     }
 
-    // Send SMS via Twilio
+    // Send SMS via Twilio with retry logic
     const client = new Twilio(twilioCredentials.accountSid, twilioCredentials.authToken);
-    const message = await client.messages.create({
-      body: parsed.message,
-      from: twilioCredentials.phoneNumber,
-      to: callData.phone_number
-    });
+    const message = await withTwilioRetry(() =>
+      client.messages.create({
+        body: parsed.message,
+        from: twilioCredentials.phoneNumber,
+        to: callData.phone_number
+      })
+    );
 
     // Log the message in the messages table
     const { error: logError } = await supabase
@@ -725,12 +728,14 @@ This is an automated message. Please do not reply to this email.
     `.trim();
 
     try {
-      const emailResult = await resend.emails.send({
-        from: 'noreply@voxanne.ai',
-        to: parsed.email,
-        subject: subject,
-        text: emailContent
-      });
+      const emailResult = await withResendRetry(() =>
+        resend.emails.send({
+          from: 'noreply@voxanne.ai',
+          to: parsed.email,
+          subject: subject,
+          text: emailContent
+        })
+      );
 
       // Log the share action (without the URL for security)
       const { error: logError } = await supabase
