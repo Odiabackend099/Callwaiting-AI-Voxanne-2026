@@ -11,6 +11,8 @@ import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { Twilio } from 'twilio';
+import { Resend } from 'resend';
+import { rateLimitAction } from '../middleware/rate-limit-actions';
 
 const appointmentsRouter = Router();
 
@@ -38,6 +40,18 @@ function transformAppointment(apt: any) {
     updated_at: apt.updated_at,
     deleted_at: apt.deleted_at
   };
+}
+
+/**
+ * Validate phone number in E.164 format
+ * @param phoneNumber The phone number to validate
+ * @returns true if valid E.164 format, false otherwise
+ */
+function isValidE164PhoneNumber(phoneNumber: string): boolean {
+  // E.164 format: +[country code][number]
+  // Must start with + and contain only digits (10-15 digits total)
+  const e164Regex = /^\+[1-9]\d{1,14}$/;
+  return e164Regex.test(phoneNumber);
 }
 
 /**
@@ -404,7 +418,7 @@ appointmentsRouter.get('/available-slots', async (req: Request, res: Response) =
  * @body method - 'sms' or 'email'
  * @returns Success/failure with confirmation
  */
-appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, res: Response) => {
+appointmentsRouter.post('/:appointmentId/send-reminder', rateLimitAction('email'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
@@ -444,6 +458,16 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
     if (parsed.method === 'sms') {
       if (!contact.phone) {
         return res.status(400).json({ error: 'Contact does not have a phone number' });
+      }
+
+      // Validate phone number format
+      if (!isValidE164PhoneNumber(contact.phone)) {
+        log.warn('Appointments', 'Invalid phone number format', {
+          orgId,
+          appointmentId,
+          phone: contact.phone
+        });
+        return res.status(400).json({ error: 'Invalid phone number format' });
       }
 
       recipient = contact.phone;
@@ -491,26 +515,67 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
 
       recipient = contact.email;
 
-      // Log the email reminder
-      const { error: logError } = await supabase
-        .from('messages')
-        .insert({
-          org_id: orgId,
-          contact_id: contact.id,
-          direction: 'outbound',
-          method: 'email',
-          recipient: contact.email,
-          subject: `Appointment Reminder - ${date_str} at ${time_str}`,
-          content: reminderContent,
-          status: 'sent',
-          sent_at: new Date().toISOString()
+      // Send email via Resend
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const emailSubject = `Appointment Reminder - ${date_str} at ${time_str}`;
+
+      try {
+        const emailResult = await resend.emails.send({
+          from: 'noreply@voxanne.ai',
+          to: contact.email,
+          subject: emailSubject,
+          text: reminderContent
         });
 
-      if (logError) {
-        log.warn('Appointments', 'Failed to log email reminder', { orgId, appointmentId, error: logError.message });
-      }
+        // Log the email reminder
+        const { error: logError } = await supabase
+          .from('messages')
+          .insert({
+            org_id: orgId,
+            contact_id: contact.id,
+            direction: 'outbound',
+            method: 'email',
+            recipient: contact.email,
+            subject: emailSubject,
+            content: reminderContent,
+            status: 'sent',
+            service_provider: 'resend',
+            external_message_id: emailResult.id,
+            sent_at: new Date().toISOString()
+          });
 
-      log.info('Appointments', 'Email reminder sent', { orgId, appointmentId, email: contact.email });
+        if (logError) {
+          log.warn('Appointments', 'Failed to log email reminder', { orgId, appointmentId, error: logError.message });
+        }
+
+        log.info('Appointments', 'Email reminder sent', { orgId, appointmentId, email: contact.email, emailId: emailResult.id });
+      } catch (emailError: any) {
+        log.error('Appointments', 'Failed to send email reminder', {
+          orgId,
+          appointmentId,
+          email: contact.email,
+          error: emailError?.message
+        });
+
+        // Log the failed attempt
+        await supabase
+          .from('messages')
+          .insert({
+            org_id: orgId,
+            contact_id: contact.id,
+            direction: 'outbound',
+            method: 'email',
+            recipient: contact.email,
+            subject: emailSubject,
+            content: reminderContent,
+            status: 'failed',
+            error_message: emailError?.message,
+            service_provider: 'resend',
+            sent_at: new Date().toISOString()
+          });
+
+        return res.status(500).json({ error: 'Failed to send email reminder. Please try again later.' });
+      }
     }
 
     // Update confirmation_sent flag
@@ -535,8 +600,14 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
       const firstError = e.issues?.[0];
       return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
     }
-    log.error('Appointments', 'POST /:appointmentId/send-reminder - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to send reminder' });
+    // Log detailed error for debugging, but return generic message to client
+    log.error('Appointments', 'POST /:appointmentId/send-reminder - Error', {
+      error: e?.message,
+      stack: e?.stack,
+      orgId,
+      appointmentId
+    });
+    return res.status(500).json({ error: 'Failed to send reminder. Please try again later.' });
   }
 });
 

@@ -11,10 +11,24 @@ import { log } from '../services/logger';
 import { getSignedRecordingUrl } from '../services/call-recording-storage';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { Twilio } from 'twilio';
+import { Resend } from 'resend';
+import { rateLimitAction } from '../middleware/rate-limit-actions';
 
 const callsRouter = Router();
 
 callsRouter.use(requireAuthOrDev);
+
+/**
+ * Validate phone number in E.164 format
+ * @param phoneNumber The phone number to validate
+ * @returns true if valid E.164 format, false otherwise
+ */
+function isValidE164PhoneNumber(phoneNumber: string): boolean {
+  // E.164 format: +[country code][number]
+  // Must start with + and contain only digits (10-15 digits total)
+  const e164Regex = /^\+[1-9]\d{1,14}$/;
+  return e164Regex.test(phoneNumber);
+}
 
 /**
  * GET /api/calls-dashboard
@@ -556,7 +570,7 @@ callsRouter.delete('/:callId', async (req: Request, res: Response) => {
  * @body message - SMS message text (max 160 characters)
  * @returns Success/failure with message ID
  */
-callsRouter.post('/:callId/followup', async (req: Request, res: Response) => {
+callsRouter.post('/:callId/followup', rateLimitAction('sms'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
@@ -578,6 +592,16 @@ callsRouter.post('/:callId/followup', async (req: Request, res: Response) => {
 
     if (callError || !callData) {
       return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Validate phone number format
+    if (!isValidE164PhoneNumber(callData.phone_number)) {
+      log.warn('Calls', 'Invalid phone number format', {
+        orgId,
+        callId,
+        phone: callData.phone_number
+      });
+      return res.status(400).json({ error: 'Invalid phone number format' });
     }
 
     // Get Twilio credentials from org_credentials
@@ -626,8 +650,14 @@ callsRouter.post('/:callId/followup', async (req: Request, res: Response) => {
       const firstError = e.issues?.[0];
       return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
     }
-    log.error('Calls', 'POST /:callId/followup - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to send follow-up SMS' });
+    // Log detailed error for debugging, but return generic message to client
+    log.error('Calls', 'POST /:callId/followup - Error', {
+      error: e?.message,
+      stack: e?.stack,
+      orgId,
+      callId
+    });
+    return res.status(500).json({ error: 'Failed to send follow-up SMS. Please try again later.' });
   }
 });
 
@@ -638,7 +668,7 @@ callsRouter.post('/:callId/followup', async (req: Request, res: Response) => {
  * @body email - Email address to send recording to
  * @returns Success/failure with share confirmation
  */
-callsRouter.post('/:callId/share', async (req: Request, res: Response) => {
+callsRouter.post('/:callId/share', rateLimitAction('share'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
@@ -666,45 +696,110 @@ callsRouter.post('/:callId/share', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'This call does not have a recording' });
     }
 
-    // Generate signed URL for the recording (24-hour expiry)
+    // Generate signed URL for the recording (1-hour expiry for security)
     let recordingUrl = callData.recording_url;
     if (callData.recording_storage_path) {
       const signed = await getSignedRecordingUrl(callData.recording_storage_path);
       if (signed) recordingUrl = signed;
     }
 
-    // Log the share action
-    const { error: logError } = await supabase
-      .from('messages')
-      .insert({
-        org_id: orgId,
-        call_id: callId,
-        direction: 'outbound',
-        method: 'email',
-        recipient: parsed.email,
-        subject: `Shared call recording - ${callData.caller_name || 'Call'} (${callData.duration_seconds}s)`,
-        content: `Recording shared at: ${recordingUrl}`,
-        status: 'sent',
-        sent_at: new Date().toISOString()
-      });
-
-    if (logError) {
-      log.warn('Calls', 'Failed to log share action', { orgId, callId, error: logError.message });
+    if (!recordingUrl) {
+      return res.status(400).json({ error: 'Recording URL could not be generated' });
     }
 
-    log.info('Calls', 'Recording shared', { orgId, callId, email: parsed.email });
-    return res.json({
-      success: true,
-      email: parsed.email,
-      message: '📧 Recording shared successfully'
-    });
+    // Send email via Resend
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const subject = `Shared call recording - ${callData.caller_name || 'Call'} (${callData.duration_seconds}s)`;
+    const emailContent = `
+Call Recording Shared
+
+A call recording has been shared with you.
+
+Caller: ${callData.caller_name || 'Unknown'}
+Duration: ${callData.duration_seconds} seconds
+
+Click below to access the recording (expires in 1 hour):
+${recordingUrl}
+
+This is an automated message. Please do not reply to this email.
+    `.trim();
+
+    try {
+      const emailResult = await resend.emails.send({
+        from: 'noreply@voxanne.ai',
+        to: parsed.email,
+        subject: subject,
+        text: emailContent
+      });
+
+      // Log the share action (without the URL for security)
+      const { error: logError } = await supabase
+        .from('messages')
+        .insert({
+          org_id: orgId,
+          call_id: callId,
+          direction: 'outbound',
+          method: 'email',
+          recipient: parsed.email,
+          subject: subject,
+          content: 'Recording shared via email',
+          status: 'sent',
+          service_provider: 'resend',
+          external_message_id: emailResult.id,
+          sent_at: new Date().toISOString()
+        });
+
+      if (logError) {
+        log.warn('Calls', 'Failed to log share action', { orgId, callId, error: logError.message });
+      }
+
+      log.info('Calls', 'Recording shared via email', { orgId, callId, email: parsed.email, emailId: emailResult.id });
+      return res.json({
+        success: true,
+        email: parsed.email,
+        message: '📧 Recording shared successfully'
+      });
+    } catch (emailError: any) {
+      // Log email sending failure
+      log.error('Calls', 'Failed to send share email', {
+        orgId,
+        callId,
+        email: parsed.email,
+        error: emailError?.message
+      });
+
+      // Still log the failed attempt for audit trail
+      await supabase
+        .from('messages')
+        .insert({
+          org_id: orgId,
+          call_id: callId,
+          direction: 'outbound',
+          method: 'email',
+          recipient: parsed.email,
+          subject: subject,
+          content: 'Recording share failed',
+          status: 'failed',
+          error_message: emailError?.message,
+          service_provider: 'resend',
+          sent_at: new Date().toISOString()
+        });
+
+      return res.status(500).json({ error: 'Failed to send email. Please try again later.' });
+    }
   } catch (e: any) {
     if (e instanceof z.ZodError) {
       const firstError = e.issues?.[0];
       return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
     }
-    log.error('Calls', 'POST /:callId/share - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to share recording' });
+    // Log detailed error for debugging, but return generic message to client
+    log.error('Calls', 'POST /:callId/share - Error', {
+      error: e?.message,
+      stack: e?.stack,
+      orgId,
+      callId
+    });
+    return res.status(500).json({ error: 'Failed to share recording. Please try again later.' });
   }
 });
 
@@ -715,7 +810,7 @@ callsRouter.post('/:callId/share', async (req: Request, res: Response) => {
  * @body format - Export format ('txt' supported, 'pdf'/'docx' future)
  * @returns Transcript file or downloadable content
  */
-callsRouter.post('/:callId/transcript/export', async (req: Request, res: Response) => {
+callsRouter.post('/:callId/transcript/export', rateLimitAction('export'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
@@ -762,14 +857,26 @@ callsRouter.post('/:callId/transcript/export', async (req: Request, res: Respons
       log.warn('Calls', 'Failed to log export action', { orgId, callId, error: logError.message });
     }
 
-    // Format transcript as text
+    // Format transcript as text with sanitization
     const transcriptText = Array.isArray(callData.transcript)
       ? callData.transcript
-          .map((turn: any) => `${turn.speaker.toUpperCase()}: ${turn.text}`)
+          .map((turn: any) => {
+            // Sanitize speaker name - allow only alphanumeric and spaces
+            const sanitizedSpeaker = (turn.speaker || 'UNKNOWN')
+              .replace(/[^a-zA-Z0-9 ]/g, '')
+              .toUpperCase()
+              .slice(0, 50);
+            return `${sanitizedSpeaker}: ${turn.text}`;
+          })
           .join('\n')
       : String(callData.transcript);
 
-    const filename = `transcript_${callData.caller_name || 'call'}_${callData.created_at?.split('T')[0]}.txt`;
+    // Sanitize filename - allow only alphanumeric, underscores, and hyphens
+    const sanitizedCallerName = (callData.caller_name || 'call')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .slice(0, 50);
+    const dateStr = callData.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
+    const filename = `transcript_${sanitizedCallerName}_${dateStr}.txt`;
 
     log.info('Calls', 'Transcript exported', { orgId, callId, format: parsed.format });
 
@@ -782,8 +889,14 @@ callsRouter.post('/:callId/transcript/export', async (req: Request, res: Respons
       const firstError = e.issues?.[0];
       return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
     }
-    log.error('Calls', 'POST /:callId/transcript/export - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to export transcript' });
+    // Log detailed error for debugging, but return generic message to client
+    log.error('Calls', 'POST /:callId/transcript/export - Error', {
+      error: e?.message,
+      stack: e?.stack,
+      orgId,
+      callId
+    });
+    return res.status(500).json({ error: 'Failed to export transcript. Please try again later.' });
   }
 });
 

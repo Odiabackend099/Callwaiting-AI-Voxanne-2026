@@ -77,10 +77,9 @@ const CallsPageContent = () => {
     const callsPerPage = 100; // MVP: Show last 100 calls
 
     useEffect(() => {
-        // Temporarily bypass auth for testing - remove in production
+        // Enforce authentication - redirect to login if not authenticated
         if (!loading && !user) {
-            // Allow access without auth for demo purposes
-            // router.push('/login');
+            router.push('/login');
         }
     }, [user, loading, router]);
 
@@ -649,11 +648,10 @@ const CallsPageContent = () => {
                                                             {call.sentiment_summary}
                                                         </p>
                                                         {call.sentiment_urgency && (
-                                                            <span className={`text-xs font-medium inline-block mt-1 ${
-                                                                call.sentiment_urgency === 'High' ? 'text-red-600 dark:text-red-400' :
-                                                                call.sentiment_urgency === 'Medium' ? 'text-amber-600 dark:text-amber-400' :
-                                                                'text-blue-600 dark:text-blue-400'
-                                                            }`}>
+                                                            <span className={`text-xs font-medium inline-block mt-1 ${call.sentiment_urgency === 'High' ? 'text-red-600 dark:text-red-400' :
+                                                                    call.sentiment_urgency === 'Medium' ? 'text-amber-600 dark:text-amber-400' :
+                                                                        'text-blue-600 dark:text-blue-400'
+                                                                }`}>
                                                                 {call.sentiment_urgency} urgency
                                                             </span>
                                                         )}
@@ -686,11 +684,96 @@ const CallsPageContent = () => {
                                                             >
                                                                 <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                                             </button>
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    const email = prompt('Enter email address to share recording:');
+                                                                    if (!email) return;
+                                                                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                                                                        alert('Invalid email address');
+                                                                        return;
+                                                                    }
+                                                                    try {
+                                                                        await authedBackendFetch(`/api/calls-dashboard/${call.id}/share`, {
+                                                                            method: 'POST',
+                                                                            body: JSON.stringify({ email })
+                                                                        });
+                                                                        alert(`Recording shared with ${email}`);
+                                                                    } catch (err: any) {
+                                                                        alert(err?.message || 'Failed to share recording');
+                                                                    }
+                                                                }}
+                                                                className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                                                title="Share recording"
+                                                            >
+                                                                <Share2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                                            </button>
                                                         </>
                                                     ) : call.recording_status === 'processing' || call.recording_status === 'pending' ? (
                                                         <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{call.recording_status}</span>
                                                     ) : (
                                                         <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                                                    )}
+                                                    {call.has_transcript && (
+                                                        <button
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    const response = await fetch(`/api/calls-dashboard/${call.id}/transcript/export`, {
+                                                                        method: 'POST',
+                                                                        headers: {
+                                                                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                                                        }
+                                                                    });
+                                                                    if (response.ok) {
+                                                                        const blob = await response.blob();
+                                                                        const url = window.URL.createObjectURL(blob);
+                                                                        const a = document.createElement('a');
+                                                                        a.href = url;
+                                                                        a.download = `transcript-${call.id}.txt`;
+                                                                        document.body.appendChild(a);
+                                                                        a.click();
+                                                                        window.URL.revokeObjectURL(url);
+                                                                        document.body.removeChild(a);
+                                                                        alert('Transcript downloaded');
+                                                                    } else {
+                                                                        alert('Failed to export transcript');
+                                                                    }
+                                                                } catch (err: any) {
+                                                                    alert('Failed to export transcript');
+                                                                }
+                                                            }}
+                                                            className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                                                            title="Export transcript"
+                                                        >
+                                                            <Download className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                                        </button>
+                                                    )}
+                                                    {call.phone_number && (
+                                                        <button
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                const message = prompt('Enter follow-up message (max 160 chars):');
+                                                                if (!message) return;
+                                                                if (message.length > 160) {
+                                                                    alert('Message too long (max 160 characters)');
+                                                                    return;
+                                                                }
+                                                                try {
+                                                                    await authedBackendFetch(`/api/calls-dashboard/${call.id}/followup`, {
+                                                                        method: 'POST',
+                                                                        body: JSON.stringify({ message })
+                                                                    });
+                                                                    alert('Follow-up SMS sent successfully');
+                                                                } catch (err: any) {
+                                                                    alert(err?.message || 'Failed to send SMS');
+                                                                }
+                                                            }}
+                                                            className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                                                            title="Send follow-up SMS"
+                                                        >
+                                                            <Mail className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                                        </button>
                                                     )}
                                                     <button
                                                         onClick={(e) => {

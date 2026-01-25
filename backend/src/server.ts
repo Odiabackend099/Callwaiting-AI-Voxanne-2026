@@ -72,6 +72,7 @@ import teamRouter from './routes/team'; // default export
 import { contactsRouter } from './routes/contacts';
 import { appointmentsRouter } from './routes/appointments';
 import { notificationsRouter } from './routes/notifications';
+import { servicesRouter } from './routes/services';
 // import { workspaceRouter } from './routes/workspace';
 import analyticsRouter from './routes/analytics';
 import calendarOAuthRouter from './routes/calendar-oauth'; // default export
@@ -199,6 +200,14 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
 import { tenantResolver } from './middleware/tenant-resolver';
 app.use(tenantResolver);
 
+// CSRF Protection Middleware
+import { csrfTokenGenerator, validateCsrfToken, csrfTokenEndpoint } from './middleware/csrf-protection';
+app.use(csrfTokenGenerator); // Generate token on every request
+app.use(validateCsrfToken); // Validate on state-changing requests
+
+// CSRF Token Endpoint: Allow frontend to explicitly fetch token if needed
+app.get('/api/csrf-token', csrfTokenEndpoint);
+
 // Routes
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/webhooks', smsStatusWebhookRouter);
@@ -227,6 +236,7 @@ app.use('/api/book-demo', bookDemoRouter);
 app.use('/api/escalation-rules', escalationRulesRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/contacts', contactsRouter);
+app.use('/api/services', servicesRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);

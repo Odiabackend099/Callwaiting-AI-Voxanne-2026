@@ -78,7 +78,7 @@ export interface VerificationResult {
 // ============================================
 
 const credentialCache = new Map<string, CacheEntry<any>>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds (reduced from 5 minutes for security)
 const MAX_CACHE_SIZE = 1000; // Prevent unbounded memory growth
 
 // ============================================
@@ -393,7 +393,7 @@ export class IntegrationDecryptor {
 
   /**
    * Store encrypted credentials in org_credentials table
-   * Automatically encrypts data using EncryptionService
+   * Automatically encrypts data usicng EncryptionService
    * Upserts to maintain single credential per org+provider
    *
    * @param orgId - Organization ID
