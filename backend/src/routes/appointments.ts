@@ -13,6 +13,7 @@ import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { Twilio } from 'twilio';
 import { Resend } from 'resend';
 import { withTwilioRetry, withResendRetry } from '../services/retry-strategy';
+import { createAppointmentReminderMessage, createAppointmentEmailSubject, getOrgTimezone } from '../services/timezone-helper';
 import { rateLimitAction } from '../middleware/rate-limit-actions';
 
 const appointmentsRouter = Router();
@@ -448,7 +449,7 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
       });
     }
 
-    // Fetch appointment with contact info
+    // Fetch appointment with contact info AND org timezone
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
       .select(`*,
@@ -465,13 +466,25 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
       return res.status(400).json({ error: 'Appointment does not have associated contact information' });
     }
 
+    // Fetch org timezone settings
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('settings')
+      .eq('id', orgId)
+      .single();
+
+    const orgSettings = orgData?.settings as any || {};
+    const timezone = getOrgTimezone(orgSettings?.timezone);
+
     const contact = appointment.contacts;
     const appointment_date = new Date(appointment.scheduled_at);
-    const date_str = appointment_date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    const time_str = appointment_date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     let recipient = '';
-    let reminderContent = `Appointment reminder: You have an appointment on ${date_str} at ${time_str} for ${appointment.service_type}.`;
+    const reminderContent = createAppointmentReminderMessage(
+      appointment_date,
+      appointment.service_type,
+      timezone
+    );
 
     // Apply rate limiting based on method
     const method = parsed.method;
@@ -565,7 +578,7 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
 
       // Send email via Resend
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const emailSubject = `Appointment Reminder - ${date_str} at ${time_str}`;
+      const emailSubject = createAppointmentEmailSubject(appointment_date, timezone);
 
       try {
         const emailResult = await withResendRetry(() =>
