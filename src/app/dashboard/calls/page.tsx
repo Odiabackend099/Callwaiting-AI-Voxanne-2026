@@ -787,15 +787,20 @@ const CallsPageContent = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-1">
-                                                    {call.has_recording && call.recording_status === 'completed' ? (
+                                                    {call.has_recording ? (
                                                         <>
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    handlePlayRecordingFromList(call);
+                                                                    if (call.recording_status === 'completed') {
+                                                                        handlePlayRecordingFromList(call);
+                                                                    } else {
+                                                                        warning(`Recording is ${call.recording_status}, please wait`);
+                                                                    }
                                                                 }}
-                                                                className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
-                                                                title="Play recording"
+                                                                disabled={call.recording_status !== 'completed'}
+                                                                className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                title={call.recording_status === 'completed' ? 'Play recording' : `Recording is ${call.recording_status}`}
                                                                 aria-label="Play recording"
                                                             >
                                                                 <Play className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -803,10 +808,15 @@ const CallsPageContent = () => {
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    handleDownloadRecordingFromList(call);
+                                                                    if (call.recording_status === 'completed') {
+                                                                        handleDownloadRecordingFromList(call);
+                                                                    } else {
+                                                                        warning(`Recording is ${call.recording_status}, please wait`);
+                                                                    }
                                                                 }}
-                                                                className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                                                title="Download recording"
+                                                                disabled={call.recording_status !== 'completed'}
+                                                                className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                title={call.recording_status === 'completed' ? 'Download recording' : `Recording is ${call.recording_status}`}
                                                                 aria-label="Download recording"
                                                             >
                                                                 <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -814,6 +824,10 @@ const CallsPageContent = () => {
                                                             <button
                                                                 onClick={async (e) => {
                                                                     e.stopPropagation();
+                                                                    if (call.recording_status !== 'completed') {
+                                                                        warning(`Recording is ${call.recording_status}, please wait until it's ready`);
+                                                                        return;
+                                                                    }
                                                                     const email = prompt('Enter email address to share recording:');
                                                                     if (!email) return;
                                                                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -833,19 +847,32 @@ const CallsPageContent = () => {
                                                                         setLoadingAction(null);
                                                                     }
                                                                 }}
-                                                                className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                                                                title="Share recording"
+                                                                disabled={call.recording_status !== 'completed'}
+                                                                className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                title={call.recording_status === 'completed' ? 'Share recording via email' : `Recording is ${call.recording_status}`}
                                                                 aria-label="Share recording via email"
                                                             >
                                                                 <Share2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                                                             </button>
                                                         </>
-                                                    ) : call.recording_status === 'processing' || call.recording_status === 'pending' ? (
-                                                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{call.recording_status}</span>
+                                                    ) : call.recording_status === 'processing' ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <div className="w-3 h-3 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
+                                                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Processing</span>
+                                                        </div>
+                                                    ) : call.recording_status === 'pending' ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Queued</span>
+                                                        </div>
+                                                    ) : call.recording_status === 'failed' ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                                                            <span className="text-xs text-red-600 dark:text-red-400 font-medium cursor-help" title={call.recording_error || 'Recording failed to upload'}>Failed</span>
+                                                        </div>
                                                     ) : (
                                                         <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                                                     )}
-                                                    {call.has_transcript && (
+                                                    {call.has_transcript ? (
                                                         <button
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
@@ -883,8 +910,17 @@ const CallsPageContent = () => {
                                                         >
                                                             <Download className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                                                         </button>
+                                                    ) : (
+                                                        <button
+                                                            disabled
+                                                            className="p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                            title="Transcript not available for this call"
+                                                            aria-label="Export transcript (not available)"
+                                                        >
+                                                            <Download className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                        </button>
                                                     )}
-                                                    {call.phone_number && (
+                                                    {call.phone_number ? (
                                                         <button
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
@@ -912,6 +948,15 @@ const CallsPageContent = () => {
                                                             aria-label="Send follow-up SMS message"
                                                         >
                                                             <Mail className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            disabled
+                                                            className="p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                            title="No phone number available for this contact"
+                                                            aria-label="Send SMS (no phone number)"
+                                                        >
+                                                            <Mail className="w-4 h-4 text-gray-300 dark:text-gray-600" />
                                                         </button>
                                                     )}
                                                     <button
@@ -1185,62 +1230,90 @@ const CallsPageContent = () => {
                             </div>
 
                             {/* Action Buttons */}
-                            {selectedCall.has_recording && selectedCall.recording_status === 'completed' && (
-                                <div className="px-6 py-6 border-t border-gray-200 dark:border-slate-800">
-                                    <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-4">Recording Actions</p>
-                                    <div className="flex flex-wrap gap-3">
-                                        {/* Download Recording */}
-                                        <button
-                                            onClick={handleDownloadRecording}
-                                            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-sm font-medium"
-                                            aria-label="Download recording file"
-                                        >
-                                            <Download className="w-4 h-4" />
-                                            Download
-                                        </button>
+                            <div className="px-6 py-6 border-t border-gray-200 dark:border-slate-800">
+                                <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-4">Actions</p>
+                                <div className="flex flex-wrap gap-3">
+                                    {/* Download Recording */}
+                                    <button
+                                        onClick={handleDownloadRecording}
+                                        disabled={!selectedCall.has_recording || selectedCall.recording_status !== 'completed'}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                            selectedCall.has_recording && selectedCall.recording_status === 'completed'
+                                                ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900'
+                                                : 'bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                                        }`}
+                                        title={!selectedCall.has_recording ? 'No recording available' : selectedCall.recording_status === 'completed' ? 'Download recording' : `Recording is ${selectedCall.recording_status}`}
+                                        aria-label="Download recording file"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Download
+                                    </button>
 
-                                        {/* Share Recording */}
-                                        <button
-                                            onClick={handleShareRecording}
-                                            className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-sm font-medium"
-                                            aria-label="Share recording with others"
-                                        >
-                                            <Share2 className="w-4 h-4" />
-                                            Share
-                                        </button>
+                                    {/* Share Recording */}
+                                    <button
+                                        onClick={handleShareRecording}
+                                        disabled={!selectedCall.has_recording || selectedCall.recording_status !== 'completed'}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                            selectedCall.has_recording && selectedCall.recording_status === 'completed'
+                                                ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900'
+                                                : 'bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                                        }`}
+                                        title={!selectedCall.has_recording ? 'No recording available' : selectedCall.recording_status === 'completed' ? 'Share recording' : `Recording is ${selectedCall.recording_status}`}
+                                        aria-label="Share recording with others"
+                                    >
+                                        <Share2 className="w-4 h-4" />
+                                        Share
+                                    </button>
 
-                                        {/* Add to CRM */}
-                                        <button
-                                            onClick={handleAddToCRM}
-                                            className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors text-sm font-medium"
-                                            aria-label="Add this caller to CRM"
-                                        >
-                                            <UserPlus className="w-4 h-4" />
-                                            Add to CRM
-                                        </button>
+                                    {/* Add to CRM */}
+                                    <button
+                                        onClick={handleAddToCRM}
+                                        className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors text-sm font-medium"
+                                        aria-label="Add this caller to CRM"
+                                    >
+                                        <UserPlus className="w-4 h-4" />
+                                        Add to CRM
+                                    </button>
 
-                                        {/* Send Follow-up */}
-                                        <button
-                                            onClick={() => setShowFollowupModal(true)}
-                                            className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors text-sm font-medium"
-                                            aria-label="Send follow-up message"
-                                        >
-                                            <Mail className="w-4 h-4" />
-                                            Follow-up
-                                        </button>
+                                    {/* Send Follow-up */}
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedCall.phone_number) {
+                                                warning('No phone number available for this contact');
+                                                return;
+                                            }
+                                            setShowFollowupModal(true);
+                                        }}
+                                        disabled={!selectedCall.phone_number}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                            selectedCall.phone_number
+                                                ? 'bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900'
+                                                : 'bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                                        }`}
+                                        title={selectedCall.phone_number ? 'Send follow-up message' : 'No phone number available'}
+                                        aria-label="Send follow-up message"
+                                    >
+                                        <Mail className="w-4 h-4" />
+                                        Follow-up
+                                    </button>
 
-                                        {/* Export Transcript */}
-                                        <button
-                                            onClick={handleExportTranscript}
-                                            className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
-                                            aria-label="Export transcript to file"
-                                        >
-                                            <Download className="w-4 h-4" />
-                                            Export
-                                        </button>
-                                    </div>
+                                    {/* Export Transcript */}
+                                    <button
+                                        onClick={handleExportTranscript}
+                                        disabled={!selectedCall.has_transcript}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                            selectedCall.has_transcript
+                                                ? 'bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                                : 'bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                                        }`}
+                                        title={selectedCall.has_transcript ? 'Export transcript to file' : 'No transcript available for this call'}
+                                        aria-label="Export transcript to file"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Export
+                                    </button>
                                 </div>
-                            )}
+                            </div>
 
                             {/* Modal Footer */}
                             <div className="border-t border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-end gap-3">
