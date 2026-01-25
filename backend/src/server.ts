@@ -26,7 +26,7 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
 // Import centralized configuration (single source of truth for env variables)
 import { config } from './config';
 
-import express from 'express';
+import express, { NextFunction, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit'; // Add express-rate-limit import
@@ -194,6 +194,14 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.requestHandler());
   app.use(Sentry.Handlers.tracingHandler());
 }
+
+// Request ID Middleware: Assign unique ID to each request for tracing/debugging
+import { randomUUID } from 'crypto';
+app.use((req: any, res: Response, next: NextFunction) => {
+  req.id = req.headers['x-request-id'] as string || randomUUID();
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
 
 // Tenant Resolver Middleware: Automatically injects org_id for users missing it
 // This ensures existing users with stale JWTs still work without manual fixes
