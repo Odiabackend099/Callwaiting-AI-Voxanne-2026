@@ -53,6 +53,17 @@ interface IntegrationResponse {
 
 integrationsRouter.get('/twilio', async (req: express.Request, res: express.Response) => {
   try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
+
     const orgId = (req as any).user.orgId;
 
     const { data: creds, error } = await supabase
@@ -103,6 +114,17 @@ integrationsRouter.get('/twilio', async (req: express.Request, res: express.Resp
 
 integrationsRouter.post('/twilio', async (req: express.Request, res: express.Response) => {
   try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
+
     const orgId = (req as any).user.orgId;
     const { accountSid, authToken, phoneNumber } = req.body;
 
@@ -218,6 +240,17 @@ integrationsRouter.post('/twilio', async (req: express.Request, res: express.Res
 // ============================================
 integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: express.Response) => {
   try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
+
     const orgId = (req as any).user.orgId;
 
 
@@ -295,6 +328,17 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
 // ============================================
 integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res: express.Response) => {
   try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
+
     const orgId = (req as any).user.orgId;
     const { vapiPhoneId, phoneNumber } = req.body;
 
@@ -371,6 +415,17 @@ integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res:
 
 integrationsRouter.get('/status', async (req: express.Request, res: express.Response) => {
   try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
+
     const orgId = (req as any).user.orgId;
 
     // Check Twilio status from org_credentials (SSOT)
@@ -418,6 +473,17 @@ integrationsRouter.get('/status', async (req: express.Request, res: express.Resp
 
 integrationsRouter.post('/:provider/verify', async (req: express.Request, res: express.Response) => {
   try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
+
     const orgId = (req as any).user.orgId;
     const { provider } = req.params;
 
@@ -473,20 +539,41 @@ integrationsRouter.post('/:provider/verify', async (req: express.Request, res: e
 // ============================================
 
 integrationsRouter.delete('/:provider', async (req: express.Request, res: express.Response) => {
-  // Implement delete for Twilio
-  const orgId = (req as any).user.orgId;
-  const { provider } = req.params;
+  try {
+    // Authentication guard
+    if (!(req as any).user || !(req as any).user.orgId) {
+      log.error('integrations', 'Missing authentication or orgId', {
+        hasUser: !!(req as any).user
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      } as IntegrationResponse);
+    }
 
-  if (provider === 'twilio') {
-    await supabase
-      .from('customer_twilio_keys')
-      .delete()
-      .eq('org_id', orgId);
+    // Implement delete for Twilio
+    const orgId = (req as any).user.orgId;
+    const { provider } = req.params;
 
-    return res.json({ success: true, message: 'Twilio disconnected' });
+    if (provider === 'twilio') {
+      await supabase
+        .from('customer_twilio_keys')
+        .delete()
+        .eq('org_id', orgId);
+
+      return res.json({ success: true, message: 'Twilio disconnected' });
+    }
+
+    res.json({ success: false, error: 'Not implemented' });
+  } catch (error: any) {
+    log.error('integrations', 'Failed to disconnect provider', {
+      error: error?.message
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to disconnect provider'
+    } as IntegrationResponse);
   }
-
-  res.json({ success: false, error: 'Not implemented' });
 });
 
 export default integrationsRouter;

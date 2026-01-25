@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export type IntegrationProvider = 'TWILIO' | 'GOOGLE' | 'VAPI' | 'OUTLOOK';
 export type IntegrationStatus = 'loading' | 'unconfigured' | 'active' | 'error';
@@ -38,7 +38,7 @@ export function useIntegration(provider: IntegrationProvider): UseIntegrationRet
   const [config, setConfig] = useState<IntegrationConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchIntegration = async () => {
+  const fetchIntegration = useCallback(async () => {
     try {
       setStatus('loading');
       setError(null);
@@ -77,11 +77,11 @@ export function useIntegration(provider: IntegrationProvider): UseIntegrationRet
       setStatus('error');
       setConfig(null);
     }
-  };
+  }, [provider]);
 
   useEffect(() => {
     fetchIntegration();
-  }, [provider]);
+  }, [fetchIntegration]);
 
   return {
     status,
