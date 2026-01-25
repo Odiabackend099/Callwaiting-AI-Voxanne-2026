@@ -366,10 +366,10 @@ contactsRouter.delete('/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/contacts/:id/call-back
- * Initiate an outbound call to a contact
+ * Initiate an outbound call to a contact via Vapi
  * @param id - Contact ID
  * @body agentId - Agent to use for the call (optional)
- * @returns Call initiation response with tracking ID
+ * @returns Call initiation response with Vapi tracking ID
  */
 contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
   try {
@@ -396,15 +396,42 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Contact not found' });
     }
 
-    // Create outbound call record
+    if (!contact.phone) {
+      return res.status(400).json({ error: 'Contact has no phone number' });
+    }
+
+    // Get organization's outbound agent configuration
+    const { data: agent, error: agentError } = await supabase
+      .from('agents')
+      .select('vapi_assistant_id, vapi_assistant_id_outbound, vapi_phone_number_id')
+      .eq('org_id', orgId)
+      .single();
+
+    if (agentError || !agent) {
+      log.error('Contacts', 'POST /:id/call-back - Agent not found', { orgId, error: agentError?.message });
+      return res.status(400).json({ error: 'Outbound agent not configured. Please set up an agent in Agent Configuration.' });
+    }
+
+    const assistantId = agent.vapi_assistant_id_outbound || agent.vapi_assistant_id;
+    const phoneNumberId = agent.vapi_phone_number_id;
+
+    if (!assistantId || !phoneNumberId) {
+      return res.status(400).json({
+        error: 'Outbound agent or phone number not configured. Please complete Agent Configuration.'
+      });
+    }
+
+    // Create outbound call record with status 'pending' (waiting for Vapi to accept)
     const { data: call, error: callError } = await supabase
       .from('calls')
       .insert({
         org_id: orgId,
+        contact_id: id,
         phone_number: contact.phone,
         caller_name: contact.name,
         call_type: 'outbound',
-        status: 'initiated',
+        direction: 'outbound',
+        status: 'pending',
         call_date: new Date().toISOString(),
         created_at: new Date().toISOString()
       })
@@ -412,18 +439,74 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
       .single();
 
     if (callError) {
-      log.error('Contacts', 'POST /:id/call-back - Failed to create call', { orgId, contactId: id, error: callError.message });
-      return res.status(500).json({ error: 'Failed to initiate call' });
+      log.error('Contacts', 'POST /:id/call-back - Failed to create call record', {
+        orgId, contactId: id, error: callError.message
+      });
+      return res.status(500).json({ error: 'Failed to create call record' });
     }
 
-    log.info('Contacts', 'Outbound call initiated', { orgId, contactId: id, callId: call.id, phone: contact.phone });
-    return res.status(201).json({
-      callId: call.id,
-      contactId: id,
-      phone: contact.phone,
-      status: 'initiated',
-      message: '🔥 Outbound call initiated'
-    });
+    // Trigger Vapi outbound call
+    try {
+      const { VapiClient } = await import('../services/vapi-client');
+      const vapiClient = new VapiClient(process.env.VAPI_PRIVATE_KEY!);
+
+      const vapiCall = await vapiClient.createOutboundCall({
+        assistantId,
+        customer: {
+          number: contact.phone,
+          name: contact.name || 'Caller'
+        },
+        phoneNumberId
+      });
+
+      // Update call record with Vapi call ID and change status to 'initiated'
+      const { error: updateError } = await supabase
+        .from('calls')
+        .update({
+          vapi_call_id: vapiCall.id,
+          status: 'initiated'
+        })
+        .eq('id', call.id)
+        .eq('org_id', orgId);
+
+      if (updateError) {
+        log.warn('Contacts', 'POST /:id/call-back - Failed to update call with Vapi ID', {
+          error: updateError.message
+        });
+        // Continue anyway - call may still be initiated in Vapi
+      }
+
+      log.info('Contacts', 'Outbound call initiated via Vapi', {
+        orgId, contactId: id, callId: call.id, vapiCallId: vapiCall.id, phone: contact.phone
+      });
+
+      return res.status(201).json({
+        callId: call.id,
+        vapiCallId: vapiCall.id,
+        contactId: id,
+        phone: contact.phone,
+        status: 'initiated',
+        message: `📞 Calling ${contact.phone}...`
+      });
+
+    } catch (vapiError: any) {
+      log.error('Contacts', 'POST /:id/call-back - Vapi API error', {
+        orgId, callId: call.id, error: vapiError?.message || 'Unknown Vapi error'
+      });
+
+      // Update call status to 'failed'
+      await supabase
+        .from('calls')
+        .update({ status: 'failed' })
+        .eq('id', call.id)
+        .eq('org_id', orgId);
+
+      return res.status(500).json({
+        error: 'Failed to initiate Vapi call. Please try again.',
+        details: vapiError?.message || 'Unknown error'
+      });
+    }
+
   } catch (e: any) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input' });

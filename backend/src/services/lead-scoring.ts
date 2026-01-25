@@ -5,6 +5,7 @@
  */
 
 import { log } from './logger';
+import { supabase } from './supabase-client';
 
 /**
  * High-value service keywords that indicate strong buying intent
@@ -233,22 +234,64 @@ export function formatTierWithEmoji(tier: 'hot' | 'warm' | 'cold'): string {
  * Estimate financial value of a lead based on procedure keywords
  * used for dashboard pipeline visualization
  */
-export function estimateLeadValue(transcript: string): number {
-  const t = transcript.toLowerCase();
+/**
+ * Estimate lead value based on transcript analysis
+ * Queries the organization's services table for pricing
+ * @param transcript - Call transcript or conversation text
+ * @param orgId - Organization ID (optional - for custom pricing lookup)
+ * @returns Estimated pipeline value in dollars
+ */
+export async function estimateLeadValue(
+  transcript: string,
+  orgId?: string
+): Promise<number> {
+  const t = (transcript || '').toLowerCase();
 
-  // Harley Street Market Rates (Conservative Estimates)
-  if (t.includes('rhinoplasty') || t.includes('nose job')) return 8000;
-  if (t.includes('facelift') || t.includes('face lift')) return 15000;
+  // If orgId is provided, try to match against org-specific services
+  if (orgId) {
+    try {
+      const { data: services } = await supabase
+        .from('services')
+        .select('price, keywords')
+        .eq('org_id', orgId);
+
+      if (services && services.length > 0) {
+        // Find first matching service
+        for (const service of services) {
+          if (service.keywords && Array.isArray(service.keywords)) {
+            const isMatch = service.keywords.some((keyword: string) =>
+              t.includes(keyword.toLowerCase())
+            );
+            if (isMatch) {
+              return Number(service.price) || 0;
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      log.warn('lead-scoring', 'Failed to query services table', {
+        orgId,
+        error: error?.message
+      });
+      // Fall through to hardcoded values
+    }
+  }
+
+  // Fallback to hardcoded market rates if no org-specific services match
+  // or if orgId not provided
+  if (t.includes('rhinoplasty') || t.includes('nose job')) return 6000;
+  if (t.includes('facelift') || t.includes('face lift')) return 8000;
   if (t.includes('breast augmentation') || t.includes('boob job')) return 7500;
-  if (t.includes('liposuction')) return 4000;
-  if (t.includes('tummy tuck') || t.includes('abdominoplasty')) return 9000;
+  if (t.includes('liposuction') || t.includes('lipo')) return 5000;
+  if (t.includes('tummy tuck') || t.includes('abdominoplasty')) return 6500;
   if (t.includes('hair transplant')) return 6000;
   if (t.includes('blepharoplasty') || t.includes('eyelid')) return 3500;
 
   // Non-surgical
-  if (t.includes('botox') || t.includes('filler')) return 350;
-  if (t.includes('facial') || t.includes('peel')) return 150;
-  if (t.includes('consultation')) return 200;
+  if (t.includes('botox') || t.includes('wrinkle')) return 400;
+  if (t.includes('filler') || t.includes('dermal')) return 500;
+  if (t.includes('facial') || t.includes('peel')) return 200;
+  if (t.includes('consultation') || t.includes('consult')) return 150;
 
   return 0; // Unknown value
 }

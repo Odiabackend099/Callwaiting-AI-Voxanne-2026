@@ -1,58 +1,28 @@
-# Planning: Clean Vapi Sync Implementation
-
-## Problem Statement
-
-The current Vapi agent synchronization logic is fragile, leading to "Voice Mismatch" errors (Status 400) because legacy voices are no longer supported. Additionally, the `IntegrationDecryptor` fails to find credentials for some organizations, lacking a fallback. The system also lacks robust idempotency. The Vapi API circuit breaker is currently open due to repeated failures.
-
-## Goals
-
-1. **Robust Voice Normalization:** Automatically map legacy voices to a supported default (Azure/Jenny) to prevent 400 errors.
-2. **Reliable Credential Retrieval:** Use `IntegrationSettingsService` which supports fallback to platform-level keys.
-3. **Idempotent Synchronization:** Ensure agents are created only once and updated via PATCH thereafter.
-4. **Circuit Breaker Management:** Ensure the circuit breaker is reset.
-5. **Clean Code:** Follow "Senior Engineer" standards.
-
-## Technical Requirements
-
-### 1. `VapiAssistantManager` Refactor
-
-- **Location:** `backend/src/services/vapi-assistant-manager.ts`
-- **Dependencies:** `VapiClient`, `IntegrationSettingsService`, `supabase-client`.
-- **Logic:**
-  - Use `IntegrationSettingsService.getVapiCredentials(orgId)` for keys.
-  - Implement `normalizeVoiceConfig(config)` to handle legacy voices.
-  - Implement `ensureAssistant` with check-then-upsert logic.
-  - Handle 404s from Vapi by recreating the assistant.
-
-### 2. `IntegrationSettingsService` Verification
-
-- **Location:** `backend/src/services/integration-settings.ts`
-- **Logic:** Ensure `getVapiCredentials` correctly falls back to `process.env.VAPI_PRIVATE_KEY` if DB lookup fails.
-
-### 3. Verification Script
-
-- **Location:** `backend/src/scripts/verify-vapi-sync.ts` (New, Clean)
-- **Logic:**
-  - Simulate an inbound agent save.
-  - Verify voice normalization.
-  - Verify idempotency.
-  - Verify credential fallback.
+# Planning - API Key Cleanup and Server Startup
 
 ## Implementation Phases
 
-### Phase 1: Core Service Refactor
+### Phase 1: Scan and Cleanup
 
-- Refactor `VapiAssistantManager` to be cleaner and more robust.
-- Ensure `IntegrationSettingsService` is used.
-- Add comprehensive logging.
+1. **Search**: Scan the codebase for `VAPI_PRIVATE_KEY`, `VAPI_PUBLIC_KEY`, and any potential hardcoded UUIDs that look like Vapi keys.
+2. **Validate**: Compare found keys with the provided correct keys.
+3. **Remediate**: Update `backend/.env` (if needed) and any other config files. Remove hardcoded keys from source code.
 
-### Phase 2: Verification
+### Phase 2: Server Startup
 
-- Create `verify-vapi-sync.ts`.
-- Restart backend to reset circuit breaker.
-- Run verification script.
+1. **Backend**: Start the backend server (`npm run dev` in `backend/`).
+2. **Frontend**: Start the frontend server (`npm run dev` in root or `frontend/`).
+3. **Tunnel**: Start ngrok to expose the backend.
 
-### Phase 3: Cleanup
+## Technical Requirements
 
-- Remove any temporary files.
-- Update documentation.
+- **Keys**:
+  - Private: `fc4cee8a-a616-4955-8a76-78fb5c6393bb`
+  - Public: `625488bf-113f-442d-a74c-95861a794250`
+- **Environment**: Node.js, Ngrok.
+
+## Testing Criteria
+
+- **Clean Scan**: No occurrences of old keys in the codebase.
+- **Server Status**: Backend and Frontend accessible via localhost.
+- **Tunnel Status**: Ngrok URL pointing to backend.

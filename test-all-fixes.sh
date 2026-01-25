@@ -7,7 +7,7 @@ set -e
 BACKEND_URL="http://localhost:3001"
 NGROK_URL="${NGROK_URL:-https://sobriquetical-zofia-abysmally.ngrok-free.dev}"
 ORG_ID="46cf2995-2bee-44e3-838b-24151486fe4e"
-VAPI_KEY="dc0ddc43-42ae-493b-a082-6e15cd7d739a"
+VAPI_KEY="fc4cee8a-a616-4955-8a76-78fb5c6393bb"
 
 echo "======================================================================"
 echo "🧪 VOXANNE AI - COMPREHENSIVE TEST SUITE"

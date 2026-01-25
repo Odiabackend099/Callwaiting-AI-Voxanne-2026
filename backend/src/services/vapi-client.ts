@@ -103,7 +103,8 @@ export class VapiClient {
 
     const sanitizedKey = keySource
       .trim()
-      .replace(/[\r\n\t\x00-\x1F\x7F]/g, ''); // Remove all control characters
+      .replace(/[\r\n\t\x00-\x1F\x7F]/g, '') // Remove all control characters
+      .replace(/^['"]|['"]$/g, ''); // Remove wrapping quotes
 
     if (!sanitizedKey) {
       throw new Error('VapiClient: API key is required and cannot be empty (checked constructor arg and VAPI_PRIVATE_KEY from config)');

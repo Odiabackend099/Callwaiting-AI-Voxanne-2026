@@ -711,6 +711,7 @@ const CallsPageContent = () => {
                                                                 }}
                                                                 className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
                                                                 title="Play recording"
+                                                                aria-label="Play recording"
                                                             >
                                                                 <Play className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                                                             </button>
@@ -721,6 +722,7 @@ const CallsPageContent = () => {
                                                                 }}
                                                                 className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                                                                 title="Download recording"
+                                                                aria-label="Download recording"
                                                             >
                                                                 <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                                             </button>
@@ -748,6 +750,7 @@ const CallsPageContent = () => {
                                                                 }}
                                                                 className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                                                                 title="Share recording"
+                                                                aria-label="Share recording via email"
                                                             >
                                                                 <Share2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                                                             </button>
@@ -791,6 +794,7 @@ const CallsPageContent = () => {
                                                             }}
                                                             className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                                                             title="Export transcript"
+                                                            aria-label="Export transcript to file"
                                                         >
                                                             <Download className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                                                         </button>
@@ -820,6 +824,7 @@ const CallsPageContent = () => {
                                                             }}
                                                             className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                                                             title="Send follow-up SMS"
+                                                            aria-label="Send follow-up SMS message"
                                                         >
                                                             <Mail className="w-4 h-4 text-green-600 dark:text-green-400" />
                                                         </button>
@@ -831,6 +836,7 @@ const CallsPageContent = () => {
                                                         }}
                                                         className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                                         title="Delete call"
+                                                        aria-label="Delete this call"
                                                     >
                                                         <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                                                     </button>
@@ -854,6 +860,7 @@ const CallsPageContent = () => {
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
                                     className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                    aria-label="Go to previous page"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                     Previous
@@ -878,6 +885,8 @@ const CallsPageContent = () => {
                                                     ? 'bg-emerald-600 text-white'
                                                     : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
                                                     }`}
+                                                aria-label={`Go to page ${pageNum}`}
+                                                aria-current={currentPage === pageNum ? 'page' : undefined}
                                             >
                                                 {pageNum}
                                             </button>
@@ -888,6 +897,7 @@ const CallsPageContent = () => {
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
                                     className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                    aria-label="Go to next page"
                                 >
                                     Next
                                     <ChevronRight className="w-4 h-4" />
@@ -913,6 +923,7 @@ const CallsPageContent = () => {
                                 <button
                                     onClick={() => setShowDetailModal(false)}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                    aria-label="Close call details modal"
                                 >
                                     <X className="w-6 h-6 text-gray-600 dark:text-slate-400" />
                                 </button>
@@ -1097,6 +1108,7 @@ const CallsPageContent = () => {
                                         <button
                                             onClick={handleDownloadRecording}
                                             className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-sm font-medium"
+                                            aria-label="Download recording file"
                                         >
                                             <Download className="w-4 h-4" />
                                             Download
@@ -1106,6 +1118,7 @@ const CallsPageContent = () => {
                                         <button
                                             onClick={handleShareRecording}
                                             className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-sm font-medium"
+                                            aria-label="Share recording with others"
                                         >
                                             <Share2 className="w-4 h-4" />
                                             Share
@@ -1115,6 +1128,7 @@ const CallsPageContent = () => {
                                         <button
                                             onClick={handleAddToCRM}
                                             className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors text-sm font-medium"
+                                            aria-label="Add this caller to CRM"
                                         >
                                             <UserPlus className="w-4 h-4" />
                                             Add to CRM
@@ -1124,6 +1138,7 @@ const CallsPageContent = () => {
                                         <button
                                             onClick={() => setShowFollowupModal(true)}
                                             className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors text-sm font-medium"
+                                            aria-label="Send follow-up message"
                                         >
                                             <Mail className="w-4 h-4" />
                                             Follow-up
@@ -1133,6 +1148,7 @@ const CallsPageContent = () => {
                                         <button
                                             onClick={handleExportTranscript}
                                             className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-sm font-medium"
+                                            aria-label="Export transcript to file"
                                         >
                                             <Download className="w-4 h-4" />
                                             Export
@@ -1146,6 +1162,7 @@ const CallsPageContent = () => {
                                 <button
                                     onClick={() => setShowDetailModal(false)}
                                     className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                    aria-label="Close call details"
                                 >
                                     Close
                                 </button>
@@ -1169,6 +1186,7 @@ const CallsPageContent = () => {
                                         setFollowupMessage('');
                                     }}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                    aria-label="Close follow-up modal"
                                 >
                                     <X className="w-6 h-6 text-gray-600 dark:text-slate-400" />
                                 </button>
@@ -1208,6 +1226,7 @@ const CallsPageContent = () => {
                                         setFollowupMessage('');
                                     }}
                                     className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                    aria-label="Cancel sending follow-up"
                                 >
                                     Cancel
                                 </button>
@@ -1215,6 +1234,7 @@ const CallsPageContent = () => {
                                     onClick={handleSendFollowup}
                                     disabled={loadingAction === 'followup'}
                                     className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center gap-2"
+                                    aria-label="Send follow-up message"
                                 >
                                     {loadingAction === 'followup' ? (
                                         <>

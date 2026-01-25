@@ -39,7 +39,8 @@
     "restart:all": "ts-node scripts/restart-and-configure.ts",
     "test:booking": "ts-node scripts/test-booking-e2e.ts",
     "verify:webhook": "ts-node scripts/verify-webhook.ts",
-    "db:encrypt-integrations": "npx tsx src/scripts/encrypt-integrations.ts"
+    "db:encrypt-integrations": "npx tsx src/scripts/encrypt-integrations.ts",
+    "test:security": "npx tsx src/scripts/test-guardian-suite.ts"
   },
   "keywords": [],
   "author": "",
@@ -59,6 +60,7 @@
     "@types/uuid": "^11.0.0",
     "@types/ws": "^8.18.1",
     "axios": "^1.13.2",
+    "chalk": "^5.6.2",
     "chrono-node": "^2.9.0",
     "cors": "^2.8.5",
     "csv-parse": "^5.5.6",
@@ -79,7 +81,7 @@
     "opossum": "^9.0.0",
     "pg": "^8.16.3",
     "resend": "^6.6.0",
-    "twilio": "^5.11.2",
+    "twilio": "^5.12.0",
     "typescript": "^5.2.2",
     "uuid": "^13.0.0",
     "ws": "^8.18.3",

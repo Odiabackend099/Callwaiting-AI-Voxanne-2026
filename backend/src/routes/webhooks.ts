@@ -1175,6 +1175,81 @@ async function handleEndOfCallReport(event: VapiEvent) {
       }
     }
 
+    // ===== DETECT BOOKING CONFIRMATION (Phase 2) =====
+    // Check if appointment was successfully booked during this call
+    let isBooked = false;
+
+    // Check Vapi tool calls for successful booking
+    if (call.toolCalls && Array.isArray(call.toolCalls)) {
+      const bookingTool = call.toolCalls.find((t: any) => {
+        const toolName = t.function?.name || t.name || '';
+        return toolName === 'book_appointment' || toolName === 'bookClinicAppointment';
+      });
+
+      if (bookingTool && bookingTool.status === 'success') {
+        isBooked = true;
+        logger.info('webhooks', 'Booking tool called successfully', {
+          callId: call.id,
+          toolName: bookingTool.function?.name
+        });
+      }
+    }
+
+    // Also check if appointment was created after this call started
+    if (!isBooked && callLog) {
+      try {
+        const callStartTime = new Date(call.startedAt || call.createdAt);
+        const { data: appointments } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('org_id', callLog.org_id)
+          .eq('contact_phone', call.customer?.number)
+          .gte('created_at', callStartTime.toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (appointments) {
+          isBooked = true;
+          logger.info('webhooks', 'Appointment found for contact', {
+            callId: call.id,
+            appointmentId: appointments.id
+          });
+        }
+      } catch (appointmentError: any) {
+        logger.warn('webhooks', 'Error checking for created appointments', {
+          error: appointmentError?.message
+        });
+      }
+    }
+    // ===== END BOOKING DETECTION =====
+
+    // ===== ESTIMATE FINANCIAL VALUE (Phase 3) =====
+    let financialValue = 0;
+    if (artifact?.transcript) {
+      try {
+        financialValue = await estimateLeadValue(artifact.transcript, callLog.org_id);
+        logger.info('webhooks', 'Financial value estimated', {
+          callId: call.id,
+          value: financialValue
+        });
+      } catch (valueError: any) {
+        logger.warn('webhooks', 'Failed to estimate financial value', {
+          error: valueError?.message
+        });
+      }
+    }
+    // ===== END FINANCIAL VALUE ESTIMATION =====
+
+    // Determine recording status based on current state
+    let recordingStatus: 'pending' | 'processing' | 'completed' | 'failed' = 'pending';
+    if (recordingStoragePath === 'processing') {
+      recordingStatus = 'processing';
+    } else if (recordingStoragePath && recordingStoragePath !== 'processing') {
+      recordingStatus = 'completed';
+    } else if (!artifact?.recording) {
+      recordingStatus = 'failed';
+    }
+
     // Update call_logs with final data including recording metadata
     // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callLogsError } = await supabase
@@ -1185,13 +1260,17 @@ async function handleEndOfCallReport(event: VapiEvent) {
         recording_storage_path: recordingStoragePath || null,
         recording_signed_url_expires_at: recordingSignedUrl ? new Date(Date.now() + 3600000).toISOString() : null,
         recording_uploaded_at: recordingUploadedAt,
+        recording_status: recordingStatus,
         transcript: artifact?.transcript || null,
         transcript_only_fallback: !recordingStoragePath && !!artifact?.transcript,
         cost: call.cost || 0,
         sentiment_score: sentimentResult.score,
         sentiment_label: sentimentResult.label,
         sentiment_summary: sentimentResult.summary,
-        sentiment_urgency: sentimentResult.urgency
+        sentiment_urgency: sentimentResult.urgency,
+        metadata: {
+          booking_confirmed: isBooked
+        }
       })
       .eq('vapi_call_id', call.id)
       .eq('org_id', callLog.org_id);
@@ -1206,19 +1285,21 @@ async function handleEndOfCallReport(event: VapiEvent) {
       throw new Error(`Failed to update call_logs: ${callLogsError.message}`);
     }
 
-    // Also update calls table with call_type and recording_storage_path
+    // Also update calls table with call_type, recording_storage_path, recording_status, and financial_value
     // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callsError } = await supabase
       .from('calls')
       .update({
         call_type: callType,
         recording_storage_path: recordingStoragePath,
+        recording_status: recordingStatus,
         status: 'completed',
         sentiment_score: sentimentResult.score,
         sentiment_label: sentimentResult.label,
         sentiment_summary: sentimentResult.summary,
         sentiment_urgency: sentimentResult.urgency,
-        direction: callType
+        direction: callType,
+        financial_value: financialValue
       })
       .eq('vapi_call_id', call.id)
       .eq('org_id', callLog.org_id);
@@ -1290,17 +1371,14 @@ async function handleEndOfCallReport(event: VapiEvent) {
         );
 
 
-        // NEW: Estimate Financial Value
-        const potentialValue = estimateLeadValue(artifact.transcript);
-
-        // Update lead with score AND value
-        if (potentialValue > 0 || leadScore.score > 0) {
+        // Update lead with score AND value (financialValue already calculated earlier)
+        if (financialValue > 0 || leadScore.score > 0) {
           await supabase.from('leads')
             .update({
               last_score: leadScore.score,
               status: leadScore.tier === 'hot' ? 'qualified' : 'called_1',
               metadata: { // Merge with existing metadata ideally, but for now simple update
-                potential_value: potentialValue,
+                potential_value: financialValue,
                 lead_score_details: leadScore.details
               }
             })
@@ -1394,6 +1472,84 @@ async function handleEndOfCallReport(event: VapiEvent) {
       }
     }
     // ===== END AUTOMATIC HOT LEAD DETECTION =====
+
+    // ===== UPDATE CONTACT LEAD STATUS (Phase 2) =====
+    // Automatically update contact's lead_status based on call outcome
+    if (call.customer?.number && callLog?.org_id) {
+      try {
+        // Get or create contact for this phone number
+        const { data: existingContact } = await supabase
+          .from('contacts')
+          .select('id, lead_status')
+          .eq('org_id', callLog.org_id)
+          .eq('phone', call.customer.number)
+          .maybeSingle();
+
+        if (existingContact) {
+          // Update existing contact
+          let newStatus = existingContact.lead_status;
+
+          if (isBooked) {
+            newStatus = 'booked';
+          } else if (existingContact.lead_status === 'new' || existingContact.lead_status === 'contacted') {
+            // Only mark as lost if it's a completed inbound call without booking
+            if (callType === 'inbound') {
+              newStatus = 'lost';
+            } else {
+              newStatus = 'contacted';
+            }
+          }
+
+          if (newStatus !== existingContact.lead_status) {
+            await supabase
+              .from('contacts')
+              .update({
+                lead_status: newStatus,
+                last_contacted_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingContact.id)
+              .eq('org_id', callLog.org_id);
+
+            logger.info('webhooks', 'Contact lead_status updated', {
+              contactId: existingContact.id,
+              previousStatus: existingContact.lead_status,
+              newStatus,
+              isBooked
+            });
+          }
+        } else if (callType === 'inbound') {
+          // Create new contact for inbound calls
+          const { error: createError } = await supabase
+            .from('contacts')
+            .insert({
+              org_id: callLog.org_id,
+              name: call.customer?.name || 'Unknown',
+              phone: call.customer.number,
+              lead_status: isBooked ? 'booked' : 'lost',
+              last_contacted_at: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (createError) {
+            logger.warn('webhooks', 'Failed to create contact from inbound call', {
+              error: createError.message
+            });
+          } else {
+            logger.info('webhooks', 'New contact created from inbound call', {
+              phone: call.customer.number,
+              status: isBooked ? 'booked' : 'lost'
+            });
+          }
+        }
+      } catch (contactError: any) {
+        logger.error('webhooks', 'Error updating contact lead_status', {
+          error: contactError?.message
+        });
+      }
+    }
+    // ===== END CONTACT STATUS UPDATE =====
 
     // Lead/campaign follow-up automation intentionally disabled for this project.
   } catch (error) {

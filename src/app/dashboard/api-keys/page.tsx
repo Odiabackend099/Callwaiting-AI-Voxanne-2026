@@ -424,22 +424,22 @@ export default function ApiKeysPage() {
                     <div className="flex items-center justify-between p-4 bg-black/20 border border-white/5 rounded-xl">
                         <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${calendarStatus.connected
-                                    ? 'bg-emerald-500/10'
-                                    : 'bg-blue-500/10'
+                                ? 'bg-emerald-500/10'
+                                : 'bg-blue-500/10'
                                 }`}>
                                 <Calendar className={`w-5 h-5 ${calendarStatus.connected
-                                        ? 'text-emerald-400'
-                                        : 'text-blue-400'
+                                    ? 'text-emerald-400'
+                                    : 'text-blue-400'
                                     }`} />
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-white">Google Calendar</p>
                                 <p className={`text-xs ${calendarStatus.connected
-                                        ? 'text-emerald-400'
-                                        : 'text-slate-500'
+                                    ? 'text-emerald-400'
+                                    : 'text-slate-500'
                                     }`}>
                                     {calendarStatus.connected
-                                        ? 'Connected'
+                                        ? (calendarStatus.email ? `Connected as ${calendarStatus.email}` : 'Connected')
                                         : 'Not Linked'}
                                 </p>
                             </div>
@@ -473,8 +473,8 @@ export default function ApiKeysPage() {
                                 onClick={handleConnectCalendar}
                                 disabled={isConnectingCalendar || calendarStatus.connected}
                                 className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${calendarStatus.connected
-                                        ? 'bg-emerald-500/10 text-emerald-400 cursor-default border border-emerald-500/20'
-                                        : 'bg-white text-black hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed'
+                                    ? 'bg-emerald-500/10 text-emerald-400 cursor-default border border-emerald-500/20'
+                                    : 'bg-white text-black hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed'
                                     }`}
                             >
                                 {isConnectingCalendar ? 'Working...' : calendarStatus.connected ? 'Connected' : 'Link My Google Calendar'}

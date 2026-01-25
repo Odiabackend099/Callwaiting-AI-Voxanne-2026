@@ -7,7 +7,7 @@ function vapiRequest(method, path, body = null) {
       path,
       method,
       headers: {
-        'Authorization': 'Bearer ' + process.env.VAPI_API_KEY,
+        'Authorization': 'Bearer ' + process.env.VAPI_PRIVATE_KEY,
         'Content-Type': 'application/json'
       }
     };

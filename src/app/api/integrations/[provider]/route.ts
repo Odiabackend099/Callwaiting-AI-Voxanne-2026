@@ -26,12 +26,18 @@ export async function GET(
     }
 
     // Call backend service to fetch and decrypt credentials
+    const backendUrl = `/api/integrations/${provider.toLowerCase()}`;
+    console.log(`[NextAPI] Fetching integration config from: ${backendUrl}`);
+
     try {
       const config = await authedBackendFetch<any>(
-        `/api/integrations/${provider}`,
+        backendUrl,
         {
           method: 'GET',
           timeoutMs: 10000,
+          // Don't throw on 404, handle it manually if the fetcher supports it, 
+          // OR catch the error and inspect it.
+          // Since our authedBackendFetch throws on !res.ok, we catch below.
         }
       );
 
@@ -44,23 +50,32 @@ export async function GET(
       }
 
       return NextResponse.json({ config }, { status: 200 });
+
     } catch (backendError: any) {
-      // If backend returns 404, propagate it
-      if (backendError.status === 404) {
+      const status = backendError?.status || backendError?.response?.status || 500;
+      const message = backendError?.message || 'Backend request failed';
+
+      console.log(`[NextAPI] Backend returned status ${status} for ${provider}`);
+
+      // Explicitly handle 404 (Not Configured) as a valid state, not an error
+      if (status === 404) {
         return NextResponse.json(
           { error: `${provider} not configured` },
           { status: 404 }
         );
       }
 
-      throw backendError;
+      // Propagate other errors (401, 403, 500)
+      return NextResponse.json(
+        { error: message },
+        { status: status }
+      );
     }
   } catch (error: any) {
-    console.error('Integration API error:', error);
-
+    console.error('Integration API Critical Fail:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to fetch integration' },
-      { status: error?.status || 500 }
+      { error: 'Internal Proxy Error' },
+      { status: 500 }
     );
   }
 }

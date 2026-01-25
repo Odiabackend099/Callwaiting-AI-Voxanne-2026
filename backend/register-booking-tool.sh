@@ -3,7 +3,7 @@
 # Register bookClinicAppointment tool with Vapi assistant
 
 ASSISTANT_ID="0bcc5fd8-77b0-4bce-81cd-abfa107dfea5"
-VAPI_PUBLIC_KEY="9829e1f5-e367-427c-934d-0de75f8801cf"
+VAPI_PUBLIC_KEY="625488bf-113f-442d-a74c-95861a794250"
 BACKEND_URL="${BACKEND_URL:-http://localhost:3001}"
 
 echo "Fetching assistant configuration..."

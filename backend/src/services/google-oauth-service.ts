@@ -53,7 +53,8 @@ export async function getOAuthUrl(orgId: string): Promise<string> {
     response_type: 'code',
     scope: [
       'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/userinfo.email' // Required for email extraction in callback
     ],
     state
   });
@@ -164,10 +165,9 @@ export async function exchangeCodeForTokens(
         orgId,
         hasEmail: !!userEmail,
         email: userEmail,
-        credentialsKeys: Object.keys(credentialsWithMetadata)
       });
 
-      console.log('[GoogleOAuth] About to store credentials:', {
+      console.log('[GoogleOAuth] About to store credentials to org_credentials:', {
         orgId,
         provider: 'google_calendar',
         hasAccessToken: !!tokens.access_token,
@@ -175,22 +175,35 @@ export async function exchangeCodeForTokens(
         email: userEmail
       });
 
-      await IntegrationDecryptor.storeCredentials(
-        orgId,
-        'google_calendar',
-        credentialsWithMetadata
-      );
+      // CRITICAL FIX: Write directly to org_credentials (SSOT)
+      // DO NOT use IntegrationDecryptor - it writes to wrong table
+      const encryptedConfig = EncryptionService.encryptObject({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresAt: expiresAt,
+        email: userEmail
+      });
 
-      // Update the exposed email column for UI
-      if (userEmail) {
-        await supabase
-          .from('org_credentials')
-          .update({ connected_calendar_email: userEmail })
-          .eq('org_id', orgId)
-          .eq('provider', 'google_calendar');
+      const { error: upsertError } = await supabase
+        .from('org_credentials')
+        .upsert({
+          org_id: orgId,
+          provider: 'google_calendar',
+          is_active: true,
+          connected_email: userEmail,
+          encrypted_config: encryptedConfig,
+          metadata: userEmail ? { email: userEmail } : null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'org_id,provider'
+        });
+
+      if (upsertError) {
+        throw new Error(`Failed to store credentials: ${upsertError.message}`);
       }
 
-      console.log('[GoogleOAuth] storeCredentials() completed successfully');
+      console.log('[GoogleOAuth] Credentials stored successfully to org_credentials');
 
       log.info('GoogleOAuth', 'Tokens stored successfully', {
         orgId,

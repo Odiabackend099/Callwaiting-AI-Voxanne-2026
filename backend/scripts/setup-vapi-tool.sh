@@ -3,7 +3,7 @@
 # Step 1: Create the tool
 echo "Creating Vapi tool..."
 TOOL_RESPONSE=$(curl -s -X POST https://api.vapi.ai/tool \
-  -H "Authorization: Bearer dc0ddc43-42ae-493b-a082-6e15cd7d739a" \
+  -H "Authorization: Bearer fc4cee8a-a616-4955-8a76-78fb5c6393bb" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "function",
@@ -47,7 +47,7 @@ echo ""
 # Step 2: Link tool to assistant
 echo "Linking tool to assistant..."
 ASSISTANT_RESPONSE=$(curl -s -X PATCH https://api.vapi.ai/assistant/38a9c7b8-56d7-468a-b5e0-05588a518c51 \
-  -H "Authorization: Bearer dc0ddc43-42ae-493b-a082-6e15cd7d739a" \
+  -H "Authorization: Bearer fc4cee8a-a616-4955-8a76-78fb5c6393bb" \
   -H "Content-Type: application/json" \
   -d "{\"model\": {\"toolIds\": [\"$TOOL_ID\"]}}")
 

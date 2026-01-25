@@ -275,29 +275,6 @@ Message: "feat: dashboard API fixes - 100% best practices certified"
 3. Monitor `messages` table for audit logs
 4. Deploy to production when ready
 
-
-### **ADDITIONAL MIGRATIONS (2026-01-25)**
-
-#### **Migration 3: Services Pricing Engine** ✅
-**File:** `20260125_create_services_table.sql`  
-**Applied:** Successfully via Supabase MCP
-
-**Services Table:** Multi-tenant pricing engine with 7 default services seeded per organization ($27,550 total value). Includes GIN index for keyword matching and helper function `get_service_price_by_keyword()`.
-
-**Default Services:** Botox ($400), Facelift ($8,000), Rhinoplasty ($6,000), Breast Augmentation ($7,500), Liposuction ($5,000), Fillers ($500), Consultation ($150)
-
-**Use Cases:** Match call transcripts to services, calculate pipeline value, track service-specific conversions
-
-#### **Migration 4: Call Recording Metadata** ✅
-**File:** `20260125_add_call_recording_metadata.sql`  
-**Applied:** Successfully via Supabase MCP
-
-**Columns Added:** `recording_status` (pending/processing/completed/failed), `transfer_to`, `transfer_time`, `transfer_reason`
-
-**Features:** Automatic data migration, performance indexes, helper function `update_recording_status()`, applied to both `call_logs` and `calls` tables
-
-**Use Cases:** Recording status badges, transfer analytics, quality monitoring
-
 ---
 
 ## 1. Project Overview
