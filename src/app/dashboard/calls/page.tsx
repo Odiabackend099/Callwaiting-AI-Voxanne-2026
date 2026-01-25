@@ -3,11 +3,12 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2, Share2, UserPlus, Mail } from 'lucide-react';
+import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2, Share2, UserPlus, Mail, Loader } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 // LeftSidebar removed (now in layout)
 import { RecordingPlayer } from '@/components/RecordingPlayer';
 import { useTranscript } from '@/hooks/useTranscript';
+import { useToast } from '@/hooks/useToast';
 import useSWR, { useSWRConfig } from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -50,6 +51,7 @@ const CallsPageContent = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
+    const { success, error: showError, info, warning } = useToast();
     // ... rest of state and logic unchanged
     // const [calls, setCalls] = useState<Call[]>([]); // Removed in favor of SWR
     // const [isLoading, setIsLoading] = useState(true); // Removed in favor of SWR
@@ -65,6 +67,26 @@ const CallsPageContent = () => {
     const [filterDate, setFilterDate] = useState<string>(''); // 'today', 'week', 'month', or ''
     const [showFollowupModal, setShowFollowupModal] = useState(false);
     const [followupMessage, setFollowupMessage] = useState('');
+
+    // Loading states for action buttons
+    const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText: string;
+        cancelText: string;
+        onConfirm: () => Promise<void> | void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        onConfirm: () => {}
+    });
 
     // Use transcript hook for live transcript display
     const { segments: liveTranscript, isConnected: wsConnected } = useTranscript(selectedCall?.id || null);
@@ -242,19 +264,23 @@ const CallsPageContent = () => {
 
     const handleDownloadRecording = async () => {
         if (!selectedCall?.recording_url) {
-            alert('No recording available');
+            warning('No recording available');
             return;
         }
 
         try {
+            setLoadingAction('download');
             const link = document.createElement('a');
             link.href = selectedCall.recording_url;
             link.download = `call_${selectedCall.id}_${formatDateTime(selectedCall.call_date)}.mp3`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            success('Recording downloaded successfully');
         } catch (err) {
-            alert('Failed to download recording');
+            showError('Failed to download recording');
+        } finally {
+            setLoadingAction(null);
         }
     };
 
@@ -262,6 +288,7 @@ const CallsPageContent = () => {
         if (!selectedCall) return;
 
         try {
+            setLoadingAction('share');
             const response = await authedBackendFetch<any>(`/api/calls-dashboard/${selectedCall.id}/share`, {
                 method: 'POST'
             });
@@ -269,22 +296,25 @@ const CallsPageContent = () => {
             const shareUrl = response.share_url;
             if (navigator.clipboard) {
                 await navigator.clipboard.writeText(shareUrl);
-                alert('Recording share link copied to clipboard');
+                success('Recording share link copied to clipboard');
             } else {
-                alert(`Share URL: ${shareUrl}`);
+                info(`Share URL: ${shareUrl}`);
             }
         } catch (err: any) {
-            alert(err?.message || 'Failed to generate share link');
+            showError(err?.message || 'Failed to generate share link');
+        } finally {
+            setLoadingAction(null);
         }
     };
 
     const handleAddToCRM = async () => {
         if (!selectedCall?.phone_number) {
-            alert('No phone number available');
+            warning('No phone number available');
             return;
         }
 
         try {
+            setLoadingAction('crm');
             const response = await authedBackendFetch<any>('/api/contacts', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -295,21 +325,24 @@ const CallsPageContent = () => {
                 })
             });
 
-            alert('Contact added to CRM successfully');
+            success('Contact added to CRM successfully');
             // Optionally redirect to contact profile
             router.push(`/dashboard/leads?id=${response.id}`);
         } catch (err: any) {
-            alert(err?.message || 'Failed to add contact to CRM');
+            showError(err?.message || 'Failed to add contact to CRM');
+        } finally {
+            setLoadingAction(null);
         }
     };
 
     const handleSendFollowup = async () => {
         if (!selectedCall || !followupMessage.trim()) {
-            alert('Please enter a message');
+            warning('Please enter a message');
             return;
         }
 
         try {
+            setLoadingAction('followup');
             await authedBackendFetch(`/api/calls-dashboard/${selectedCall.id}/followup`, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -318,11 +351,13 @@ const CallsPageContent = () => {
                 })
             });
 
-            alert('Follow-up sent successfully');
+            success('Follow-up SMS sent successfully');
             setShowFollowupModal(false);
             setFollowupMessage('');
         } catch (err: any) {
-            alert(err?.message || 'Failed to send follow-up');
+            showError(err?.message || 'Failed to send follow-up');
+        } finally {
+            setLoadingAction(null);
         }
     };
 
@@ -330,6 +365,7 @@ const CallsPageContent = () => {
         if (!selectedCall) return;
 
         try {
+            setLoadingAction('export');
             const response = await authedBackendFetch<any>(`/api/calls-dashboard/${selectedCall.id}/transcript/export?format=pdf`, {
                 method: 'POST'
             });
@@ -340,8 +376,11 @@ const CallsPageContent = () => {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            success('Transcript exported successfully');
         } catch (err: any) {
-            alert(err?.message || 'Failed to export transcript');
+            showError(err?.message || 'Failed to export transcript');
+        } finally {
+            setLoadingAction(null);
         }
     };
 
@@ -690,17 +729,20 @@ const CallsPageContent = () => {
                                                                     const email = prompt('Enter email address to share recording:');
                                                                     if (!email) return;
                                                                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                                                                        alert('Invalid email address');
+                                                                        warning('Invalid email address');
                                                                         return;
                                                                     }
                                                                     try {
+                                                                        setLoadingAction(`share-${call.id}`);
                                                                         await authedBackendFetch(`/api/calls-dashboard/${call.id}/share`, {
                                                                             method: 'POST',
                                                                             body: JSON.stringify({ email })
                                                                         });
-                                                                        alert(`Recording shared with ${email}`);
+                                                                        success(`Recording shared with ${email}`);
                                                                     } catch (err: any) {
-                                                                        alert(err?.message || 'Failed to share recording');
+                                                                        showError(err?.message || 'Failed to share recording');
+                                                                    } finally {
+                                                                        setLoadingAction(null);
                                                                     }
                                                                 }}
                                                                 className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
@@ -719,6 +761,7 @@ const CallsPageContent = () => {
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
                                                                 try {
+                                                                    setLoadingAction(`export-${call.id}`);
                                                                     const response = await fetch(`/api/calls-dashboard/${call.id}/transcript/export`, {
                                                                         method: 'POST',
                                                                         headers: {
@@ -735,12 +778,14 @@ const CallsPageContent = () => {
                                                                         a.click();
                                                                         window.URL.revokeObjectURL(url);
                                                                         document.body.removeChild(a);
-                                                                        alert('Transcript downloaded');
+                                                                        success('Transcript downloaded');
                                                                     } else {
-                                                                        alert('Failed to export transcript');
+                                                                        showError('Failed to export transcript');
                                                                     }
                                                                 } catch (err: any) {
-                                                                    alert('Failed to export transcript');
+                                                                    showError('Failed to export transcript');
+                                                                } finally {
+                                                                    setLoadingAction(null);
                                                                 }
                                                             }}
                                                             className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
@@ -756,17 +801,20 @@ const CallsPageContent = () => {
                                                                 const message = prompt('Enter follow-up message (max 160 chars):');
                                                                 if (!message) return;
                                                                 if (message.length > 160) {
-                                                                    alert('Message too long (max 160 characters)');
+                                                                    warning('Message too long (max 160 characters)');
                                                                     return;
                                                                 }
                                                                 try {
+                                                                    setLoadingAction(`sms-${call.id}`);
                                                                     await authedBackendFetch(`/api/calls-dashboard/${call.id}/followup`, {
                                                                         method: 'POST',
                                                                         body: JSON.stringify({ message })
                                                                     });
-                                                                    alert('Follow-up SMS sent successfully');
+                                                                    success('Follow-up SMS sent successfully');
                                                                 } catch (err: any) {
-                                                                    alert(err?.message || 'Failed to send SMS');
+                                                                    showError(err?.message || 'Failed to send SMS');
+                                                                } finally {
+                                                                    setLoadingAction(null);
                                                                 }
                                                             }}
                                                             className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"

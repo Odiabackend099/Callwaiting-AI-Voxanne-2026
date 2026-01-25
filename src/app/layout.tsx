@@ -3,6 +3,7 @@ import { Lato, Playfair_Display, Poppins, Inter } from "next/font/google";
 import "./globals.css";
 import JsonLd from "@/components/JsonLd";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ToastContainer } from "@/components/ToastContainer";
 import DevSwCleanup from "@/components/DevSwCleanup";
 
 const lato = Lato({
@@ -114,6 +115,7 @@ export default function RootLayout({
         <DevSwCleanup />
         <AuthProvider>
           {children}
+          <ToastContainer />
         </AuthProvider>
       </body>
     </html>
