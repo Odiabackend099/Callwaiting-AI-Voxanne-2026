@@ -8,15 +8,17 @@ import axios from 'axios';
 import { log } from './logger';
 
 /**
- * Get webhook URL from environment or construct from BASE_URL
+ * Get webhook URL from environment or construct from BACKEND_URL
+ * CRITICAL: Uses BACKEND_URL which is set to ngrok URL for development
+ * and production domain for production
  */
 function getWebhookUrl(): string {
   if (process.env.WEBHOOK_URL) {
     return process.env.WEBHOOK_URL;
   }
-  
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-  return `${baseUrl}/api/webhooks/vapi`;
+
+  const baseUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+  return `${baseUrl}/api/vapi/webhook`;
 }
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
