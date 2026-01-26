@@ -21,6 +21,7 @@ import * as crypto from 'crypto';
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { getUnifiedBookingTool } from '../config/unified-booking-tool';
+import { getTransferCallTool, getLookupCallerTool } from '../config/phase1-tools';
 import { supabase } from './supabase-client';
 import { log } from './logger';
 
@@ -204,11 +205,6 @@ export class ToolSyncService {
     toolBlueprint: any,
     backendUrl: string
   ): Promise<string> {
-    // For now, we only support bookClinicAppointment
-    if (toolBlueprint.name !== 'bookClinicAppointment') {
-      throw new Error(`Unsupported tool: ${toolBlueprint.name}`);
-    }
-
     // Step 1: Use backend's Vapi API key (platform is sole provider)
     // In multi-tenant platform mode, the backend has the single Vapi API key
     const vapiApiKey = process.env.VAPI_PRIVATE_KEY;
@@ -218,8 +214,22 @@ export class ToolSyncService {
 
     const vapi = new VapiClient(vapiApiKey);
 
-    // Step 2: Build tool definition with webhook URL
-    const toolDef = getUnifiedBookingTool(backendUrl);
+    // Step 2: Build tool definition with webhook URL based on tool name
+    let toolDef: any;
+
+    switch (toolBlueprint.name) {
+      case 'bookClinicAppointment':
+        toolDef = getUnifiedBookingTool(backendUrl);
+        break;
+      case 'transferCall':
+        toolDef = getTransferCallTool(backendUrl);
+        break;
+      case 'lookupCaller':
+        toolDef = getLookupCallerTool(backendUrl);
+        break;
+      default:
+        throw new Error(`Unsupported tool: ${toolBlueprint.name}`);
+    }
     const currentHash = this.getToolDefinitionHash(toolDef);
 
     // Step 3: Check if tool already registered GLOBALLY (by any org)
@@ -227,7 +237,7 @@ export class ToolSyncService {
     const { data: globalTools, error: globalCheckError } = await supabase
       .from('org_tools')
       .select('vapi_tool_id, definition_hash, org_id')
-      .eq('tool_name', 'bookClinicAppointment')
+      .eq('tool_name', toolBlueprint.name)
       .limit(1);
 
     let existingToolId: string | null = null;
@@ -449,12 +459,23 @@ export class ToolSyncService {
    */
   private static async getSystemToolsBlueprint(): Promise<any[]> {
     // TODO: Fetch from system_tools table in Supabase
-    // For MVP, we hardcode the booking tool
+    // For MVP, we hardcode the system tools
 
     return [
       {
         name: 'bookClinicAppointment',
         description: 'Book a confirmed appointment for a patient',
+        enabled: true
+      },
+      // Phase 1: Operational Core Tools
+      {
+        name: 'transferCall',
+        description: 'Transfers the caller to a human agent with context',
+        enabled: true
+      },
+      {
+        name: 'lookupCaller',
+        description: 'Search for an existing patient/customer in the database',
         enabled: true
       }
     ];

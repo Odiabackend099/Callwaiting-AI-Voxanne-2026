@@ -979,4 +979,374 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
     }
 });
 
+/**
+ * ================================
+ * PHASE 1: OPERATIONAL CORE TOOLS
+ * ================================
+ */
+
+/**
+ * 📞 TOOL: transferCall
+ *
+ * Transfers the caller to a human agent with full context.
+ * Implements warm handoff following Split-Brain Rule.
+ *
+ * Request format:
+ * {
+ *   "message": {
+ *     "toolCalls": [{
+ *       "function": {
+ *         "arguments": {
+ *           "summary": "Customer wants to reschedule their Botox appointment",
+ *           "department": "general"
+ *         }
+ *       }
+ *     }],
+ *     "call": {
+ *       "id": "call-123",
+ *       "metadata": { "org_id": "org-uuid" },
+ *       "customer": { "number": "+15551234567" }
+ *     }
+ *   }
+ * }
+ */
+router.post('/tools/transferCall', async (req, res) => {
+    try {
+        // Extract arguments from Vapi payload
+        const toolCalls = req.body.message?.toolCalls || [];
+        if (toolCalls.length === 0) {
+            log.warn('VapiTools', 'transferCall: No toolCalls found');
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'No tool calls' })
+                },
+                speech: 'I apologize, but I encountered an error. Let me try again.'
+            });
+        }
+
+        const args = toolCalls[0]?.function?.arguments || {};
+        const { summary, department } = args;
+
+        // Extract org context from call metadata
+        const call = req.body.message?.call || {};
+        const orgId = call.metadata?.org_id || call.orgId;
+        const callId = call.id;
+        const customerPhone = call.customer?.number;
+
+        log.info('VapiTools', 'Transfer call requested', {
+            orgId,
+            callId,
+            department,
+            summaryPreview: summary?.substring(0, 50)
+        });
+
+        if (!orgId) {
+            log.error('VapiTools', 'transferCall: No org_id found');
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'Organization context not found' })
+                },
+                speech: 'I apologize, but I\'m having trouble transferring your call. Could you please call back and ask to speak with a representative directly?'
+            });
+        }
+
+        // Fetch transfer configuration from integration_settings
+        const { data: settings, error: settingsError } = await supabaseService
+            .from('integration_settings')
+            .select('transfer_phone_number, transfer_sip_uri, transfer_departments')
+            .eq('org_id', orgId)
+            .maybeSingle();
+
+        if (settingsError || !settings) {
+            log.error('VapiTools', 'Failed to fetch transfer settings', {
+                orgId,
+                error: settingsError?.message
+            });
+
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'Transfer not configured' })
+                },
+                speech: 'I apologize, but transfers are not configured for your organization. Could you please call back during business hours and ask to speak with a representative directly?'
+            });
+        }
+
+        // Determine transfer destination
+        let transferDestination: string | null = null;
+
+        // Priority 1: Check department-specific number
+        if (settings.transfer_departments && department) {
+            const deptNumbers = settings.transfer_departments as Record<string, string>;
+            transferDestination = deptNumbers[department] || null;
+        }
+
+        // Priority 2: Fall back to default transfer number
+        if (!transferDestination) {
+            transferDestination = settings.transfer_phone_number || null;
+        }
+
+        if (!transferDestination) {
+            log.warn('VapiTools', 'No transfer destination configured', { orgId, department });
+
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'No transfer number configured' })
+                },
+                speech: 'I apologize, but there\'s no one available to take your call right now. Can I take a message or have someone call you back?'
+            });
+        }
+
+        // Log transfer to call_logs (transfer_to, transfer_time, transfer_reason columns exist)
+        if (callId) {
+            const { error: logError } = await supabaseService
+                .from('call_logs')
+                .update({
+                    transfer_to: transferDestination,
+                    transfer_time: new Date().toISOString(),
+                    transfer_reason: `${department}: ${summary}`
+                })
+                .eq('vapi_call_id', callId)
+                .eq('org_id', orgId);
+
+            if (logError) {
+                log.warn('VapiTools', 'Failed to log transfer to call_logs', {
+                    error: logError.message,
+                    callId
+                });
+            }
+        }
+
+        // Log to transfer_queue for audit trail (if table exists)
+        try {
+            await supabaseService
+                .from('transfer_queue')
+                .insert({
+                    org_id: orgId,
+                    call_id: callId,
+                    to_number: transferDestination,
+                    reason: summary,
+                    trigger_data: {
+                        department,
+                        customer_phone: customerPhone,
+                        timestamp: new Date().toISOString()
+                    },
+                    status: 'initiated'
+                });
+        } catch (queueError: any) {
+            log.warn('VapiTools', 'Failed to create transfer queue entry (non-blocking)', {
+                error: queueError?.message
+            });
+            // Continue - queue logging should not block transfer
+        }
+
+        log.info('VapiTools', 'Transfer initiated', {
+            orgId,
+            callId,
+            destination: transferDestination,
+            department
+        });
+
+        // Determine if SIP or PSTN transfer
+        const isSipDestination = settings.transfer_sip_uri && transferDestination.startsWith('sip:');
+
+        // Return Vapi transfer object
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: true,
+                    transferTo: transferDestination,
+                    department,
+                    summary
+                })
+            },
+            // Vapi transfer action
+            transfer: {
+                destination: isSipDestination
+                    ? { type: 'sip', sipUri: transferDestination }
+                    : { type: 'number', number: transferDestination },
+                // Include context for the receiving agent
+                message: `Transfer from AI: ${summary}`
+            },
+            speech: `I'm transferring you now to our ${department} team. One moment please.`
+        });
+
+    } catch (error: any) {
+        log.error('VapiTools', 'Error in transferCall', {
+            error: error?.message,
+            stack: error?.stack
+        });
+
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({ success: false, error: 'Transfer failed' })
+            },
+            speech: 'I apologize, but I encountered an error while trying to transfer your call. Could you please hold while I try again?'
+        });
+    }
+});
+
+/**
+ * 🔍 TOOL: lookupCaller
+ *
+ * Searches for existing customer in database.
+ * Used when caller claims to be an existing client but identity wasn't auto-detected.
+ *
+ * Request format:
+ * {
+ *   "message": {
+ *     "toolCalls": [{
+ *       "function": {
+ *         "arguments": {
+ *           "searchKey": "+15551234567",
+ *           "searchType": "phone"
+ *         }
+ *       }
+ *     }],
+ *     "call": {
+ *       "metadata": { "org_id": "org-uuid" }
+ *     }
+ *   }
+ * }
+ */
+router.post('/tools/lookupCaller', async (req, res) => {
+    try {
+        // Extract arguments
+        const toolCalls = req.body.message?.toolCalls || [];
+        if (toolCalls.length === 0) {
+            log.warn('VapiTools', 'lookupCaller: No toolCalls found');
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'No tool calls' })
+                },
+                speech: 'I need a bit more information. Could you provide your phone number or name?'
+            });
+        }
+
+        const args = toolCalls[0]?.function?.arguments || {};
+        const { searchKey, searchType } = args;
+
+        // Extract org context
+        const call = req.body.message?.call || {};
+        const orgId = call.metadata?.org_id || call.orgId;
+
+        log.info('VapiTools', 'Caller lookup requested', {
+            orgId,
+            searchType,
+            searchKeyPreview: searchKey?.substring(0, 3) + '***'
+        });
+
+        if (!orgId || !searchKey || !searchType) {
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'Missing required parameters' })
+                },
+                speech: 'I need a bit more information to look you up. Could you provide your phone number or full name?'
+            });
+        }
+
+        // Build query based on search type
+        let query = supabaseService
+            .from('contacts')
+            .select('id, name, email, phone, lead_status, service_interests, notes, last_contact_at')
+            .eq('org_id', orgId);
+
+        switch (searchType) {
+            case 'phone':
+                // Normalize phone number for search (remove all non-digits)
+                const normalizedPhone = searchKey.replace(/\D/g, '');
+                query = query.or(`phone.ilike.%${normalizedPhone}%`);
+                break;
+            case 'email':
+                query = query.ilike('email', `%${searchKey}%`);
+                break;
+            case 'name':
+                query = query.ilike('name', `%${searchKey}%`);
+                break;
+            default:
+                return res.json({
+                    toolResult: {
+                        content: JSON.stringify({ success: false, error: 'Invalid search type' })
+                    },
+                    speech: 'I couldn\'t understand the search criteria. Could you try again?'
+                });
+        }
+
+        const { data: contacts, error } = await query.limit(5);
+
+        if (error) {
+            log.error('VapiTools', 'Caller lookup failed', { error: error.message });
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'Database error' })
+                },
+                speech: 'I\'m having trouble accessing our records right now. Let me help you as a new customer for today.'
+            });
+        }
+
+        if (!contacts || contacts.length === 0) {
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: true, found: false, message: 'No matching contact found' })
+                },
+                speech: 'I don\'t see a record matching that information. That\'s okay, I\'d be happy to help you today. Could you tell me your name?'
+            });
+        }
+
+        // Single match - return full details
+        if (contacts.length === 1) {
+            const contact = contacts[0];
+            const firstName = contact.name?.split(' ')[0] || 'there';
+
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: true,
+                        found: true,
+                        contact: {
+                            id: contact.id,
+                            name: contact.name,
+                            email: contact.email,
+                            status: contact.lead_status,
+                            interests: contact.service_interests,
+                            lastContact: contact.last_contact_at,
+                            notes: contact.notes
+                        }
+                    })
+                },
+                speech: `Found you, ${firstName}! Great to hear from you again. How can I help you today?`
+            });
+        }
+
+        // Multiple matches - return list for clarification
+        const names = contacts.map(c => c.name).join(', ');
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: true,
+                    found: true,
+                    multipleMatches: true,
+                    contacts: contacts.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        phone: c.phone?.slice(-4) // Last 4 digits only for privacy
+                    }))
+                })
+            },
+            speech: `I found a few people that might be you: ${names}. Which one is correct?`
+        });
+
+    } catch (error: any) {
+        log.error('VapiTools', 'Error in lookupCaller', {
+            error: error?.message
+        });
+
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({ success: false, error: 'Lookup failed' })
+            },
+            speech: 'I\'m having trouble with the lookup. Let me help you as if you\'re new for today.'
+        });
+    }
+});
+
 export default router;

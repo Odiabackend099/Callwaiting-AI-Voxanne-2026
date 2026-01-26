@@ -141,6 +141,133 @@ async function injectRagContextIntoAgent(params: {
 }
 
 /**
+ * PHASE 1: Identity Injection
+ * Lookup contact by phone number and inject personalized greeting
+ * This is the "Identity Injection" feature for Phase 1
+ */
+async function lookupContactAndInjectGreeting(params: {
+  vapiApiKey: string;
+  assistantId: string;
+  orgId: string;
+  phoneNumber: string;
+}): Promise<{ contact: any | null; injected: boolean }> {
+  try {
+    if (!params.phoneNumber || !params.orgId) {
+      return { contact: null, injected: false };
+    }
+
+    // Lookup contact by phone in contacts table
+    const { data: contact, error } = await supabase
+      .from('contacts')
+      .select('id, name, email, lead_score, lead_status, service_interests, last_contact_at, notes')
+      .eq('org_id', params.orgId)
+      .eq('phone', params.phoneNumber)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      logger.error('webhooks', 'Contact lookup failed', { error: error.message });
+      return { contact: null, injected: false };
+    }
+
+    if (!contact) {
+      // Contact not found - create a new one
+      const { data: newContact, error: createError } = await supabase
+        .from('contacts')
+        .insert({
+          org_id: params.orgId,
+          phone: params.phoneNumber,
+          name: 'Unknown Caller',
+          lead_status: 'new',
+          lead_score: 50,
+          last_contact_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        logger.warn('webhooks', 'Failed to create new contact', { error: createError.message });
+      } else {
+        logger.info('webhooks', 'New contact created from inbound call', {
+          contactId: newContact.id,
+          phone: params.phoneNumber
+        });
+      }
+
+      return { contact: newContact || null, injected: false };
+    }
+
+    // Contact found - update last_contact_at
+    await supabase
+      .from('contacts')
+      .update({ last_contact_at: new Date().toISOString() })
+      .eq('id', contact.id)
+      .eq('org_id', params.orgId);
+
+    // Inject personalized greeting if we have a name
+    if (contact.name && contact.name !== 'Unknown Caller' && params.assistantId && params.vapiApiKey) {
+      try {
+        const vapi = new VapiClient(params.vapiApiKey);
+        const assistant = await vapi.getAssistant(params.assistantId);
+
+        if (assistant) {
+          const IDENTITY_MARKER_START = '\n\n---BEGIN CALLER IDENTITY---\n';
+          const IDENTITY_MARKER_END = '\n---END CALLER IDENTITY---\n';
+
+          let systemPrompt = assistant.systemPrompt || '';
+
+          // Remove any existing identity injection
+          const identityStartIdx = systemPrompt.indexOf(IDENTITY_MARKER_START);
+          if (identityStartIdx !== -1) {
+            const identityEndIdx = systemPrompt.indexOf(IDENTITY_MARKER_END, identityStartIdx);
+            if (identityEndIdx !== -1) {
+              systemPrompt =
+                systemPrompt.substring(0, identityStartIdx) +
+                systemPrompt.substring(identityEndIdx + IDENTITY_MARKER_END.length);
+            }
+          }
+
+          // Build identity context
+          const identityContext = [
+            `CALLER IDENTITY: ${contact.name}`,
+            contact.email ? `Email: ${contact.email}` : null,
+            contact.lead_status ? `Status: ${contact.lead_status}` : null,
+            contact.service_interests?.length ? `Previous interests: ${contact.service_interests.join(', ')}` : null,
+            contact.notes ? `Notes: ${contact.notes}` : null,
+            '',
+            'IMPORTANT: Greet this caller by their first name. Example: "Hi Sarah, great to hear from you again!"'
+          ].filter(Boolean).join('\n');
+
+          const newSystemPrompt = systemPrompt.trim() +
+            IDENTITY_MARKER_START +
+            identityContext +
+            IDENTITY_MARKER_END;
+
+          await vapi.updateAssistant(params.assistantId, {
+            systemPrompt: newSystemPrompt
+          });
+
+          logger.info('webhooks', 'Identity injected into assistant', {
+            contactId: contact.id,
+            contactName: contact.name
+          });
+
+          return { contact, injected: true };
+        }
+      } catch (injectError: any) {
+        logger.warn('webhooks', 'Failed to inject identity (non-blocking)', {
+          error: injectError?.message
+        });
+      }
+    }
+
+    return { contact, injected: false };
+  } catch (error: any) {
+    logger.error('webhooks', 'Error in contact lookup', { error: error?.message });
+    return { contact: null, injected: false };
+  }
+}
+
+/**
  * Verify Vapi webhook signature for security
  * Uses secret stored in database (cached)
  * Prevents unauthorized webhook events from being processed
@@ -618,6 +745,33 @@ async function handleCallStarted(event: VapiEvent) {
       logger.warn('webhooks', 'Failed to retrieve RAG context (non-blocking)');
       // Don't throw - RAG context is optional
     }
+
+    // === PHASE 1: IDENTITY INJECTION ===
+    // Lookup contact by phone and inject personalized greeting
+    if (phoneNumber && callTracking?.org_id && call.assistantId && vapiApiKey) {
+      try {
+        const { contact, injected } = await lookupContactAndInjectGreeting({
+          vapiApiKey,
+          assistantId: call.assistantId,
+          orgId: callTracking.org_id,
+          phoneNumber
+        });
+
+        if (contact) {
+          logger.info('webhooks', 'Contact identified', {
+            contactId: contact.id,
+            contactName: contact.name,
+            identityInjected: injected
+          });
+        }
+      } catch (identityError: any) {
+        logger.warn('webhooks', 'Identity injection failed (non-blocking)', {
+          error: identityError?.message
+        });
+        // Continue - identity injection should not block call
+      }
+    }
+    // === END PHASE 1: IDENTITY INJECTION ===
 
     // Create call log entry with metadata (including RAG context and org_id)
     const { error: logError } = await supabase.from('call_logs').upsert({
