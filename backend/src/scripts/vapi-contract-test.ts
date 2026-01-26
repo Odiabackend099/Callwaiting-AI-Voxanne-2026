@@ -10,10 +10,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const VAPI_API_KEY = process.env.VAPI_PRIVATE_KEY;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
-const TEST_ORG_ID = '46cf2995-2bee-44e3-838b-24151486fe4e';
+const TEST_ORG_ID = process.env.TEST_ORG_ID || '46cf2995-2bee-44e3-838b-24151486fe4e';
 const VAPI_TIMEOUT_MS = 15000;
+
+// Validate required configuration
+if (!TEST_ORG_ID) {
+  console.error('❌ TEST_ORG_ID environment variable is required');
+  process.exit(1);
+}
 
 interface TestResult {
   name: string;
@@ -29,6 +34,47 @@ function logSuccess(msg: string) { console.log('[PASS]', msg); }
 function logError(msg: string) { console.error('[FAIL]', msg); }
 function logInfo(msg: string) { console.log('[INFO]', msg); }
 function logWarning(msg: string) { console.log('[WARN]', msg); }
+
+/**
+ * Safe axios POST wrapper with enhanced error reporting
+ * Extracts detailed error messages from axios responses
+ */
+async function safeAxiosPost(url: string, payload: any, timeout: number) {
+  try {
+    return await axios.post(url, payload, { timeout });
+  } catch (axiosError: any) {
+    const errorData = axiosError.response?.data;
+    const errorMsg = errorData?.error || errorData?.message || axiosError.message;
+    throw new Error(`HTTP ${axiosError.response?.status || 'unknown'}: ${errorMsg}`);
+  }
+}
+
+/**
+ * Check if backend is reachable before running tests
+ * Provides early failure with clear messaging
+ */
+async function checkBackendHealth(): Promise<void> {
+  logInfo(`Checking backend health at: ${BACKEND_URL}`);
+
+  try {
+    // Try to reach any endpoint - we just need to verify connectivity
+    // Using a simple GET to the base URL with short timeout
+    await axios.get(BACKEND_URL, {
+      timeout: 5000,
+      validateStatus: () => true // Accept any status code, we just need connectivity
+    });
+    logInfo('✓ Backend is reachable\n');
+  } catch (error: any) {
+    console.error(`\n❌ BACKEND UNREACHABLE\n`);
+    console.error(`   URL: ${BACKEND_URL}`);
+    console.error(`   Error: ${error.message}\n`);
+    console.error(`   Please ensure:`);
+    console.error(`   1. Backend server is running`);
+    console.error(`   2. BACKEND_URL is correct in .env`);
+    console.error(`   3. Network connectivity is available\n`);
+    process.exit(1);
+  }
+}
 
 async function testCheckAvailability(): Promise<TestResult> {
   const startTime = Date.now();
@@ -52,19 +98,11 @@ async function testCheckAvailability(): Promise<TestResult> {
       }
     };
 
-    let response;
-    try {
-      response = await axios.post(
-        `${BACKEND_URL}/api/vapi/tools/calendar/check`,
-        vapiPayload,
-        { timeout: VAPI_TIMEOUT_MS }
-      );
-    } catch (axiosError: any) {
-      const duration = Date.now() - startTime;
-      const errorData = axiosError.response?.data;
-      const errorMsg = errorData?.error || errorData?.message || axiosError.message;
-      throw new Error(`HTTP ${axiosError.response?.status || 'unknown'}: ${errorMsg}`);
-    }
+    const response = await safeAxiosPost(
+      `${BACKEND_URL}/api/vapi/tools/calendar/check`,
+      vapiPayload,
+      VAPI_TIMEOUT_MS
+    );
 
     const duration = Date.now() - startTime;
 
@@ -73,7 +111,13 @@ async function testCheckAvailability(): Promise<TestResult> {
     const { toolResult, speech } = response.data;
     if (!toolResult?.content) throw new Error('Missing toolResult.content');
 
-    const resultData = JSON.parse(toolResult.content);
+    let resultData;
+    try {
+      resultData = JSON.parse(toolResult.content);
+    } catch (parseError: any) {
+      throw new Error(`Invalid JSON in toolResult.content: ${parseError.message}`);
+    }
+
     if (!resultData.success) {
       const errorMsg = resultData.error || 'Unknown error';
       // Calendar is Phase 2 - gracefully skip if not configured
@@ -154,10 +198,10 @@ async function testBookClinicAppointment(): Promise<TestResult> {
       toolCallId: 'test-book-001'
     };
 
-    const response = await axios.post(
+    const response = await safeAxiosPost(
       `${BACKEND_URL}/api/vapi/tools/bookClinicAppointment`,
       vapiPayload,
-      { timeout: VAPI_TIMEOUT_MS }
+      VAPI_TIMEOUT_MS
     );
 
     const duration = Date.now() - startTime;
@@ -224,7 +268,7 @@ async function testTransferCall(): Promise<TestResult> {
       }
     };
     
-    const response = await axios.post(`${BACKEND_URL}/api/vapi/tools/transferCall`, vapiPayload, { timeout: VAPI_TIMEOUT_MS });
+    const response = await safeAxiosPost(`${BACKEND_URL}/api/vapi/tools/transferCall`, vapiPayload, VAPI_TIMEOUT_MS);
     const duration = Date.now() - startTime;
     
     if (response.status !== 200) throw new Error(`Expected 200, got ${response.status}`);
@@ -266,15 +310,21 @@ async function testLookupCaller(): Promise<TestResult> {
       }
     };
     
-    const response = await axios.post(`${BACKEND_URL}/api/vapi/tools/lookupCaller`, vapiPayload, { timeout: VAPI_TIMEOUT_MS });
+    const response = await safeAxiosPost(`${BACKEND_URL}/api/vapi/tools/lookupCaller`, vapiPayload, VAPI_TIMEOUT_MS);
     const duration = Date.now() - startTime;
     
     if (response.status !== 200) throw new Error(`Expected 200, got ${response.status}`);
     
     const { toolResult, speech } = response.data;
     if (!toolResult?.content) throw new Error('Missing toolResult.content');
-    
-    const resultData = JSON.parse(toolResult.content);
+
+    let resultData;
+    try {
+      resultData = JSON.parse(toolResult.content);
+    } catch (parseError: any) {
+      throw new Error(`Invalid JSON in toolResult.content: ${parseError.message}`);
+    }
+
     if (!resultData.success) throw new Error('Lookup failed');
     if (resultData.found && resultData.contact?.name !== 'John Smith') logWarning('Expected John Smith');
     if (duration > VAPI_TIMEOUT_MS) throw new Error(`Response took ${duration}ms (>15s timeout)`);
@@ -297,6 +347,9 @@ async function runContractTests() {
   logInfo(`Backend URL: ${BACKEND_URL}`);
   logInfo(`Test Org ID: ${TEST_ORG_ID}`);
   logInfo(`Vapi Timeout: ${VAPI_TIMEOUT_MS}ms\n`);
+
+  // Check backend health before running tests
+  await checkBackendHealth();
 
   results.push(await testCheckAvailability());
   results.push(await testBookClinicAppointment());
