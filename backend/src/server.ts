@@ -87,6 +87,7 @@ import oauthTestRouter from './routes/oauth-test';
 import internalApiRoutes from './routes/internal-api-routes'; // default export
 import integrationsApiRouter from './routes/integrations-api'; // default export
 import telephonyRouter from './routes/telephony'; // default export - Hybrid Telephony
+import webhookHealthRouter from './routes/webhook-health'; // default export - Webhook Health Check
 
 // Initialize logger
 initLogger();
@@ -152,7 +153,14 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-request-id',
+    'x-csrf-token',
+    'X-CSRF-Token',
+    'csrf-token'
+  ],
   // SECURITY FIX: Removed 'x-org-id' - org_id must come from JWT only
   maxAge: 86400 // 24 hours
 }));
@@ -214,7 +222,10 @@ app.use(tenantResolver);
 // CSRF Protection Middleware
 import { csrfTokenGenerator, validateCsrfToken, csrfTokenEndpoint } from './middleware/csrf-protection';
 app.use(csrfTokenGenerator); // Generate token on every request
-app.use(validateCsrfToken); // Validate on state-changing requests
+// Disable CSRF validation in development for easier testing
+if (process.env.NODE_ENV !== 'development') {
+  app.use(validateCsrfToken); // Validate on state-changing requests (production only)
+}
 
 // CSRF Token Endpoint: Allow frontend to explicitly fetch token if needed
 app.get('/api/csrf-token', csrfTokenEndpoint);
@@ -222,6 +233,7 @@ app.get('/api/csrf-token', csrfTokenEndpoint);
 // Routes
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/webhooks', smsStatusWebhookRouter);
+app.use('/api/webhook', webhookHealthRouter); // Health check endpoint (no rate limiting)
 app.use('/api/calls', callsRouter);
 app.use('/api/calls-dashboard', callsDashboardRouter);
 app.use('/api/assistants', assistantsRouter);
