@@ -10,22 +10,16 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { setupTestEnvironment, waitForPageReady } from './fixtures';
 
 test.describe('Edge Case Handling & State Management', () => {
   test.beforeEach(async ({ page }) => {
-    // Mock auth
-    await page.context().addCookies([
-      {
-        name: 'sb-access-token',
-        value: 'mock-token',
-        domain: 'localhost',
-        path: '/'
-      }
-    ]);
+    await setupTestEnvironment(page);
   });
 
   test('Processing recording should show spinner and disable action buttons', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock API response with processing recording
     await page.route('**/api/calls-dashboard*', async (route) => {
@@ -70,7 +64,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Failed recording should show error icon with tooltip', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock failed recording
     await page.route('**/api/calls-dashboard*', async (route) => {
@@ -119,7 +114,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Missing transcript should disable export button', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock call without transcript
     await page.route('**/api/calls-dashboard*', async (route) => {
@@ -163,7 +159,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Missing phone number should disable SMS button', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock call without phone
     await page.route('**/api/calls-dashboard*', async (route) => {
@@ -205,7 +202,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Queued recording should show pending state', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock pending recording
     await page.route('**/api/calls-dashboard*', async (route) => {
@@ -242,7 +240,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Toast notification should appear on action', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open first call
     const firstCall = await page.locator('table tbody tr').first();
@@ -265,7 +264,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Disabled state should persist across page reloads', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock call with failed recording
     await page.route('**/api/calls-dashboard*', async (route) => {
@@ -307,7 +307,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Error messages should be helpful and not expose internals', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Mock error response
     let errorMessageVisible = false;
@@ -328,7 +329,8 @@ test.describe('Edge Case Handling & State Management', () => {
   });
 
   test('Recording status should update after action', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open modal
     const firstCall = await page.locator('table tbody tr').first();

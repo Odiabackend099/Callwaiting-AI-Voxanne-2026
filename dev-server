@@ -1,0 +1,79 @@
+#!/bin/bash
+# Voxanne AI Development Server Manager
+
+case "$1" in
+    start)
+        echo "🚀 Starting all services..."
+        
+        # Start backend
+        echo "Starting backend..."
+        cd backend && npm run dev > /tmp/backend-server.log 2>&1 &
+        sleep 3
+        
+        # Start ngrok
+        echo "Starting ngrok tunnel..."
+        ngrok http 3001 --log=stdout > /tmp/ngrok.log 2>&1 &
+        sleep 4
+        
+        # Start frontend
+        echo "Starting frontend..."
+        cd .. && npm run dev > /tmp/frontend-server.log 2>&1 &
+        sleep 6
+        
+        echo "✅ All services started!"
+        bash /tmp/server-status.sh
+        ;;
+        
+    stop)
+        echo "🛑 Stopping all services..."
+        pkill -f "next dev"
+        pkill -f "tsx src/server.ts"
+        pkill ngrok
+        echo "✅ All services stopped!"
+        ;;
+        
+    status)
+        bash /tmp/server-status.sh
+        ;;
+        
+    verify)
+        bash /tmp/quick-verify.sh
+        ;;
+        
+    logs)
+        case "$2" in
+            backend) tail -f /tmp/backend-server.log ;;
+            frontend) tail -f /tmp/frontend-server.log ;;
+            ngrok) tail -f /tmp/ngrok.log ;;
+            *) 
+                echo "Usage: $0 logs [backend|frontend|ngrok]"
+                echo "Example: $0 logs backend"
+                ;;
+        esac
+        ;;
+        
+    restart)
+        $0 stop
+        sleep 2
+        $0 start
+        ;;
+        
+    *)
+        echo "Voxanne AI Development Server Manager"
+        echo ""
+        echo "Usage: $0 {start|stop|status|verify|logs|restart}"
+        echo ""
+        echo "Commands:"
+        echo "  start    - Start all services (backend, ngrok, frontend)"
+        echo "  stop     - Stop all services"
+        echo "  status   - Show status of all services"
+        echo "  verify   - Run quick verification tests"
+        echo "  logs     - View logs (backend|frontend|ngrok)"
+        echo "  restart  - Restart all services"
+        echo ""
+        echo "Examples:"
+        echo "  $0 start"
+        echo "  $0 logs backend"
+        echo "  $0 verify"
+        ;;
+esac

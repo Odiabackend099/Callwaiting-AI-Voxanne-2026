@@ -62,6 +62,7 @@ import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
 import { bookDemoRouter } from './routes/book-demo';
 import integrationsStatusRouter from './routes/integrations-status'; // default export
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
+import { scheduleTelephonyVerificationCleanup } from './jobs/telephony-verification-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
@@ -69,6 +70,7 @@ import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monito
 import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
 import escalationRulesRouter from './routes/escalation-rules'; // default export
 import teamRouter from './routes/team'; // default export
+import agentsRouter from './routes/agents'; // default export
 import { contactsRouter } from './routes/contacts';
 import { appointmentsRouter } from './routes/appointments';
 import { notificationsRouter } from './routes/notifications';
@@ -84,6 +86,7 @@ import orgsRouter from './routes/orgs'; // default export
 import oauthTestRouter from './routes/oauth-test';
 import internalApiRoutes from './routes/internal-api-routes'; // default export
 import integrationsApiRouter from './routes/integrations-api'; // default export
+import telephonyRouter from './routes/telephony'; // default export - Hybrid Telephony
 
 // Initialize logger
 initLogger();
@@ -243,6 +246,7 @@ app.use('/api/dashboard', dashboardLeadsRouter);
 app.use('/api/book-demo', bookDemoRouter);
 app.use('/api/escalation-rules', escalationRulesRouter);
 app.use('/api/team', teamRouter);
+app.use('/api/agents', agentsRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/appointments', appointmentsRouter);
@@ -255,7 +259,9 @@ app.use('/api/calendar', calendarOAuthRouter);
 app.use('/api/vapi', vapiCalendarToolsRouter);
 app.use('/api/google-oauth', googleOAuthRouter);
 app.use('/api/health', healthIntegrationsRouter);
+app.use('/api/telephony', telephonyRouter); // Hybrid Telephony BYOC routes
 log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
+log.info('Server', 'Hybrid Telephony routes registered at /api/telephony');
 log.info('Server', 'Health integrations diagnostic endpoint registered at /api/health/integrations');
 log.info('Server', 'Contacts, appointments, notifications, calendar, and org validation routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
@@ -632,6 +638,13 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('Orphan recording cleanup job scheduled');
     } catch (error: any) {
       console.warn('Failed to schedule orphan cleanup job:', error.message);
+    }
+
+    try {
+      scheduleTelephonyVerificationCleanup();
+      console.log('Telephony verification cleanup job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule telephony verification cleanup job:', error.message);
     }
 
     try {

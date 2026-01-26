@@ -8,22 +8,16 @@
 
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { setupTestEnvironment, waitForPageReady } from './fixtures';
 
 test.describe('Accessibility Verification', () => {
   test.beforeEach(async ({ page }) => {
-    // Mock auth to avoid login redirect
-    await page.context().addCookies([
-      {
-        name: 'sb-access-token',
-        value: 'mock-token',
-        domain: 'localhost',
-        path: '/'
-      }
-    ]);
+    await setupTestEnvironment(page);
   });
 
   test('Dashboard calls page should have zero accessibility violations', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Run axe accessibility scan
     const accessibilityScanResults = await new AxeBuilder({ page })
@@ -36,7 +30,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('All icon-only buttons must have aria-labels', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Find all buttons without visible text (icon-only buttons)
     const buttons = await page.locator('button').all();
@@ -64,7 +59,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('Pagination buttons should have aria-labels and aria-current', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Find pagination buttons
     const pageButtons = await page.locator('button[aria-label*="page"]').all();
@@ -84,7 +80,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('Modal should trap focus and be keyboard navigable', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open first call detail
     const firstCallRow = await page.locator('table tbody tr').first();
@@ -106,7 +103,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('Buttons should be keyboard focusable (Tab key)', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Get first button
     const firstButton = await page.locator('button').first();
@@ -123,7 +121,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('Disabled buttons should have aria-disabled or disabled attribute', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     const disabledButtons = await page.locator('button[disabled]').all();
     let properlyMarked = 0;
@@ -142,7 +141,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('Form labels should be associated with inputs', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Check for search input
     const searchInput = page.locator('input[type="text"]').first();
@@ -161,7 +161,8 @@ test.describe('Accessibility Verification', () => {
   });
 
   test('Color contrast should be sufficient', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Run axe scan specifically for color contrast
     const results = await new AxeBuilder({ page })

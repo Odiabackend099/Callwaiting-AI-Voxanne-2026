@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle, PlayCircle } from 'lucide-react';
+import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle, PlayCircle, MicOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 // LeftSidebar removed (now in layout)
@@ -95,6 +95,7 @@ const TestAgentPageContent = () => {
 
     const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
     const [callInitiating, setCallInitiating] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     // --- Phone Test State ---
@@ -169,12 +170,57 @@ const TestAgentPageContent = () => {
         }
     };
 
+    const handleToggleMute = async () => {
+        if (!isConnected) return;
+
+        if (isMuted) {
+            // Unmute: restart recording
+            try {
+                await startRecording();
+                setIsMuted(false);
+            } catch (err) {
+                console.error('Failed to unmute:', err);
+            }
+        } else {
+            // Mute: stop recording (keeps WebSocket alive)
+            stopRecording();
+            setIsMuted(true);
+        }
+    };
+
     useEffect(() => {
         setVoiceSessionActiveFlag(isConnected || isRecording);
         return () => {
             setVoiceSessionActiveFlag(false);
         };
     }, [isConnected, isRecording]);
+
+    // Keyboard shortcuts for web test
+    useEffect(() => {
+        if (activeTab !== 'web') return;
+
+        const handleKeyPress = (e: KeyboardEvent) => {
+            // Ignore if typing in input fields
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            // Spacebar: Toggle mute
+            if (e.code === 'Space' && isConnected && !callInitiating) {
+                e.preventDefault();
+                handleToggleMute();
+            }
+
+            // Ctrl/Cmd + E: End call
+            if ((e.ctrlKey || e.metaKey) && e.key === 'e' && isConnected && !callInitiating) {
+                e.preventDefault();
+                handleToggleWebCall();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyPress);
+        return () => window.removeEventListener('keydown', handleKeyPress);
+    }, [isConnected, isMuted, callInitiating, activeTab]);
 
     // --- Phone Test Effects ---
     const getAuthToken = async () => {
@@ -405,8 +451,11 @@ const TestAgentPageContent = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-emerald-400 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-slate-400 tracking-tight">Loading...</p>
+                </div>
             </div>
         );
     }
@@ -414,63 +463,92 @@ const TestAgentPageContent = () => {
     if (!user) return null;
 
     return (
-        <div className="max-w-4xl mx-auto px-6 py-8">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Test Agent</h1>
-                <p className="text-gray-700">Interact with your agent in real-time to verify behavior.</p>
+        <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col overflow-hidden">
+            <div className="flex-none px-6 pt-6">
+                {/* Premium Header with Glassmorphism */}
+                <div className="mb-4 p-6 rounded-2xl bg-slate-900/40 backdrop-blur-md border border-slate-800/60 max-w-5xl mx-auto">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+                            <Activity className="w-5 h-5 text-white" />
+                        </div>
+                        <h1 className="text-2xl font-semibold text-slate-50 tracking-tight">Test Agent</h1>
+                    </div>
+                    <p className="text-sm text-slate-400 tracking-tight ml-[52px]">Interact with your agent in real-time to verify behavior and responses.</p>
+                </div>
+
+                {/* Premium Tabs */}
+                <div className="bg-slate-900/40 backdrop-blur-sm p-1 rounded-xl inline-flex mb-4 border border-slate-800/50 max-w-5xl mx-auto">
+                    <button
+                        onClick={() => setActiveTab('web')}
+                        className={`px-6 py-2.5 rounded-lg text-sm font-medium tracking-tight transition-all flex items-center gap-2 ${activeTab === 'web'
+                            ? 'bg-slate-800 text-slate-50 shadow-lg'
+                            : 'text-slate-400 hover:text-slate-300'
+                            }`}
+                    >
+                        <Globe className="w-4 h-4" />
+                        Browser Test
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('phone')}
+                        className={`px-6 py-2.5 rounded-lg text-sm font-medium tracking-tight transition-all flex items-center gap-2 ${activeTab === 'phone'
+                            ? 'bg-slate-800 text-slate-50 shadow-lg'
+                            : 'text-slate-400 hover:text-slate-300'
+                            }`}
+                    >
+                        <Phone className="w-4 h-4" />
+                        Live Call
+                    </button>
+                </div>
             </div>
 
-            {/* Tabs */}
-            <div className="bg-gray-100 p-1 rounded-xl inline-flex mb-8">
-                <button
-                    onClick={() => setActiveTab('web')}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'web'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
-                        }`}
-                >
-                    <Globe className="w-4 h-4" />
-                    Browser Test
-                </button>
-                <button
-                    onClick={() => setActiveTab('phone')}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'phone'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
-                        }`}
-                >
-                    <Phone className="w-4 h-4" />
-                    Live Call
-                </button>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden min-h-[600px] flex flex-col">
+            <div className="flex-1 bg-slate-900/50 backdrop-blur-md border border-slate-800/60 rounded-2xl shadow-2xl overflow-hidden mx-6 mb-6 max-w-5xl w-full flex flex-col self-center">
 
                 {/* --- Web Test Interface --- */}
                 {activeTab === 'web' && (
-                    <div className="flex flex-col h-full">
-                        {/* Minimal Header */}
-                        <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
+                    <div className="flex-1 flex flex-col min-h-0">
+                        {/* Premium Status Header with Glassmorphism */}
+                        <div className="flex-none relative px-6 py-4 border-b border-slate-800/50 bg-slate-800/30 backdrop-blur-sm flex items-center justify-between">
+                            {/* Subtle gradient accent line */}
+                            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent opacity-60" />
+
                             <div className="flex items-center gap-3">
-                                <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <div className={`w-2.5 h-2.5 rounded-full transition-all ${isConnected ? 'bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50' : 'bg-slate-600'
+                                    }`} />
+                                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                                     {isConnected ? 'Connected' : 'Ready'}
                                 </span>
                             </div>
-                            {isConnected && isRecording && (
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-full">
-                                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                                    <span className="text-xs font-medium text-red-600">Recording</span>
-                                </div>
-                            )}
+
+                            <div className="flex items-center gap-2">
+                                {isRecording && !isMuted && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 rounded-full border border-red-500/30 backdrop-blur-sm">
+                                        <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+                                        <span className="text-xs font-medium text-red-400 tracking-tight">Recording</span>
+                                    </div>
+                                )}
+                                {isMuted && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-full border border-slate-600/50 backdrop-blur-sm">
+                                        <MicOff className="w-3.5 h-3.5 text-slate-400" />
+                                        <span className="text-xs font-medium text-slate-400 tracking-tight">Muted</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Transcript Area - Scrollable (Full Height) */}
-                        <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-white relative">
+                        {/* Transcript Area - Premium Dark Design - Takes all available space */}
+                        <div
+                            className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-950/50"
+                            role="log"
+                            aria-live="polite"
+                            aria-label="Conversation transcript"
+                        >
                             {displayTranscripts.length === 0 ? (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-                                    <Mic className="w-12 h-12 mb-3 opacity-30" />
-                                    <p className="text-sm font-medium">Start the session to begin speaking</p>
+                                <div className="flex-1 flex flex-col min-h-0 items-center justify-center text-slate-500">
+                                    <div className="w-16 h-16 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-center mb-4 backdrop-blur-sm">
+                                        <Mic className="w-8 h-8 text-slate-600" />
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-400 tracking-tight">Start the session to begin speaking</p>
+                                    <p className="text-xs text-slate-600 mt-1 tracking-tight">Press the call button below</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -479,11 +557,11 @@ const TestAgentPageContent = () => {
                                             key={t.id}
                                             className={`flex ${t.speaker === 'user' ? 'justify-end' : 'justify-start'}`}
                                         >
-                                            <div className={`max-w-[70%] rounded-lg px-4 py-2.5 text-sm ${t.speaker === 'user'
-                                                ? 'bg-blue-500 text-white'
-                                                : 'bg-gray-100 text-gray-800'
+                                            <div className={`max-w-[75%] sm:max-w-[70%] rounded-xl px-4 py-2.5 text-sm backdrop-blur-sm transition-all ${t.speaker === 'user'
+                                                ? 'bg-gradient-to-br from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20'
+                                                : 'bg-slate-800/60 text-slate-200 border border-slate-700/50'
                                                 }`}>
-                                                <p className="leading-relaxed">
+                                                <p className="leading-relaxed tracking-tight">
                                                     {t.text}
                                                     {!t.isFinal && <span className="animate-pulse">...</span>}
                                                 </p>
@@ -495,58 +573,85 @@ const TestAgentPageContent = () => {
                             )}
                         </div>
 
-                        {/* Control Footer - Compact */}
-                        <div className="px-6 py-4 border-t border-gray-200 bg-white flex items-center justify-center gap-3">
-                            <button
+                        {/* Premium Fixed Control Bar - Always Visible at Bottom */}
+                        <div className="flex-none px-4 sm:px-6 py-4 sm:py-5 border-t border-slate-800/60 bg-slate-900/80 backdrop-blur-xl flex items-center justify-center gap-4 sm:gap-6">
+                            {/* Subtle gradient accent line at top */}
+                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+
+                            {/* Mute Button - Premium Style */}
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={handleToggleMute}
+                                disabled={!isConnected}
+                                aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                                aria-pressed={isMuted}
+                                title={isMuted ? 'Unmute (Spacebar)' : 'Mute (Spacebar)'}
+                                className={`group relative w-11 h-11 sm:w-14 sm:h-14 rounded-full transition-all duration-300 flex items-center justify-center ${isMuted
+                                    ? 'bg-red-500/10 text-red-400 border-2 border-red-500/50 hover:bg-red-500/20 shadow-lg shadow-red-500/20'
+                                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-300 hover:bg-slate-700/60 border border-slate-700/50'
+                                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                            >
+                                {/* Glow effect on hover */}
+                                <div className={`absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isMuted ? 'bg-red-500/10' : 'bg-slate-700/20'
+                                    } blur-xl`} />
+                                {isMuted ? <MicOff className="w-5 h-5 relative z-10" /> : <Mic className="w-5 h-5 relative z-10" />}
+                            </motion.button>
+
+                            {/* Primary Call Button - Premium Gradient */}
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
                                 onClick={handleToggleWebCall}
                                 disabled={callInitiating}
-                                title={isConnected ? 'End session' : 'Start session'}
-                                className={`relative flex items-center justify-center rounded-full transition-all shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isConnected
-                                    ? 'w-14 h-14 bg-red-500 hover:bg-red-600'
-                                    : 'w-14 h-14 bg-emerald-500 hover:bg-emerald-600'
-                                    }`}
+                                aria-label={isConnected ? 'End call' : 'Start call'}
+                                title={isConnected ? 'End session (Ctrl+E)' : 'Start session'}
+                                className={`group relative w-16 h-16 sm:w-20 sm:h-20 rounded-full transition-all duration-300 shadow-2xl flex items-center justify-center ${isConnected
+                                    ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/50'
+                                    : 'bg-gradient-to-br from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white shadow-emerald-500/50'
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
+                                {/* Animated glow effect */}
+                                <div className={`absolute inset-0 rounded-full opacity-60 group-hover:opacity-100 transition-opacity blur-2xl ${isConnected ? 'bg-red-500' : 'bg-emerald-500'
+                                    }`} />
                                 {callInitiating ? (
-                                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                    <Loader2 className="w-7 h-7 sm:w-8 sm:h-8 animate-spin relative z-10" />
                                 ) : isConnected ? (
-                                    <StopCircle className="w-6 h-6 text-white" />
+                                    <StopCircle className="w-7 h-7 sm:w-8 sm:h-8 relative z-10" />
                                 ) : (
-                                    <Phone className="w-6 h-6 text-white" />
+                                    <Phone className="w-7 h-7 sm:w-8 sm:h-8 relative z-10" />
                                 )}
-                            </button>
-                            {callInitiating && (
-                                <span className="text-xs text-gray-600">Connecting...</span>
-                            )}
+                            </motion.button>
                         </div>
                     </div>
                 )}
 
                 {/* --- Phone Test Interface --- */}
                 {activeTab === 'phone' && (
-                    <div className="flex flex-col h-full">
+                    <div className="flex flex-col h-full bg-slate-950/50">
                         <div className="p-8 max-w-xl mx-auto w-full flex-1 flex flex-col justify-center">
                             <div className="text-center mb-8">
-                                <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                    <Phone className="w-8 h-8 text-blue-600" />
+                                <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/30">
+                                    <Phone className="w-8 h-8 text-white" />
                                 </div>
-                                <h2 className="text-2xl font-bold text-gray-900 mb-2">Live Call Test</h2>
-                                <p className="text-gray-500">Enter your phone number to receive a test call from your agent.</p>
+                                <h2 className="text-2xl font-semibold text-slate-50 mb-2 tracking-tight">Live Call Test</h2>
+                                <p className="text-sm text-slate-400 tracking-tight">Enter your phone number to receive a test call from your agent.</p>
 
-                                <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-left">
-                                    <p className="text-xs text-gray-600 font-medium uppercase">Caller ID</p>
-                                    <p className="text-sm text-gray-900">
+                                <div className="mt-4 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl text-left backdrop-blur-sm">
+                                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Caller ID</p>
+                                    <p className="text-sm text-slate-200 mt-1">
                                         {inboundStatus?.configured && inboundStatus.inboundNumber
                                             ? inboundStatus.inboundNumber
                                             : 'Inbound not configured yet'}
                                     </p>
-                                    <p className="text-xs text-gray-500 mt-1">Outbound calls always use your inbound number.</p>
+                                    <p className="text-xs text-slate-500 mt-2">Outbound calls always use your inbound number.</p>
                                 </div>
 
                                 {/* WebSocket Connection Status */}
                                 {outboundTrackingId && (
                                     <div className="mt-4 flex items-center justify-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${wsConnectionStatus === 'connected' ? 'bg-green-500' : wsConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'}`} />
-                                        <span className="text-xs text-gray-600">
+                                        <div className={`w-2 h-2 rounded-full ${wsConnectionStatus === 'connected' ? 'bg-emerald-400 shadow-lg shadow-emerald-500/50' : wsConnectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-slate-600'}`} />
+                                        <span className="text-xs text-slate-400 tracking-tight">
                                             {wsConnectionStatus === 'connected' ? 'Live transcript connected' : wsConnectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                                         </span>
                                     </div>
@@ -556,23 +661,23 @@ const TestAgentPageContent = () => {
                             {/* Config Loading State */}
                             {outboundConfigLoading && (
                                 <div className="text-center space-y-4">
-                                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
-                                    <p className="text-gray-600">Loading outbound configuration...</p>
+                                    <Loader2 className="w-8 h-8 text-cyan-400 animate-spin mx-auto" />
+                                    <p className="text-sm text-slate-400 tracking-tight">Loading outbound configuration...</p>
                                 </div>
                             )}
 
                             {/* Config Error State */}
                             {!outboundConfigLoading && outboundConfigError && !outboundTrackingId && !callSummary && (
                                 <div className="space-y-4">
-                                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl backdrop-blur-sm">
                                         <div className="flex items-start gap-3">
-                                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                                             <div className="flex-1">
-                                                <p className="font-medium text-red-900">{outboundConfigError}</p>
+                                                <p className="font-medium text-red-300 text-sm tracking-tight">{outboundConfigError}</p>
                                                 {outboundConfigMissingFields.length > 0 && (
                                                     <div className="mt-2">
-                                                        <p className="text-sm text-red-700">Missing fields:</p>
-                                                        <ul className="list-disc list-inside text-sm text-red-700 mt-1">
+                                                        <p className="text-xs text-red-400">Missing fields:</p>
+                                                        <ul className="list-disc list-inside text-xs text-red-400 mt-1">
                                                             {outboundConfigMissingFields.map((field, idx) => (
                                                                 <li key={idx}>{field}</li>
                                                             ))}
@@ -584,7 +689,7 @@ const TestAgentPageContent = () => {
                                     </div>
                                     <button
                                         onClick={() => router.push('/dashboard/agent-config')}
-                                        className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                                        className="w-full py-3 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium transition-all shadow-lg shadow-cyan-500/30 tracking-tight"
                                     >
                                         Go to Agent Configuration
                                     </button>
@@ -594,33 +699,33 @@ const TestAgentPageContent = () => {
                             {/* Call Summary (Post-Call) */}
                             {callSummary && !outboundTrackingId && (
                                 <div className="space-y-4">
-                                    <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-4">Call Summary</h3>
+                                    <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                                        <h3 className="text-lg font-semibold text-slate-50 mb-4 tracking-tight">Call Summary</h3>
                                         <div className="space-y-3">
                                             <div>
-                                                <p className="text-xs text-gray-600 font-medium uppercase">Status</p>
-                                                <p className="text-sm text-gray-900 capitalize">{callSummary.status || 'Completed'}</p>
+                                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Status</p>
+                                                <p className="text-sm text-slate-200 capitalize mt-1">{callSummary.status || 'Completed'}</p>
                                             </div>
                                             {callSummary.durationSeconds && (
                                                 <div>
-                                                    <p className="text-xs text-gray-600 font-medium uppercase">Duration</p>
-                                                    <p className="text-sm text-gray-900">{Math.floor(callSummary.durationSeconds / 60)}m {callSummary.durationSeconds % 60}s</p>
+                                                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Duration</p>
+                                                    <p className="text-sm text-slate-200 mt-1">{Math.floor(callSummary.durationSeconds / 60)}m {callSummary.durationSeconds % 60}s</p>
                                                 </div>
                                             )}
                                             <div>
-                                                <p className="text-xs text-gray-600 font-medium uppercase">Tracking ID</p>
-                                                <p className="text-sm text-gray-900 font-mono">{callSummary.trackingId}</p>
+                                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Tracking ID</p>
+                                                <p className="text-sm text-slate-200 font-mono mt-1">{callSummary.trackingId}</p>
                                             </div>
                                             {callSummary.transcripts && callSummary.transcripts.length > 0 && (
                                                 <div>
-                                                    <p className="text-xs text-gray-600 font-medium uppercase mb-2">Last Transcript Lines</p>
+                                                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2">Last Transcript Lines</p>
                                                     <div className="space-y-2">
                                                         {callSummary.transcripts.slice(-5).map((t: any, idx: number) => (
                                                             <div key={idx} className="text-sm">
-                                                                <span className={`font-bold ${t.speaker === 'agent' ? 'text-blue-600' : 'text-gray-700'}`}>
+                                                                <span className={`font-semibold ${t.speaker === 'agent' ? 'text-cyan-400' : 'text-slate-400'}`}>
                                                                     {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
                                                                 </span>
-                                                                <span className="text-gray-800">{t.text}</span>
+                                                                <span className="text-slate-300">{t.text}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -631,7 +736,7 @@ const TestAgentPageContent = () => {
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => router.push('/dashboard/calls?tab=outbound')}
-                                            className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                                            className="flex-1 py-3 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium transition-all shadow-lg shadow-cyan-500/30 tracking-tight"
                                         >
                                             View in Calls Dashboard
                                         </button>
@@ -641,7 +746,7 @@ const TestAgentPageContent = () => {
                                                 setPhoneNumber('');
                                                 setOutboundTranscripts([]);
                                             }}
-                                            className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                            className="px-6 py-3 rounded-xl border border-slate-700/50 text-slate-300 hover:bg-slate-800/50 font-medium transition-all tracking-tight"
                                         >
                                             New Test
                                         </button>
@@ -653,7 +758,7 @@ const TestAgentPageContent = () => {
                             {!outboundConfigLoading && !outboundConfigError && !outboundTrackingId && !callSummary && (
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2 tracking-tight">Phone Number</label>
                                         <input
                                             type="tel"
                                             value={phoneNumber}
@@ -662,19 +767,19 @@ const TestAgentPageContent = () => {
                                                 setPhoneValidationError(null);
                                             }}
                                             placeholder="+15551234567"
-                                            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg ${phoneValidationError ? 'border-red-500' : 'border-gray-200'}`}
+                                            className={`w-full px-4 py-3 rounded-xl border bg-slate-800/50 backdrop-blur-sm text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none text-lg transition-all ${phoneValidationError ? 'border-red-500/50' : 'border-slate-700/50'}`}
                                         />
                                         {phoneValidationError && (
-                                            <p className="text-xs text-red-600 mt-1">{phoneValidationError}</p>
+                                            <p className="text-xs text-red-400 mt-2">{phoneValidationError}</p>
                                         )}
                                         {!phoneValidationError && (
-                                            <p className="text-xs text-gray-500 mt-1">Must be in E.164 format (e.g., +1234567890)</p>
+                                            <p className="text-xs text-slate-500 mt-2 tracking-tight">Must be in E.164 format (e.g., +1234567890)</p>
                                         )}
                                     </div>
                                     <button
                                         onClick={handleInitiateCall}
                                         disabled={isCallingPhone || !phoneNumber}
-                                        className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                        className="w-full py-4 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-lg shadow-2xl shadow-cyan-500/30 hover:shadow-cyan-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
                                         {isCallingPhone ? (
                                             <>
@@ -694,30 +799,30 @@ const TestAgentPageContent = () => {
                             {/* Active Call State */}
                             {outboundTrackingId && !callSummary && (
                                 <div className="text-center space-y-6">
-                                    <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
-                                        <Activity className="w-12 h-12 text-emerald-500 mx-auto mb-3 animate-pulse" />
-                                        <h3 className="text-lg font-bold text-emerald-800">Call In Progress</h3>
-                                        <p className="text-emerald-600">Check your phone!</p>
+                                    <div className="p-6 bg-emerald-500/10 rounded-2xl border border-emerald-500/30 backdrop-blur-sm">
+                                        <Activity className="w-12 h-12 text-emerald-400 mx-auto mb-3 animate-pulse" />
+                                        <h3 className="text-lg font-semibold text-emerald-300 tracking-tight">Call In Progress</h3>
+                                        <p className="text-sm text-emerald-400/80">Check your phone!</p>
                                     </div>
 
                                     <button
                                         onClick={handleEndPhoneCall}
-                                        className="px-8 py-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition-all"
+                                        className="px-8 py-3 rounded-xl border border-slate-700/50 text-slate-300 hover:bg-slate-800/50 font-medium transition-all tracking-tight"
                                     >
                                         End Test Session
                                     </button>
 
                                     {/* Live Transcript Preview */}
                                     {outboundTranscripts.length > 0 && (
-                                        <div className="mt-8 text-left bg-gray-50 rounded-xl p-4 max-h-64 overflow-y-auto border border-gray-200">
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Live Transcript</p>
+                                        <div className="mt-8 text-left bg-slate-800/50 rounded-xl p-4 max-h-64 overflow-y-auto border border-slate-700/50 backdrop-blur-sm">
+                                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Live Transcript</p>
                                             <div className="space-y-3">
                                                 {outboundTranscripts.map((t, i) => (
                                                     <div key={i} className="text-sm">
-                                                        <span className={`font-bold ${t.speaker === 'agent' ? 'text-blue-600' : 'text-gray-700'}`}>
+                                                        <span className={`font-semibold ${t.speaker === 'agent' ? 'text-cyan-400' : 'text-slate-400'}`}>
                                                             {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
                                                         </span>
-                                                        <span className="text-gray-800">{t.text}</span>
+                                                        <span className="text-slate-300">{t.text}</span>
                                                     </div>
                                                 ))}
                                                 <div ref={outboundTranscriptEndRef} />
@@ -730,29 +835,33 @@ const TestAgentPageContent = () => {
                     </div>
                 )}
 
-                {/* Confirmation Dialog */}
+                {/* Premium Confirmation Dialog */}
                 {showConfirmDialog && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Test Call</h3>
-                            <p className="text-gray-600 mb-6">
-                                Are you sure you want to place a test call to <span className="font-mono font-bold">{phoneNumber}</span>?
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-slate-900/95 backdrop-blur-xl border border-slate-800/60 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl"
+                        >
+                            <h3 className="text-xl font-semibold text-slate-50 mb-2 tracking-tight">Confirm Test Call</h3>
+                            <p className="text-sm text-slate-400 mb-6 tracking-tight">
+                                Are you sure you want to place a test call to <span className="font-mono font-semibold text-cyan-400">{phoneNumber}</span>?
                             </p>
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setShowConfirmDialog(false)}
-                                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-700/50 text-slate-300 hover:bg-slate-800/50 font-medium transition-all tracking-tight"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleConfirmCall}
-                                    className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+                                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium transition-all shadow-lg shadow-cyan-500/30 tracking-tight"
                                 >
                                     Confirm Call
                                 </button>
                             </div>
-                        </div>
+                        </motion.div>
                     </div>
                 )}
             </div>
@@ -764,8 +873,11 @@ const TestAgentPageContent = () => {
 export default function TestAgentPage() {
     return (
         <React.Suspense fallback={
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-emerald-400 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-slate-400 tracking-tight">Initializing test environment...</p>
+                </div>
             </div>
         }>
             <TestAgentPageContent />

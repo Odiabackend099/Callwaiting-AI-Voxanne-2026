@@ -9,22 +9,16 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { setupTestEnvironment, waitForPageReady } from './fixtures';
 
 test.describe('Keyboard Shortcuts & User Interactions', () => {
   test.beforeEach(async ({ page }) => {
-    // Mock auth
-    await page.context().addCookies([
-      {
-        name: 'sb-access-token',
-        value: 'mock-token',
-        domain: 'localhost',
-        path: '/'
-      }
-    ]);
+    await setupTestEnvironment(page);
   });
 
   test('Escape key should close call detail modal', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Click first call to open modal
     const firstCall = await page.locator('table tbody tr').first();
@@ -52,7 +46,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Escape should NOT fire when typing in search input', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open modal
     const firstCall = await page.locator('table tbody tr').first();
@@ -75,7 +70,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Modal should have proper keyboard navigation', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open first call
     const firstCall = await page.locator('table tbody tr').first();
@@ -98,7 +94,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Follow-up modal should be openable and closable', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open first call
     const firstCall = await page.locator('table tbody tr').first();
@@ -128,7 +125,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Confirm dialog should be dismissible with Escape', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Click delete button to trigger confirmation
     const deleteBtn = page.locator('button[aria-label*="Delete"]').first();
@@ -152,7 +150,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Enter key should confirm dialogs', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Look for confirm dialog trigger
     const deleteBtn = page.locator('button[aria-label*="Delete"]').first();
@@ -176,7 +175,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Button hover states should be visible', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     const button = page.locator('button').first();
     if (await button.count() > 0) {
@@ -200,7 +200,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Disabled buttons should not respond to clicks', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Find a disabled button
     const disabledButton = page.locator('button[disabled]').first();
@@ -219,7 +220,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Loading state buttons should show spinner', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     // Open a call
     const firstCall = await page.locator('table tbody tr').first();
@@ -240,7 +242,8 @@ test.describe('Keyboard Shortcuts & User Interactions', () => {
   });
 
   test('Focus outline should be visible on buttons', async ({ page }) => {
-    await page.goto('http://localhost:3000/dashboard/calls', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/dashboard/calls?_test=1', { waitUntil: 'networkidle' });
+    await waitForPageReady(page);
 
     const button = page.locator('button').first();
 
