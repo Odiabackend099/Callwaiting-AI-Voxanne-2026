@@ -80,6 +80,41 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
+// CSRF token cache - store in memory with fallback to sessionStorage
+let cachedCsrfToken: string | null = null;
+let csrfTokenFetching: Promise<string | null> | null = null;
+
+async function getCsrfToken(): Promise<string | null> {
+  // Return cached token if available
+  if (cachedCsrfToken) {
+    return cachedCsrfToken;
+  }
+
+  // If already fetching, wait for that fetch to complete
+  if (csrfTokenFetching) {
+    return csrfTokenFetching;
+  }
+
+  // Fetch new token
+  csrfTokenFetching = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/csrf-token`);
+      if (response.ok) {
+        const data = await response.json();
+        cachedCsrfToken = data.csrfToken;
+        return cachedCsrfToken;
+      }
+    } catch (err) {
+      console.warn('[CSRF] Failed to fetch CSRF token:', err);
+    }
+    csrfTokenFetching = null;
+    return null;
+  })();
+
+  return csrfTokenFetching;
+}
+
 /**
  * Perform a fetch request to the backend with authentication.
  * 
@@ -120,12 +155,23 @@ export async function authedBackendFetch<T>(
       const bodyIsFormData = typeof FormData !== 'undefined' && requestInit.body instanceof FormData;
       const shouldSetJsonContentType = !!requestInit.body && !bodyIsFormData;
 
+      // Fetch CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
+      const csrfHeaders: Record<string, string> = {};
+      const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(requestInit.method?.toUpperCase() || 'GET');
+      if (isStateChanging) {
+        const csrfToken = await getCsrfToken();
+        if (csrfToken) {
+          csrfHeaders['X-CSRF-Token'] = csrfToken;
+        }
+      }
+
       // Build headers once per request (not per retry)
       const finalHeaders = {
         ...(shouldSetJsonContentType ? { 'Content-Type': 'application/json' } : {}),
         ...headers,
         'x-request-id': requestId,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...csrfHeaders,
       };
 
       const res = await fetch(url, {
