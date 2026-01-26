@@ -36,3 +36,4 @@ coverage/
 voxanne-dashboard/
 .vercel
 .env*.local
+_ARCHIVE_2026/
