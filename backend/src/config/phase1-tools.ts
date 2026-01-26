@@ -56,6 +56,30 @@ export const LOOKUP_CALLER_TOOL = {
   async: true // Allows AI to say "Let me look that up..." while the DB query runs
 };
 
+export const END_CALL_TOOL = {
+  type: 'function',
+  function: {
+    name: 'endCall',
+    description: 'Gracefully end the current call. Use this when: 1) The conversation is complete and patient has no more questions, 2) Call duration limit is reached (>9.5 minutes), or 3) Patient explicitly says "that\'s all" or "goodbye".',
+    parameters: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          enum: ['completed', 'time_limit', 'patient_request', 'transfer_needed'],
+          description: 'Why the call is ending: completed (successful outcome), time_limit (max duration reached), patient_request (patient said goodbye), transfer_needed (transferring to human)'
+        },
+        summary: {
+          type: 'string',
+          description: 'Brief 1-sentence summary of call outcome (e.g., "Appointment booked for Jan 28 at 2 PM" or "Transferred to billing for refund request")'
+        }
+      },
+      required: ['reason']
+    }
+  },
+  async: false // Synchronous - call ends immediately
+};
+
 /**
  * Helper to inject the dynamic backend URL into the tool definition.
  * This ensures the AI knows exactly where to send the webhook (to YOUR server).
@@ -74,6 +98,58 @@ export function getLookupCallerTool(backendUrl: string) {
     ...LOOKUP_CALLER_TOOL,
     server: {
       url: `${backendUrl}/api/vapi/tools/lookupCaller`
+    }
+  };
+}
+
+export function getEndCallTool(backendUrl: string) {
+  return {
+    ...END_CALL_TOOL,
+    server: {
+      url: `${backendUrl}/api/vapi/tools/endCall`
+    }
+  };
+}
+
+/**
+ * Check Availability Tool (Phase 1 Critical Addition)
+ *
+ * MUST be called BEFORE bookClinicAppointment to validate slot availability.
+ * Returns available time slots for the requested date.
+ */
+export const CHECK_AVAILABILITY_TOOL = {
+  type: 'function',
+  function: {
+    name: 'checkAvailability',
+    description: 'Check available appointment slots for a given date. ALWAYS call this BEFORE attempting to book. Returns list of available time slots respecting business hours.',
+    parameters: {
+      type: 'object',
+      properties: {
+        date: {
+          type: 'string',
+          description: 'The date to check availability for in YYYY-MM-DD format (e.g., 2026-01-28). Convert relative dates like "next Tuesday" to this format.'
+        },
+        serviceType: {
+          type: 'string',
+          enum: ['consultation', 'checkup', 'follow_up', 'teeth_whitening', 'botox', 'generic'],
+          description: 'The type of service to check availability for. Defaults to "consultation".'
+        },
+        timezone: {
+          type: 'string',
+          description: 'IANA timezone string (e.g., "America/New_York", "America/Los_Angeles", "Africa/Lagos"). Optional - uses org default if not provided.'
+        }
+      },
+      required: ['date']
+    }
+  },
+  async: true // Allows AI to say "Let me check..." while the calendar query runs
+};
+
+export function getCheckAvailabilityTool(backendUrl: string) {
+  return {
+    ...CHECK_AVAILABILITY_TOOL,
+    server: {
+      url: `${backendUrl}/api/vapi/tools/calendar/check`
     }
   };
 }

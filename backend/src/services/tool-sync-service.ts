@@ -21,7 +21,7 @@ import * as crypto from 'crypto';
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { getUnifiedBookingTool } from '../config/unified-booking-tool';
-import { getTransferCallTool, getLookupCallerTool } from '../config/phase1-tools';
+import { getTransferCallTool, getLookupCallerTool, getEndCallTool, getCheckAvailabilityTool } from '../config/phase1-tools';
 import { supabase } from './supabase-client';
 import { log } from './logger';
 
@@ -218,6 +218,9 @@ export class ToolSyncService {
     let toolDef: any;
 
     switch (toolBlueprint.name) {
+      case 'checkAvailability':
+        toolDef = getCheckAvailabilityTool(backendUrl);
+        break;
       case 'bookClinicAppointment':
         toolDef = getUnifiedBookingTool(backendUrl);
         break;
@@ -226,6 +229,9 @@ export class ToolSyncService {
         break;
       case 'lookupCaller':
         toolDef = getLookupCallerTool(backendUrl);
+        break;
+      case 'endCall':
+        toolDef = getEndCallTool(backendUrl);
         break;
       default:
         throw new Error(`Unsupported tool: ${toolBlueprint.name}`);
@@ -460,8 +466,18 @@ export class ToolSyncService {
   private static async getSystemToolsBlueprint(): Promise<any[]> {
     // TODO: Fetch from system_tools table in Supabase
     // For MVP, we hardcode the system tools
+    //
+    // CRITICAL: checkAvailability MUST be first - it's required before booking
+    // The order here reflects the call flow: check → book → transfer/end
 
     return [
+      // Phase 1 Critical: Availability Check (MUST call before booking)
+      {
+        name: 'checkAvailability',
+        description: 'Check available appointment slots (MUST call before booking)',
+        enabled: true
+      },
+      // Core Booking Tool
       {
         name: 'bookClinicAppointment',
         description: 'Book a confirmed appointment for a patient',
@@ -476,6 +492,11 @@ export class ToolSyncService {
       {
         name: 'lookupCaller',
         description: 'Search for an existing patient/customer in the database',
+        enabled: true
+      },
+      {
+        name: 'endCall',
+        description: 'Gracefully end the current call',
         enabled: true
       }
     ];

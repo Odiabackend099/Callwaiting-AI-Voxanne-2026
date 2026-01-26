@@ -40,7 +40,11 @@
     "test:booking": "ts-node scripts/test-booking-e2e.ts",
     "verify:webhook": "ts-node scripts/verify-webhook.ts",
     "db:encrypt-integrations": "npx tsx src/scripts/encrypt-integrations.ts",
-    "test:security": "npx tsx src/scripts/test-guardian-suite.ts"
+    "test:security": "npx tsx src/scripts/test-guardian-suite.ts",
+    "test:full-scope": "npx tsx src/scripts/full-scope-test.ts",
+    "test:contract": "npx tsx src/scripts/vapi-integration-contract-test.ts",
+    "phoenix": "npx tsx src/scripts/sync-vapi-tools.ts",
+    "phoenix:dry-run": "npx tsx src/scripts/sync-vapi-tools.ts --dry-run"
   },
   "keywords": [],
   "author": "",
