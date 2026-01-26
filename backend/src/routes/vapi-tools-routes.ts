@@ -1247,7 +1247,7 @@ router.post('/tools/lookupCaller', async (req, res) => {
         // Build query based on search type
         let query = supabaseService
             .from('contacts')
-            .select('id, name, email, phone, lead_status, service_interests, notes, last_contact_at')
+            .select('id, name, email, phone, lead_status, service_interests, notes, last_contacted_at')
             .eq('org_id', orgId);
 
         switch (searchType) {
@@ -1308,7 +1308,7 @@ router.post('/tools/lookupCaller', async (req, res) => {
                             email: contact.email,
                             status: contact.lead_status,
                             interests: contact.service_interests,
-                            lastContact: contact.last_contact_at,
+                            lastContact: contact.last_contacted_at,
                             notes: contact.notes
                         }
                     })

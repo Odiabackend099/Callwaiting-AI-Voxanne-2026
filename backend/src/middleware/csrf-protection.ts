@@ -63,6 +63,8 @@ export function validateCsrfToken(req: Request, res: Response, next: NextFunctio
     '/health',
     '/health/check',
     '/api/webhooks', // Vapi webhooks have their own signature verification
+    '/api/vapi/tools', // Vapi tool endpoints (called by Vapi servers, not browsers)
+    '/api/assistants/sync', // Tool sync endpoint (administrative, called by scripts)
   ];
 
   if (skipPaths.some(path => req.path.startsWith(path))) {

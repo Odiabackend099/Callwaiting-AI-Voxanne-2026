@@ -3,13 +3,11 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone } from 'lucide-react';
+import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-// LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
-import { PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
+import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
 import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
-import { VOICE_MANIFEST } from '@/lib/voice-manifest';
 
 const AGENT_CONFIG_CONSTRAINTS = {
     MIN_DURATION_SECONDS: 60,
@@ -55,15 +53,12 @@ export default function AgentConfigPage() {
     const [error, setError] = useState<string | null>(null);
 
     const [voices, setVoices] = useState<Voice[]>([]);
-    const [vapiConfigured, setVapiConfigured] = useState(false);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
 
     // Vapi Phone Number State
     const [vapiNumbers, setVapiNumbers] = useState<any[]>([]);
     const [selectedNumberId, setSelectedNumberId] = useState('');
     const [assigningNumber, setAssigningNumber] = useState(false);
-
-
 
     // Global Store State
     const { inboundConfig, outboundConfig, setInboundConfig, setOutboundConfig } = useAgentStore();
@@ -81,7 +76,6 @@ export default function AgentConfigPage() {
             a.language === b.language &&
             a.maxDuration === b.maxDuration;
     };
-
 
     const [originalInboundConfig, setOriginalInboundConfig] = useState<AgentConfig | null>(null);
     const [originalOutboundConfig, setOriginalOutboundConfig] = useState<AgentConfig | null>(null);
@@ -112,15 +106,6 @@ export default function AgentConfigPage() {
                 return;
             }
 
-            if (settingsResult.status === 'fulfilled') {
-                setVapiConfigured(Boolean(settingsResult.value?.vapiConfigured));
-            } else {
-                console.error('Failed to load settings:', settingsResult.reason);
-                setError('Failed to load integration settings. Please refresh the page.');
-                setIsLoading(false);
-                return;
-            }
-
             if (agentResult.status === 'fulfilled') {
                 const agentData = agentResult.value;
                 if (agentData?.agents) {
@@ -136,7 +121,6 @@ export default function AgentConfigPage() {
                             maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                         };
 
-                        
                         // Check for drafts
                         const currentStore = useAgentStore.getState().inboundConfig;
                         if (!areConfigsEqual(currentStore, loadedConfig)) {
@@ -165,7 +149,6 @@ export default function AgentConfigPage() {
                             maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
                         };
 
-                        
                         // Check for drafts
                         const currentStore = useAgentStore.getState().outboundConfig;
                         if (!areConfigsEqual(currentStore, loadedConfig)) {
@@ -184,31 +167,6 @@ export default function AgentConfigPage() {
                             setOriginalOutboundConfig(loadedConfig);
                         }
                     }
-                } else if (agentData?.vapi) {
-                    // Legacy single Vapi config handling (treat as inbound)
-                    const vapi = agentData.vapi;
-                    const loadedConfig = {
-                        systemPrompt: vapi.systemPrompt || '',
-                        firstMessage: vapi.firstMessage || '',
-                        voice: vapi.voice || '',
-                        language: vapi.language || 'en-US',
-                        maxDuration: vapi.maxCallDuration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                    };
-
-                    const currentStore = useAgentStore.getState().inboundConfig;
-                    if (!areConfigsEqual(currentStore, loadedConfig)) {
-                        if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
-                            setInboundConfig(loadedConfig);
-                            setOriginalInboundConfig(loadedConfig);
-                        } else {
-                            setHasDraft(true);
-                            setServerInbound(loadedConfig);
-                            setOriginalInboundConfig(loadedConfig);
-                        }
-                    } else {
-                        setInboundConfig(loadedConfig);
-                        setOriginalInboundConfig(loadedConfig);
-                    }
                 }
             } else {
                 console.error('Failed to load agent config:', agentResult.reason);
@@ -222,14 +180,10 @@ export default function AgentConfigPage() {
                     configured: Boolean(inboundResult.value?.configured),
                     inboundNumber: inboundResult.value?.inboundNumber
                 });
-            } else {
-                console.warn('Failed to load inbound status:', inboundResult.reason);
             }
 
             if (numbersResult.status === 'fulfilled' && numbersResult.value.success) {
                 setVapiNumbers(numbersResult.value.numbers || []);
-            } else {
-                console.warn('Failed to load Vapi phone numbers');
             }
         } catch (err) {
             console.error('Unexpected error loading configuration:', err);
@@ -273,18 +227,14 @@ export default function AgentConfigPage() {
     const inboundChanged = hasAgentChanged(inboundConfig, originalInboundConfig);
     const outboundChanged = hasAgentChanged(outboundConfig, originalOutboundConfig);
 
-    const hasChanges = () => inboundChanged || outboundChanged;
-
     const hasActiveTabChanges = () => {
         if (activeTab === 'inbound') return inboundChanged;
         if (activeTab === 'outbound') return outboundChanged;
         return false;
     };
 
-    // Validate agent config before save
     const restoreDraft = () => {
         setHasDraft(false);
-        // Store already has the draft, so we just clear the banner
     };
 
     const discardDraft = () => {
@@ -311,25 +261,17 @@ export default function AgentConfigPage() {
     };
 
     const handleSave = async () => {
-        // VAPI is platform-provided, no user configuration required
-        // BACKEND enforces key presence via 'integration_settings' table.
-        // Frontend should NOT validate this, as it doesn't have access to the key.
-
         setIsSaving(true);
         setSaveSuccess(false);
         setError(null);
 
-        // Track which agent is being saved to prevent race conditions
         const currentAgent = activeTab;
         setSavingAgent(currentAgent);
 
         try {
-            // Build payload for ONLY the active tab
             const payload: any = {};
 
-            // Save only the ACTIVE tab's agent
             if (activeTab === 'inbound' && inboundChanged) {
-                // Validate inbound config
                 const inboundError = validateAgentConfig(inboundConfig, 'inbound');
                 if (inboundError) {
                     setError(inboundError);
@@ -348,7 +290,6 @@ export default function AgentConfigPage() {
             }
 
             if (activeTab === 'outbound' && outboundChanged) {
-                // Validate outbound config
                 const outboundError = validateAgentConfig(outboundConfig, 'outbound');
                 if (outboundError) {
                     setError(outboundError);
@@ -366,7 +307,6 @@ export default function AgentConfigPage() {
                 };
             }
 
-            // If no changes, don't send (this shouldn't happen due to button disabled state)
             if (!payload.inbound && !payload.outbound) {
                 setError('No changes to save');
                 setIsSaving(false);
@@ -374,7 +314,6 @@ export default function AgentConfigPage() {
                 return;
             }
 
-            // Save to backend
             const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -386,8 +325,6 @@ export default function AgentConfigPage() {
                 throw new Error(result?.error || 'Failed to sync agent configuration to Vapi');
             }
 
-            // Update original config for the agent that was saved (not activeTab, which may have changed)
-            // This prevents race condition if user switches tabs during save
             if (currentAgent === 'inbound') {
                 setOriginalInboundConfig(inboundConfig);
             } else if (currentAgent === 'outbound') {
@@ -408,12 +345,7 @@ export default function AgentConfigPage() {
             setIsSaving(false);
             setSavingAgent(null);
         }
-
     };
-
-    // REMOVED: This useEffect was causing race conditions
-    // Server state is now updated directly in handleSave after successful backend response
-    // This prevents issues when user switches tabs during save operation
 
     const handleTestInbound = async () => {
         try {
@@ -451,30 +383,31 @@ export default function AgentConfigPage() {
     };
 
     const applyTemplate = (templateId: string, type: 'inbound' | 'outbound') => {
-        const template = PROMPT_TEMPLATES.find(t => t.id === templateId);
+        const templates = type === 'inbound' ? PROMPT_TEMPLATES : OUTBOUND_PROMPT_TEMPLATES;
+        const template = templates.find(t => t.id === templateId);
         if (!template) return;
 
         if (type === 'inbound') {
             setInboundConfig({
+                ...inboundConfig,
                 systemPrompt: template.systemPrompt,
                 firstMessage: template.firstMessage
             });
         } else {
             setOutboundConfig({
+                ...outboundConfig,
                 systemPrompt: template.systemPrompt,
                 firstMessage: template.firstMessage
             });
         }
     };
 
-    // Vapi Number Assignment Handler
     const handleAssignNumber = async () => {
         if (!selectedNumberId) return;
         try {
             setAssigningNumber(true);
             setError(null);
 
-            // Find selected number object to get the phone number string for UI/DB update
             const selectedNumObj = vapiNumbers.find(n => n.id === selectedNumberId);
             const phoneNumber = selectedNumObj?.number;
 
@@ -487,7 +420,6 @@ export default function AgentConfigPage() {
             });
 
             if (result.success) {
-                // Refresh inbound status to show new number
                 const status = await authedBackendFetch<InboundStatus>('/api/inbound/status');
                 setInboundStatus(status);
                 alert('Agent successfully assigned to phone number!');
@@ -504,7 +436,7 @@ export default function AgentConfigPage() {
 
     if (loading || isLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
             </div>
         );
@@ -512,404 +444,333 @@ export default function AgentConfigPage() {
 
     if (!user) return null;
 
+    const currentConfig = activeTab === 'inbound' ? inboundConfig : outboundConfig;
+    const setConfig = activeTab === 'inbound' ? setInboundConfig : setOutboundConfig;
+    const templates = activeTab === 'inbound' ? PROMPT_TEMPLATES : OUTBOUND_PROMPT_TEMPLATES;
+
     return (
-        <div className="max-w-6xl mx-auto px-6 py-8">
-            <div className="mb-8 flex justify-between items-start">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Agent Configuration</h1>
-                    <p className="text-gray-600 dark:text-slate-400">Configure both inbound and outbound agents. Settings sync to Vapi automatically.</p>
-                </div>
-
-                <button
-                    onClick={handleSave}
-                    disabled={!hasActiveTabChanges() || isSaving}
-                    className={`px-6 py-3 rounded-xl font-medium shadow-lg transition-all flex items-center gap-2 ${saveSuccess
-                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                        : hasActiveTabChanges()
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl'
-                            : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-600 cursor-not-allowed border border-gray-200 dark:border-slate-700'
-                        }`}
-                >
-                    {isSaving ? (
-                        <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Saving {activeTab === 'inbound' ? 'Inbound' : 'Outbound'} Agent...
-                        </>
-                    ) : saveSuccess ? (
-                        <>
-                            <Check className="w-5 h-5" />
-                            Saved!
-                        </>
-                    ) : (
-                        <>
-                            <Save className="w-5 h-5" />
-                            Save {activeTab === 'inbound' ? 'Inbound' : 'Outbound'} Agent
-                        </>
-                    )}
-                </button>
-            </div>
-
-            {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-3">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    {error}
-                </div>
-            )}
-
-            {/* VAPI is platform-provided - no user configuration warning needed */}
-
-            {/* Draft Restoration Banner */}
-            {hasDraft && (
-                <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                            <Save className="w-5 h-5 text-indigo-600" />
-                        </div>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <h3 className="font-bold text-indigo-900">Unsaved Changes Found</h3>
-                            <p className="text-sm text-indigo-700">We restored your unsaved changes from your last session.</p>
+                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Bot className="w-6 h-6 text-emerald-500" />
+                                Agent Configuration
+                            </h1>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                Configure behavior and settings for your AI agents
+                            </p>
                         </div>
-                    </div>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={discardDraft}
-                            className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
-                        >
-                            Discard Draft
-                        </button>
-                        <button
-                            onClick={restoreDraft}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm"
-                        >
-                            Keep Draft
-                        </button>
-                    </div>
-                </div>
-            )}
 
-            {/* Tab Navigation */}
-            <div className="bg-gray-100 dark:bg-slate-800 p-1 rounded-xl inline-flex mb-8">
-                <button
-                    onClick={() => {
-                        setActiveTab('inbound');
-                        router.push('/dashboard/agent-config?agent=inbound');
-                    }}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'inbound'
-                        ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-sm'
-                        : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
-                        }`}
-                >
-                    <Phone className="w-4 h-4" />
-                    Inbound Agent
-                    {inboundStatus?.inboundNumber && (
-                        <span className="text-xs opacity-70">({inboundStatus.inboundNumber})</span>
-                    )}
-                </button>
-                <button
-                    onClick={() => {
-                        setActiveTab('outbound');
-                        router.push('/dashboard/agent-config?agent=outbound');
-                    }}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'outbound'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                        : 'text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'
-                        }`}
-                >
-                    <Phone className="w-4 h-4" />
-                    Outbound Agent
-                    {inboundStatus?.inboundNumber && (
-                        <span className="text-xs opacity-70">(Caller ID: {inboundStatus.inboundNumber})</span>
-                    )}
-                </button>
-            </div>
+                        <div className="flex items-center gap-3">
+                            {activeTab === 'inbound' ? (
+                                <button
+                                    onClick={handleTestInbound}
+                                    className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium transition-colors flex items-center gap-2 text-sm"
+                                >
+                                    <Globe className="w-4 h-4" />
+                                    Test in Browser
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleTestOutbound}
+                                    className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium transition-colors flex items-center gap-2 text-sm"
+                                >
+                                    <Phone className="w-4 h-4" />
+                                    Test Call
+                                </button>
+                            )}
 
-            {/* INBOUND AGENT TAB */}
-            {activeTab === 'inbound' && (
-                <div className="space-y-6 max-w-3xl">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl p-6">
-                        <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2 mb-1">
-                            <Phone className="w-6 h-6" />
-                            Inbound Agent
-                        </h2>
-                        <p className="text-sm text-blue-700">Receives incoming calls</p>
-                        {inboundStatus?.configured && inboundStatus?.inboundNumber && (
-                            <p className="text-xs text-blue-600 mt-2">📱 {inboundStatus.inboundNumber}</p>
-                        )}
-                    </div>
-
-                    {/* Template Selector */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-indigo-600" />
-                            Prompt Template
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">Auto-fill the system prompt and first message with industry best practices.</p>
-                        <select
-                            onChange={(e) => applyTemplate(e.target.value, 'inbound')}
-                            className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            defaultValue=""
-                        >
-                            <option value="" disabled>Select a template...</option>
-                            {PROMPT_TEMPLATES.map((template) => (
-                                <option key={template.id} value={template.id}>
-                                    {template.name} - {template.description}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Phone Number Selection */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <Phone className="w-5 h-5 text-indigo-600" />
-                            Select Phone Number
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">
-                            Select a number from your Vapi account to assign to this agent.
-                        </p>
-                        <div className="flex gap-3">
-                            <select
-                                value={selectedNumberId}
-                                onChange={(e) => setSelectedNumberId(e.target.value)}
-                                className="flex-1 px-4 py-2 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                            >
-                                <option value="" disabled>Select a number...</option>
-                                {vapiNumbers.map((num) => (
-                                    <option key={num.id} value={num.id}>
-                                        {num.number} {num.name ? `(${num.name})` : ''}
-                                    </option>
-                                ))}
-                            </select>
                             <button
-                                onClick={handleAssignNumber}
-                                disabled={assigningNumber || !selectedNumberId}
-                                className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                onClick={handleSave}
+                                disabled={!hasActiveTabChanges() || isSaving}
+                                className={`px-6 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 text-sm ${saveSuccess
+                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800'
+                                    : hasActiveTabChanges()
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed border border-slate-200 dark:border-slate-700'
+                                    }`}
                             >
-                                {assigningNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                {assigningNumber ? 'Syncing...' : 'Sync Number'}
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : saveSuccess ? (
+                                    <>
+                                        <Check className="w-4 h-4" />
+                                        Saved
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="w-4 h-4" />
+                                        Save Changes
+                                    </>
+                                )}
                             </button>
                         </div>
-                        {vapiNumbers.length === 0 && (
-                            <p className="text-xs text-amber-600 mt-2">
-                                No phone numbers found in your Vapi account. Please import numbers in Vapi first.
+                    </div>
+
+                    {/* Tab Navigation */}
+                    <div className="flex items-center gap-1 mt-6 border-b border-slate-200 dark:border-slate-800">
+                        <button
+                            onClick={() => {
+                                setActiveTab('inbound');
+                                router.push('/dashboard/agent-config?agent=inbound');
+                            }}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'inbound'
+                                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                }`}
+                        >
+                            <Phone className="w-4 h-4" />
+                            Inbound Agent
+                        </button>
+                        <button
+                            onClick={() => {
+                                setActiveTab('outbound');
+                                router.push('/dashboard/agent-config?agent=outbound');
+                            }}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'outbound'
+                                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                }`}
+                        >
+                            <ArrowRight className="w-4 h-4" />
+                            Outbound Agent
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {error && (
+                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                        {error}
+                    </div>
+                )}
+
+                {hasDraft && (
+                    <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
+                                <Save className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <div>
+                                <h3 className="font-medium text-indigo-900 dark:text-indigo-300">Unsaved Changes Restored</h3>
+                                <p className="text-sm text-indigo-700 dark:text-indigo-400">We found unsaved changes from your last session.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={discardDraft}
+                                className="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-colors"
+                            >
+                                Discard
+                            </button>
+                            <button
+                                onClick={restoreDraft}
+                                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm"
+                            >
+                                Keep Draft
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* LEFT COLUMN - Configuration */}
+                    <div className="lg:col-span-1 space-y-6">
+                        {/* Status Card (Inbound Only) */}
+                        {activeTab === 'inbound' && (
+                            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                    <Phone className="w-5 h-5 text-emerald-500" />
+                                    Phone Number
+                                </h3>
+                                <div className="space-y-4">
+                                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Current Number</p>
+                                        <p className="text-lg font-mono text-slate-900 dark:text-white">
+                                            {inboundStatus?.configured && inboundStatus.inboundNumber
+                                                ? inboundStatus.inboundNumber
+                                                : 'Not Assigned'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            Assign New Number
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <select
+                                                value={selectedNumberId}
+                                                onChange={(e) => setSelectedNumberId(e.target.value)}
+                                                className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                            >
+                                                <option value="" disabled>Select number...</option>
+                                                {vapiNumbers.map((num) => (
+                                                    <option key={num.id} value={num.id}>
+                                                        {num.number} {num.name ? `(${num.name})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={handleAssignNumber}
+                                                disabled={assigningNumber || !selectedNumberId}
+                                                className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                {assigningNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Voice Settings */}
+                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <Volume2 className="w-5 h-5 text-blue-500" />
+                                Voice Settings
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        Voice Persona
+                                    </label>
+                                    <select
+                                        value={currentConfig.voice}
+                                        onChange={(e) => setConfig({ ...currentConfig, voice: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="">Select a voice...</option>
+                                        {voices.map((voice) => (
+                                            <option key={voice.id} value={voice.id}>
+                                                {voice.name} ({voice.gender}) - {voice.provider}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        Language
+                                    </label>
+                                    <select
+                                        value={currentConfig.language}
+                                        onChange={(e) => setConfig({ ...currentConfig, language: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="en-US">English (US)</option>
+                                        <option value="en-GB">English (UK)</option>
+                                        <option value="es-ES">Spanish (Spain)</option>
+                                        <option value="es-MX">Spanish (Mexico)</option>
+                                        <option value="fr-FR">French</option>
+                                        <option value="de-DE">German</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Limits */}
+                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-amber-500" />
+                                Limits
+                            </h3>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Max Duration (Seconds)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={currentConfig.maxDuration}
+                                    onChange={(e) => setConfig({ ...currentConfig, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
+                                    min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
+                                    max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
+                                    className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Auto-end call after this time.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* RIGHT COLUMN - Intelligence */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* Template Selector */}
+                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <LayoutTemplate className="w-5 h-5 text-purple-500" />
+                                Quick Start Templates
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {templates.map((template) => (
+                                    <button
+                                        key={template.id}
+                                        onClick={() => applyTemplate(template.id, activeTab)}
+                                        className="text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/10 transition-all group"
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-medium text-slate-900 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-400">
+                                                {template.name}
+                                            </span>
+                                            <Sparkles className="w-4 h-4 text-slate-400 group-hover:text-purple-500" />
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                                            {template.description}
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* System Prompt */}
+                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <Bot className="w-5 h-5 text-emerald-500" />
+                                    System Prompt
+                                </h3>
+                                <span className="text-xs px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+                                    Core Personality
+                                </span>
+                            </div>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                Define how your agent behaves, speaks, and handles specific scenarios.
                             </p>
-                        )}
-                    </div>
-
-                    {/* System Prompt */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-purple-600" />
-                            System Prompt
-                        </h3>
-                        <textarea
-                            value={inboundConfig.systemPrompt}
-                            onChange={(e) => setInboundConfig({ systemPrompt: e.target.value })}
-                            placeholder="You are a helpful AI assistant..."
-                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm leading-relaxed"
-                        />
-                    </div>
-
-                    {/* First Message */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-blue-600" />
-                            First Message
-                        </h3>
-                        <textarea
-                            value={inboundConfig.firstMessage}
-                            onChange={(e) => setInboundConfig({ firstMessage: e.target.value })}
-                            placeholder="Hello, thanks for calling!"
-                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                        />
-                    </div>
-
-                    {/* Voice & Language */}
-                    <div className="space-y-4">
-                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                                <Volume2 className="w-5 h-5 text-blue-600" />
-                                Voice
-                            </h3>
-                            <select
-                                value={inboundConfig.voice}
-                                onChange={(e) => setInboundConfig({ voice: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            >
-                                <option value="">Select a voice...</option>
-                                {voices.map((voice) => (
-                                    <option key={voice.id} value={voice.id}>
-                                        {voice.name} ({voice.gender}) - {voice.provider}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                                <Globe className="w-5 h-5 text-cyan-600" />
-                                Language
-                            </h3>
-                            <select
-                                value={inboundConfig.language}
-                                onChange={(e) => setInboundConfig({ language: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            >
-                                <option value="en-US">English (US)</option>
-                                <option value="en-GB">English (UK)</option>
-                                <option value="es-ES">Spanish (Spain)</option>
-                                <option value="es-MX">Spanish (Mexico)</option>
-                                <option value="fr-FR">French</option>
-                                <option value="de-DE">German</option>
-                                <option value="it-IT">Italian</option>
-                                <option value="pt-BR">Portuguese (Brazil)</option>
-                                <option value="pt-PT">Portuguese (Portugal)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Max Duration */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-amber-600" />
-                            Max Call Duration
-                        </h3>
-                        <div className="flex items-center gap-4">
-                            <input
-                                type="number"
-                                value={inboundConfig.maxDuration}
-                                onChange={(e) => setInboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
-                                min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            <textarea
+                                value={currentConfig.systemPrompt}
+                                onChange={(e) => setConfig({ ...currentConfig, systemPrompt: e.target.value })}
+                                placeholder="You are a helpful AI assistant..."
+                                className="w-full h-96 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
                             />
-                            <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
                         </div>
-                    </div>
 
-                    {/* Test Button */}
-                    <button
-                        onClick={handleTestInbound}
-                        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                        🌐 Test Web (Browser)
-                    </button>
-                </div>
-            )}
-
-            {/* OUTBOUND AGENT TAB */}
-            {activeTab === 'outbound' && (
-                <div className="space-y-6 max-w-3xl">
-                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 rounded-2xl p-6">
-                        <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-2 mb-1">
-                            📤 Outbound Agent
-                        </h2>
-                        <p className="text-sm text-emerald-700">Makes outgoing calls</p>
-                        {inboundStatus?.configured && inboundStatus?.inboundNumber && (
-                            <p className="text-xs text-emerald-600 mt-2">Caller ID: {inboundStatus.inboundNumber}</p>
-                        )}
-                    </div>
-
-                    {/* System Prompt */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-purple-600" />
-                            System Prompt
-                        </h3>
-                        <textarea
-                            value={outboundConfig.systemPrompt}
-                            onChange={(e) => setOutboundConfig({ systemPrompt: e.target.value })}
-                            placeholder="You are a professional outbound sales representative..."
-                            className="w-full h-48 px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none resize-none font-mono text-sm leading-relaxed"
-                        />
-                    </div>
-
-                    {/* First Message */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-blue-600" />
-                            First Message
-                        </h3>
-                        <textarea
-                            value={outboundConfig.firstMessage}
-                            onChange={(e) => setOutboundConfig({ firstMessage: e.target.value })}
-                            placeholder="Hello! This is an outbound call from..."
-                            className="w-full h-20 px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
-                        />
-                    </div>
-
-                    {/* Voice & Language */}
-                    <div className="space-y-4">
-                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                                <Volume2 className="w-5 h-5 text-emerald-600" />
-                                Voice
+                        {/* First Message */}
+                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <MessageSquare className="w-5 h-5 text-blue-500" />
+                                First Message
                             </h3>
-                            <select
-                                value={outboundConfig.voice}
-                                onChange={(e) => setOutboundConfig({ voice: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            >
-                                <option value="">Select a voice...</option>
-                                {voices.map((voice) => (
-                                    <option key={voice.id} value={voice.id}>
-                                        {voice.name} ({voice.gender}) - {voice.provider}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                                <Globe className="w-5 h-5 text-cyan-600" />
-                                Language
-                            </h3>
-                            <select
-                                value={outboundConfig.language}
-                                onChange={(e) => setOutboundConfig({ language: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            >
-                                <option value="en-US">English (US)</option>
-                                <option value="en-GB">English (UK)</option>
-                                <option value="es-ES">Spanish (Spain)</option>
-                                <option value="es-MX">Spanish (Mexico)</option>
-                                <option value="fr-FR">French</option>
-                                <option value="de-DE">German</option>
-                                <option value="it-IT">Italian</option>
-                                <option value="pt-BR">Portuguese (Brazil)</option>
-                                <option value="pt-PT">Portuguese (Portugal)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Max Duration */}
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-amber-600" />
-                            Max Call Duration
-                        </h3>
-                        <div className="flex items-center gap-4">
-                            <input
-                                type="number"
-                                value={outboundConfig.maxDuration}
-                                onChange={(e) => setOutboundConfig({ maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
-                                min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                The very first thing your agent says when the call connects.
+                            </p>
+                            <textarea
+                                value={currentConfig.firstMessage}
+                                onChange={(e) => setConfig({ ...currentConfig, firstMessage: e.target.value })}
+                                placeholder="Hello! How can I help you today?"
+                                className="w-full h-24 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                             />
-                            <span className="text-gray-500 font-medium whitespace-nowrap">seconds</span>
                         </div>
                     </div>
-
-                    {/* Test Button */}
-                    <button
-                        onClick={handleTestOutbound}
-                        className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-                    >
-                        ☎️ Test Live Call
-                    </button>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

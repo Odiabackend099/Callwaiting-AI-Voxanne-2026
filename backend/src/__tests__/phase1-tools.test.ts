@@ -23,29 +23,50 @@ describe('Phase 1: Operational Core Tools', () => {
   beforeAll(async () => {
     supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Create test organization
-    const { data: org } = await supabase
+    // Use existing organization (fetch the most recent one)
+    const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .insert({ name: 'Phase 1 Test Org' })
-      .select()
+      .select('id')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
-    testOrgId = org!.id;
+    if (orgError || !org) {
+      throw new Error(`Failed to fetch organization: ${orgError?.message || 'No organizations found'}`);
+    }
 
-    // Create test contact
-    const { data: contact } = await supabase
+    testOrgId = org.id;
+
+    // Use existing test contact (John Smith from setup-phase1-test-data)
+    const { data: contact, error: contactError } = await supabase
       .from('contacts')
-      .insert({
-        org_id: testOrgId,
-        name: 'Test User',
-        phone: '+15551234567',
-        email: 'test@example.com',
-        lead_status: 'contacted'
-      })
-      .select()
-      .single();
+      .select('id')
+      .eq('org_id', testOrgId)
+      .eq('phone', '+15551234567')
+      .maybeSingle();
 
-    testContactId = contact!.id;
+    if (!contact) {
+      // If John Smith doesn't exist, create a test contact
+      const { data: newContact, error: createError } = await supabase
+        .from('contacts')
+        .insert({
+          org_id: testOrgId,
+          name: 'Test User',
+          phone: '+15551234567',
+          email: 'test@example.com',
+          lead_status: 'warm',
+          lead_score: 2
+        })
+        .select('id')
+        .single();
+
+      if (createError || !newContact) {
+        throw new Error(`Failed to create test contact: ${createError?.message || 'Unknown error'}`);
+      }
+      testContactId = newContact.id;
+    } else {
+      testContactId = contact.id;
+    }
 
     // Configure transfer settings
     await supabase
@@ -140,16 +161,25 @@ describe('Phase 1: Operational Core Tools', () => {
 
     it('should log transfer to call_logs', async () => {
       // Create a test call log
-      const { data: callLog } = await supabase
+      const { data: callLog, error: insertError } = await supabase
         .from('call_logs')
         .insert({
           org_id: testOrgId,
           vapi_call_id: 'test-log-call-123',
-          phone_number: '+15551234567',
-          status: 'in-progress'
+          call_sid: 'test-sid-123',
+          call_type: 'inbound',
+          status: 'completed'
         })
         .select()
         .single();
+
+      if (insertError) {
+        console.error('Failed to insert call log:', insertError);
+        throw new Error(`Call log insert failed: ${insertError.message}`);
+      }
+      if (!callLog) {
+        throw new Error('Call log was not created');
+      }
 
       // Trigger transfer
       await axios.post(`${BACKEND_URL}/api/vapi/tools/transferCall`, {
@@ -169,12 +199,25 @@ describe('Phase 1: Operational Core Tools', () => {
         }
       });
 
+      // Wait a moment for the database update to complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       // Verify transfer logged
-      const { data: updatedLog } = await supabase
+      const { data: updatedLog, error: logError } = await supabase
         .from('call_logs')
-        .select('transfer_to, transfer_reason')
+        .select('*')
         .eq('vapi_call_id', 'test-log-call-123')
+        .eq('org_id', testOrgId)
         .single();
+
+      if (logError) {
+        console.error('Failed to fetch updated call log:', logError);
+      }
+      if (!updatedLog) {
+        console.error('No call log found with vapi_call_id: test-log-call-123 and org_id:', testOrgId);
+      } else {
+        console.log('Updated call log:', JSON.stringify(updatedLog, null, 2));
+      }
 
       expect(updatedLog?.transfer_to).toBe('+15552222222');
       expect(updatedLog?.transfer_reason).toContain('medical');
@@ -203,7 +246,7 @@ describe('Phase 1: Operational Core Tools', () => {
       const result = JSON.parse(response.data.toolResult.content);
       expect(result.success).toBe(true);
       expect(result.found).toBe(true);
-      expect(result.contact.name).toBe('Test User');
+      expect(result.contact.name).toBe('John Smith'); // Using existing test data
     });
 
     it('should find contact by name', async () => {
@@ -212,7 +255,7 @@ describe('Phase 1: Operational Core Tools', () => {
           toolCalls: [{
             function: {
               arguments: {
-                searchKey: 'Test User',
+                searchKey: 'John Smith', // Using existing test data
                 searchType: 'name'
               }
             }
@@ -235,7 +278,7 @@ describe('Phase 1: Operational Core Tools', () => {
           toolCalls: [{
             function: {
               arguments: {
-                searchKey: 'test@example.com',
+                searchKey: 'john.smith@example.com', // Using existing test data
                 searchType: 'email'
               }
             }
@@ -250,7 +293,7 @@ describe('Phase 1: Operational Core Tools', () => {
       const result = JSON.parse(response.data.toolResult.content);
       expect(result.success).toBe(true);
       expect(result.found).toBe(true);
-      expect(result.contact.email).toBe('test@example.com');
+      expect(result.contact.email).toBe('john.smith@example.com');
     });
 
     it('should return not found for non-existent contact', async () => {
@@ -284,7 +327,8 @@ describe('Phase 1: Operational Core Tools', () => {
           org_id: testOrgId,
           name: 'Test Smith',
           phone: '+15559999999',
-          lead_status: 'new'
+          lead_status: 'cold',
+          lead_score: 1
         });
 
       const response = await axios.post(`${BACKEND_URL}/api/vapi/tools/lookupCaller`, {
@@ -330,28 +374,28 @@ describe('Phase 1: Operational Core Tools', () => {
       // (This would be tested via integration test with actual webhook)
     });
 
-    it('should update last_contact_at for existing contact', async () => {
+    it('should update last_contacted_at for existing contact', async () => {
       const { data: beforeContact } = await supabase
         .from('contacts')
-        .select('last_contact_at')
+        .select('last_contacted_at')
         .eq('id', testContactId)
         .single();
 
-      const oldTimestamp = beforeContact!.last_contact_at;
+      const oldTimestamp = beforeContact!.last_contacted_at;
 
       // Simulate contact update (would happen in webhook handler)
       await supabase
         .from('contacts')
-        .update({ last_contact_at: new Date().toISOString() })
+        .update({ last_contacted_at: new Date().toISOString() })
         .eq('id', testContactId);
 
       const { data: afterContact } = await supabase
         .from('contacts')
-        .select('last_contact_at')
+        .select('last_contacted_at')
         .eq('id', testContactId)
         .single();
 
-      expect(new Date(afterContact!.last_contact_at).getTime())
+      expect(new Date(afterContact!.last_contacted_at).getTime())
         .toBeGreaterThan(new Date(oldTimestamp!).getTime());
     });
   });

@@ -43,7 +43,6 @@ async function run() {
         .from('integration_settings')
         .select('*')
         .eq('org_id', orgId)
-        .eq('service_type', 'vapi')
         .single();
 
     if (settings) {

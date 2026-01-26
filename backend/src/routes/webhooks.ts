@@ -159,7 +159,7 @@ async function lookupContactAndInjectGreeting(params: {
     // Lookup contact by phone in contacts table
     const { data: contact, error } = await supabase
       .from('contacts')
-      .select('id, name, email, lead_score, lead_status, service_interests, last_contact_at, notes')
+      .select('id, name, email, lead_score, lead_status, service_interests, last_contacted_at, notes')
       .eq('org_id', params.orgId)
       .eq('phone', params.phoneNumber)
       .maybeSingle();
@@ -177,9 +177,9 @@ async function lookupContactAndInjectGreeting(params: {
           org_id: params.orgId,
           phone: params.phoneNumber,
           name: 'Unknown Caller',
-          lead_status: 'new',
-          lead_score: 50,
-          last_contact_at: new Date().toISOString()
+          lead_status: 'cold',     // ENUM: hot, warm, cold
+          lead_score: 1,           // Integer: 1=cold, 2=warm, 3=hot
+          last_contacted_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -196,10 +196,10 @@ async function lookupContactAndInjectGreeting(params: {
       return { contact: newContact || null, injected: false };
     }
 
-    // Contact found - update last_contact_at
+    // Contact found - update last_contacted_at
     await supabase
       .from('contacts')
-      .update({ last_contact_at: new Date().toISOString() })
+      .update({ last_contacted_at: new Date().toISOString() })
       .eq('id', contact.id)
       .eq('org_id', params.orgId);
 
@@ -1904,7 +1904,8 @@ async function handleBookAppointment(
           name: customerName,
           phone: customerPhone,
           email: customerEmail || null,
-          lead_status: 'new',
+          lead_status: 'cold',
+          lead_score: 1,
           created_at: new Date().toISOString()
         })
         .select('id')

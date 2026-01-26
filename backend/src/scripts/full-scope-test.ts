@@ -176,11 +176,10 @@ async function test1CheckAvailability(orgId: string): Promise<void> {
       process.exit(1);
     }
 
-    // Graceful handling for unconfigured calendar
+    // NO SKIPS: Calendar must work or fail with real error
     if (!resultData.success) {
-      console.warn(`⚠️  Calendar not available (Phase 2 feature)`);
-      console.log(`✓ TEST 1 PASSED (skipped - calendar not configured)\n`);
-      return;
+      console.error(`❌ ABORT: Calendar API failed - ${resultData.error || 'Unknown error'}`);
+      process.exit(1);
     }
 
     if (!resultData.availableSlots || resultData.availableSlots.length === 0) {

@@ -260,7 +260,6 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
       .from('integration_settings')
       .select('api_key_encrypted')
       .eq('org_id', orgId)
-      .eq('service_type', 'vapi')
       .single();
 
     // If no tenant key, check for global fallback (Default Org/Single Tenant Mode)
