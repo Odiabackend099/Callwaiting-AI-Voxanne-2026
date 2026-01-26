@@ -1994,6 +1994,14 @@ router.post(
           payload.max_call_duration = config.maxDurationSeconds;
         }
 
+        // Accept phone number ID for outbound agents
+        if (agentRole === 'outbound' && config.vapiPhoneNumberId !== undefined) {
+          payload.vapi_phone_number_id = config.vapiPhoneNumberId || null;
+          logger.info('Outbound phone number ID included in payload', {
+            vapiPhoneNumberId: config.vapiPhoneNumberId
+          });
+        }
+
         return Object.keys(payload).length > 0 ? payload : null;
       };
 
@@ -3110,40 +3118,60 @@ router.post(
         }
       }
 
-      // CRITICAL FIX: Deterministic Phone Number Selection
-      // Single-number policy: Outbound ALWAYS uses the inbound Twilio/Vapi mapping.
-      // This prevents conflicting imports and removes any ambiguity.
-      const { data: inboundMapping, error: inboundMappingError } = await supabase
-        .from('integrations')
-        .select('config')
+      // Dynamic Phone Number Selection - Use agent's saved phone number
+      const { data: agentPhoneData, error: agentPhoneError } = await supabase
+        .from('agents')
+        .select('vapi_phone_number_id')
+        .eq('id', agent.id)
         .eq('org_id', orgId)
-        .eq('provider', 'twilio_inbound')
         .maybeSingle();
 
-      if (inboundMappingError && inboundMappingError.code !== 'PGRST116') {
-        res.status(500).json({ error: 'Failed to load inbound number mapping', requestId });
-        return;
-      }
-
-      const inboundCfg: any = inboundMapping?.config || null;
-      const phoneNumberId: string | undefined = inboundCfg?.vapiPhoneNumberId;
-      const inboundCallerNumber: string | undefined = inboundCfg?.phoneNumber;
-
-      if (!phoneNumberId) {
-        res.status(400).json({
-          error: 'Inbound phone number is not provisioned yet. Please complete Inbound Setup first.',
-          action: 'Go to Inbound Config and click Save & Activate Inbound.',
+      if (agentPhoneError) {
+        logger.error('Failed to fetch agent phone number', {
+          agentId: agent.id,
+          error: agentPhoneError.message,
+          requestId
+        });
+        res.status(500).json({
+          error: 'Failed to load agent configuration',
           requestId
         });
         return;
       }
 
-      logger.info('Outbound test resolved context (single-number)', {
+      const phoneNumberId = agentPhoneData?.vapi_phone_number_id;
+
+      // Edge case: No phone number selected yet
+      if (!phoneNumberId) {
+        res.status(400).json({
+          error: 'Outbound Caller ID not configured. Please select a phone number in Agent Configuration.',
+          action: 'Go to Agent Config > Outbound Agent > Select Caller ID Number',
+          requestId
+        });
+        return;
+      }
+
+      // Fetch phone number details for logging (optional but helpful)
+      let callerNumber: string | undefined;
+      try {
+        const vapiClient = new VapiClient(vapiApiKey);
+        const phoneDetails = await vapiClient.getPhoneNumber(phoneNumberId);
+        callerNumber = phoneDetails?.number;
+      } catch (err) {
+        logger.warn('Failed to fetch phone number details for logging', {
+          phoneNumberId,
+          error: err
+        });
+        // Non-critical - continue with call
+      }
+
+      logger.info('Outbound test call using agent-specific phone number', {
         requestId,
         orgId,
+        agentId: agent.id,
         assistantId: assistantId ? assistantId.slice(-6) : null,
-        inboundCallerLast4: inboundCallerNumber ? inboundCallerNumber.slice(-4) : null,
-        phoneNumberIdLast6: phoneNumberId.slice(-6)
+        phoneNumberIdLast6: phoneNumberId.slice(-6),
+        callerNumber: callerNumber ? callerNumber.slice(-4) : 'unknown'
       });
 
       // Create call_tracking row for outbound test
@@ -3191,6 +3219,17 @@ router.post(
 
         logger.exception('Failed to create Vapi outbound call', vapiError);
         const errorMsg = vapiError?.response?.data?.message || vapiError?.message || 'Unknown error';
+
+        // Check if error is due to invalid phone number
+        if (errorMsg.toLowerCase().includes('phone') || errorMsg.toLowerCase().includes('number')) {
+          res.status(400).json({
+            error: 'The selected phone number is no longer available. Please choose a different number in Agent Configuration.',
+            action: 'Go to Agent Config > Outbound Agent > Select Caller ID Number',
+            requestId
+          });
+          return;
+        }
+
         res.status(500).json({
           error: `Failed to initiate outbound call: ${errorMsg}`,
           requestId
