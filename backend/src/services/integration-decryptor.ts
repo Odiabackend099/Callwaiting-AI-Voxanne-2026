@@ -722,10 +722,10 @@ export class IntegrationDecryptor {
     }
 
     try {
-      // Query integrations table
+      // Query org_credentials table (Single Source of Truth for all BYOC credentials)
       const { data, error } = await supabase
-        .from('integrations')
-        .select('encrypted_config, config, last_verified_at')
+        .from('org_credentials')
+        .select('encrypted_config')
         .eq('org_id', orgId)
         .eq('provider', provider)
         .maybeSingle();
