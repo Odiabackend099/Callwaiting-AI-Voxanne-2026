@@ -7,10 +7,12 @@
 import { supabase } from './supabase-client';
 import { generateEmbedding } from './embeddings';
 import { log } from './logger';
+import { RAG_CONFIG } from '../config/rag-config';
 
-const SIMILARITY_THRESHOLD = 0.6;
-const MAX_CHUNKS = 5;
-const MAX_CONTEXT_LENGTH = 2000; // chars
+// Use centralized RAG config for consistency
+const SIMILARITY_THRESHOLD = RAG_CONFIG.SIMILARITY_THRESHOLD;
+const MAX_CHUNKS = RAG_CONFIG.MAX_CHUNKS;
+const MAX_CONTEXT_LENGTH = RAG_CONFIG.MAX_CONTEXT_LENGTH;
 
 /**
  * Get RAG context for a user query
@@ -56,25 +58,47 @@ export async function getRagContext(
 
       similarChunks = data || [];
     } catch (error: any) {
-      log.warn('RAG', 'RPC call failed, trying direct query', { error: error?.message });
-      
-      // Fallback: try direct query without RPC
+      log.warn('RAG', 'RPC call failed, trying text search fallback', { error: error?.message });
+
+      // Fallback: try text search with keyword matching
       try {
+        // Extract keywords from query (simple tokenization)
+        const keywords = userQuery
+          .toLowerCase()
+          .replace(/[^\w\s]/g, '') // Remove punctuation
+          .split(/\s+/)
+          .filter(word => word.length > 2) // Skip short words
+          .slice(0, 5); // Limit to 5 keywords
+
+        if (keywords.length === 0) {
+          log.warn('RAG', 'No keywords extracted from query', { userQuery });
+          return { context: '', chunkCount: 0, hasContext: false };
+        }
+
+        // Build OR conditions for keyword matching
+        const keywordFilters = keywords.map(kw => `content.ilike.%${kw}%`).join(',');
+
         const { data, error: queryError } = await supabase
           .from('knowledge_base_chunks')
           .select('id, content')
           .eq('org_id', orgId)
+          .or(keywordFilters)
           .limit(MAX_CHUNKS);
 
         if (queryError) {
-          log.warn('RAG', 'Fallback query also failed', { error: queryError.message });
+          log.warn('RAG', 'Text search fallback also failed', { error: queryError.message });
           return { context: '', chunkCount: 0, hasContext: false };
         }
+
+        log.info('RAG', 'Text search fallback succeeded', {
+          keywords,
+          resultCount: data?.length || 0
+        });
 
         similarChunks = (data || []).map((chunk: any) => ({
           id: chunk.id,
           content: chunk.content,
-          similarity: 0.5 // Fallback similarity score
+          similarity: RAG_CONFIG.FALLBACK_SIMILARITY_SCORE // Fallback similarity score
         }));
       } catch (fallbackError: any) {
         log.error('RAG', 'All retrieval methods failed', { error: fallbackError?.message });
@@ -94,6 +118,15 @@ export async function getRagContext(
       if (!chunk.content) continue;
 
       const chunkText = `- ${chunk.content}\n\n`;
+
+      // Always add at least ONE chunk, even if it exceeds limit
+      if (contextStr.length === 'RELEVANT KNOWLEDGE BASE INFORMATION:\n\n'.length) {
+        contextStr += chunkText;
+        currentLength += chunkText.length;
+        continue;
+      }
+
+      // For subsequent chunks, check length limit
       if (currentLength + chunkText.length > MAX_CONTEXT_LENGTH) {
         break;
       }

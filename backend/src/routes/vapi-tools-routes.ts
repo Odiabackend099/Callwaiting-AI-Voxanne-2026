@@ -10,6 +10,7 @@ import { createCalendarEvent } from '../services/calendar-integration';
 import { normalizeDate, normalizeTime } from '../services/date-normalizer';
 import { bookingDeduplicator } from '../services/booking-deduplicator';
 import { normalizeBookingData, formatAlternativeSlots } from '../utils/normalizeBookingData';
+import { getRagContext } from '../services/rag-context-provider';
 
 const router = Router();
 
@@ -118,6 +119,26 @@ router.post('/tools/calendar/check', async (req, res) => {
             return res.status(400).json({ error: 'Missing tenantId/inboundPhoneNumber or date parameters' });
         }
 
+        // Validate Google Calendar credentials health before attempting to check availability
+        const healthCheck = await IntegrationDecryptor.validateGoogleCalendarHealth(resolvedTenantId);
+        if (!healthCheck.healthy) {
+            log.error('VapiTools', 'Google Calendar credentials invalid', {
+                orgId: resolvedTenantId,
+                error: healthCheck.error
+            });
+
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: 'calendar_integration_error',
+                        message: healthCheck.error || 'Unable to access calendar'
+                    })
+                },
+                speech: 'I\'m having trouble accessing the calendar right now. Let me transfer you to someone who can help you schedule an appointment.'
+            });
+        }
+
         log.info('VapiTools', 'Checking availability', {
             resolvedTenantId,
             date,
@@ -127,27 +148,72 @@ router.post('/tools/calendar/check', async (req, res) => {
 
         const slots = await calendarSlotService.checkAvailability(resolvedTenantId, date, serviceType);
 
+        // If no slots available, check next 3 days automatically
+        let alternativeDays: any[] = [];
+        if (slots.length === 0) {
+            log.info('VapiTools', 'No slots on requested date, checking next 3 days', { date });
+
+            const requestedDate = new Date(date + 'T00:00:00');
+
+            for (let i = 1; i <= 3; i++) {
+                const nextDate = new Date(requestedDate);
+                nextDate.setDate(nextDate.getDate() + i);
+                const nextDateStr = nextDate.toISOString().split('T')[0];
+
+                try {
+                    const nextSlots = await calendarSlotService.checkAvailability(
+                        resolvedTenantId,
+                        nextDateStr,
+                        serviceType
+                    );
+
+                    if (nextSlots.length > 0) {
+                        alternativeDays.push({
+                            date: nextDateStr,
+                            slots: nextSlots.slice(0, 3), // First 3 slots only
+                            slotCount: nextSlots.length
+                        });
+                    }
+                } catch (err: any) {
+                    log.warn('VapiTools', `Failed to check ${nextDateStr}`, { error: err.message });
+                }
+            }
+        }
+
         // CRITICAL: Return structured response for GPT-4o parsing
         // The toolResult.content must be JSON that the model can parse
+        const hasAlternatives = alternativeDays.length > 0;
         const toolContent = JSON.stringify({
             success: true,
-            date: date,
+            requestedDate: date,
             availableSlots: slots,
             slotCount: slots.length,
+            alternatives: alternativeDays,
             message: slots.length > 0
                 ? `Found ${slots.length} available times on ${date}`
-                : `No availability on ${date}`
+                : hasAlternatives
+                ? `No availability on ${date}. Found ${alternativeDays.length} alternative days with openings.`
+                : `No availability on ${date} or the next 3 days.`
         });
+
+        // Generate speech with alternatives
+        let speechText = '';
+        if (slots.length > 0) {
+            speechText = `Great! I found ${slots.length} available times on ${date}. Here are your options: ${slots.slice(0, 3).join(', ')}.`;
+        } else if (hasAlternatives) {
+            const firstAlt = alternativeDays[0];
+            const firstSlots = firstAlt.slots.slice(0, 2).join(' or ');
+            speechText = `I'm sorry, but ${date} is fully booked. How about ${firstAlt.date}? I have ${firstSlots} available.`;
+        } else {
+            speechText = `I'm sorry, but I don't see any openings on ${date} or the next few days. Would you like me to transfer you to someone who can help find a time that works?`;
+        }
 
         // Vapi webhook response format
         return res.json({
             toolResult: {
                 content: toolContent
             },
-            // Optional: Add natural language that Vapi can speak
-            speech: slots.length > 0
-                ? `Great! I found ${slots.length} available times on ${date}. Here are your options: ${slots.slice(0, 3).join(', ')}.`
-                : `I'm sorry, but I don't see any openings on ${date}. Would another day work for you?`
+            speech: speechText
         });
 
     } catch (error: any) {
@@ -1186,6 +1252,100 @@ router.post('/tools/transferCall', async (req, res) => {
 });
 
 /**
+ * ⏹️  TOOL: endCall
+ *
+ * Gracefully terminates the current call with logging.
+ * Used when: conversation complete, time limit reached, or patient requests to end.
+ *
+ * Request format:
+ * {
+ *   "message": {
+ *     "toolCalls": [{
+ *       "function": {
+ *         "name": "endCall",
+ *         "arguments": { "reason": "completed", "summary": "..." }
+ *       }
+ *     }],
+ *     "call": { "id": "...", "metadata": { "org_id": "..." } }
+ *   }
+ * }
+ */
+router.post('/tools/endCall', async (req, res) => {
+    try {
+        // Extract arguments using the unified extractor
+        const args = extractArgs(req);
+        const { reason, summary } = args;
+
+        // Extract call context
+        const call = req.body.message?.call || {};
+        const callId = call.id;
+        const orgId = call.metadata?.org_id || call.orgId;
+
+        log.info('VapiTools', '⏹️  endCall invoked', {
+            reason,
+            summary,
+            callId,
+            orgId
+        });
+
+        // Log to call_logs if call_id available
+        if (callId && orgId) {
+            const { error: logError } = await supabaseService
+                .from('call_logs')
+                .update({
+                    end_reason: reason,
+                    ai_summary: summary,
+                    ended_at: new Date().toISOString()
+                })
+                .eq('vapi_call_id', callId)
+                .eq('org_id', orgId);
+
+            if (logError) {
+                log.warn('VapiTools', 'Failed to log end reason to call_logs', {
+                    error: logError.message,
+                    callId
+                });
+            } else {
+                log.info('VapiTools', 'Call end logged successfully', { callId, reason });
+            }
+        }
+
+        // Return success with endCall flag (tells Vapi to terminate the call)
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: true,
+                    reason,
+                    message: summary || 'Call ended successfully'
+                })
+            },
+            endCall: true, // Vapi's flag to terminate call immediately
+            speech: reason === 'time_limit'
+                ? 'Our time is up. Thank you for calling, and have a great day!'
+                : 'Thank you for calling. Have a great day!'
+        });
+
+    } catch (error: any) {
+        log.error('VapiTools', 'Error in endCall', {
+            error: error?.message,
+            stack: error?.stack
+        });
+
+        // Still end call even if logging fails
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: false,
+                    error: 'Failed to log call end, but call will still terminate'
+                })
+            },
+            endCall: true,
+            speech: 'Thank you for calling. Goodbye!'
+        });
+    }
+});
+
+/**
  * 🔍 TOOL: lookupCaller
  *
  * Searches for existing customer in database.
@@ -1345,6 +1505,137 @@ router.post('/tools/lookupCaller', async (req, res) => {
                 content: JSON.stringify({ success: false, error: 'Lookup failed' })
             },
             speech: 'I\'m having trouble with the lookup. Let me help you as if you\'re new for today.'
+        });
+    }
+});
+
+/**
+ * 📚 TOOL: getKnowledgeBase
+ *
+ * Searches the organization's knowledge base for relevant information.
+ * Allows the AI to actively query KB during calls for specific questions.
+ *
+ * Request format:
+ * {
+ *   "message": {
+ *     "toolCalls": [{
+ *       "function": {
+ *         "name": "getKnowledgeBase",
+ *         "arguments": {
+ *           "query": "What are your hours?",
+ *           "tenantId": "org-uuid" // or inboundPhoneNumber
+ *         }
+ *       }
+ *     }],
+ *     "call": {
+ *       "metadata": { "org_id": "org-uuid" }
+ *     }
+ *   }
+ * }
+ */
+router.post('/tools/knowledge-base', async (req, res) => {
+    try {
+        // Extract arguments using the unified extractor
+        const args = extractArgs(req);
+        const { query, tenantId, inboundPhoneNumber } = args;
+
+        // Extract org context from call metadata as fallback
+        const call = req.body.message?.call || {};
+        const metadataOrgId = call.metadata?.org_id || call.orgId;
+
+        // Resolve org_id (priority: tenantId → call metadata → phone lookup)
+        let orgId = tenantId || metadataOrgId;
+
+        if (!orgId && inboundPhoneNumber) {
+            orgId = await resolveTenantId(undefined, inboundPhoneNumber);
+        }
+
+        log.info('VapiTools', '📚 Knowledge base query requested', {
+            orgId,
+            queryPreview: query?.substring(0, 50),
+            hasQuery: !!query
+        });
+
+        if (!orgId) {
+            log.error('VapiTools', 'getKnowledgeBase: No org_id resolved');
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: 'Organization context not found',
+                        message: 'Unable to search knowledge base without organization context'
+                    })
+                },
+                speech: 'I\'m having trouble accessing our information database. Let me help you another way.'
+            });
+        }
+
+        if (!query || query.trim().length === 0) {
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: 'Empty query',
+                        message: 'No search query provided'
+                    })
+                },
+                speech: 'What would you like to know? I can look that up for you.'
+            });
+        }
+
+        // Call RAG context provider
+        const { context, chunkCount, hasContext } = await getRagContext(query, orgId);
+
+        log.info('VapiTools', '📚 Knowledge base search completed', {
+            orgId,
+            hasContext,
+            chunkCount,
+            contextLength: context.length
+        });
+
+        if (!hasContext) {
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: true,
+                        found: false,
+                        chunkCount: 0,
+                        message: 'No relevant information found in knowledge base for this query'
+                    })
+                },
+                speech: 'I don\'t have specific information about that in my knowledge base. Is there something else I can help you with?'
+            });
+        }
+
+        // Return successful context retrieval
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: true,
+                    found: true,
+                    chunkCount,
+                    context,
+                    message: `Found ${chunkCount} relevant knowledge base entries`
+                })
+            },
+            speech: '' // No speech - let the AI formulate response based on context
+        });
+
+    } catch (error: any) {
+        log.error('VapiTools', 'Error in getKnowledgeBase', {
+            error: error?.message,
+            stack: error?.stack
+        });
+
+        return res.json({
+            toolResult: {
+                content: JSON.stringify({
+                    success: false,
+                    error: 'Knowledge base search failed',
+                    message: error?.message || 'Unable to search knowledge base'
+                })
+            },
+            speech: 'I\'m having trouble accessing our information right now. Let me try to help you another way.'
         });
     }
 });

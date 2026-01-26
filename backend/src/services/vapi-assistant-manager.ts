@@ -14,6 +14,7 @@ import { IntegrationDecryptor } from './integration-decryptor';
 import { IntegrationSettingsService } from './integration-settings'; // Use Settings Service for fallback support
 import { enhanceSystemPrompt } from './prompt-injector';
 import { ToolSyncService } from './tool-sync-service';
+import { getSuperSystemPrompt, getTemporalContext } from './super-system-prompt';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
 
@@ -261,6 +262,21 @@ export class VapiAssistantManager {
             assistantId,
           });
 
+          // Get temporal context for system prompt
+          const { currentDate, currentTime } = getTemporalContext('America/Los_Angeles');
+
+          // Generate super system prompt with user template embedded
+          const systemPromptContent = getSuperSystemPrompt({
+            userTemplate: config.systemPrompt,
+            orgId,
+            currentDate,
+            currentTime,
+            timezone: 'America/Los_Angeles', // TODO: Get from org settings
+            businessHours: '9 AM - 6 PM',     // TODO: Get from org settings
+            clinicName: 'our clinic',         // TODO: Get from org settings
+            maxDuration: config.maxDurationSeconds || 600,
+          });
+
           const updatePayload: any = {
             name: config.name,
             model: {
@@ -269,7 +285,7 @@ export class VapiAssistantManager {
               messages: [
                 {
                   role: 'system',
-                  content: enhanceSystemPrompt(config.systemPrompt),
+                  content: systemPromptContent,
                 },
               ],
             },
@@ -291,10 +307,32 @@ export class VapiAssistantManager {
           // NOTE: Tools are now registered separately by ToolSyncService
           // Don't modify toolIds during updates - they're managed independently
 
-          // Add server messages if provided
-          if (config.serverMessages) {
-            updatePayload.serverMessages = config.serverMessages;
-          }
+          // Add time-based server messages for call duration awareness
+          updatePayload.serverMessages = [
+            {
+              type: 'status-update',
+              conditions: [
+                {
+                  param: 'call.duration',
+                  operator: 'gt',
+                  value: 480 // 8 minutes
+                }
+              ],
+              content: 'SYSTEM: Call approaching 8 minutes. Begin wrapping up naturally.'
+            },
+            {
+              type: 'status-update',
+              conditions: [
+                {
+                  param: 'call.duration',
+                  operator: 'gt',
+                  value: 540 // 9 minutes
+                }
+              ],
+              content: 'SYSTEM: Call at 9 minutes. Inform patient of time limit and offer to finish up.'
+            },
+            ...(config.serverMessages || []) // Merge with any user-provided server messages
+          ];
 
           // Add transcriber if provided
           if (config.transcriber) {
@@ -386,9 +424,24 @@ export class VapiAssistantManager {
             role,
           });
 
+          // Get temporal context for system prompt (same as UPDATE path)
+          const { currentDate, currentTime } = getTemporalContext('America/Los_Angeles');
+
+          // Generate super system prompt with user template embedded (consistent with UPDATE path)
+          const systemPromptContent = getSuperSystemPrompt({
+            userTemplate: config.systemPrompt,
+            orgId,
+            currentDate,
+            currentTime,
+            timezone: 'America/Los_Angeles', // TODO: Get from org settings
+            businessHours: '9 AM - 6 PM',     // TODO: Get from org settings
+            clinicName: 'our clinic',         // TODO: Get from org settings
+            maxDuration: config.maxDurationSeconds || 600,
+          });
+
           const createPayload: any = {
             name: config.name,
-            systemPrompt: enhanceSystemPrompt(config.systemPrompt),
+            systemPrompt: systemPromptContent,
             firstMessage: config.firstMessage || 'Hello! How can I help you today?',
             voiceId: voiceConfig.voiceId,
             voiceProvider: voiceConfig.provider,
@@ -417,7 +470,7 @@ export class VapiAssistantManager {
             messages: [
               {
                 role: 'system',
-                content: enhanceSystemPrompt(config.systemPrompt),
+                content: systemPromptContent,
               },
             ],
             toolIds: []  // Empty initially - ToolSyncService will populate this

@@ -10,12 +10,14 @@ import { generateEmbedding } from '../services/embeddings';
 import { log } from '../services/logger';
 import { verifyVapiSignature } from '../utils/vapi-webhook-signature';
 import { AnalyticsService } from '../services/analytics-service';
+import { RAG_CONFIG } from '../config/rag-config';
 
 const vapiWebhookRouter = Router();
 
-const SIMILARITY_THRESHOLD = 0.65;
-const MAX_CHUNKS = 5;
-const MAX_CONTEXT_LENGTH = 3000;
+// Use centralized RAG config for consistency
+const SIMILARITY_THRESHOLD = RAG_CONFIG.SIMILARITY_THRESHOLD;
+const MAX_CHUNKS = RAG_CONFIG.MAX_CHUNKS;
+const MAX_CONTEXT_LENGTH = RAG_CONFIG.MAX_CONTEXT_LENGTH;
 
 // Rate limiting: 100 requests per minute per IP
 const webhookLimiter = rateLimit({
@@ -77,7 +79,38 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         });
 
         const args = toolFunction?.arguments || {};
-        const orgId = '46cf2995-2bee-44e3-838b-24151486fe4e'; // TODO: Extract from assistant metadata
+
+        // Resolve org_id dynamically (multi-tenant support)
+        let orgId: string | null = null;
+
+        // Option 1: Get from assistantId lookup
+        const assistantId = body.assistantId || body.assistant?.id;
+        if (assistantId) {
+          const { data: agent } = await supabase
+            .from('agents')
+            .select('org_id')
+            .eq('vapi_assistant_id', assistantId)
+            .maybeSingle();
+          orgId = (agent as any)?.org_id ?? null;
+        }
+
+        // Option 2: Get from call metadata
+        if (!orgId && body.message?.call?.metadata?.org_id) {
+          orgId = body.message.call.metadata.org_id;
+        }
+
+        // Option 3: Get from tenantId in arguments
+        if (!orgId && args.tenantId) {
+          orgId = args.tenantId;
+        }
+
+        if (!orgId) {
+          log.error('Vapi-Webhook', 'Unable to resolve org_id for booking', { assistantId });
+          return res.status(400).json({ error: 'Unable to resolve organization for booking' });
+        }
+
+        log.info('Vapi-Webhook', 'Resolved org_id for booking', { orgId, assistantId });
+
         const { appointmentDate, appointmentTime, patientEmail, patientPhone, patientName, serviceType } = args;
 
         if (!appointmentDate || !appointmentTime || !patientEmail) {
