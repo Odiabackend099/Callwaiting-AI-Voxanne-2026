@@ -14,8 +14,10 @@
  */
 
 import { EncryptionService } from './encryption';
+import { CredentialService } from './credential-service';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
+import type { ProviderType } from '../types/supabase-db';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -127,7 +129,7 @@ export class IntegrationDecryptor {
   static async getTwilioCredentials(orgId: string): Promise<TwilioCredentials> {
     return this.getCredentials<TwilioCredentials>(
       orgId,
-      'TWILIO',
+      'twilio',
       (decrypted) => {
         // Handle multiple possible field names
         const accountSid =
@@ -702,8 +704,14 @@ export class IntegrationDecryptor {
   // ============================================
 
   /**
-   * Generic credential retrieval with caching and decryption
-   * This is the core method that all provider-specific methods use
+   * Generic credential retrieval with caching and transformation
+   * Delegates credential fetch/decryption to CredentialService (centralized)
+   * Keeps caching and transformation logic here for performance
+   *
+   * This architecture ensures:
+   * ✅ Single source of truth for credential access (CredentialService)
+   * ✅ Performance via caching in IntegrationDecryptor
+   * ✅ Provider-specific transformation logic encapsulated here
    *
    * @private
    */
@@ -722,53 +730,17 @@ export class IntegrationDecryptor {
     }
 
     try {
-      // Query org_credentials table (Single Source of Truth for all BYOC credentials)
-      const { data, error } = await supabase
-        .from('org_credentials')
-        .select('encrypted_config')
-        .eq('org_id', orgId)
-        .eq('provider', provider)
-        .maybeSingle();
+      // ===== DELEGATION TO CENTRALIZED SERVICE =====
+      // This is the KEY CHANGE: Instead of direct DB queries,
+      // we delegate to CredentialService which handles:
+      // - Database queries
+      // - Decryption (even legacy format handling if needed)
+      // - Error handling with clear messages
+      // - Audit logging
+      const decrypted = await CredentialService.get(orgId, provider as ProviderType);
 
-      if (error) {
-        throw new Error(
-          `Database error retrieving ${provider} credentials: ${error.message}`
-        );
-      }
-
-      if (!data) {
-        throw new Error(
-          `${provider} credentials not found for org ${orgId}. Please configure ${provider} in integration settings.`
-        );
-      }
-
-      // Decrypt the configuration
-      let decrypted: any;
-
-      if (typeof data.encrypted_config === 'string') {
-        // New format: encrypted string "iv:authTag:content"
-        try {
-          decrypted = EncryptionService.decryptObject(
-            data.encrypted_config
-          );
-        } catch (decryptError: any) {
-          log.error('IntegrationDecryptor', 'Decryption failed', {
-            orgId,
-            provider,
-            error: decryptError?.message,
-          });
-          throw new Error(`Failed to decrypt ${provider} credentials`);
-        }
-      } else {
-        // Legacy format: plain JSONB (for backward compatibility during migration)
-        log.warn('IntegrationDecryptor', 'Found unencrypted credentials (legacy)', {
-          orgId,
-          provider,
-        });
-        decrypted = data.encrypted_config;
-      }
-
-      // Transform to expected shape
+      // ===== LOCAL TRANSFORMATION & CACHING =====
+      // Transform to provider-specific shape
       const transformed = transformer(decrypted);
 
       // Manage cache size with LRU eviction
@@ -782,16 +754,15 @@ export class IntegrationDecryptor {
         }
       }
 
-      // Update cache
+      // Update cache with transformed result
       credentialCache.set(cacheKey, {
         data: transformed,
         timestamp: Date.now(),
       });
 
-      log.info('IntegrationDecryptor', 'Credentials retrieved', {
+      log.info('IntegrationDecryptor', 'Credentials retrieved and cached', {
         orgId,
         provider,
-        lastVerified: (data as any).last_verified_at,
         cacheSize: credentialCache.size,
       });
 

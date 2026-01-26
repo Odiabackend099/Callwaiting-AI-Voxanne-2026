@@ -1,6 +1,8 @@
 import { supabase } from './supabase-client';
 import { generateOTP } from '../utils/otp-utils';
 import { sendSmsTwilio } from './twilio-service';
+import { IntegrationDecryptor } from './integration-decryptor';
+import { log } from './logger';
 
 export interface AtomicBookingResult {
   success: boolean;
@@ -121,24 +123,20 @@ export class AtomicBookingService {
         }
         
         orgId = holdCheck.org_id;
-        
-        // Fetch from database using org_id - BEFORE changing state
-        const { data: credData, error: credError } = await supabase
-          .from('org_credentials')
-          .select('decrypted_auth_config')
-          .eq('org_id', orgId)
-          .eq('integration_type', 'twilio_byoc')
-          .single();
 
-        if (credError || !credData) {
-          console.error('[AtomicBooking] Failed to get Twilio credentials');
+        // Fetch Twilio credentials via CredentialService (centralized) - BEFORE changing state
+        try {
+          credentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
+        } catch (credError: any) {
+          log.error('AtomicBooking', 'Failed to get Twilio credentials', {
+            orgId,
+            error: credError.message
+          });
           return {
             success: false,
             error: 'SMS service not configured',
           };
         }
-
-        credentials = credData.decrypted_auth_config;
       }
 
       // NOW generate OTP and store it
