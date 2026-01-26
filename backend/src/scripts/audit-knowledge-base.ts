@@ -98,14 +98,36 @@ async function auditKnowledgeBase(): Promise<void> {
     process.exit(1);
   }
 
-  // Display each document
+  // Check how many chunks exist for each document
+  const { data: allChunks, error: chunksError } = await supabase
+    .from('knowledge_base_chunks')
+    .select('knowledge_base_id, chunk_index, token_count, embedding')
+    .eq('org_id', orgId);
+
+  // Group chunks by document ID
+  const chunksByDoc = new Map<string, any[]>();
+  if (allChunks) {
+    for (const chunk of allChunks) {
+      const docChunks = chunksByDoc.get(chunk.knowledge_base_id) || [];
+      docChunks.push(chunk);
+      chunksByDoc.set(chunk.knowledge_base_id, docChunks);
+    }
+  }
+
+  // Display each document with chunk info
   for (let i = 0; i < kbDocs.length; i++) {
     const doc = kbDocs[i];
-    console.log(`   Document ${i + 1}: ${doc.title || 'Untitled'}`);
+    const docChunks = chunksByDoc.get(doc.id) || [];
+    const totalTokens = docChunks.reduce((sum, c) => sum + (c.token_count || 0), 0);
+    const chunksWithEmbeddings = docChunks.filter(c => c.embedding).length;
+
+    console.log(`   Document ${i + 1}: ${doc.filename || 'Untitled'}`);
     console.log(`     ID: ${doc.id}`);
     console.log(`     Category: ${doc.category || 'N/A'}`);
     console.log(`     Content Length: ${doc.content?.length || 0} characters`);
-    console.log(`     Has Embeddings: ${doc.embeddings ? 'Yes' : 'No'}`);
+    console.log(`     Chunks: ${docChunks.length}`);
+    console.log(`     Total Tokens: ${totalTokens}`);
+    console.log(`     Has Embeddings: ${chunksWithEmbeddings}/${docChunks.length} chunks`);
     console.log(`     Version: ${doc.version || 'v1'}`);
     console.log(`     Created: ${new Date(doc.created_at).toLocaleString()}`);
     console.log('');
@@ -129,9 +151,9 @@ async function auditKnowledgeBase(): Promise<void> {
   for (const query of testQueries) {
     const { data: searchResults, error: searchError } = await supabase
       .from('knowledge_base')
-      .select('title, content')
+      .select('filename, content')
       .eq('org_id', orgId)
-      .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+      .or(`filename.ilike.%${query}%,content.ilike.%${query}%`)
       .limit(5);
 
     if (searchError) {
@@ -143,7 +165,7 @@ async function auditKnowledgeBase(): Promise<void> {
       if (matchCount > 0) {
         console.log(`   ✅ Query "${query}": ${matchCount} match(es)`);
         for (const result of searchResults || []) {
-          console.log(`      - ${result.title}`);
+          console.log(`      - ${result.filename}`);
         }
       } else {
         console.log(`   ⚠️  Query "${query}": 0 matches`);
@@ -156,16 +178,29 @@ async function auditKnowledgeBase(): Promise<void> {
   // ==================== PHASE 4: Check Vector Embeddings ====================
   console.log('🧠 PHASE 4: Checking Vector Embeddings...\n');
 
-  const docsWithEmbeddings = kbDocs.filter(doc => doc.embeddings);
-  const docsWithoutEmbeddings = kbDocs.filter(doc => !doc.embeddings);
+  // Count chunks with and without embeddings
+  const totalChunks = allChunks?.length || 0;
+  const chunksWithEmbeddings = allChunks?.filter(c => c.embedding).length || 0;
+  const chunksWithoutEmbeddings = totalChunks - chunksWithEmbeddings;
 
-  console.log(`   Documents with embeddings: ${docsWithEmbeddings.length}`);
-  console.log(`   Documents without embeddings: ${docsWithoutEmbeddings.length}`);
+  console.log(`   Total chunks: ${totalChunks}`);
+  console.log(`   Chunks with embeddings: ${chunksWithEmbeddings}`);
+  console.log(`   Chunks without embeddings: ${chunksWithoutEmbeddings}`);
 
-  if (docsWithoutEmbeddings.length > 0) {
-    console.log('\n   ⚠️  Documents missing embeddings:');
-    for (const doc of docsWithoutEmbeddings) {
-      console.log(`      - ${doc.title}`);
+  // Show which documents have missing embeddings
+  const docsWithMissingEmbeddings: string[] = [];
+  for (const doc of kbDocs) {
+    const docChunks = chunksByDoc.get(doc.id) || [];
+    const docChunksWithEmbeddings = docChunks.filter(c => c.embedding).length;
+    if (docChunksWithEmbeddings < docChunks.length) {
+      docsWithMissingEmbeddings.push(doc.filename || 'Untitled');
+    }
+  }
+
+  if (docsWithMissingEmbeddings.length > 0) {
+    console.log('\n   ⚠️  Documents with missing embeddings:');
+    for (const filename of docsWithMissingEmbeddings) {
+      console.log(`      - ${filename}`);
     }
   }
 
@@ -177,14 +212,18 @@ async function auditKnowledgeBase(): Promise<void> {
   console.log(`Organization:           ${targetOrg.name}`);
   console.log(`Organization ID:        ${orgId}`);
   console.log(`Total Documents:        ${kbDocs.length}`);
-  console.log(`With Embeddings:        ${docsWithEmbeddings.length}`);
-  console.log(`Without Embeddings:     ${docsWithoutEmbeddings.length}`);
+  console.log(`Total Chunks:           ${totalChunks}`);
+  console.log(`Chunks with Embeddings: ${chunksWithEmbeddings}`);
+  console.log(`Chunks without Embeddings: ${chunksWithoutEmbeddings}`);
   console.log(`Retrieval Test Matches: ${totalMatches}`);
 
   console.log('\n🎯 Recommendations:\n');
 
-  if (docsWithoutEmbeddings.length > 0) {
-    console.log('   ⚠️  Generate embeddings for documents without them');
+  if (totalChunks === 0) {
+    console.log('   ⚠️  No chunks found - documents need to be chunked');
+    console.log('      Run the chunking process for these documents');
+  } else if (chunksWithoutEmbeddings > 0) {
+    console.log('   ⚠️  Generate embeddings for chunks without them');
     console.log('      This will improve AI retrieval accuracy');
   }
 
@@ -193,8 +232,8 @@ async function auditKnowledgeBase(): Promise<void> {
     console.log('      Some documents may not have synced to Supabase');
   }
 
-  if (kbDocs.length >= 8 && docsWithEmbeddings.length === kbDocs.length) {
-    console.log('   ✅ All documents are properly stored and indexed!');
+  if (kbDocs.length >= 8 && chunksWithoutEmbeddings === 0 && totalChunks > 0) {
+    console.log('   ✅ All documents are properly stored, chunked, and indexed!');
     console.log('   ✅ AI can successfully retrieve data during live calls');
   }
 
