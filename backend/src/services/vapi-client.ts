@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { createLogger } from './logger';
 import { config } from '../config/index';
+import { mergeFallbacksIntoPayload } from '../config/vapi-fallbacks';
 
 const logger = createLogger('VapiClient');
 
@@ -262,11 +263,17 @@ export class VapiClient {
       payload.maxDurationSeconds = config.maxDurationSeconds;
     }
 
-    return await this.request<any>(() => this.client.post('/assistant', payload), { route: 'POST /assistant' });
+    // Auto-apply provider fallbacks for reliability (Reliability Protocol)
+    const payloadWithFallbacks = mergeFallbacksIntoPayload(payload);
+
+    return await this.request<any>(() => this.client.post('/assistant', payloadWithFallbacks), { route: 'POST /assistant' });
   }
 
   async updateAssistant(assistantId: string, updates: any) {
-    return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updates), { route: 'PATCH /assistant/:id', assistantId });
+    // Auto-apply provider fallbacks for reliability (Reliability Protocol)
+    const updatesWithFallbacks = mergeFallbacksIntoPayload(updates);
+
+    return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updatesWithFallbacks), { route: 'PATCH /assistant/:id', assistantId });
   }
 
   /**
@@ -525,6 +532,16 @@ export class VapiClient {
 
   async listAssistants() {
     return await this.request<any>(() => this.client.get('/assistant'), { route: 'GET /assistant' });
+  }
+
+  /**
+   * Hard delete assistant from Vapi
+   * @param assistantId - Vapi assistant ID
+   * @returns Void on success
+   * @throws Error if API request fails
+   */
+  async deleteAssistant(assistantId: string): Promise<void> {
+    await this.request<void>(() => this.client.delete(`/assistant/${assistantId}`), { route: 'DELETE /assistant/:id', assistantId });
   }
 
   async getTool(toolId: string) {
