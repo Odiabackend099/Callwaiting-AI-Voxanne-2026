@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { StepIndicator } from './StepIndicator';
+import { CountrySelectionStep } from './CountrySelectionStep';
 import { PhoneNumberInputStep } from './PhoneNumberInputStep';
 import { VerificationStep } from './VerificationStep';
 import { CarrierSelectionStep } from './CarrierSelectionStep';
@@ -18,29 +19,35 @@ import type {
   ForwardingConfig
 } from '../types';
 
-type WizardStep = 'phone_input' | 'verification' | 'carrier_selection' | 'forwarding_code' | 'confirmation';
+type WizardStep = 'country_selection' | 'phone_input' | 'verification' | 'carrier_selection' | 'forwarding_code' | 'confirmation';
 
 /**
  * Telephony Setup Wizard - Main Component
  *
  * Multi-step wizard for setting up hybrid telephony with BYOC.
  * Guides users through:
- * 1. Phone number entry and verification
- * 2. Verification via Twilio validation call
- * 3. Carrier and forwarding type selection
- * 4. GSM code generation and activation
- * 5. Confirmation
+ * 1. Country selection (required first - affects phone format and carriers)
+ * 2. Phone number entry and verification
+ * 3. Verification via Twilio validation call
+ * 4. Carrier and forwarding type selection
+ * 5. GSM code generation and activation
+ * 6. Confirmation
  */
 export default function TelephonySetupWizard() {
   // ============================================
   // STATE MANAGEMENT
   // ============================================
 
-  const [step, setStep] = useState<WizardStep>('phone_input');
+  const [step, setStep] = useState<WizardStep>('country_selection');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1: Phone Input
+  // Step 1: Country Selection
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [selectedCountryName, setSelectedCountryName] = useState<string | null>(null);
+  const [availableCarriers, setAvailableCarriers] = useState<string[]>([]);
+
+  // Step 2: Phone Input
   const [phoneNumber, setPhoneNumber] = useState('');
   const [friendlyName, setFriendlyName] = useState('');
   const [verifiedNumbers, setVerifiedNumbers] = useState<VerifiedNumber[]>([]);
@@ -80,6 +87,15 @@ export default function TelephonySetupWizard() {
   // ============================================
   // STEP HANDLERS
   // ============================================
+
+  const handleCountrySelected = (countryCode: string, countryName: string, carriers: string[]) => {
+    setSelectedCountry(countryCode);
+    setSelectedCountryName(countryName);
+    setAvailableCarriers(carriers);
+    setError(null);
+    // Move to phone input step
+    setStep('phone_input');
+  };
 
   const handleInitiateVerification = async () => {
     setError(null);
@@ -247,6 +263,21 @@ export default function TelephonySetupWizard() {
 
       {/* Step content */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-8">
+        {step === 'country_selection' && (
+          <CountrySelectionStep
+            selectedCountry={selectedCountry}
+            onCountrySelect={(code) => {
+              // Country selection API call happens in the component
+            }}
+            onNext={() => {
+              // onNext will be called after country is confirmed
+              setStep('phone_input');
+            }}
+            isLoading={isLoading}
+            error={error}
+          />
+        )}
+
         {step === 'phone_input' && (
           <PhoneNumberInputStep
             phoneNumber={phoneNumber}

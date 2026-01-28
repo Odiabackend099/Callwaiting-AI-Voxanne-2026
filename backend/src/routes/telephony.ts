@@ -5,6 +5,7 @@
  * for the Hybrid Telephony BYOC feature.
  *
  * Endpoints:
+ * - POST /api/telephony/select-country - Set country for telephony
  * - POST /api/telephony/verify-caller-id/initiate - Start verification call
  * - POST /api/telephony/verify-caller-id/confirm - Confirm 6-digit code
  * - GET /api/telephony/verified-numbers - List verified numbers
@@ -109,6 +110,205 @@ async function checkTwilioVerificationWithRetry(
 
   return null;
 }
+
+// ============================================
+// COUNTRY CONFIGURATION ENDPOINTS
+// ============================================
+
+/**
+ * POST /api/telephony/select-country
+ *
+ * Set the telephony country for the organization.
+ * This is required before phone number verification can proceed.
+ *
+ * Uses optimistic locking to prevent race conditions where two concurrent
+ * requests overwrite each other's country selection.
+ *
+ * Request body:
+ * {
+ *   "countryCode": "NG|US|GB|TR",
+ *   "orgUpdatedAt": "2026-01-28T10:00:00Z" (optional, for optimistic locking)
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "country": "NG",
+ *   "countryName": "Nigeria",
+ *   "carriers": [...],
+ *   "phoneLengthInfo": {...},
+ *   "updatedAt": "2026-01-28T10:05:00Z"
+ * }
+ */
+router.post('/select-country', requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
+  const requestId = (req as any).requestId || `req_${Date.now()}`;
+
+  try {
+    const orgId = req.user?.orgId;
+    const userId = req.user?.id;
+
+    if (!orgId || !userId) {
+      res.status(401).json({ error: 'Not authenticated', requestId });
+      return;
+    }
+
+    const { countryCode, orgUpdatedAt } = req.body;
+
+    // Validation: Country code format (2-letter ISO 3166-1 alpha-2)
+    if (!countryCode) {
+      res.status(400).json({
+        error: 'countryCode is required',
+        requestId
+      });
+      return;
+    }
+
+    if (!/^[A-Z]{2}$/.test(countryCode)) {
+      res.status(400).json({
+        error: 'Invalid country code format. Must be 2-letter ISO code (e.g., NG, US, GB, TR)',
+        requestId
+      });
+      return;
+    }
+
+    // Fetch current organization state for optimistic locking
+    const { data: currentOrg, error: fetchError } = await supabase
+      .from('organizations')
+      .select('id, telephony_country, updated_at')
+      .eq('id', orgId)
+      .single();
+
+    if (fetchError || !currentOrg) {
+      logger.error('Failed to fetch organization for country selection', {
+        orgId,
+        error: fetchError
+      });
+      res.status(404).json({
+        error: 'Organization not found',
+        requestId
+      });
+      return;
+    }
+
+    const oldCountry = currentOrg.telephony_country || 'US';
+    const newCountry = countryCode;
+
+    // Optimistic locking: Only update if the org hasn't been modified since we read it
+    // This prevents race conditions where two concurrent requests overwrite each other
+    const { data: updateResult, error: updateError } = await supabase
+      .from('organizations')
+      .update({
+        telephony_country: newCountry,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', orgId)
+      .eq('updated_at', currentOrg.updated_at)
+      .select('telephony_country, updated_at')
+      .single();
+
+    if (updateError || !updateResult) {
+      // If update failed, it's likely due to optimistic lock failure
+      // Fetch fresh data and return conflict error
+      const { data: freshOrg } = await supabase
+        .from('organizations')
+        .select('telephony_country, updated_at')
+        .eq('id', orgId)
+        .single();
+
+      if (freshOrg?.telephony_country === newCountry) {
+        // Country was already set correctly (idempotent operation)
+        return res.status(200).json({
+          success: true,
+          message: 'Country already selected',
+          country: newCountry,
+          updatedAt: freshOrg.updated_at,
+          requestId
+        });
+      }
+
+      res.status(409).json({
+        error: 'Country selection conflict. Another request modified the organization. Please try again.',
+        currentCountry: freshOrg?.telephony_country,
+        requestId
+      });
+      return;
+    }
+
+    // Log the change to audit trail for compliance
+    if (oldCountry !== newCountry) {
+      const { error: auditError } = await supabase
+        .from('telephony_country_audit_log')
+        .insert({
+          org_id: orgId,
+          old_country: oldCountry,
+          new_country: newCountry,
+          changed_by: userId,
+          ip_address: req.ip || 'unknown',
+          user_agent: req.get('user-agent') || 'unknown'
+        });
+
+      if (auditError) {
+        logger.warn('Failed to log country change to audit trail', {
+          orgId,
+          oldCountry,
+          newCountry,
+          error: auditError
+        });
+        // Don't fail the request - audit logging is best-effort
+      }
+    }
+
+    // Fetch carrier rules for the selected country
+    const { data: countryRules, error: rulesError } = await supabase
+      .from('carrier_forwarding_rules')
+      .select('*')
+      .eq('country_code', newCountry)
+      .single();
+
+    let carriers = [];
+    let countryName = newCountry;
+    let phoneLengthInfo = null;
+
+    if (countryRules) {
+      countryName = countryRules.country_name;
+      carriers = Object.keys(countryRules.carrier_codes || {}).sort();
+
+      // Provide phone length validation info
+      const phoneLengthRules: Record<string, { min: number; max: number; example: string }> = {
+        'US': { min: 12, max: 12, example: '+1234567890' },
+        'GB': { min: 13, max: 13, example: '+441234567890' },
+        'NG': { min: 14, max: 14, example: '+234801234567' },
+        'TR': { min: 13, max: 13, example: '+905551234567' },
+      };
+
+      phoneLengthInfo = phoneLengthRules[newCountry] || {
+        min: 12,
+        max: 15,
+        example: '+followed by country and subscriber codes'
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      country: newCountry,
+      countryName,
+      carriers,
+      phoneLengthInfo,
+      updatedAt: updateResult.updated_at,
+      requestId
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    logger.error('Error in select-country endpoint', {
+      error: errorMessage,
+      requestId
+    });
+    res.status(500).json({
+      error: 'Failed to set country',
+      requestId
+    });
+  }
+});
 
 // ============================================
 // CALLER ID VERIFICATION ENDPOINTS

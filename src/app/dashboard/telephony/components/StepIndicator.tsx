@@ -3,7 +3,7 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 
-type WizardStep = 'phone_input' | 'verification' | 'carrier_selection' | 'forwarding_code' | 'confirmation';
+type WizardStep = 'country_selection' | 'phone_input' | 'verification' | 'carrier_selection' | 'forwarding_code' | 'confirmation';
 
 interface StepIndicatorProps {
   currentStep: WizardStep;
@@ -11,6 +11,7 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
   const steps: Array<{ id: WizardStep; label: string }> = [
+    { id: 'country_selection', label: 'Country' },
     { id: 'phone_input', label: 'Phone' },
     { id: 'verification', label: 'Verify' },
     { id: 'carrier_selection', label: 'Configure' },

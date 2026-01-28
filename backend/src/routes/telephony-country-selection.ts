@@ -11,22 +11,11 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../config/supabase';
 import { requireAuthOrDev } from '../middleware/auth';
 import { orgRateLimit } from '../middleware/org-rate-limiter';
 import { log } from '../services/logger';
 import * as GSMCodeGeneratorV2 from '../services/gsm-code-generator-v2';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      persistSession: false,
-    },
-  }
-);
 
 const router = Router();
 
@@ -123,7 +112,7 @@ router.post(
       });
 
       // Step 1: Validate country is supported and active
-      const { data: countryRules, error: countryError } = await supabase
+      const { data: countryRules, error: countryError } = await supabaseAdmin
         .from('carrier_forwarding_rules')
         .select('country_name, recommended_twilio_country, carrier_codes, warning_message')
         .eq('country_code', countryCode)
@@ -144,11 +133,22 @@ router.post(
         return;
       }
 
-      // Step 2: Update organization's telephony_country
-      const { error: updateError } = await supabase
+      // Step 2: Update organization's telephony_country with optimistic locking
+      // Fetch current updated_at timestamp first to prevent race conditions
+      const { data: currentOrg } = await supabaseAdmin
         .from('organizations')
-        .update({ telephony_country: countryCode })
-        .eq('id', orgId);
+        .select('updated_at')
+        .eq('id', orgId)
+        .single();
+
+      const { error: updateError } = await supabaseAdmin
+        .from('organizations')
+        .update({
+          telephony_country: countryCode,
+          updated_at: new Date().toISOString() // Trigger optimistic locking
+        })
+        .eq('id', orgId)
+        .eq('updated_at', currentOrg?.updated_at); // Only update if not modified since read
 
       if (updateError) {
         log.error('TelephonyCountrySelection', 'Failed to update organization', {
@@ -326,7 +326,7 @@ router.get(
       }
 
       // Get country name from database
-      const { data: countryData } = await supabase
+      const { data: countryData } = await supabaseAdmin
         .from('carrier_forwarding_rules')
         .select('country_name')
         .eq('country_code', countryCode)

@@ -15,22 +15,45 @@
  * - Multi-tenant isolation
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../config/supabase';
 import twilio from 'twilio';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { safeCall } from './safe-call';
 import { log } from './logger';
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      persistSession: false,
-    },
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Validate Twilio SID format
+ * Twilio SIDs are 34 characters starting with 'PN' for phone numbers
+ * @param sid - Twilio resource SID
+ * @returns True if valid format
+ */
+function isValidTwilioSid(sid: string): boolean {
+  return /^PN[a-f0-9]{32}$/i.test(sid);
+}
+
+/**
+ * Redact phone number for logging (PII protection)
+ * Shows only country code and last 4 digits
+ * @param phoneNumber - E.164 format phone number
+ * @returns Redacted phone number (e.g., "+1******1234")
+ */
+function redactPhoneNumber(phoneNumber: string): string {
+  if (!phoneNumber || phoneNumber.length < 8) {
+    return '****';
   }
-);
+
+  const countryCodeMatch = phoneNumber.match(/^\+(\d{1,3})/);
+  const countryCode = countryCodeMatch ? countryCodeMatch[0] : '+***';
+  const last4 = phoneNumber.slice(-4);
+  const middleLength = phoneNumber.length - countryCode.length - 4;
+  const redacted = '*'.repeat(Math.max(0, middleLength));
+
+  return `${countryCode}${redacted}${last4}`;
+}
 
 // ============================================
 // Type Definitions
@@ -85,7 +108,7 @@ export class TelephonyProvisioningService {
       });
 
       // Step 1: Lookup smart routing rule from carrier_forwarding_rules
-      const { data: routingRule, error: routingError } = await supabase
+      const { data: routingRule, error: routingError } = await supabaseAdmin
         .from('carrier_forwarding_rules')
         .select('recommended_twilio_country, country_name')
         .eq('country_code', userCountry)
@@ -164,7 +187,7 @@ export class TelephonyProvisioningService {
 
       log.info('TelephonyProvisioning', 'Available number found', {
         orgId,
-        selectedNumber,
+        selectedNumber: redactPhoneNumber(selectedNumber),
         totalAvailable: searchResult.length,
       });
 
@@ -205,12 +228,12 @@ export class TelephonyProvisioningService {
 
       log.info('TelephonyProvisioning', 'Number purchased successfully', {
         orgId,
-        purchasedNumber,
+        purchasedNumber: redactPhoneNumber(purchasedNumber),
         sid: purchaseResult.sid,
       });
 
       // Step 5: Store in organizations table (with automatic rollback on failure)
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('organizations')
         .update({
           telephony_country: userCountry,
@@ -222,7 +245,7 @@ export class TelephonyProvisioningService {
       if (updateError) {
         log.error('TelephonyProvisioning', 'DB update failed - rolling back Twilio purchase', {
           orgId,
-          purchasedNumber,
+          purchasedNumber: redactPhoneNumber(purchasedNumber),
           error: updateError,
         });
 
@@ -231,13 +254,13 @@ export class TelephonyProvisioningService {
           await twilioClient.incomingPhoneNumbers(purchaseResult.sid).remove();
           log.info('TelephonyProvisioning', 'Rollback successful - number released', {
             orgId,
-            purchasedNumber,
+            purchasedNumber: redactPhoneNumber(purchasedNumber),
             sid: purchaseResult.sid,
           });
         } catch (rollbackError: any) {
           log.error('TelephonyProvisioning', 'CRITICAL: Rollback failed - orphaned number', {
             orgId,
-            purchasedNumber,
+            purchasedNumber: redactPhoneNumber(purchasedNumber),
             sid: purchaseResult.sid,
             rollbackError: rollbackError.message,
           });
@@ -259,7 +282,7 @@ export class TelephonyProvisioningService {
       log.info('TelephonyProvisioning', 'Provisioning complete', {
         orgId,
         userCountry,
-        provisionedNumber: purchasedNumber,
+        provisionedNumber: redactPhoneNumber(purchasedNumber),
         provisionedCountry: provisionCountry,
       });
 
@@ -298,7 +321,7 @@ export class TelephonyProvisioningService {
       log.info('TelephonyProvisioning', 'Starting number release', { orgId });
 
       // Step 1: Get assigned number from organizations table
-      const { data: org, error: orgError } = await supabase
+      const { data: org, error: orgError } = await supabaseAdmin
         .from('organizations')
         .select('assigned_twilio_number')
         .eq('id', orgId)
@@ -349,10 +372,10 @@ export class TelephonyProvisioningService {
       if (!numbersResult || numbersResult.length === 0) {
         log.warn('TelephonyProvisioning', 'Number not found in Twilio', {
           orgId,
-          numberToRelease,
+          numberToRelease: redactPhoneNumber(numberToRelease),
         });
         // Clear from database anyway
-        await supabase
+        await supabaseAdmin
           .from('organizations')
           .update({ assigned_twilio_number: null })
           .eq('id', orgId);
@@ -364,6 +387,19 @@ export class TelephonyProvisioningService {
       }
 
       const numberSid = numbersResult[0].sid;
+
+      // Validate Twilio SID format before deletion (prevents invalid API calls)
+      if (!isValidTwilioSid(numberSid)) {
+        log.error('TelephonyProvisioning', 'Invalid Twilio SID format', {
+          orgId,
+          numberToRelease: redactPhoneNumber(numberToRelease),
+          sid: numberSid,
+        });
+        return {
+          success: false,
+          error: 'Invalid Twilio resource identifier. Please contact support.',
+        };
+      }
 
       // Step 4: Release the number
       const releaseResult = await safeCall<any>(
@@ -388,12 +424,12 @@ export class TelephonyProvisioningService {
 
       log.info('TelephonyProvisioning', 'Number released successfully', {
         orgId,
-        releasedNumber: numberToRelease,
+        releasedNumber: redactPhoneNumber(numberToRelease),
         sid: numberSid,
       });
 
       // Step 5: Clear from database
-      const { error: clearError } = await supabase
+      const { error: clearError } = await supabaseAdmin
         .from('organizations')
         .update({ assigned_twilio_number: null })
         .eq('id', orgId);
@@ -429,7 +465,7 @@ export class TelephonyProvisioningService {
    * @returns Current telephony provisioning details
    */
   static async getProvisioningStatus(orgId: string) {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('organizations')
       .select('telephony_country, assigned_twilio_number, forwarding_carrier')
       .eq('id', orgId)

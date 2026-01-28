@@ -114,10 +114,10 @@ export function CountrySelectionStep({
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100/80 dark:bg-blue-900/40 backdrop-blur-sm mb-4">
           <Globe className="w-6 h-6 text-blue-600 dark:text-blue-400" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">
+        <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 mb-2">
           Where is your clinic located?
         </h2>
         <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
@@ -127,7 +127,7 @@ export function CountrySelectionStep({
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+        <div className="bg-red-50/90 dark:bg-red-900/30 backdrop-blur-sm border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -147,22 +147,22 @@ export function CountrySelectionStep({
             key={country.code}
             onClick={() => handleCountryClick(country.code)}
             disabled={isLoading || isLoadingCarriers}
-            className={`relative p-6 rounded-xl border-2 transition-all text-left focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`relative p-6 rounded-xl border transition-all duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
               selectedCountry === country.code
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
-                : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-sm'
+                ? 'border-blue-500 bg-blue-50/90 dark:bg-blue-900/30 backdrop-blur-sm shadow-lg scale-[1.02]'
+                : 'border-gray-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md hover:scale-[1.01]'
             }`}
           >
             {/* Flag */}
             <div className="text-4xl mb-3">{country.flag}</div>
 
             {/* Country Name */}
-            <div className="font-semibold text-base text-gray-900 dark:text-white mb-1">
+            <div className="font-semibold text-base text-gray-900 dark:text-slate-50 mb-1">
               {country.name}
             </div>
 
             {/* Description */}
-            <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">
+            <div className="text-sm text-gray-600 dark:text-slate-300 mb-2">
               {country.description}
             </div>
 
@@ -195,14 +195,14 @@ export function CountrySelectionStep({
 
       {/* Country-Specific Warning (Nigeria/Turkey) */}
       {selectedCountry && countryWarning && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+        <div className="bg-amber-50/90 dark:bg-amber-900/30 backdrop-blur-sm border border-amber-200 dark:border-amber-800 rounded-lg p-4 shadow-sm">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-300 mb-1">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">
                 Important Cost Information
               </p>
-              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+              <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
                 {countryWarning}
               </p>
             </div>
@@ -210,13 +210,14 @@ export function CountrySelectionStep({
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading State - Skeleton Loader */}
       {isLoadingCarriers && (
-        <div className="flex items-center justify-center py-4">
-          <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin mr-2" />
-          <span className="text-sm text-gray-600 dark:text-slate-400">
+        <div className="space-y-3 py-4">
+          <div className="h-4 bg-gradient-to-r from-slate-200 dark:from-slate-700 via-slate-300 dark:via-slate-600 to-slate-200 dark:to-slate-700 rounded animate-pulse"></div>
+          <div className="h-4 bg-gradient-to-r from-slate-200 dark:from-slate-700 via-slate-300 dark:via-slate-600 to-slate-200 dark:to-slate-700 rounded w-3/4 animate-pulse"></div>
+          <div className="text-xs text-center text-gray-600 dark:text-slate-400 mt-2">
             Loading carrier information...
-          </span>
+          </div>
         </div>
       )}
 
@@ -225,10 +226,10 @@ export function CountrySelectionStep({
         <button
           onClick={handleContinue}
           disabled={!selectedCountry || isLoading || isLoadingCarriers}
-          className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+          className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
             !selectedCountry || isLoading || isLoadingCarriers
               ? 'bg-gray-300 dark:bg-slate-700 text-gray-500 dark:text-slate-500 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+              : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-xl hover:scale-[1.02]'
           }`}
         >
           {isLoading || isLoadingCarriers ? (
