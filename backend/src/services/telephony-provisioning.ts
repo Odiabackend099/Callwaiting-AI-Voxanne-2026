@@ -118,26 +118,17 @@ export class TelephonyProvisioningService {
         const credentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
         twilioClient = twilio(credentials.accountSid, credentials.authToken);
       } catch (credError: any) {
-        // Fallback to environment Twilio (if platform provides numbers)
-        if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-          log.info('TelephonyProvisioning', 'Using platform Twilio account', {
-            orgId,
-          });
-          twilioClient = twilio(
-            process.env.TWILIO_ACCOUNT_SID,
-            process.env.TWILIO_AUTH_TOKEN
-          );
-        } else {
-          log.error('TelephonyProvisioning', 'No Twilio credentials available', {
-            orgId,
-            error: credError.message,
-          });
-          return {
-            success: false,
-            error: 'No Twilio credentials available. Please connect your Twilio account.',
-            errorCode: 'NO_CREDENTIALS',
-          };
-        }
+        // SECURITY: No fallback to platform credentials (Fortress Protocol)
+        // Organizations must provide their own Twilio BYOC credentials
+        log.error('TelephonyProvisioning', 'No Twilio credentials available', {
+          orgId,
+          error: credError.message,
+        });
+        return {
+          success: false,
+          error: 'No Twilio credentials available. Please connect your Twilio account in Settings > Integrations.',
+          errorCode: 'NO_CREDENTIALS',
+        };
       }
 
       // Step 3: Search for available Twilio numbers in recommended country
@@ -218,7 +209,7 @@ export class TelephonyProvisioningService {
         sid: purchaseResult.sid,
       });
 
-      // Step 5: Store in organizations table
+      // Step 5: Store in organizations table (with automatic rollback on failure)
       const { error: updateError } = await supabase
         .from('organizations')
         .update({
@@ -229,14 +220,38 @@ export class TelephonyProvisioningService {
         .eq('id', orgId);
 
       if (updateError) {
-        log.error('TelephonyProvisioning', 'Failed to update organization', {
+        log.error('TelephonyProvisioning', 'DB update failed - rolling back Twilio purchase', {
           orgId,
+          purchasedNumber,
           error: updateError,
         });
-        // Number was purchased but DB update failed - log for manual cleanup
+
+        // CRITICAL: Rollback the Twilio purchase to prevent orphaned numbers
+        try {
+          await twilioClient.incomingPhoneNumbers(purchaseResult.sid).remove();
+          log.info('TelephonyProvisioning', 'Rollback successful - number released', {
+            orgId,
+            purchasedNumber,
+            sid: purchaseResult.sid,
+          });
+        } catch (rollbackError: any) {
+          log.error('TelephonyProvisioning', 'CRITICAL: Rollback failed - orphaned number', {
+            orgId,
+            purchasedNumber,
+            sid: purchaseResult.sid,
+            rollbackError: rollbackError.message,
+          });
+          // TODO: Send Slack alert for manual cleanup
+          // await sendSlackAlert('🚨 Orphaned Twilio Number', {
+          //   orgId,
+          //   number: purchasedNumber,
+          //   sid: purchaseResult.sid
+          // });
+        }
+
         return {
           success: false,
-          error: 'Number provisioned but failed to save to database. Contact support.',
+          error: 'Failed to save number configuration. Please try again.',
           errorCode: 'DB_UPDATE_FAILED',
         };
       }
@@ -307,21 +322,15 @@ export class TelephonyProvisioningService {
         const credentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
         twilioClient = twilio(credentials.accountSid, credentials.authToken);
       } catch (credError: any) {
-        // Fallback to environment Twilio
-        if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-          twilioClient = twilio(
-            process.env.TWILIO_ACCOUNT_SID,
-            process.env.TWILIO_AUTH_TOKEN
-          );
-        } else {
-          log.error('TelephonyProvisioning', 'No Twilio credentials for release', {
-            orgId,
-          });
-          return {
-            success: false,
-            error: 'No Twilio credentials available to release number',
-          };
-        }
+        // SECURITY: No fallback to platform credentials (Fortress Protocol)
+        log.error('TelephonyProvisioning', 'No Twilio credentials for release', {
+          orgId,
+          error: credError.message,
+        });
+        return {
+          success: false,
+          error: 'No Twilio credentials available to release number. Please connect your Twilio account.',
+        };
       }
 
       // Step 3: Find the number resource SID
