@@ -339,29 +339,40 @@ integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res:
     }
 
     const orgId = (req as any).user.orgId;
-    const { vapiPhoneId, phoneNumber } = req.body;
+    const { vapiPhoneId, phoneNumber, phoneNumberId, role = 'inbound' } = req.body;
 
-    if (!vapiPhoneId) {
-      return res.status(400).json({ success: false, error: 'vapiPhoneId is required' });
+    // Support both old format (vapiPhoneId) and new format (phoneNumberId)
+    const phoneId = phoneNumberId || vapiPhoneId;
+
+    if (!phoneId) {
+      return res.status(400).json({ success: false, error: 'phoneNumberId or vapiPhoneId is required' });
     }
 
-    // 1. Get Inbound Agent
+    // Validate role
+    if (role !== 'inbound' && role !== 'outbound') {
+      return res.status(400).json({ success: false, error: 'role must be either "inbound" or "outbound"' });
+    }
+
+    // 1. Get Agent (inbound or outbound based on role)
     const { data: agent, error: agentError } = await supabase
       .from('agents')
       .select('id, vapi_assistant_id')
       .eq('org_id', orgId)
-      .eq('role', 'inbound')
+      .eq('role', role)
       .single();
 
     if (agentError || !agent || !agent.vapi_assistant_id) {
-      return res.status(400).json({ success: false, error: 'Inbound agent not configured or synced to Vapi' });
+      return res.status(400).json({
+        success: false,
+        error: `${role.charAt(0).toUpperCase() + role.slice(1)} agent not configured or synced to Vapi`
+      });
     }
 
     const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
     if (!VAPI_PRIVATE_KEY) throw new Error('VAPI_PRIVATE_KEY missing');
 
     // 2. Assign Assistant in Vapi
-    const updateRes = await fetch(`https://api.vapi.ai/phone-number/${vapiPhoneId}`, {
+    const updateRes = await fetch(`https://api.vapi.ai/phone-number/${phoneId}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
@@ -375,31 +386,41 @@ integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res:
       return res.status(400).json({ success: false, error: `Failed to assign agent: ${errorText}` });
     }
 
-    // 3. Update Database (user_phone_numbers)
-    // We update local DB to reflect this assignment.
-    // If we only have vapiPhoneId, and want to store it, we might need to know the number string too.
-    // Ideally the frontend passes both, or we fetch details from Vapi. 
-    // Assuming frontend passes phoneNumber for convenience, OR we look it up.
+    // 3. Update Database
+    if (role === 'inbound') {
+      // Update inbound_agent_config or user_phone_numbers for inbound
+      if (phoneNumber) {
+        const { error: dbUpdateError } = await supabase
+          .from('user_phone_numbers')
+          .upsert({
+            org_id: orgId,
+            phone_number: phoneNumber,
+            vapi_phone_id: phoneId,
+            assigned_agent_id: agent.id,
+            vapi_synced_at: new Date().toISOString()
+          }, { onConflict: 'phone_number, org_id' });
 
-    // Upsert or Update check
-    if (phoneNumber) {
+        if (dbUpdateError) {
+          log.warn('integrations', 'DB update failed after Vapi sync', { error: dbUpdateError.message });
+        }
+      }
+    } else if (role === 'outbound') {
+      // Update agents table with phone number ID (single source of truth)
       const { error: dbUpdateError } = await supabase
-        .from('user_phone_numbers')
-        .upsert({
-          org_id: orgId,
-          phone_number: phoneNumber,
-          vapi_phone_id: vapiPhoneId,
-          assigned_agent_id: agent.id,
-          vapi_synced_at: new Date().toISOString()
-        }, { onConflict: 'phone_number, org_id' }); // Assuming composite key
+        .from('agents')
+        .update({
+          vapi_phone_number_id: phoneId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('role', 'outbound')
+        .eq('org_id', orgId);
 
       if (dbUpdateError) {
-        log.warn('integrations', 'DB update failed after Vapi sync', { error: dbUpdateError.message });
-        // We don't fail the request since Vapi sync worked.
+        log.warn('integrations', 'Failed to update outbound agent phone number', { error: dbUpdateError.message });
       }
     }
 
-    res.json({ success: true, message: 'Agent assigned to number' });
+    res.json({ success: true, message: `${role.charAt(0).toUpperCase() + role.slice(1)} agent assigned to number` });
 
   } catch (error: any) {
     log.error('integrations', 'Assign error', { error: error.message });

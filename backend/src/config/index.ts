@@ -127,6 +127,21 @@ export const config = {
   GOOGLE_REDIRECT_URI: getOptional('GOOGLE_REDIRECT_URI'),
 
   // ========================================================================
+  // STRIPE BILLING (Optional)
+  // ========================================================================
+  STRIPE_SECRET_KEY: getOptional('STRIPE_SECRET_KEY'),
+  STRIPE_WEBHOOK_SECRET: getOptional('STRIPE_WEBHOOK_SECRET'),
+  STRIPE_STARTER_PRICE_ID: getOptional('STRIPE_STARTER_PRICE_ID'),
+  STRIPE_STARTER_OVERAGE_PRICE_ID: getOptional('STRIPE_STARTER_OVERAGE_PRICE_ID'),
+  STRIPE_STARTER_SETUP_PRICE_ID: getOptional('STRIPE_STARTER_SETUP_PRICE_ID'),
+  STRIPE_PROFESSIONAL_PRICE_ID: getOptional('STRIPE_PROFESSIONAL_PRICE_ID'),
+  STRIPE_PROFESSIONAL_OVERAGE_PRICE_ID: getOptional('STRIPE_PROFESSIONAL_OVERAGE_PRICE_ID'),
+  STRIPE_PROFESSIONAL_SETUP_PRICE_ID: getOptional('STRIPE_PROFESSIONAL_SETUP_PRICE_ID'),
+  STRIPE_ENTERPRISE_PRICE_ID: getOptional('STRIPE_ENTERPRISE_PRICE_ID'),
+  STRIPE_ENTERPRISE_OVERAGE_PRICE_ID: getOptional('STRIPE_ENTERPRISE_OVERAGE_PRICE_ID'),
+  STRIPE_ENTERPRISE_SETUP_PRICE_ID: getOptional('STRIPE_ENTERPRISE_SETUP_PRICE_ID'),
+
+  // ========================================================================
   // OPENAI (Optional)
   // ========================================================================
   OPENAI_API_KEY: getOptional('OPENAI_API_KEY'),

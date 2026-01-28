@@ -28,18 +28,20 @@ export default function CTA({ onBookDemo }: { onBookDemo?: () => void }) {
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <button
-                            onClick={onBookDemo}
-                            className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300 shadow-[0_0_40px_rgba(255,255,255,0.3)]"
-                        >
-                            Start Free Trial
-                        </button>
-                        <button
-                            onClick={onBookDemo}
-                            className="px-10 py-5 bg-transparent border-2 border-white text-white text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300"
-                        >
-                            Book Demo Now
-                        </button>
+                        <a href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer">
+                            <button
+                                className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300 shadow-[0_0_40px_rgba(255,255,255,0.3)]"
+                            >
+                                Start Free Trial
+                            </button>
+                        </a>
+                        <a href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer">
+                            <button
+                                className="px-10 py-5 bg-transparent border-2 border-white text-white text-xl font-bold rounded-full hover:scale-105 transition-transform duration-300"
+                            >
+                                Book Demo Now
+                            </button>
+                        </a>
                     </div>
                 </motion.div>
             </div>

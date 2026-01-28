@@ -1,9 +1,12 @@
 import { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft, FileText, Video, Download, BookOpen } from "lucide-react";
+import { FileText, Video, Download, BookOpen } from "lucide-react";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-    title: "Resources - CallWaiting AI",
+    title: "Resources - Voxanne AI",
     description: "Guides, templates, and resources for medical practice management",
 };
 
@@ -26,7 +29,7 @@ const resources = [
         title: "Phone Script Templates",
         type: "PDF Guide",
         icon: BookOpen,
-        description: "Proven scripts for BBL, Rhinoplasty, and Botox consultations",
+        description: "Proven scripts for consultations, bookings, and customer inquiries",
         downloadUrl: "/resources/phone-scripts.pdf"
     },
     {
@@ -40,99 +43,92 @@ const resources = [
         title: "Setup Walkthrough Video",
         type: "Video",
         icon: Video,
-        description: "5-minute video showing how to set up Call Waiting AI from scratch",
+        description: "5-minute video showing how to set up Voxanne AI from scratch",
         downloadUrl: "/resources/setup-video"
     },
     {
-        title: "Integration Guide: Mindbody",
+        title: "Integration Guide: Google Calendar",
         type: "PDF Guide",
         icon: FileText,
-        description: "Step-by-step guide to connect Call Waiting AI with your Mindbody account",
-        downloadUrl: "/resources/mindbody-integration.pdf"
+        description: "Step-by-step guide to connect Voxanne AI with your Google Calendar",
+        downloadUrl: "/resources/calendar-integration.pdf"
     }
 ];
 
 export default function ResourcesPage() {
     return (
-        <main className="min-h-screen bg-black text-white">
-            {/* Header */}
-            <section className="py-24 px-6 bg-gradient-to-b from-slate-950 to-black border-b border-white/5">
-                <div className="container mx-auto max-w-6xl">
-                    <Link
-                        href="/"
-                        className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors mb-8"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Home
-                    </Link>
-                    <h1 className="text-4xl md:text-6xl font-bold mb-6">
+        <div className="min-h-screen bg-white">
+            <Navbar />
+
+            <main className="max-w-7xl mx-auto px-4 py-16">
+                {/* Header */}
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl md:text-5xl font-bold text-navy-900 mb-4">
                         Resources & Downloads
                     </h1>
-                    <p className="text-xl text-slate-400">
-                        Free guides, templates, and tools to help you maximize your practice's potential.
+                    <p className="text-lg text-slate-600">
+                        Free guides, templates, and tools to help you maximize your practice's potential
                     </p>
                 </div>
-            </section>
 
-            {/* Resources Grid */}
-            <section className="py-16 px-6">
-                <div className="container mx-auto max-w-6xl">
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {resources.map((resource, index) => (
-                            <div
-                                key={index}
-                                className="group p-8 rounded-3xl bg-slate-900/50 border border-white/10 hover:border-cyan-500/30 transition-all duration-300"
-                            >
-                                <div className="w-14 h-14 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 mb-6 group-hover:scale-110 transition-transform">
+                {/* Resources Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
+                    {resources.map((resource) => (
+                        <Card key={resource.title} className="hover:shadow-lg transition-shadow border-slate-100">
+                            <CardHeader>
+                                <div className="w-14 h-14 rounded-2xl bg-surgical-50 flex items-center justify-center text-surgical-600 mb-4">
                                     <resource.icon className="w-7 h-7" />
                                 </div>
-
-                                <div className="inline-block px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs font-medium mb-4">
+                                <div className="inline-block px-3 py-1 rounded-full bg-slate-50 text-slate-600 text-xs font-medium mb-3">
                                     {resource.type}
                                 </div>
-
-                                <h3 className="text-xl font-bold text-white mb-3">
+                                <CardTitle className="text-navy-900">
                                     {resource.title}
-                                </h3>
-
-                                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                                </CardTitle>
+                                <CardDescription className="text-slate-600">
                                     {resource.description}
-                                </p>
-
-                                <a
-                                    href={resource.downloadUrl}
-                                    className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 font-medium text-sm group-hover:gap-3 transition-all"
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button
+                                    className="w-full bg-surgical-600 hover:bg-surgical-700 text-white rounded-full"
+                                    asChild
                                 >
-                                    <Download className="w-4 h-4" />
-                                    Download Free
-                                </a>
-                            </div>
-                        ))}
-                    </div>
+                                    <a href={resource.downloadUrl} download>
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Download Free
+                                    </a>
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
-            </section>
 
-            {/* Newsletter CTA */}
-            <section className="py-16 px-6 border-t border-white/5">
-                <div className="container mx-auto max-w-4xl text-center">
-                    <h3 className="text-3xl font-bold text-white mb-4">
+                {/* Newsletter CTA */}
+                <div className="bg-slate-50 rounded-2xl p-8 md:p-12 text-center">
+                    <h3 className="text-3xl font-bold text-navy-900 mb-4">
                         Get New Resources Delivered Weekly
                     </h3>
-                    <p className="text-slate-400 mb-8">
-                        Join 500+ medical practice owners getting actionable insights every Tuesday.
+                    <p className="text-slate-600 mb-8 max-w-2xl mx-auto">
+                        Join 500+ medical practice owners getting actionable insights every Tuesday
                     </p>
                     <form className="flex gap-4 max-w-md mx-auto">
                         <input
                             type="email"
                             placeholder="Enter your email"
-                            className="flex-1 px-4 py-3 rounded-lg bg-slate-900 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50"
+                            className="flex-1 px-4 py-3 rounded-lg bg-white border border-slate-200 text-navy-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-surgical-600 focus:border-surgical-600"
                         />
-                        <button className="px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
+                        <Button
+                            type="submit"
+                            className="px-6 py-3 rounded-full bg-surgical-600 text-white font-semibold hover:bg-surgical-700 transition-colors"
+                        >
                             Subscribe
-                        </button>
+                        </Button>
                     </form>
                 </div>
-            </section>
-        </main>
+            </main>
+
+            <Footer />
+        </div>
     );
 }

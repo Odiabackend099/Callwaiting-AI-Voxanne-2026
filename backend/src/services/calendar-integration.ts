@@ -2,12 +2,34 @@
  * Google Calendar Integration Service
  * Handles Google Calendar availability checks and event creation
  * Supports OAuth flow for clinic managers to connect their calendars
- * 
+ *
  * Uses googleapis library with OAuth2 authentication
+ *
+ * 2026 Update: Circuit breaker pattern via safeCall for resilience
  */
 
 import { log } from './logger';
 import { getCalendarClient } from './google-oauth-service';
+import { safeCall } from './safe-call';
+
+// Google Calendar API response types
+interface FreeBusyResponse {
+  data: {
+    calendars?: {
+      primary?: {
+        busy?: Array<{ start?: string; end?: string }>;
+      };
+    };
+  };
+}
+
+interface CalendarEventResponse {
+  data: {
+    id?: string;
+    htmlLink?: string;
+    hangoutLink?: string;
+  };
+}
 
 export interface CalendarEvent {
   title: string;
@@ -55,17 +77,33 @@ export async function getAvailableSlots(
     const startOfDay = `${date}T00:00:00`;
     const endOfDay = `${date}T23:59:59`;
 
-    const response = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: new Date(`${startOfDay}`).toISOString(),
-        timeMax: new Date(`${endOfDay}`).toISOString(),
-        items: [{ id: 'primary' }],
-        timeZone
-      }
-    });
+    // Use safeCall for circuit breaker protection
+    const result = await safeCall(
+      'google_calendar_freebusy',
+      () => calendar.freebusy.query({
+        requestBody: {
+          timeMin: new Date(`${startOfDay}`).toISOString(),
+          timeMax: new Date(`${endOfDay}`).toISOString(),
+          items: [{ id: 'primary' }],
+          timeZone
+        }
+      }),
+      { retries: 2, backoffMs: 1000, timeoutMs: 10000 }
+    );
+
+    if (!result.success) {
+      log.error('CalendarIntegration', 'Circuit breaker: freebusy query failed', {
+        orgId,
+        date,
+        circuitOpen: result.circuitOpen,
+        error: result.error?.message || result.userMessage
+      });
+      throw new Error(result.userMessage || 'Google Calendar service temporarily unavailable');
+    }
 
     // Extract busy periods
-    const busyPeriods = response.data.calendars?.primary?.busy || [];
+    const response = result.data as FreeBusyResponse;
+    const busyPeriods = response?.data?.calendars?.primary?.busy || [];
     const busyTimes = new Set<string>();
 
     for (const period of busyPeriods) {
@@ -163,59 +201,68 @@ export async function createCalendarEvent(
       attendee: event.attendeeEmail
     });
 
-    // Create event using googleapis with 5-second timeout
-    log.info('CalendarIntegration', '[STEP 4] Calling calendar.events.insert with 5s timeout', { orgId });
-    
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Google Calendar API timeout: No response within 5 seconds')), 5000);
-    });
+    // Create event using googleapis with circuit breaker protection
+    log.info('CalendarIntegration', '[STEP 4] Calling calendar.events.insert with circuit breaker', { orgId });
 
-    const insertPromise = calendar.events.insert({
-      calendarId: 'primary',
-      requestBody: {
-      summary: event.title,
-      description: event.description,
-      start: {
-        dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-      },
-      attendees: [
-        {
-          email: event.attendeeEmail,
-          responseStatus: 'needsAction'
-        }
-      ],
-      conferenceData: event.googleMeetUrl
-        ? {
-            entryPoints: [
-              {
-                entryPointType: 'video',
-                uri: event.googleMeetUrl
+    const insertResult = await safeCall(
+      'google_calendar_insert',
+      () => calendar.events.insert({
+        calendarId: 'primary',
+        requestBody: {
+          summary: event.title,
+          description: event.description,
+          start: {
+            dateTime: startDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+          },
+          end: {
+            dateTime: endDate.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+          },
+          attendees: [
+            {
+              email: event.attendeeEmail,
+              responseStatus: 'needsAction'
+            }
+          ],
+          conferenceData: event.googleMeetUrl
+            ? {
+                entryPoints: [
+                  {
+                    entryPointType: 'video',
+                    uri: event.googleMeetUrl
+                  }
+                ]
               }
-            ]
-          }
-          : undefined,
-        sendUpdates: 'all' // Send email notifications to attendees
-      }
-    });
+            : undefined,
+          sendUpdates: 'all' // Send email notifications to attendees
+        }
+      }),
+      { retries: 2, backoffMs: 1000, timeoutMs: 10000 }
+    );
 
-    const result = await Promise.race([insertPromise, timeoutPromise]);
+    if (!insertResult.success) {
+      log.error('CalendarIntegration', '[CIRCUIT BREAKER] Calendar event creation failed', {
+        orgId,
+        circuitOpen: insertResult.circuitOpen,
+        error: insertResult.error?.message || insertResult.userMessage
+      });
+      throw new Error(insertResult.userMessage || 'Google Calendar service temporarily unavailable');
+    }
+
+    const result = insertResult.data as CalendarEventResponse;
 
     log.info('CalendarIntegration', '[STEP 5] ✅ Calendar event created successfully', {
       orgId,
-      eventId: result.data.id,
+      eventId: result?.data?.id,
       title: event.title,
       attendee: event.attendeeEmail,
-      htmlLink: result.data.htmlLink
+      htmlLink: result?.data?.htmlLink
     });
 
     const returnValue = {
-      eventId: result.data.id || '',
-      eventUrl: result.data.htmlLink || ''
+      eventId: result?.data?.id || '',
+      eventUrl: result?.data?.htmlLink || ''
     };
     
     log.info('CalendarIntegration', '[END] createCalendarEvent SUCCESS', {
@@ -256,18 +303,34 @@ export async function checkAvailability(
     // Get authenticated calendar client
     const calendar = await getCalendarClient(orgId);
 
-    // Use freebusy.query to check if time slot is free
-    const response = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: new Date(startTime).toISOString(),
-        timeMax: new Date(endTime).toISOString(),
-        items: [{ id: 'primary' }],
-        timeZone
+    // Use safeCall for circuit breaker protection
+    const result = await safeCall(
+      'google_calendar_freebusy',
+      () => calendar.freebusy.query({
+        requestBody: {
+          timeMin: new Date(startTime).toISOString(),
+          timeMax: new Date(endTime).toISOString(),
+          items: [{ id: 'primary' }],
+          timeZone
         }
-    });
+      }),
+      { retries: 2, backoffMs: 1000, timeoutMs: 10000 }
+    );
+
+    if (!result.success) {
+      log.error('CalendarIntegration', 'Circuit breaker: availability check failed', {
+        orgId,
+        startTime,
+        endTime,
+        circuitOpen: result.circuitOpen,
+        error: result.error?.message || result.userMessage
+      });
+      throw new Error(result.userMessage || 'Google Calendar service temporarily unavailable');
+    }
 
     // Check if there are any busy periods
-    const busyPeriods = response.data.calendars?.primary?.busy || [];
+    const response = result.data as FreeBusyResponse;
+    const busyPeriods = response?.data?.calendars?.primary?.busy || [];
     const isAvailable = busyPeriods.length === 0;
 
     log.info('CalendarIntegration', 'Availability checked', {

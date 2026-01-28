@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
 import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
+import { VoiceSelector } from '@/components/VoiceSelector';
 
 const AGENT_CONFIG_CONSTRAINTS = {
     MIN_DURATION_SECONDS: 60,
@@ -20,13 +21,22 @@ interface Voice {
     name: string;
     gender: string;
     provider: string;
+    language: string;
+    characteristics: string;
+    accent: string;
+    bestFor: string;
+    latency: string;
+    quality: string;
     isDefault?: boolean;
+    requiresApiKey?: boolean;
 }
 
 interface AgentConfig {
+    name: string;
     systemPrompt: string;
     firstMessage: string;
     voice: string;
+    voiceProvider?: string; // NEW: Voice provider from voice registry
     language: string;
     maxDuration: number;
 }
@@ -51,6 +61,8 @@ export default function AgentConfigPage() {
     const [savingAgent, setSavingAgent] = useState<'inbound' | 'outbound' | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const [voices, setVoices] = useState<Voice[]>([]);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
@@ -75,9 +87,11 @@ export default function AgentConfigPage() {
 
     // Helper to check equality
     const areConfigsEqual = (a: AgentConfig, b: AgentConfig) => {
-        return a.systemPrompt === b.systemPrompt &&
+        return a.name === b.name &&
+            a.systemPrompt === b.systemPrompt &&
             a.firstMessage === b.firstMessage &&
             a.voice === b.voice &&
+            a.voiceProvider === b.voiceProvider &&
             a.language === b.language &&
             a.maxDuration === b.maxDuration;
     };
@@ -119,6 +133,7 @@ export default function AgentConfigPage() {
 
                     if (inboundAgent) {
                         const loadedConfig = {
+                            name: inboundAgent.name || 'Inbound Agent',
                             systemPrompt: inboundAgent.system_prompt || '',
                             firstMessage: inboundAgent.first_message || '',
                             voice: inboundAgent.voice || '',
@@ -147,6 +162,7 @@ export default function AgentConfigPage() {
 
                     if (outboundAgent) {
                         const loadedConfig = {
+                            name: outboundAgent.name || 'Outbound Agent',
                             systemPrompt: outboundAgent.system_prompt || '',
                             firstMessage: outboundAgent.first_message || '',
                             voice: outboundAgent.voice || '',
@@ -227,6 +243,7 @@ export default function AgentConfigPage() {
     const hasAgentChanged = (current: AgentConfig, original: AgentConfig | null): boolean => {
         if (!original) return hasValidConfig(current);
         return (
+            current.name !== original.name ||
             current.systemPrompt !== original.systemPrompt ||
             current.firstMessage !== original.firstMessage ||
             current.voice !== original.voice ||
@@ -296,9 +313,11 @@ export default function AgentConfigPage() {
                 }
 
                 payload.inbound = {
+                    name: inboundConfig.name,
                     systemPrompt: inboundConfig.systemPrompt,
                     firstMessage: inboundConfig.firstMessage,
                     voiceId: inboundConfig.voice,
+                    voiceProvider: inboundConfig.voiceProvider, // NEW: Include voice provider
                     language: inboundConfig.language,
                     maxDurationSeconds: inboundConfig.maxDuration
                 };
@@ -314,9 +333,11 @@ export default function AgentConfigPage() {
                 }
 
                 payload.outbound = {
+                    name: outboundConfig.name,
                     systemPrompt: outboundConfig.systemPrompt,
                     firstMessage: outboundConfig.firstMessage,
                     voiceId: outboundConfig.voice,
+                    voiceProvider: outboundConfig.voiceProvider, // NEW: Include voice provider
                     language: outboundConfig.language,
                     maxDurationSeconds: outboundConfig.maxDuration,
                     vapiPhoneNumberId: selectedOutboundNumberId || null
@@ -398,6 +419,45 @@ export default function AgentConfigPage() {
         }
     };
 
+    const handleDelete = async () => {
+        try {
+            setIsDeleting(true);
+            setError(null);
+
+            const response = await authedBackendFetch<any>(
+                `/api/founder-console/agent/${activeTab}`,
+                {
+                    method: 'DELETE',
+                }
+            );
+
+            if (!response?.success) {
+                throw new Error(response?.error || 'Failed to delete agent');
+            }
+
+            // Clear local state
+            if (activeTab === 'inbound') {
+                setInboundConfig(INITIAL_CONFIG);
+                setOriginalInboundConfig(null);
+                setServerInbound(null);
+                setSelectedNumberId('');
+            } else {
+                setOutboundConfig(INITIAL_CONFIG);
+                setOriginalOutboundConfig(null);
+                setServerOutbound(null);
+                setSelectedOutboundNumberId('');
+            }
+
+            setShowDeleteModal(false);
+
+        } catch (error: any) {
+            setError(error.message || 'Failed to delete agent');
+            setShowDeleteModal(false);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const applyTemplate = (templateId: string, type: 'inbound' | 'outbound') => {
         const templates = type === 'inbound' ? PROMPT_TEMPLATES : OUTBOUND_PROMPT_TEMPLATES;
         const template = templates.find(t => t.id === templateId);
@@ -447,6 +507,38 @@ export default function AgentConfigPage() {
             setError(err.message || 'Failed to assign phone number');
         } finally {
             setAssigningNumber(false);
+        }
+    };
+
+    const handleAssignOutboundNumber = async () => {
+        if (!selectedOutboundNumberId) return;
+        try {
+            setAssigningOutboundNumber(true);
+            setError(null);
+
+            const selectedNumObj = vapiNumbers.find(n => n.id === selectedOutboundNumberId);
+            const phoneNumber = selectedNumObj?.number;
+
+            const result = await authedBackendFetch<any>('/api/integrations/vapi/assign-number', {
+                method: 'POST',
+                body: JSON.stringify({
+                    phoneNumberId: selectedOutboundNumberId,
+                    role: 'outbound'
+                })
+            });
+
+            if (result.success) {
+                // Update the original value to reflect the newly assigned number
+                setOriginalOutboundPhoneNumberId(selectedOutboundNumberId);
+                alert('Phone number assigned successfully to outbound agent!');
+            } else {
+                throw new Error(result.error || 'Assignment failed');
+            }
+        } catch (err: any) {
+            console.error('Failed to assign outbound number:', err);
+            setError(err.message || 'Failed to assign phone number');
+        } finally {
+            setAssigningOutboundNumber(false);
         }
     };
 
@@ -526,6 +618,31 @@ export default function AgentConfigPage() {
                                     </>
                                 )}
                             </button>
+
+                            {/* Delete Button - Show only if agent exists */}
+                            {(activeTab === 'inbound' ? originalInboundConfig : originalOutboundConfig) && (
+                                <button
+                                    onClick={() => setShowDeleteModal(true)}
+                                    disabled={isSaving || isDeleting}
+                                    className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium text-sm shadow-sm"
+                                    title="Delete this agent"
+                                >
+                                    <svg
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                        />
+                                    </svg>
+                                    <span className="hidden sm:inline">Delete Agent</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -600,6 +717,30 @@ export default function AgentConfigPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* LEFT COLUMN - Configuration */}
                     <div className="lg:col-span-1 space-y-6">
+                        {/* Agent Identity Card */}
+                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <Bot className="w-5 h-5 text-purple-500" />
+                                Agent Identity
+                            </h3>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Agent Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={currentConfig.name}
+                                    onChange={(e) => setConfig({ ...currentConfig, name: e.target.value.slice(0, 100) })}
+                                    placeholder={activeTab === 'inbound' ? 'Inbound Agent' : 'Outbound Agent'}
+                                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-slate-800 dark:text-white outline-none transition-colors"
+                                    maxLength={100}
+                                />
+                                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                    Give your agent a memorable name (e.g., "Receptionist Robin", "Sales Sarah")
+                                </p>
+                            </div>
+                        </div>
+
                         {/* Status Card (Inbound Only) */}
                         {activeTab === 'inbound' && (
                             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
@@ -681,6 +822,13 @@ export default function AgentConfigPage() {
                                                     </option>
                                                 ))}
                                             </select>
+                                            <button
+                                                onClick={handleAssignOutboundNumber}
+                                                disabled={assigningOutboundNumber || !selectedOutboundNumberId}
+                                                className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                {assigningOutboundNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                            </button>
                                         </div>
                                         <p className="text-xs text-slate-500 mt-2">
                                             This number will be shown as Caller ID when calling leads.
@@ -697,23 +845,18 @@ export default function AgentConfigPage() {
                                 Voice Settings
                             </h3>
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                        Voice Persona
-                                    </label>
-                                    <select
-                                        value={currentConfig.voice}
-                                        onChange={(e) => setConfig({ ...currentConfig, voice: e.target.value })}
-                                        className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                    >
-                                        <option value="">Select a voice...</option>
-                                        {voices.map((voice) => (
-                                            <option key={voice.id} value={voice.id}>
-                                                {voice.name} ({voice.gender}) - {voice.provider}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                {/* Voice Selector Component */}
+                                <VoiceSelector
+                                    voices={voices}
+                                    selected={currentConfig.voice}
+                                    onSelect={(voiceId, provider) => {
+                                        setConfig({
+                                            ...currentConfig,
+                                            voice: voiceId,
+                                            voiceProvider: provider // NEW: Also store voice provider
+                                        });
+                                    }}
+                                />
 
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -830,6 +973,74 @@ export default function AgentConfigPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-red-200 dark:border-red-900">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-full">
+                                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                Delete {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Agent
+                            </h3>
+                        </div>
+
+                        <div className="mb-6 space-y-3">
+                            <p className="text-gray-700 dark:text-gray-300">
+                                Are you sure you want to delete this agent? This action cannot be undone.
+                            </p>
+
+                            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900 rounded-lg p-4 space-y-2">
+                                <p className="text-sm font-medium text-red-800 dark:text-red-400">
+                                    What will be deleted:
+                                </p>
+                                <ul className="text-sm text-red-700 dark:text-red-300 space-y-1 ml-4 list-disc">
+                                    <li>Agent configuration (name, prompts, voice, settings)</li>
+                                    <li>Phone number assignment (if any)</li>
+                                    <li>VAPI assistant registration</li>
+                                </ul>
+                            </div>
+
+                            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900 rounded-lg p-4 space-y-2">
+                                <p className="text-sm font-medium text-blue-800 dark:text-blue-400">
+                                    What will be preserved:
+                                </p>
+                                <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 ml-4 list-disc">
+                                    <li>Historical call logs (for compliance)</li>
+                                    <li>Appointment records</li>
+                                    <li>Contact database</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 font-medium"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    'Delete Agent'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

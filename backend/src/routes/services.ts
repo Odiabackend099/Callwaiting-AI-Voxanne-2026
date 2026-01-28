@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
+import { getCachedServicePricing, invalidateServiceCache } from '../services/cache';
 
 const servicesRouter = Router();
 
@@ -131,6 +132,9 @@ servicesRouter.post('/', async (req: Request, res: Response) => {
       return res.status(500).json({ error: error.message });
     }
 
+    // Invalidate service cache after creation
+    invalidateServiceCache(orgId);
+
     log.info('Services', 'Service created', {
       orgId,
       serviceId: service.id,
@@ -202,6 +206,9 @@ servicesRouter.patch('/:id', async (req: Request, res: Response) => {
       return res.status(500).json({ error: error.message });
     }
 
+    // Invalidate service cache after update
+    invalidateServiceCache(orgId);
+
     log.info('Services', 'Service updated', { orgId, serviceId: id });
 
     return res.json(service);
@@ -251,6 +258,9 @@ servicesRouter.delete('/:id', async (req: Request, res: Response) => {
       log.error('Services', 'DELETE /:id - Database error', { orgId, serviceId: id, error: error.message });
       return res.status(500).json({ error: error.message });
     }
+
+    // Invalidate service cache after deletion
+    invalidateServiceCache(orgId);
 
     log.info('Services', 'Service deleted', { orgId, serviceId: id, serviceName: existing.name });
 

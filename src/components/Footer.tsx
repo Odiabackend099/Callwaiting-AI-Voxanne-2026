@@ -1,68 +1,99 @@
-import Link from 'next/link';
-import Image from 'next/image';
-import { Mail, MapPin, Phone } from 'lucide-react';
-import Logo from "./Logo";
-import { COMPANY_INFO } from '@/lib/constants';
+import Link from "next/link";
+import { ShieldCheck, Lock, Activity } from "lucide-react";
 
 export default function Footer() {
     return (
-        <footer className="py-16 bg-black border-t border-white/10 text-zinc-400 text-sm">
-            <div className="container px-6 mx-auto max-w-7xl">
-                <div className="grid md:grid-cols-4 gap-12 mb-12">
-                    {/* Company Info */}
-                    <div className="md:col-span-2">
-                        <div className="mb-6 flex items-center gap-3">
-                            <Logo size="lg" showText={false} href="/" />
-                            <span className="text-white font-serif text-3xl font-bold">{COMPANY_INFO.name}</span>
-                        </div>
-                        <p className="text-zinc-500 mb-6 leading-relaxed">
-                            Transform your practice with AI-powered reception. Never miss a call, never lose a lead.
+        <footer className="bg-navy-900 text-slate-300 py-16 lg:py-24">
+            <div className="max-w-7xl mx-auto px-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+                    {/* Column 1: Brand */}
+                    <div className="space-y-6">
+                        <Link href="/" className="flex items-center gap-2">
+                            <span className="text-2xl font-bold text-white tracking-tight">
+                                Voxanne<span className="text-surgical-500">AI</span>
+                            </span>
+                        </Link>
+                        <p className="text-slate-400 leading-relaxed">
+                            The Voice of Your Practice. Automate scheduling, answer patient queries, and reduce admin overhead with HIPAA-compliant voice AI.
                         </p>
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-zinc-400">
-                                <MapPin className="w-4 h-4 text-cyan-400" />
-                                <span className="text-xs">
-                                    {COMPANY_INFO.address.line1}, {COMPANY_INFO.address.line2}, {COMPANY_INFO.address.city}, {COMPANY_INFO.address.region} {COMPANY_INFO.address.postalCode}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Phone className="w-4 h-4 text-cyan-400" />
-                                <a href={`tel:${COMPANY_INFO.contact.phone}`} className="hover:text-white transition-colors">{COMPANY_INFO.contact.phoneDisplay}</a>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Mail className="w-4 h-4 text-cyan-400" />
-                                <a href={`mailto:${COMPANY_INFO.contact.email}`} className="hover:text-white transition-colors">{COMPANY_INFO.contact.email}</a>
-                            </div>
+                        <div className="flex gap-4">
+                            {/* Social Links placeholders */}
+                            {["LinkedIn", "Twitter", "Instagram"].map((social) => (
+                                <a
+                                    key={social}
+                                    href="#"
+                                    className="h-10 w-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-surgical-600 transition-colors"
+                                    aria-label={social}
+                                >
+                                    <span className="sr-only">{social}</span>
+                                    <div className="w-5 h-5 bg-current opacity-50" />
+                                </a>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Quick Links */}
+                    {/* Column 2: Product */}
                     <div>
-                        <h3 className="text-white font-semibold mb-4">Product</h3>
-                        <ul className="space-y-2">
-                            <li><Link href="/#features" className="hover:text-white transition-colors">Features</Link></li>
-                            <li><Link href="/#pricing" className="hover:text-white transition-colors">Pricing</Link></li>
-                            <li><Link href="/dashboard/test" className="hover:text-white transition-colors">Try Demo</Link></li>
+                        <h3 className="text-white font-semibold mb-6">Product</h3>
+                        <ul className="space-y-4">
+                            {["How It Works", "Features", "Pricing", "Integrations", "Customer Stories", "ROI Calculator"].map((item) => (
+                                <li key={item}>
+                                    <Link href="#" className="hover:text-white transition-colors">
+                                        {item}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
 
-                    {/* Legal */}
+                    {/* Column 3: Company */}
                     <div>
-                        <h3 className="text-white font-semibold mb-4">Legal</h3>
-                        <ul className="space-y-2">
-                            <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                            <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                            <li><Link href="/privacy#cookies" className="hover:text-white transition-colors">Cookie Policy</Link></li>
+                        <h3 className="text-white font-semibold mb-6">Company</h3>
+                        <ul className="space-y-4">
+                            {["About Us", "Careers", "Contact Sales", "Support Center", "System Status", "Press Kit"].map((item) => (
+                                <li key={item}>
+                                    <Link href="#" className="hover:text-white transition-colors">
+                                        {item}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
 
+                    {/* Column 4: Legal & Compliance */}
+                    <div>
+                        <h3 className="text-white font-semibold mb-6">Legal & Compliance</h3>
+                        <ul className="space-y-4 mb-8">
+                            {["Privacy Policy", "Terms of Service", "HIPAA Compliance", "Security", "Cookie Policy"].map((item) => (
+                                <li key={item}>
+                                    <Link href="#" className="hover:text-white transition-colors">
+                                        {item}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                <ShieldCheck className="h-4 w-4 text-surgical-500" />
+                                <span>HIPAA Compliant</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                <Lock className="h-4 w-4 text-surgical-500" />
+                                <span>SOC 2 Type II Certified</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                <Activity className="h-4 w-4 text-surgical-500" />
+                                <span>99.9% Uptime SLA</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <p className="text-zinc-500">© 2025 CallWaiting AI. All rights reserved.</p>
-                    <p className="text-slate-400 text-sm">Built exclusively for Aesthetic Clinics, Plastic Surgeons, and Med Spas</p>
+                <div className="mt-16 pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+                    <p>© 2026 Voxanne AI. All rights reserved.</p>
+                    <p>A product of Call Waiting AI</p>
                 </div>
             </div>
         </footer>
-    )
+    );
 }

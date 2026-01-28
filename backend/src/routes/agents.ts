@@ -50,30 +50,36 @@ router.get('/', requireAuthOrDev, async (req, res) => {
             return res.status(500).json({ error: error.message });
         }
 
-        // Fetch user details from auth.users for each agent
-        const agentsWithDetails = await Promise.all(
-            (data || []).map(async (agent) => {
-                try {
-                    const { data: userData } = await supabase.auth.admin.getUserById(agent.user_id);
-                    if (userData?.user) {
-                        return {
-                            id: userData.user.id,
-                            email: userData.user.email || 'Unknown',
-                            created_at: agent.created_at
-                        };
-                    }
-                    return null;
-                } catch (err) {
-                    log.warn('agents', 'Error fetching user details', {
-                        userId: agent.user_id,
-                        error: err instanceof Error ? err.message : String(err)
-                    });
-                    return null;
-                }
-            })
-        );
+        // Batch fetch user details to avoid N+1 query problem
+        // Instead of getUserById for each agent (N queries), list all users once (1 query)
+        const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers({
+            perPage: 1000 // Fetch up to 1000 users (more than enough for most orgs)
+        });
 
-        // Filter out null values (failed fetches)
+        if (usersError) {
+            log.error('agents', 'Error fetching users in batch', { error: usersError.message, orgId });
+            return res.status(500).json({ error: usersError.message });
+        }
+
+        // Create lookup map for O(1) access
+        const userMap = new Map<string, any>(users.map(u => [u.id, u] as [string, any]));
+
+        // Map agents to user details using the lookup map
+        const agentsWithDetails = (data || []).map(agent => {
+            const user = userMap.get(agent.user_id);
+            if (user) {
+                return {
+                    id: user.id as string,
+                    email: (user.email as string) || 'Unknown',
+                    created_at: agent.created_at
+                };
+            }
+            // User not found (might have been deleted)
+            log.warn('agents', 'User not found for agent', { userId: agent.user_id, orgId });
+            return null;
+        });
+
+        // Filter out null values (agents with deleted users)
         const validAgents = agentsWithDetails.filter(agent => agent !== null);
 
         log.info('agents', 'Successfully fetched agents', {

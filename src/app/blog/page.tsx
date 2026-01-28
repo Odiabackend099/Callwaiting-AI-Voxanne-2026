@@ -1,10 +1,14 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Calendar, Clock } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-    title: "Blog - CallWaiting AI",
-    description: "Insights on AI receptionists, medical practice management, and healthcare technology",
+    title: "Blog - Voxanne AI",
+    description: "Insights on AI, healthcare automation, and customer service innovation",
 };
 
 const blogPosts = [
@@ -15,7 +19,7 @@ const blogPosts = [
         date: "December 7, 2025",
         readTime: "5 min read",
         category: "Case Studies",
-        author: "Peter Ntaji"
+        author: "Voxanne Team"
     },
     {
         slug: "cost-of-missed-calls",
@@ -24,7 +28,7 @@ const blogPosts = [
         date: "December 6, 2025",
         readTime: "4 min read",
         category: "Business",
-        author: "Austyn Eguale"
+        author: "Voxanne Team"
     },
     {
         slug: "hipaa-compliance-ai-receptionists",
@@ -33,105 +37,96 @@ const blogPosts = [
         date: "December 5, 2025",
         readTime: "7 min read",
         category: "Compliance",
-        author: "Benjamin Nwoye"
+        author: "Voxanne Team"
     }
 ];
 
 export default function BlogPage() {
     return (
-        <main className="min-h-screen bg-black text-white">
-            {/* Header */}
-            <section className="py-24 px-6 bg-gradient-to-b from-slate-950 to-black border-b border-white/5">
-                <div className="container mx-auto max-w-4xl">
-                    <Link
-                        href="/"
-                        className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors mb-8"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Home
-                    </Link>
-                    <h1 className="text-4xl md:text-6xl font-bold mb-6">
-                        The CallWaiting AI Blog
+        <div className="min-h-screen bg-white">
+            <Navbar />
+
+            <main className="max-w-7xl mx-auto px-4 py-16">
+                {/* Header */}
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl md:text-5xl font-bold text-navy-900 mb-4">
+                        Voxanne AI Blog
                     </h1>
-                    <p className="text-xl text-slate-400">
-                        Insights on AI receptionists, medical practice management, and healthcare technology.
+                    <p className="text-lg text-slate-600">
+                        Insights on AI, healthcare automation, and customer service innovation
                     </p>
                 </div>
-            </section>
 
-            {/* Blog Posts */}
-            <section className="py-16 px-6">
-                <div className="container mx-auto max-w-4xl">
-                    <div className="space-y-12">
-                        {blogPosts.map((post) => (
-                            <article
-                                key={post.slug}
-                                className="group p-8 rounded-3xl bg-slate-900/50 border border-white/10 hover:border-cyan-500/30 transition-all duration-300"
-                            >
-                                <div className="flex items-center gap-4 mb-4">
-                                    <span className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-medium">
+                {/* Blog Posts Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
+                    {blogPosts.map((post) => (
+                        <Card key={post.slug} className="hover:shadow-lg transition-shadow border-slate-100">
+                            <CardHeader>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="px-3 py-1 rounded-full bg-surgical-50 border border-surgical-600/20 text-surgical-600 text-xs font-medium">
                                         {post.category}
                                     </span>
-                                    <div className="flex items-center gap-4 text-slate-500 text-sm">
-                                        <div className="flex items-center gap-1">
-                                            <Calendar className="w-4 h-4" />
-                                            {post.date}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Clock className="w-4 h-4" />
-                                            {post.readTime}
-                                        </div>
-                                    </div>
                                 </div>
-
-                                <h2 className="text-2xl md:text-3xl font-bold text-white mb-4 group-hover:text-cyan-400 transition-colors">
+                                <CardTitle className="text-navy-900 hover:text-surgical-600 transition-colors">
                                     <Link href={`/blog/${post.slug}`}>
                                         {post.title}
                                     </Link>
-                                </h2>
-
-                                <p className="text-slate-400 mb-6 leading-relaxed">
+                                </CardTitle>
+                                <CardDescription className="text-slate-600 flex items-center gap-4 text-sm mt-2">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar className="w-4 h-4" />
+                                        {post.date}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="w-4 h-4" />
+                                        {post.readTime}
+                                    </span>
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-slate-600 mb-4 leading-relaxed">
                                     {post.excerpt}
                                 </p>
-
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-slate-500">
                                         By {post.author}
                                     </span>
-                                    <Link
-                                        href={`/blog/${post.slug}`}
-                                        className="text-cyan-400 hover:text-cyan-300 font-medium text-sm flex items-center gap-2 group-hover:gap-3 transition-all"
-                                    >
-                                        Read More →
-                                    </Link>
+                                    <Button variant="outline" asChild size="sm">
+                                        <Link href={`/blog/${post.slug}`}>
+                                            Read More
+                                        </Link>
+                                    </Button>
                                 </div>
-                            </article>
-                        ))}
-                    </div>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
-            </section>
 
-            {/* CTA */}
-            <section className="py-16 px-6 border-t border-white/5">
-                <div className="container mx-auto max-w-4xl text-center">
-                    <h3 className="text-2xl font-bold text-white mb-4">
+                {/* Newsletter CTA */}
+                <div className="bg-slate-50 rounded-2xl p-8 md:p-12 text-center">
+                    <h3 className="text-2xl font-bold text-navy-900 mb-4">
                         Want to learn more about AI for your practice?
                     </h3>
-                    <p className="text-slate-400 mb-8">
-                        Subscribe to our newsletter for weekly insights and case studies.
+                    <p className="text-slate-600 mb-8 max-w-2xl mx-auto">
+                        Subscribe to our newsletter for weekly insights, case studies, and industry updates.
                     </p>
                     <form className="flex gap-4 max-w-md mx-auto">
                         <input
                             type="email"
                             placeholder="Enter your email"
-                            className="flex-1 px-4 py-3 rounded-lg bg-slate-900 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50"
+                            className="flex-1 px-4 py-3 rounded-lg bg-white border border-slate-200 text-navy-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-surgical-600 focus:border-surgical-600"
                         />
-                        <button className="px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
+                        <Button
+                            type="submit"
+                            className="px-6 py-3 rounded-full bg-surgical-600 text-white font-semibold hover:bg-surgical-700 transition-colors"
+                        >
                             Subscribe
-                        </button>
+                        </Button>
                     </form>
                 </div>
-            </section>
-        </main>
+            </main>
+
+            <Footer />
+        </div>
     );
 }

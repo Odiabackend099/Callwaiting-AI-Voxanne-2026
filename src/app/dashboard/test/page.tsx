@@ -110,6 +110,7 @@ const TestAgentPageContent = () => {
     const [outboundConfigError, setOutboundConfigError] = useState<string | null>(null);
     const [outboundConfigMissingFields, setOutboundConfigMissingFields] = useState<string[]>([]);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
+    const [outboundCallerIdNumber, setOutboundCallerIdNumber] = useState<string>('');
     const [wsConnectionStatus, setWsConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [phoneValidationError, setPhoneValidationError] = useState<string | null>(null);
@@ -263,19 +264,48 @@ const TestAgentPageContent = () => {
             try {
                 const agentData = await authedBackendFetch<any>('/api/founder-console/agent/config');
                 const outboundAgent = agentData?.agents?.find((a: any) => a.role === 'outbound');
-                const config = outboundAgent || {};
+
+                if (!outboundAgent) {
+                    setOutboundConfigError('No outbound agent configured');
+                    setOutboundConfigMissingFields(['Outbound Agent']);
+                    setOutboundConfigLoaded(false);
+                    return;
+                }
+
+                const config = outboundAgent;
                 const missingFields = [];
-                if (!config.system_prompt) missingFields.push('System Prompt');
+
+                // Check all required fields
+                if (!config.vapi_assistant_id) {
+                    missingFields.push('VAPI Assistant ID');
+                }
+                if (!config.system_prompt || config.system_prompt.trim() === '') {
+                    missingFields.push('System Prompt');
+                }
+                if (!config.vapi_phone_number_id) {
+                    missingFields.push('Caller ID Phone Number');
+                }
 
                 if (missingFields.length > 0) {
                     setOutboundConfigError('Outbound agent configuration is incomplete');
                     setOutboundConfigMissingFields(missingFields);
                     setOutboundConfigLoaded(false);
+                    setOutboundCallerIdNumber('');
                     setCachedConfig(config, missingFields);
                 } else {
                     setOutboundConfigLoaded(true);
                     setOutboundConfigError(null);
                     setOutboundConfigMissingFields([]);
+
+                    // Store the caller ID phone number for display
+                    // Try to fetch the actual phone number from the phone number ID
+                    // For now, we'll fetch it from inbound status or show the ID
+                    if (inboundStatus?.inboundNumber) {
+                        setOutboundCallerIdNumber(inboundStatus.inboundNumber);
+                    } else {
+                        setOutboundCallerIdNumber(config.vapi_phone_number_id || 'Not configured');
+                    }
+
                     setCachedConfig(config);
                 }
             } catch (err) {
@@ -773,9 +803,23 @@ const TestAgentPageContent = () => {
                                             <p className="text-xs text-red-400 mt-2">{phoneValidationError}</p>
                                         )}
                                         {!phoneValidationError && (
-                                            <p className="text-xs text-slate-500 mt-2 tracking-tight">Must be in E.164 format (e.g., +1234567890)</p>
+                                            <p className="text-xs text-slate-500 mt-2 tracking-tight">Enter the phone number you want the AI agent to call</p>
                                         )}
                                     </div>
+
+                                    {/* Outbound Caller ID Display */}
+                                    {outboundCallerIdNumber && (
+                                        <div className="p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl backdrop-blur-sm">
+                                            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Outbound Caller ID</p>
+                                            <p className="text-sm text-slate-200 mt-1 font-mono">
+                                                {outboundCallerIdNumber}
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-2">
+                                                This number will appear as the caller ID to the recipient
+                                            </p>
+                                        </div>
+                                    )}
+
                                     <button
                                         onClick={handleInitiateCall}
                                         disabled={isCallingPhone || !phoneNumber}
@@ -789,7 +833,7 @@ const TestAgentPageContent = () => {
                                         ) : (
                                             <>
                                                 <Phone className="w-6 h-6" />
-                                                Call Me Now
+                                                Start Outbound Call
                                             </>
                                         )}
                                     </button>

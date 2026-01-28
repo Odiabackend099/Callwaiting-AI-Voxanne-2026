@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { getAuthCallbackUrl, getPasswordResetCallbackUrl } from '@/lib/auth-redirect';
@@ -44,6 +44,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [error, setError] = useState<string | null>(null);
 
     const router = useRouter();
+    // Use ref to avoid re-subscriptions when router changes reference
+    const routerRef = useRef(router);
+    useEffect(() => {
+        routerRef.current = router;
+    }, [router]);
 
     // Initialize auth state
     useEffect(() => {
@@ -66,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 if (data.session?.user && !isEmailVerified(data.session.user)) {
                     const qs = data.session.user.email ? `?email=${encodeURIComponent(data.session.user.email)}` : '';
-                    router.push(`/verify-email${qs}`);
+                    routerRef.current.push(`/verify-email${qs}`);
                 }
 
                 // NOTE: org_id is now obtained from JWT app_metadata (stamped by Phase 1 trigger)
@@ -108,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
                     if (!isEmailVerified(session.user)) {
                         const qs = session.user.email ? `?email=${encodeURIComponent(session.user.email)}` : '';
-                        router.push(`/verify-email${qs}`);
+                        routerRef.current.push(`/verify-email${qs}`);
                         return;
                     }
 
@@ -129,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setUserSettings(null);
                     localStorage.removeItem('org_id'); // Clean up legacy localStorage
                     setLoading(false);
-                    router.push('/login');
+                    routerRef.current.push('/login');
                 }
             }
         );
@@ -138,7 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isMounted = false;
             data?.subscription.unsubscribe();
         };
-    }, [supabase, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Subscribe once on mount - supabase is singleton, router uses ref
 
     const fetchUserSettings = async (userId: string) => {
         try {

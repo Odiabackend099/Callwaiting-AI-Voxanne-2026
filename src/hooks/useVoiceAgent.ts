@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { AudioRecorder } from '@/lib/audio/recorder';
 import { AudioPlayer } from '@/lib/audio/player';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrg } from '@/hooks/useOrg';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import type { VoiceAgentState, TranscriptMessage, WebSocketEvent } from '@/types/voice';
 import { mapDbSpeakerToFrontend, type FrontendSpeaker } from '@/types/transcript';
@@ -41,6 +42,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
     });
 
     const { user, session } = useAuth();
+    const validatedOrgId = useOrg(); // Get validated org_id from JWT (replaces hardcoded value)
 
     const wsRef = useRef<WebSocket | null>(null);
     const recorderRef = useRef<AudioRecorder | null>(null);
@@ -266,17 +268,22 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
 
             if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Initiating web test...');
 
+            // Validate org_id before initiating web test (multi-tenant security)
+            if (!validatedOrgId) {
+                throw new Error('Organization not validated. Please refresh the page or log in again.');
+            }
+
             const data = await authedBackendFetch<WebTestResponse>('/api/founder-console/agent/web-test', {
                 method: 'POST',
                 body: JSON.stringify({
-                    // **FIX**: Inject org_id for Vapi Context (Amnesia Cure)
+                    // Inject org_id for Vapi Context (uses validated org from JWT)
                     customer: {
                         metadata: {
-                            org_id: "46cf2995-2bee-44e3-838b-24151486fe4e"
+                            org_id: validatedOrgId
                         }
                     },
                     variableValues: {
-                        org_id: "46cf2995-2bee-44e3-838b-24151486fe4e"
+                        org_id: validatedOrgId
                     }
                 }),
                 timeoutMs: 30000,

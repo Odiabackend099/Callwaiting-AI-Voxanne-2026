@@ -25,9 +25,53 @@ export function initializeSentry() {
         tracesSampleRate: environment === 'production' ? 0.1 : 1.0,
         // Profiling
         profilesSampleRate: environment === 'production' ? 0.1 : 1.0,
+        beforeSend(event, hint) {
+            // Add custom context
+            event.contexts = {
+                ...event.contexts,
+                app: {
+                    version: process.env.npm_package_version || '1.0.0',
+                    deployment: process.env.VERCEL_GIT_COMMIT_SHA || 'local',
+                    node_env: process.env.NODE_ENV
+                }
+            };
+
+            // Redact PII
+            if (event.request) {
+                delete event.request.cookies;
+                delete event.request.headers?.Authorization;
+            }
+
+            return event;
+        },
+        ignoreErrors: [
+            'AbortError',
+            'NetworkError',
+            'Non-Error promise rejection captured',
+            'ResizeObserver loop limit exceeded',
+            'CORS not allowed'
+        ]
     });
 
     console.log('✅ Sentry error monitoring initialized');
+}
+
+export function reportError(
+    error: Error,
+    context: { orgId?: string; userId?: string; [key: string]: any }
+): void {
+    if (process.env.NODE_ENV !== 'production' || !process.env.SENTRY_DSN) {
+        return;
+    }
+
+    Sentry.withScope((scope) => {
+        if (context.userId || context.orgId) {
+            scope.setUser({ id: context.userId, org_id: context.orgId });
+        }
+        scope.setContext('custom', context);
+        scope.setLevel('error');
+        Sentry.captureException(error);
+    });
 }
 
 export { Sentry };

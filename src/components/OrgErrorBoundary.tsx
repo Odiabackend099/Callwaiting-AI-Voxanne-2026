@@ -1,15 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useOrgValidation } from '@/hooks/useOrgValidation';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
- * OrgErrorBoundary Component
- * 
- * Wraps dashboard and protected routes to ensure user has a valid organization.
- * Shows error message and logout button if org validation fails.
- * 
+ * OrgErrorBoundary Component (2026 Optimized)
+ *
+ * Wraps dashboard and protected routes with optimistic rendering:
+ * - Shows children immediately if we have an orgId (trust JWT)
+ * - Only shows loader on TRUE cold start (never rendered before)
+ * - Background validation catches any issues without blocking UI
+ *
+ * Key 2026 Best Practice: Optimistic rendering with background validation
+ *
  * Usage:
  * ```tsx
  * <OrgErrorBoundary>
@@ -21,23 +25,48 @@ export function OrgErrorBoundary({ children }: { children: React.ReactNode }) {
   const { orgId, orgValid, orgError, loading } = useOrgValidation();
   const { signOut } = useAuth();
 
-  // Show loading state while validating
-  if (loading) {
+  // Track if we've ever successfully rendered children
+  // This persists across re-renders but resets on page refresh
+  const hasRenderedChildrenRef = useRef(false);
+
+  // Update ref when validation passes
+  useEffect(() => {
+    if (orgValid) {
+      hasRenderedChildrenRef.current = true;
+    }
+  }, [orgValid]);
+
+  // OPTIMISTIC RENDERING LOGIC:
+  // 1. If validation passed (orgValid) -> show children
+  // 2. If we rendered before AND have orgId AND no error -> show children (trust cached/JWT state)
+  // 3. Otherwise, check if we should show loader or error
+  const shouldShowChildren = orgValid || (hasRenderedChildrenRef.current && orgId && !orgError);
+
+  // Show loading state ONLY on TRUE cold start:
+  // - Still loading
+  // - Never rendered children before
+  // - Don't have an orgId yet (JWT not parsed)
+  if (loading && !hasRenderedChildrenRef.current && !orgId) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="text-center">
           <div className="mb-6">
             <div className="w-14 h-14 mx-auto border-4 border-slate-800 border-t-emerald-400 rounded-full animate-spin"></div>
           </div>
-          <h1 className="text-xl font-semibold text-slate-50 mb-2 tracking-tight">Validating access...</h1>
-          <p className="text-sm text-slate-400 tracking-tight">Verifying your organization</p>
+          <h1 className="text-xl font-semibold text-slate-50 mb-2 tracking-tight">Loading dashboard...</h1>
+          <p className="text-sm text-slate-400 tracking-tight">Setting up your workspace</p>
         </div>
       </div>
     );
   }
 
-  // Show error state if validation failed
-  if (!orgValid || orgError) {
+  // Show children optimistically if conditions met
+  if (shouldShowChildren) {
+    return children;
+  }
+
+  // Show error state ONLY if validation definitively failed (not loading, has error)
+  if (!loading && (!orgValid || orgError)) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="max-w-md w-full mx-auto px-6 text-center">

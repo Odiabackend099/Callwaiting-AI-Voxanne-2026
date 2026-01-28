@@ -5,7 +5,7 @@ import { config } from '../config';
 const ALGORITHM = 'aes-256-gcm';
 
 // Initialization Vector length
-const IV_LENGTH = 16;
+const IV_LENGTH = 12;
 
 // Auth Tag length (GCM)
 const AUTH_TAG_LENGTH = 16;

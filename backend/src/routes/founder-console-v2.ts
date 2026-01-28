@@ -11,6 +11,7 @@ import { supabase } from '../services/supabase-client';
 import { VapiClient } from '../services/vapi-client';
 import { ToolSyncService } from '../services/tool-sync-service';
 import { storeApiKey, getApiKey } from '../services/secrets-manager';
+import { invalidateInboundConfigCache } from '../services/cache';
 import { buildOutboundSystemPrompt, getDefaultPromptConfig, buildCallContextBlock, buildTierSpecificPrompt } from '../prompts/outbound-agent-template';
 import { CallOutcome, CallStatus, isActiveCall } from '../types/call-outcome';
 import { createLogger } from '../services/logger';
@@ -24,6 +25,7 @@ import { withTimeout } from '../utils/timeout-helper';
 import { validateE164Format } from '../utils/phone-validation';
 import { phoneNumbersRouter } from './phone-numbers';
 import { createWebVoiceSession, endWebVoiceSession } from '../services/web-voice-bridge';
+import { getVoiceById, isValidVoice } from '../config/voice-registry';
 import { config } from '../config/index';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
@@ -422,7 +424,14 @@ const configRateLimiter = rateLimit({
   skip: (req) => req.method === 'GET' // Only apply to mutations
 });
 
-
+// Very strict rate limiting for agent deletion (prevent accidental rapid deletions)
+const deleteAgentRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 10, // Max 10 deletions per hour per org
+  keyGenerator: (req) => req.user?.app_metadata?.org_id || req.ip || 'unknown',
+  message: { error: 'Too many agent deletions. Please try again later.' },
+  standardHeaders: true,
+});
 
 router.use(callRateLimiter);
 router.use('/agent/config', configRateLimiter);
@@ -652,7 +661,9 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
   const resolvedSystemPrompt = agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig());
   const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
-  const resolvedVoiceProvider = getVoiceProvider(resolvedVoiceId);
+  // Use voice registry to get provider, fallback to vapi if not found
+  const voiceData = getVoiceById(resolvedVoiceId) || { provider: 'vapi' };
+  const resolvedVoiceProvider = voiceData.provider || agent.voice_provider || 'vapi';
   const resolvedLanguage = agent.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE;
   const resolvedFirstMessage = agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE;
   const resolvedMaxDurationSeconds = agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION;
@@ -688,7 +699,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     },
     voice: {
       provider: resolvedVoiceProvider,
-      voiceId: convertToVapiVoiceId(resolvedVoiceId) // Convert database format to Vapi format
+      voiceId: resolvedVoiceId
     },
     transcriber: {
       provider: VAPI_DEFAULTS.TRANSCRIBER_PROVIDER,
@@ -1079,7 +1090,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
       // Get the inbound agent (select only needed columns for performance)
       role === 'outbound' ? Promise.resolve({ data: null }) : supabase
         .from('agents')
-        .select('id, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
+        .select('id, name, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
         .eq('role', AGENT_ROLES.INBOUND)
         .eq('org_id', orgId)
         .limit(1)
@@ -1087,7 +1098,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
       // Get the outbound agent (select only needed columns for performance)
       role === 'inbound' ? Promise.resolve({ data: null }) : supabase
         .from('agents')
-        .select('id, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
+        .select('id, name, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, vapi_phone_number_id, role')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .limit(1)
@@ -1109,6 +1120,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
     if (inboundAgent) {
       agents.push({
         id: inboundAgent.id,
+        name: inboundAgent.name || 'Inbound Agent',
         role: 'inbound',
         systemPrompt: inboundAgent.system_prompt,
         voice: inboundAgent.voice,
@@ -1122,13 +1134,20 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
     if (outboundAgent) {
       agents.push({
         id: outboundAgent.id,
+        name: outboundAgent.name || 'Outbound Agent',
         role: 'outbound',
+        system_prompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
         systemPrompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
         voice: outboundAgent.voice || 'jennifer',
         language: outboundAgent.language || 'en-GB',
         maxCallDuration: outboundAgent.max_call_duration || 600,
+        max_call_duration: outboundAgent.max_call_duration || 600,
         firstMessage: outboundAgent.first_message || 'Hello! This is CallWaiting AI calling...',
-        vapiAssistantId: outboundAgent.vapi_assistant_id
+        first_message: outboundAgent.first_message || 'Hello! This is CallWaiting AI calling...',
+        vapiAssistantId: outboundAgent.vapi_assistant_id,
+        vapi_assistant_id: outboundAgent.vapi_assistant_id,
+        vapiPhoneNumberId: outboundAgent.vapi_phone_number_id,
+        vapi_phone_number_id: outboundAgent.vapi_phone_number_id
       });
     }
 
@@ -1655,12 +1674,7 @@ router.post(
 
       steps.stored = true;
 
-      // Persist test destination (non-secret) for later re-tests
-      if (testing?.testDestinationNumber) {
-        await mergeIntegrationConfig(INTEGRATION_PROVIDERS.VAPI, {
-          test_destination_number: testing.testDestinationNumber
-        });
-      }
+      // NOTE: Default test destination number removed - now passed dynamically in requests
 
       // ===== Step 2: Validate Vapi credentials =====
       try {
@@ -1850,38 +1864,16 @@ router.post(
               updated_at: new Date().toISOString()
             }, { onConflict: 'org_id' });
 
+          // Invalidate inbound config cache after update
+          invalidateInboundConfigCache(orgId);
+
           logger.info('Populated inbound_agent_config', {
             orgId,
             assistantId: inboundAgent.vapi_assistant_id?.slice(0, 20) + '...'
           });
         }
 
-        // Populate outbound_agent_config
-        if (outboundAgent) {
-          await supabase
-            .from('outbound_agent_config')
-            .upsert({
-              org_id: orgId,
-              vapi_api_key: vapiApiKey,
-              vapi_assistant_id: outboundAgent.vapi_assistant_id,
-              twilio_account_sid: twilioBody.accountSid,
-              twilio_auth_token: twilioBody.authToken,
-              twilio_phone_number: twilioBody.fromNumber,
-              system_prompt: outboundAgent.system_prompt,
-              first_message: outboundAgent.first_message,
-              voice_id: outboundAgent.voice,
-              language: outboundAgent.language,
-              max_call_duration: outboundAgent.max_call_duration,
-              is_active: true,
-              last_synced_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'org_id' });
-
-          logger.info('Populated outbound_agent_config', {
-            orgId,
-            assistantId: outboundAgent.vapi_assistant_id?.slice(0, 20) + '...'
-          });
-        }
+        // outbound_agent_config table removed - agents table is the single source of truth
       } catch (configError: any) {
         // Log but don't fail the request - config tables are secondary
         logger.error('Failed to populate agent config tables (non-blocking)', {
@@ -1961,6 +1953,14 @@ router.post(
         const payload: Record<string, any> = {};
 
         // Validate and add fields only if provided
+        // Name field (new)
+        if (config.name !== undefined && config.name !== null && config.name !== '') {
+          if (typeof config.name !== 'string' || config.name.length > 100) {
+            throw new Error(`Agent name must be a string and less than 100 characters for ${agentRole} agent`);
+          }
+          payload.name = config.name;
+        }
+
         if (config.system_prompt !== undefined && config.system_prompt !== null) {
           payload.system_prompt = config.system_prompt;
         }
@@ -2168,11 +2168,12 @@ router.post(
           // VERIFY the update actually saved
           const { data: verifyInbound } = await supabase
             .from('agents')
-            .select('id, system_prompt, voice, first_message')
+            .select('id, name, system_prompt, voice, first_message')
             .eq('id', inboundAgentId)
             .maybeSingle();
           console.log('[SYSTEM_PROMPT_DEBUG] INBOUND agent after update:', {
             agentId: inboundAgentId,
+            name: verifyInbound?.name || 'NULL',
             systemPrompt: verifyInbound?.system_prompt ? `"${verifyInbound.system_prompt.substring(0, 50)}..."` : 'NULL',
             voice: verifyInbound?.voice,
             firstMessage: verifyInbound?.first_message ? `"${verifyInbound.first_message.substring(0, 30)}..."` : 'NULL'
@@ -2202,11 +2203,12 @@ router.post(
           // VERIFY the update actually saved
           const { data: verifyOutbound } = await supabase
             .from('agents')
-            .select('id, system_prompt, voice, first_message')
+            .select('id, name, system_prompt, voice, first_message')
             .eq('id', outboundAgentId)
             .maybeSingle();
           console.log('[SYSTEM_PROMPT_DEBUG] OUTBOUND agent after update:', {
             agentId: outboundAgentId,
+            name: verifyOutbound?.name || 'NULL',
             systemPrompt: verifyOutbound?.system_prompt ? `"${verifyOutbound.system_prompt.substring(0, 50)}..."` : 'NULL',
             voice: verifyOutbound?.voice,
             firstMessage: verifyOutbound?.first_message ? `"${verifyOutbound.first_message.substring(0, 30)}..."` : 'NULL'
@@ -2413,6 +2415,82 @@ router.post(
 );
 
 /**
+ * DELETE /api/founder-console/agent/:role
+ * Hard delete agent configuration (both from database and VAPI)
+ *
+ * @param {string} role - Agent role: 'inbound' or 'outbound'
+ * @returns {object} Success message with deletion details
+ * @throws {400} Invalid role
+ * @throws {409} Active calls exist for this agent
+ * @throws {500} Failed to delete from database or VAPI
+ */
+router.delete(
+  '/agent/:role',
+  requireAuthOrDev,
+  deleteAgentRateLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const requestId = req.requestId || generateRequestId();
+    try {
+      const { role } = req.params;
+      const userId = req.user?.id;
+      const orgId = req.user?.orgId;
+
+      if (!userId || !orgId) {
+        res.status(401).json({ error: 'Not authenticated', requestId });
+        return;
+      }
+
+      // Validate role
+      if (!role || !['inbound', 'outbound'].includes(role)) {
+        res.status(400).json({
+          error: 'Invalid role. Must be "inbound" or "outbound"',
+          requestId
+        });
+        return;
+      }
+
+      logger.info('DELETE /agent/:role received', {
+        role,
+        orgId,
+        userId,
+        requestId
+      });
+
+      // Delete agent (hard delete from DB + Vapi)
+      await VapiAssistantManager.deleteAssistant(orgId, role as 'inbound' | 'outbound');
+
+      logger.info('Agent deleted successfully', {
+        role,
+        orgId,
+        requestId
+      });
+
+      res.json({
+        success: true,
+        message: `${role.charAt(0).toUpperCase() + role.slice(1)} agent deleted successfully`,
+        requestId
+      });
+    } catch (error: any) {
+      logger.error('Delete agent error:', error, { requestId });
+
+      // Check for specific error messages
+      if (error.message?.includes('active calls')) {
+        res.status(409).json({
+          error: error.message,
+          requestId
+        });
+        return;
+      }
+
+      res.status(500).json({
+        error: error.message || 'Failed to delete agent',
+        requestId
+      });
+    }
+  }
+);
+
+/**
  * POST /api/founder-console/agent/test-call
  * Run a test call using stored config.
  * Returns vapiCallId (primary realtime ID) and trackingId.
@@ -2445,11 +2523,10 @@ router.post(
         return;
       }
 
-      const storedDest = settings.test_destination_number;
-
-      const destination = testDestinationNumber || storedDest;
+      // Require phone number in request body (no stored default)
+      const destination = testDestinationNumber;
       if (!destination) {
-        res.status(400).json({ error: 'Test destination number required', requestId });
+        res.status(400).json({ error: 'Test destination number required in request body', requestId });
         return;
       }
       if (!validateE164Format(destination)) {
@@ -3010,34 +3087,29 @@ router.post(
         return;
       }
 
-      // CRITICAL FIX: Fetch from outbound_agent_config source of truth
-      // The 'agents' table is legacy/stale for this specific new config flow
-      const { data: outboundConfig } = await supabase
-        .from('outbound_agent_config')
-        .select('system_prompt, first_message, voice_id, language, max_call_duration, vapi_assistant_id')
-        .eq('org_id', orgId)
-        .maybeSingle();
-
+      // Fetch from agents table (single source of truth)
+      // This is where /agent/behavior saves to
       const { data: agent } = await supabase
         .from('agents')
-        .select('id, system_prompt, first_message, voice, language, max_call_duration')
+        .select('id, system_prompt, first_message, voice, language, max_call_duration, vapi_assistant_id, vapi_phone_number_id')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .maybeSingle();
 
       if (!agent?.id) {
-        res.status(400).json({ error: 'Agent not initialized in database. Please contact support.', requestId });
+        res.status(400).json({ error: 'Outbound agent not configured. Please save the Outbound Configuration in the dashboard first.', requestId });
         return;
       }
 
-      // Use outbound_config if available (Source of Truth), otherwise fallback to agents table
+      // Use agent data directly (agents table is the single source of truth)
       const activeConfig = {
-        system_prompt: outboundConfig?.system_prompt || agent.system_prompt,
-        first_message: outboundConfig?.first_message || agent.first_message,
-        voice: outboundConfig?.voice_id || agent.voice,
-        language: outboundConfig?.language || agent.language,
-        max_call_duration: outboundConfig?.max_call_duration || agent.max_call_duration,
-        vapi_assistant_id: outboundConfig?.vapi_assistant_id
+        system_prompt: agent.system_prompt,
+        first_message: agent.first_message,
+        voice: agent.voice,
+        language: agent.language,
+        max_call_duration: agent.max_call_duration,
+        vapi_assistant_id: agent.vapi_assistant_id,
+        vapi_phone_number_id: agent.vapi_phone_number_id
       };
 
       // CRITICAL FIX: Complete validation of all required outbound config fields
@@ -3091,8 +3163,11 @@ router.post(
               messages: [{ role: 'system', content: activeConfig.system_prompt }]
             },
             voice: {
-              provider: getVoiceProvider(activeConfig.voice || 'jennifer'),
-              voiceId: convertToVapiVoiceId(activeConfig.voice || 'jennifer')
+              provider: (() => {
+                const voiceData = getVoiceById(activeConfig.voice || 'jennifer');
+                return voiceData?.provider || 'vapi';
+              })(),
+              voiceId: activeConfig.voice || 'jennifer'
             },
             firstMessage: activeConfig.first_message,
             maxDurationSeconds: activeConfig.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,
@@ -3101,10 +3176,11 @@ router.post(
             serverMessages: ['function-call', 'hangup', 'status-update', 'end-of-call-report', 'transcript']
           });
 
-          // If we relied on a fresh sync and didn't have the ID in our new config table, patch it now
+          // Update the agent record with the assistant ID
           if (!activeConfig.vapi_assistant_id) {
-            await supabase.from('outbound_agent_config')
+            await supabase.from('agents')
               .update({ vapi_assistant_id: assistantId })
+              .eq('id', agent.id)
               .eq('org_id', orgId);
           }
 

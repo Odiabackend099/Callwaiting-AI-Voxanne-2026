@@ -1,23 +1,18 @@
--- Update existing agents to use VAPI voice names
--- Replace 'Kylie' with 'paige' (case insensitive)
-UPDATE agents
-SET voice = 'paige'
-WHERE voice = 'Kylie' OR voice ILIKE '%kylie%';
+-- Normalize voice field to use SSOT (Single Source of Truth) active voices only
+-- Migrate any legacy/invalid voices to Rohan (default Vapi native voice)
 
--- Migrate Deepgram voice IDs to VAPI equivalents
+-- Set any NULL or empty voice IDs to Rohan (default)
 UPDATE agents
-SET voice = CASE
-  WHEN voice LIKE '%asteria%' THEN 'lily'
-  WHEN voice LIKE '%luna%' THEN 'savannah'
-  WHEN voice LIKE '%athena%' THEN 'hana'
-  WHEN voice LIKE '%orion%' THEN 'cole'
-  WHEN voice LIKE '%hera%' THEN 'neha'
-  WHEN voice LIKE '%arcas%' THEN 'elliot'
-  WHEN voice LIKE '%perseus%' THEN 'spencer'
-  ELSE 'paige' -- Default fallback
-END
-WHERE voice LIKE 'aura-%';
+SET voice = 'Rohan',
+    voice_provider = 'vapi'
+WHERE voice IS NULL
+   OR voice = ''
+   OR voice_provider IS NULL;
 
--- Ensure voice column has a default
+-- Set default for voice column
 ALTER TABLE agents
-ALTER COLUMN voice SET DEFAULT 'paige';
+ALTER COLUMN voice SET DEFAULT 'Rohan';
+
+-- Set default for voice_provider column
+ALTER TABLE agents
+ALTER COLUMN voice_provider SET DEFAULT 'vapi';

@@ -59,11 +59,16 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     let allCalls: any[] = [];
     let totalCount = 0;
 
+    // Optimization: Use database-level pagination when querying single call type
+    const isInboundOnly = parsed.call_type === 'inbound';
+    const isOutboundOnly = parsed.call_type === 'outbound';
+    const isMixedQuery = !parsed.call_type;
+
     // Fetch inbound calls from call_logs
     if (!parsed.call_type || parsed.call_type === 'inbound') {
       let inboundQuery = supabase
         .from('call_logs')
-        .select('*', { count: 'exact' })
+        .select('id, phone_number, caller_name, created_at, duration_seconds, status, recording_storage_path, transcript, sentiment_score, sentiment_label, sentiment_summary, sentiment_urgency', { count: 'exact' })
         .eq('org_id', orgId)  // CRITICAL FIX: Filter by org_id for tenant isolation
         .eq('call_type', 'inbound')
         .not('recording_storage_path', 'is', null);
@@ -83,19 +88,23 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
       inboundQuery = inboundQuery.order('created_at', { ascending: false });
 
+      // Apply database-level pagination for inbound-only queries
+      if (isInboundOnly) {
+        inboundQuery = inboundQuery.range(offset, offset + limit - 1);
+      } else if (isMixedQuery) {
+        // For mixed queries, limit each table to prevent over-fetching
+        // Fetch 2x the requested limit to ensure we have enough for pagination
+        inboundQuery = inboundQuery.limit(limit * 2);
+      }
+
       const { data: inboundCalls, error: inboundError, count: inboundCount } = await inboundQuery;
 
       if (inboundError) {
         log.warn('Calls', 'Failed to fetch inbound calls', { error: inboundError.message });
       } else {
-        const processedInboundCalls = await Promise.all((inboundCalls || []).map(async (call: any) => {
-          let signedUrl = call.recording_url;
-          // Generate signed URL if storage path exists (preferred)
-          if (call.recording_storage_path) {
-            const generatedUrl = await getSignedRecordingUrl(call.recording_storage_path);
-            if (generatedUrl) signedUrl = generatedUrl;
-          }
-
+        // PERFORMANCE OPTIMIZATION: No longer generate signed URLs on list load
+        // URLs generated on-demand when user clicks play (see /:callId/recording-url endpoint)
+        const processedInboundCalls = (inboundCalls || []).map((call: any) => {
           return {
             id: call.id,
             phone_number: call.phone_number || 'Unknown',
@@ -103,8 +112,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
             call_date: call.created_at,
             duration_seconds: call.duration_seconds || 0,
             status: call.status || 'completed',
-            has_recording: !!signedUrl,
-            recording_url: signedUrl,
+            has_recording: !!call.recording_storage_path,
             has_transcript: !!call.transcript,
             sentiment_score: call.sentiment_score,
             sentiment_label: call.sentiment_label,
@@ -112,7 +120,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
             sentiment_urgency: call.sentiment_urgency,
             call_type: 'inbound'
           };
-        }));
+        });
 
         allCalls = allCalls.concat(processedInboundCalls);
         totalCount += (inboundCount || 0);
@@ -123,7 +131,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     if (!parsed.call_type || parsed.call_type === 'outbound') {
       let outboundQuery = supabase
         .from('calls')
-        .select('*', { count: 'exact' })
+        .select('id, phone_number, caller_name, call_date, duration_seconds, status, recording_storage_path, recording_path, transcript, sentiment_score, sentiment_label, sentiment_summary, sentiment_urgency', { count: 'exact' })
         .eq('org_id', orgId)
         .eq('call_type', 'outbound')
         .not('caller_name', 'ilike', '%demo%')
@@ -145,20 +153,22 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
       outboundQuery = outboundQuery.order('call_date', { ascending: false });
 
+      // Apply database-level pagination for outbound-only queries
+      if (isOutboundOnly) {
+        outboundQuery = outboundQuery.range(offset, offset + limit - 1);
+      } else if (isMixedQuery) {
+        // For mixed queries, limit each table to prevent over-fetching
+        outboundQuery = outboundQuery.limit(limit * 2);
+      }
+
       const { data: outboundCalls, error: outboundError, count: outboundCount } = await outboundQuery;
 
       if (outboundError) {
         log.warn('Calls', 'Failed to fetch outbound calls', { error: outboundError.message });
       } else {
-        const processedCalls = await Promise.all((outboundCalls || []).map(async (call: any) => {
-          let signedUrl = call.recording_url;
-          // Generate signed URL if storage path exists (preferred)
-          if (call.recording_storage_path || call.recording_path) {
-            const path = call.recording_storage_path || call.recording_path;
-            const generatedUrl = await getSignedRecordingUrl(path);
-            if (generatedUrl) signedUrl = generatedUrl;
-          }
-
+        // PERFORMANCE OPTIMIZATION: No longer generate signed URLs on list load
+        // URLs generated on-demand when user clicks play (see /:callId/recording-url endpoint)
+        const processedCalls = (outboundCalls || []).map((call: any) => {
           return {
             id: call.id,
             phone_number: call.phone_number,
@@ -166,8 +176,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
             call_date: call.call_date,
             duration_seconds: call.duration_seconds,
             status: call.status,
-            has_recording: !!signedUrl,
-            recording_url: signedUrl,
+            has_recording: !!(call.recording_storage_path || call.recording_path),
             has_transcript: !!call.transcript,
             sentiment_score: call.sentiment_score,
             sentiment_label: call.sentiment_label,
@@ -175,21 +184,27 @@ callsRouter.get('/', async (req: Request, res: Response) => {
             sentiment_urgency: call.sentiment_urgency,
             call_type: 'outbound'
           };
-        }));
+        });
 
         allCalls = allCalls.concat(processedCalls);
         totalCount += (outboundCount || 0);
       }
     }
 
-    // Sort all calls by date
-    allCalls.sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime());
+    // For mixed queries, sort and paginate in memory (already limited to 2x per table)
+    // For single call type queries, database already handled pagination
+    let finalCalls = allCalls;
 
-    // Apply pagination
-    const paginatedCalls = allCalls.slice(offset, offset + limit);
+    if (isMixedQuery) {
+      // Sort all calls by date (mixed query only)
+      allCalls.sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime());
+
+      // Apply in-memory pagination (limited dataset)
+      finalCalls = allCalls.slice(offset, offset + limit);
+    }
 
     return res.json({
-      calls: paginatedCalls,
+      calls: finalCalls,
       pagination: {
         page: parsed.page,
         limit: parsed.limit,
@@ -214,51 +229,115 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
     const orgId = req.user?.orgId;
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Fetch all call_logs for this org (for dashboard stats)
-    const { data: allCalls, error: callsError } = await supabase
-      .from('call_logs')
-      .select('*')
-      .eq('org_id', orgId)
-      .order('started_at', { ascending: false });
+    // PERFORMANCE OPTIMIZATION: Use database aggregation instead of fetching all records
+    // This replaces full table scan + JavaScript filtering with efficient database queries
 
-    if (callsError) {
-      log.error('Calls', 'GET /stats - Database error', { orgId, error: callsError.message });
-      return res.status(500).json({ error: callsError.message });
-    }
-
-    // New: Calculate Pipeline Value from Leads (Last 30 Days)
+    const today = new Date().toISOString().split('T')[0];
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data: leads, error: leadsError } = await supabase
-      .from('leads')
-      .select('metadata')
-      .eq('org_id', orgId)
-      .gte('created_at', thirtyDaysAgo.toISOString());
+    // Execute all aggregation queries in parallel for maximum performance
+    const [
+      totalCallsResult,
+      completedCallsResult,
+      callsTodayResult,
+      inboundCallsResult,
+      outboundCallsResult,
+      avgDurationResult,
+      recentCallsResult,
+      leadsResult
+    ] = await Promise.all([
+      // Total calls count
+      supabase
+        .from('call_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId),
 
+      // Completed calls count
+      supabase
+        .from('call_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .eq('status', 'completed'),
+
+      // Calls today count
+      supabase
+        .from('call_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .gte('started_at', `${today}T00:00:00.000Z`)
+        .lte('started_at', `${today}T23:59:59.999Z`),
+
+      // Inbound calls count (metadata.channel = 'inbound')
+      supabase
+        .from('call_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .contains('metadata', { channel: 'inbound' }),
+
+      // Outbound calls count (metadata.channel = 'outbound')
+      supabase
+        .from('call_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .contains('metadata', { channel: 'outbound' }),
+
+      // Average duration (fetch only completed calls with duration)
+      supabase
+        .from('call_logs')
+        .select('duration_seconds')
+        .eq('org_id', orgId)
+        .eq('status', 'completed')
+        .not('duration_seconds', 'is', null),
+
+      // Recent calls (last 5) - still need actual data for display
+      supabase
+        .from('call_logs')
+        .select('id, phone_number, to_number, caller_name, started_at, created_at, duration_seconds, status, call_type, metadata')
+        .eq('org_id', orgId)
+        .order('started_at', { ascending: false })
+        .limit(5),
+
+      // Pipeline value from leads (last 30 days)
+      supabase
+        .from('leads')
+        .select('metadata')
+        .eq('org_id', orgId)
+        .gte('created_at', thirtyDaysAgo.toISOString())
+    ]);
+
+    // Check for errors (using first query as representative)
+    if (totalCallsResult.error) {
+      log.error('Calls', 'GET /stats - Database error', { orgId, error: totalCallsResult.error.message });
+      return res.status(500).json({ error: totalCallsResult.error.message });
+    }
+
+    // Calculate aggregate stats from database results
+    const totalCalls = totalCallsResult.count || 0;
+    const completedCalls = completedCallsResult.count || 0;
+    const callsToday = callsTodayResult.count || 0;
+    const inboundCalls = inboundCallsResult.count || 0;
+
+    // Outbound calls = total - inbound (handles both explicit 'outbound' and missing channel)
+    const outboundCalls = totalCalls - inboundCalls;
+
+    // Calculate average duration from completed calls
+    const durationRecords = avgDurationResult.data || [];
+    const totalDuration = durationRecords.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0);
+    const avgDuration = durationRecords.length > 0 ? Math.round(totalDuration / durationRecords.length) : 0;
+
+    // Calculate pipeline value from leads
     let pipelineValue = 0;
-    if (!leadsError && leads) {
-      pipelineValue = leads.reduce((sum, lead) => {
+    if (!leadsResult.error && leadsResult.data) {
+      pipelineValue = leadsResult.data.reduce((sum, lead) => {
         const val = (lead.metadata as any)?.potential_value;
         return sum + (Number(val) || 0);
       }, 0);
     }
 
-    const calls = allCalls || [];
-
-    // Calculate stats (matching frontend logic)
-    const today = new Date().toISOString().split('T')[0];
-    const callsToday = calls.filter((c: any) => c.started_at?.startsWith(today));
-
-    const inbound = calls.filter((c: any) => c.metadata?.channel === 'inbound');
-    const outbound = calls.filter((c: any) => c.metadata?.channel === 'outbound' || !c.metadata?.channel);
-    const completed = calls.filter((c: any) => c.status === 'completed');
-
-    const totalDuration = completed.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0);
-    const avgDuration = completed.length > 0 ? Math.round(totalDuration / completed.length) : 0;
-
-    // Get recent calls (last 5) - format for frontend (include both old and new field names for compatibility)
-    const recentCalls = calls.slice(0, 5).map((c: any) => ({
+    // Format recent calls for frontend (include both old and new field names for compatibility)
+    const recentCallsData = recentCallsResult.data || [];
+    const recentCalls = recentCallsData.map((c: any) => ({
       id: c.id,
       // New field names
       phone_number: c.phone_number || c.to_number || 'Unknown',
@@ -276,14 +355,13 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
     }));
 
     return res.json({
-      totalCalls: calls.length,
-      inboundCalls: inbound.length,
-      outboundCalls: outbound.length,
-      completedCalls: completed.length,
-      callsToday: callsToday.length,
-      callsToday: callsToday.length,
+      totalCalls,
+      inboundCalls,
+      outboundCalls,
+      completedCalls,
+      callsToday,
       avgDuration,
-      pipelineValue, // New Field
+      pipelineValue,
       recentCalls
     });
   } catch (e: any) {
@@ -302,47 +380,50 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
     const orgId = req.user?.orgId;
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
 
+    // PERFORMANCE OPTIMIZATION: Fetch only needed columns and use smart filtering
+    // Instead of 4 separate queries (all, today, week, month), fetch once and filter in JavaScript
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Get all calls
-    const { data: allCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId);
+    // Parallel queries: Get ALL calls for aggregate stats + month's calls for time-based stats
+    const [allCallsResult, monthCallsResult] = await Promise.all([
+      // All calls - only fetch columns needed for aggregate stats (no large text fields)
+      supabase
+        .from('calls')
+        .select('id, call_date, status, duration_seconds, sentiment_score')
+        .eq('org_id', orgId),
 
-    const calls = allCalls || [];
+      // Month's calls - includes today and week (smart fetch eliminates 2 redundant queries)
+      supabase
+        .from('calls')
+        .select('id, call_date')
+        .eq('org_id', orgId)
+        .gte('call_date', monthAgo.toISOString())
+    ]);
 
-    // Get today's calls
-    const { data: todayCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('call_date', today.toISOString());
+    const calls = allCallsResult.data || [];
+    const monthCalls = monthCallsResult.data || [];
 
-    // Get week's calls
-    const { data: weekCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('call_date', weekAgo.toISOString());
+    // Filter month's calls in JavaScript (fast with small dataset ~1000 records max)
+    const todayISO = today.toISOString().split('T')[0];
+    const weekAgoISO = weekAgo.toISOString();
 
-    // Get month's calls
-    const { data: monthCalls } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', orgId)
-      .gte('call_date', monthAgo.toISOString());
+    const todayCalls = monthCalls.filter((c: any) => c.call_date >= todayISO);
+    const weekCalls = monthCalls.filter((c: any) => c.call_date >= weekAgoISO);
 
+    // Calculate aggregate stats from all calls
     const completedCalls = calls.filter((c: any) => c.status === 'completed');
     const missedCalls = calls.filter((c: any) => c.status === 'missed');
+
     const avgDuration = completedCalls.length > 0
       ? Math.round(completedCalls.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0) / completedCalls.length)
       : 0;
-    const avgSentiment = calls.filter((c: any) => c.sentiment_score).length > 0
-      ? calls.filter((c: any) => c.sentiment_score).reduce((sum: number, c: any) => sum + c.sentiment_score, 0) / calls.filter((c: any) => c.sentiment_score).length
+
+    const callsWithSentiment = calls.filter((c: any) => c.sentiment_score != null);
+    const avgSentiment = callsWithSentiment.length > 0
+      ? callsWithSentiment.reduce((sum: number, c: any) => sum + c.sentiment_score, 0) / callsWithSentiment.length
       : 0;
 
     return res.json({
@@ -351,13 +432,73 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
       missed_calls: missedCalls.length,
       average_duration: avgDuration,
       average_sentiment: Math.round(avgSentiment * 100) / 100,
-      calls_today: todayCalls?.length || 0,
-      calls_this_week: weekCalls?.length || 0,
-      calls_this_month: monthCalls?.length || 0
+      calls_today: todayCalls.length,
+      calls_this_week: weekCalls.length,
+      calls_this_month: monthCalls.length
     });
   } catch (e: any) {
     log.error('Calls', 'GET /analytics/summary - Error', { error: e?.message });
     return res.status(500).json({ error: e?.message || 'Failed to fetch analytics' });
+  }
+});
+
+/**
+ * GET /api/calls-dashboard/:callId/recording-url
+ * Generate signed URL for call recording on-demand (performance optimization)
+ * IMPORTANT: Must be defined BEFORE /:callId route (more specific path)
+ */
+callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { callId } = req.params;
+
+    // Try to fetch from call_logs first (inbound calls)
+    const { data: inboundCall } = await supabase
+      .from('call_logs')
+      .select('id, recording_storage_path, recording_url')
+      .eq('id', callId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (inboundCall?.recording_storage_path) {
+      const signedUrl = await getSignedRecordingUrl(inboundCall.recording_storage_path);
+      if (signedUrl) {
+        return res.json({ recording_url: signedUrl });
+      }
+      // Fallback to legacy recording_url if signed URL generation fails
+      if (inboundCall.recording_url) {
+        return res.json({ recording_url: inboundCall.recording_url });
+      }
+    }
+
+    // Fall back to calls table (outbound calls)
+    const { data: outboundCall } = await supabase
+      .from('calls')
+      .select('id, recording_storage_path, recording_path, recording_url')
+      .eq('id', callId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (outboundCall) {
+      const path = outboundCall.recording_storage_path || outboundCall.recording_path;
+      if (path) {
+        const signedUrl = await getSignedRecordingUrl(path);
+        if (signedUrl) {
+          return res.json({ recording_url: signedUrl });
+        }
+      }
+      // Fallback to legacy recording_url
+      if (outboundCall.recording_url) {
+        return res.json({ recording_url: outboundCall.recording_url });
+      }
+    }
+
+    return res.status(404).json({ error: 'Recording not found' });
+  } catch (e: any) {
+    log.error('Calls', 'GET /:callId/recording-url - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to generate recording URL' });
   }
 });
 

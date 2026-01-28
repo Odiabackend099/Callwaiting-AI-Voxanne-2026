@@ -1,89 +1,86 @@
 @tailwind base;
-/* Force Rebuild for Light Mode Fix */
 @tailwind components;
 @tailwind utilities;
 
-/* @custom-variant dark (&:where(.dark, .dark *)); */
-
 :root {
-  /* Premium AI Design Base - Light Mode (Slate 50 Foundation) */
-  --background: #f8fafc;
-  /* Slate 50 - Softer than pure white */
-  --foreground: #0f172a;
-  /* Slate 900 - Sharp text */
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #0f172a;
-  --primary-foreground: #f8fafc;
-  --secondary: #f1f5f9;
-  /* Slate 100 */
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  /* Slate 100 */
-  --muted-foreground: #64748b;
-  /* Slate 500 */
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #ef4444;
-  --destructive-foreground: #f8fafc;
-  --border: #e2e8f0;
-  /* Slate 200 */
-  --input: #e2e8f0;
-  --ring: #0f172a;
-}
-
-.dark {
-  /* Premium Dark Mode (Refined for Contrast) */
-  --background: #020617;
-  /* Slate 950 (Keep deep base) */
-  --foreground: #e2e8f0;
-  /* Slate 200 (Softer than pure white) */
-  --card: #0f172a;
+  /* Clinical Trust Theme - Light Mode Only */
+  --background: #FFFFFF;
+  --foreground: #0F172A;
   /* Slate 900 */
-  --card-foreground: #e2e8f0;
+
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+
+  --primary: #006BFF;
+  /* Calendly Blue */
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #F1F5F9;
+  /* Slate 100 */
+  --secondary-foreground: #0F172A;
+
+  --muted: #F8FAFC;
+  /* Slate 50 */
+  --muted-foreground: #64748B;
+  /* Slate 500 */
+
+  --accent: #F1F5F9;
+  --accent-foreground: #0F172A;
+
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #E2E8F0;
   /* Slate 200 */
-  --popover: #0f172a;
-  --popover-foreground: #e2e8f0;
-  --primary: #f8fafc;
-  /* Slate 50 (Keep bright for key actions) */
-  --primary-foreground: #0f172a;
-  --secondary: #1e293b;
-  /* Slate 800 */
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #cbd5e1;
-  /* Slate 300 (Lighter for better readability) */
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #7f1d1d;
-  --destructive-foreground: #f8fafc;
-  --border: #334155;
-  /* Slate 700 (More visible borders) */
-  --input: #1e293b;
-  --ring: #cbd5e1;
+  --input: #E2E8F0;
+  --ring: #006BFF;
+  /* Calendly Blue */
+
+  --radius: 0.5rem;
+
+  /* Chart colors */
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
 }
 
-/* @theme {
-  --font-sans: var(--font-inter);
-  --font-serif: var(--font-playfair);
-} */
+/* Enforce Light Mode even if system is dark */
+.dark {
+  --background: #FFFFFF;
+  --foreground: #0F172A;
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  --primary: #006BFF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #0F172A;
+  --muted: #F8FAFC;
+  --muted-foreground: #64748B;
+  --accent: #F1F5F9;
+  --accent-foreground: #0F172A;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #006BFF;
+}
 
 body {
   color: var(--foreground);
   background: var(--background);
-  /* Premium gradient for depth */
-  background-image: radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 100% 0%, rgba(6, 182, 212, 0.05) 0%, transparent 30%);
-  background-size: cover;
-  background-attachment: fixed;
-  background-position: center;
   font-family: var(--font-inter), sans-serif;
-  font-size: 14px;
-  /* Premium small text base */
-  line-height: 1.5;
-  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+  font-size: 15px;
+  /* Slightly larger for readability */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Ensure all form inputs have proper text color */
@@ -91,103 +88,20 @@ input,
 textarea,
 select {
   color: inherit !important;
-  font-size: 14px;
-  /* Maintain standard size */
+  font-size: 15px;
 }
 
-/* Premium Glassmorphism Utilities */
+/* Clinical Glassmorphism - Subtle & Clean */
 .glass-panel {
-  @apply bg-slate-900/60 backdrop-blur-xl border border-white/20 shadow-sm dark:shadow-xl;
+  @apply bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm;
 }
 
 .glass-card {
-  @apply bg-slate-900/40 backdrop-blur-lg border border-white/20 transition-all duration-300;
+  @apply bg-white/60 backdrop-blur-sm border border-slate-200 transition-all duration-300 hover:shadow-md;
 }
 
-@keyframes heartbeat {
-  0% {
-    transform: scale(1);
-  }
-
-  15% {
-    transform: scale(1.05);
-  }
-
-  30% {
-    transform: scale(1);
-  }
-
-  45% {
-    transform: scale(1.05);
-  }
-
-  60% {
-    transform: scale(1);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
-.animate-heartbeat {
-  animation: heartbeat 3s infinite;
-}
-
-@keyframes pulse-glow {
-
-  0%,
-  100% {
-    box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
-  }
-
-  50% {
-    box-shadow: 0 0 25px rgba(6, 182, 212, 0.8);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s infinite;
-}
-
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-
-  100% {
-    transform: translateX(-100%);
-  }
-}
-
-@keyframes marquee2 {
-  0% {
-    transform: translateX(100%);
-  }
-
-  100% {
-    transform: translateX(0);
-  }
-}
-
-.animate-marquee {
-  animation: marquee 25s linear infinite;
-}
-
-.animate-marquee2 {
-  animation: marquee2 25s linear infinite;
-}
-
-@keyframes scanline {
-  0% {
-    transform: translateY(-100%);
-  }
-
-  100% {
-    transform: translateY(100%);
-  }
-}
-
-.animate-scanline {
-  animation: scanline 2.5s linear infinite;
+/* Swiss Typography Utilities */
+.tracking-tight-swiss {
+  letter-spacing: -0.02em;
+  /* Less aggressive than before */
 }

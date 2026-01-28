@@ -61,88 +61,57 @@ export interface EnsureAssistantResult {
 
 export class VapiAssistantManager {
   /**
-   * Helper to normalize voice configuration
+   * Helper to resolve voice configuration using voice registry
    *
    * Handles:
-   * - Legacy Vapi voices (jennifer, kylie, neha, etc.) → Azure/Jenny
-   * - Unmapped providers (vapi, undefined) → Azure/Jenny
-   * - Empty voice IDs → Azure/Jenny
-   * - Valid Azure voices → pass through unchanged
+   * - Legacy Vapi voices (neha, paige, harry, etc.) → Normalized to 2026 active voices
+   * - Invalid voice/provider combinations → Falls back to Rohan (default)
+   * - Empty voice IDs → Defaults to Rohan
+   * - Valid active voices → Pass through with provider
    *
-   * This prevents 400 "Voice Not Found" errors from Vapi API
+   * Uses voice registry as single source of truth for 100+ voices across 7 providers
    */
-  private static normalizeVoiceConfig(config: AssistantConfig): { provider: string; voiceId: string } {
-    const legacyVoices = new Set([
-      // Original Vapi-hosted voices (no longer supported)
-      'jennifer', 'kylie', 'neha', 'rohan', 'elliot', 'lily', 'savannah',
-      'hana', 'cole', 'harry', 'paige', 'spencer', 'leah', 'tara',
-      'jess', 'leo', 'dan', 'mia', 'zac', 'zoe'
-    ]);
+  private static async resolveVoiceConfig(config: AssistantConfig): Promise<{ provider: string; voiceId: string }> {
+    try {
+      const { isValidVoice, getVoiceById } = require('../config/voice-registry');
 
-    const voiceId = config.voiceId?.toLowerCase() || '';
-    const voiceProvider = config.voiceProvider?.toLowerCase() || '';
+      const voiceId = config.voiceId || 'Rohan';
+      const voiceProvider = config.voiceProvider || 'vapi';
 
-    // Condition 1: Voice is in legacy list
-    if (legacyVoices.has(voiceId)) {
-      log.info('VapiAssistantManager', `Normalizing legacy voice ID: ${config.voiceId}`, {
-        reason: 'legacy_vapi_voice',
-        original: config.voiceId,
-        normalized: 'en-US-JennyNeural'
+      // Check if voice/provider combination is valid
+      if (isValidVoice(voiceId, voiceProvider)) {
+        log.debug('VapiAssistantManager', 'Voice configuration valid', {
+          voiceId,
+          provider: voiceProvider
+        });
+        return { voiceId, provider: voiceProvider };
+      }
+
+      // Voice not found in SSOT registry - default to Rohan (Vapi native)
+      log.warn('VapiAssistantManager', 'Invalid voice configuration, using default', {
+        original: voiceId,
+        originalProvider: voiceProvider,
+        defaultVoice: 'Rohan',
+        defaultProvider: 'vapi',
+        reason: 'voice_not_in_ssot'
       });
+
       return {
-        provider: 'azure',
-        voiceId: 'en-US-JennyNeural'
+        voiceId: 'Rohan',
+        provider: 'vapi'
+      };
+    } catch (error: any) {
+      log.warn('VapiAssistantManager', 'Error resolving voice config, using defaults', {
+        error: error?.message,
+        voiceId: config.voiceId
+      });
+
+      // Fallback to Rohan if voice registry has issues
+      return {
+        voiceId: 'Rohan',
+        provider: 'vapi'
       };
     }
-
-    // Condition 2: Provider is 'vapi' (legacy provider)
-    if (voiceProvider === 'vapi') {
-      log.info('VapiAssistantManager', `Normalizing legacy voice provider: vapi`, {
-        reason: 'vapi_provider_deprecated',
-        voiceId: config.voiceId,
-        normalized: 'en-US-JennyNeural'
-      });
-      return {
-        provider: 'azure',
-        voiceId: 'en-US-JennyNeural'
-      };
-    }
-
-    // Condition 3: Provider is missing or empty
-    if (!voiceProvider || voiceProvider === 'undefined') {
-      log.info('VapiAssistantManager', `Setting default provider and voice`, {
-        reason: 'missing_provider',
-        voiceId: config.voiceId,
-        normalized: 'en-US-JennyNeural'
-      });
-      return {
-        provider: 'azure',
-        voiceId: 'en-US-JennyNeural'
-      };
-    }
-
-    // Condition 4: Empty voice ID with valid provider
-    if (!voiceId) {
-      log.info('VapiAssistantManager', `Setting default voice for provider ${voiceProvider}`, {
-        reason: 'empty_voice_id',
-        provider: voiceProvider,
-        normalized: 'en-US-JennyNeural'
-      });
-      return {
-        provider: voiceProvider,
-        voiceId: 'en-US-JennyNeural'
-      };
-    }
-
-    // Condition 5: Valid configuration - pass through as-is
-    log.debug('VapiAssistantManager', `Voice configuration valid`, {
-      provider: voiceProvider,
-      voiceId: voiceId
-    });
-    return {
-      provider: voiceProvider,
-      voiceId: config.voiceId || 'en-US-JennyNeural'
-    };
   }
 
   /**
@@ -202,12 +171,12 @@ export class VapiAssistantManager {
 
       const vapi = new VapiClient(vapiCreds.apiKey);
 
-      // Step 2: Normalize voice configuration (prevents 400 errors)
-      const voiceConfig = this.normalizeVoiceConfig(config);
-      log.info('VapiAssistantManager', '🎤 Voice configuration normalized', {
+      // Step 2: Resolve voice configuration using voice registry (prevents 400 errors)
+      const voiceConfig = await this.resolveVoiceConfig(config);
+      log.info('VapiAssistantManager', '🎤 Voice configuration resolved', {
         operationId,
         original: `${config.voiceProvider}/${config.voiceId}`,
-        normalized: `${voiceConfig.provider}/${voiceConfig.voiceId}`,
+        resolved: `${voiceConfig.provider}/${voiceConfig.voiceId}`,
       });
 
       // Step 3: Check if assistant_id exists in agents table
@@ -519,8 +488,14 @@ export class VapiAssistantManager {
             .from('agents')
             .update({
               vapi_assistant_id: assistantId,
+              name: config.name,
+              system_prompt: config.systemPrompt,
+              first_message: config.firstMessage,
+              voice: voiceConfig.voiceId,
+              voice_provider: voiceConfig.provider,
+              language: config.language,
+              max_call_duration: config.maxDurationSeconds,
               updated_at: new Date().toISOString(),
-              voice: voiceConfig.voiceId
             })
             .eq('id', agent.id);
 
@@ -558,6 +533,7 @@ export class VapiAssistantManager {
               system_prompt: config.systemPrompt,
               first_message: config.firstMessage || 'Hello! How can I help you today?',
               voice: voiceConfig.voiceId,
+              voice_provider: voiceConfig.provider,
               language: config.language || 'en',
               max_call_duration: config.maxDurationSeconds || 600,
             });
@@ -789,32 +765,153 @@ export class VapiAssistantManager {
   }
 
   /**
-   * Delete assistant (soft delete - marks as inactive)
+   * Hard delete assistant from database and Vapi
+   * Implements comprehensive cleanup with error recovery:
+   * 1. Fetch agent details before deletion
+   * 2. Check for active calls (safety check)
+   * 3. Delete from Vapi (best effort - don't block on failure)
+   * 4. Unassign phone number if assigned
+   * 5. Delete from database (CASCADE handles assistant_org_mapping)
+   * 6. Audit log the deletion
    *
    * @param orgId - Organization ID
-   * @param role - Assistant role
+   * @param role - Assistant role ('inbound' | 'outbound')
+   * @throws Error if active calls exist or database cleanup fails
    */
   static async deleteAssistant(
     orgId: string,
     role: 'inbound' | 'outbound'
   ): Promise<void> {
     try {
-      const { error } = await supabase
+      // 1. Get assistant details before deletion
+      const { data: agent, error: fetchError } = await supabase
         .from('agents')
-        .update({
-          active: false,
-          updated_at: new Date().toISOString(),
-        })
+        .select('id, vapi_assistant_id, vapi_phone_number_id')
         .eq('org_id', orgId)
-        .eq('role', role);
+        .eq('role', role)
+        .maybeSingle();
 
-      if (error) {
-        throw error;
+      if (fetchError) {
+        throw fetchError;
       }
 
-      log.info('VapiAssistantManager', 'Assistant marked as inactive', {
+      if (!agent) {
+        log.warn('VapiAssistantManager', 'Agent not found for deletion', {
+          orgId,
+          role,
+        });
+        return; // No agent to delete
+      }
+
+      // 2. Check for active calls (safety check)
+      const { data: activeCalls, error: callError } = await supabase
+        .from('calls')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('status', 'active')
+        .limit(1);
+
+      if (callError) {
+        throw callError;
+      }
+
+      if (activeCalls && activeCalls.length > 0) {
+        throw new Error('Cannot delete agent with active calls. Please wait for calls to complete.');
+      }
+
+      // 3. Delete from Vapi (best effort - don't block on failure)
+      if (agent.vapi_assistant_id) {
+        try {
+          const vapiKey = process.env.VAPI_PRIVATE_KEY;
+          if (!vapiKey) {
+            throw new Error('VAPI_PRIVATE_KEY not configured');
+          }
+
+          const vapi = new VapiClient(vapiKey);
+          await vapi.deleteAssistant(agent.vapi_assistant_id);
+
+          log.info('VapiAssistantManager', 'Assistant deleted from Vapi', {
+            orgId,
+            role,
+            assistantId: agent.vapi_assistant_id,
+          });
+        } catch (vapiError: any) {
+          // Log but continue - we still want to clean up database
+          log.error('VapiAssistantManager', 'Failed to delete from Vapi (continuing with DB cleanup)', {
+            orgId,
+            role,
+            assistantId: agent.vapi_assistant_id,
+            error: vapiError?.message,
+          });
+        }
+      }
+
+      // 4. Clear phone number assignment (if any)
+      if (agent.vapi_phone_number_id) {
+        try {
+          const vapiKey = process.env.VAPI_PRIVATE_KEY;
+          if (!vapiKey) {
+            throw new Error('VAPI_PRIVATE_KEY not configured');
+          }
+
+          const vapi = new VapiClient(vapiKey);
+
+          // Unassign phone number by updating to null assistant
+          await vapi.updatePhoneNumber(agent.vapi_phone_number_id, {
+            assistantId: null
+          });
+
+          log.info('VapiAssistantManager', 'Phone number unassigned', {
+            orgId,
+            phoneNumberId: agent.vapi_phone_number_id,
+          });
+        } catch (phoneError: any) {
+          log.error('VapiAssistantManager', 'Failed to unassign phone number', {
+            orgId,
+            phoneNumberId: agent.vapi_phone_number_id,
+            error: phoneError?.message,
+          });
+        }
+      }
+
+      // 5. Delete from database (CASCADE will handle assistant_org_mapping)
+      const { error: deleteError } = await supabase
+        .from('agents')
+        .delete()
+        .eq('id', agent.id);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      // 6. Audit log the deletion
+      try {
+        await supabase
+          .from('audit_logs')
+          .insert({
+            org_id: orgId,
+            action: 'agent.deleted',
+            resource_type: 'agent',
+            resource_id: agent.id,
+            details: {
+              role,
+              vapi_assistant_id: agent.vapi_assistant_id,
+              vapi_phone_number_id: agent.vapi_phone_number_id,
+            },
+          });
+      } catch (auditError: any) {
+        // Don't fail deletion if audit logging fails
+        log.warn('VapiAssistantManager', 'Failed to audit log deletion', {
+          orgId,
+          role,
+          error: auditError?.message,
+        });
+      }
+
+      log.info('VapiAssistantManager', 'Agent successfully deleted', {
         orgId,
         role,
+        agentId: agent.id,
       });
     } catch (error: any) {
       log.error('VapiAssistantManager', 'Failed to delete assistant', {

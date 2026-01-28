@@ -140,3 +140,5 @@ export function csrfTokenEndpoint(req: Request, res: Response) {
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
   });
 }
+
+export const csrfProtection = validateCsrfToken;

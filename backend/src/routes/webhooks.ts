@@ -27,6 +27,9 @@ import {
   getSmsCredentialsForOrg,
   getCalendarCredentialsForOrg,
 } from '../utils/webhook-org-resolver';
+import { verifyWebhookSignature } from '../middleware/verify-webhook-signature';
+import { enqueueWebhook } from '../config/webhook-queue';
+import { redactPHI } from '../services/phi-redaction';
 
 export const webhooksRouter = express.Router();
 
@@ -375,107 +378,83 @@ interface VapiEvent {
  *
  * See: /Users/mac/.claude/plans/mossy-wishing-pony.md for Render free tier scalability assessment
  */
-webhooksRouter.post('/vapi', webhookLimiter, async (req, res) => {
-  try {
-    // Track webhook receipt time for latency monitoring
-    (req as any).webhookReceivedAt = Date.now();
+webhooksRouter.post('/vapi',
+  webhookLimiter,
+  verifyWebhookSignature({ maxAgeSeconds: 300 }),
+  async (req, res) => {
+    const requestStart = Date.now();
 
-    // Log every webhook call for debugging
-    logger.info('webhooks', 'Webhook received');
-
-    // ===== CRITICAL: BYOC - Resolve organization from webhook FIRST =====
-    // This MUST happen before any credential access
+    // Resolve org context
     const orgContext = await resolveOrgFromWebhook(req);
     if (!orgContext) {
-      logger.error('webhooks', 'Failed to resolve organization from webhook');
-      res.status(400).json({ error: 'Cannot resolve organization' });
-      return;
+      return res.status(400).json({ error: 'Cannot resolve organization' });
     }
 
-    // Store org_id in request for later use by handlers
-    (req as any).orgId = orgContext.orgId;
-    (req as any).assistantId = orgContext.assistantId;
+    const event = req.body;
+    const eventType = event.type || event.message?.type;
 
-    logger.info('webhooks', 'Organization resolved from webhook', {
+    // Log webhook receipt
+    const { data: deliveryLog } = await supabase
+      .from('webhook_delivery_log')
+      .insert({
+        org_id: orgContext.orgId,
+        event_type: eventType,
+        event_id: event.call?.id || 'unknown',
+        received_at: new Date(requestStart).toISOString(),
+        status: 'pending'
+      })
+      .select('id')
+      .single();
+
+    // Enqueue for async processing
+    const jobData = {
+      eventType,
+      event,
       orgId: orgContext.orgId,
       assistantId: orgContext.assistantId,
+      receivedAt: new Date(requestStart).toISOString()
+    };
+
+    const job = await enqueueWebhook(jobData);
+
+    if (!job) {
+      // Queue unavailable - fallback to sync
+      logger.warn('Webhook', 'Queue unavailable, processing synchronously');
+      await processWebhookSync(event, orgContext);
+
+      if (deliveryLog) {
+        await supabase
+          .from('webhook_delivery_log')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('id', deliveryLog.id);
+      }
+
+      return res.status(200).json({ received: true, processed: 'sync' });
+    }
+
+    // Update delivery log with job ID
+    if (deliveryLog) {
+      await supabase
+        .from('webhook_delivery_log')
+        .update({ job_id: job.id, status: 'processing' })
+        .eq('id', deliveryLog.id);
+    }
+
+    // Return immediately (async processing)
+    const responseTime = Date.now() - requestStart;
+    logger.info('Webhook', 'Webhook enqueued', {
+      eventType,
+      jobId: job.id,
+      responseTime: `${responseTime}ms` 
     });
 
-    // ===== CRITICAL FIX #9: Enforce webhook signature verification with org-specific credentials =====
-    try {
-      const isValid = await verifyVapiWebhookSignature(req, orgContext.orgId);
-      if (!isValid) {
-        logger.error('webhooks', 'Invalid webhook signature', { orgId: orgContext.orgId });
-        res.status(401).json({ error: 'Invalid webhook signature' });
-        return;
-      }
-      logger.debug('webhooks', 'Signature verified', { orgId: orgContext.orgId });
-    } catch (verifyError: any) {
-      logger.error('webhooks', 'Signature verification failed', {
-        orgId: orgContext.orgId,
-        error: verifyError?.message,
-      });
-      res.status(401).json({ error: 'Webhook verification failed' });
-      return;
-    }
-
-    // ===== CRITICAL FIX #5: Validate Vapi event structure with Zod =====
-    let event: VapiEvent;
-    try {
-      event = VapiEventValidationSchema.parse(req.body) as VapiEvent;
-      logger.debug('webhooks', 'Event validated');
-    } catch (parseError: any) {
-      logger.error('webhooks', 'Invalid event structure');
-      res.status(400).json({ error: 'Invalid event structure' });
-      return;
-    }
-
-    logger.debug('webhooks', 'Event received');
-
-    let handlerSuccess = true;
-    try {
-      switch (event.type) {
-        case 'call.started':
-          await handleCallStarted(event);
-          break;
-
-        case 'call.ended':
-          await handleCallEnded(event);
-          break;
-
-        case 'call.transcribed':
-          await handleTranscript(event);
-          break;
-
-        case 'end-of-call-report':
-          await handleEndOfCallReport(event);
-          break;
-
-        case 'function-call':
-          const result = await handleFunctionCall(event);
-          res.status(200).json(result);
-          return;
-
-        default:
-          logger.warn('webhooks', 'Unhandled event type');
-      }
-    } catch (handlerError) {
-      logger.error('webhooks', 'Handler error');
-      handlerSuccess = false;
-    }
-
-    // FIX #3: Return error status if handler failed
-    if (!handlerSuccess) {
-      res.status(500).json({ error: 'Handler processing failed' });
-      return;
-    }
-
-    res.status(200).json({ received: true });
-  } catch (error) {
-    logger.error('webhooks', 'Webhook processing failed');
-    res.status(500).json({ error: 'Webhook processing failed' });
+    res.status(200).json({
+      received: true,
+      jobId: job.id,
+      processed: 'async'
+    });
   }
-});
+);
 
 async function handleCallStarted(event: VapiEvent) {
   const { call } = event;
@@ -666,19 +645,19 @@ async function handleCallStarted(event: VapiEvent) {
 
     try {
       const callType = isInboundCall ? 'inbound' : 'outbound';
-      const configTableName = callType === 'inbound' ? 'inbound_agent_config' : 'outbound_agent_config';
+      const agentRole = callType; // 'inbound' or 'outbound'
 
       logger.info('handleCallStarted', `Loading ${callType} agent config`, {
         vapiCallId: call.id,
         orgId: callTracking.org_id,
-        tableName: configTableName
+        role: agentRole
       });
 
       const { data: config, error: configError } = await supabase
-        .from(configTableName)
+        .from('agents')
         .select('*')
         .eq('org_id', callTracking.org_id)
-        .eq('is_active', true)
+        .eq('role', agentRole)
         .maybeSingle();
 
       if (configError) {
@@ -1046,12 +1025,25 @@ async function handleTranscript(event: any) {
     }
 
     if (callTracking) {
+      // PRIORITY 7: HIPAA COMPLIANCE - Redact PHI from transcript before storage
+      const redactedTranscript = await redactPHI(cleanTranscript, {
+        redactDates: true,
+        redactPhones: true,
+        redactEmails: true,
+        redactMedicalTerms: true
+      });
+
+      logger.info('webhooks', 'PHI redaction applied to transcript', {
+        originalLength: cleanTranscript.length,
+        redactedLength: redactedTranscript.length
+      });
+
       // Insert transcript into call_transcripts (source of truth)
       const { error: insertError } = await supabase.from('call_transcripts').insert({
         call_id: callTracking.id,
         vapi_call_id: call.id,
         speaker: speaker,
-        text: cleanTranscript,
+        text: redactedTranscript,
         created_at: new Date().toISOString()
       });
 
@@ -1404,6 +1396,24 @@ async function handleEndOfCallReport(event: VapiEvent) {
       recordingStatus = 'failed';
     }
 
+    // PRIORITY 7: HIPAA COMPLIANCE - Redact PHI from transcript before storage
+    let redactedTranscript: string | null = null;
+    if (artifact?.transcript) {
+      redactedTranscript = await redactPHI(artifact.transcript, {
+        redactDates: true,
+        redactPhones: true,
+        redactEmails: true,
+        redactMedicalTerms: true
+      });
+
+      logger.info('webhooks', 'PHI redaction applied to end-of-call transcript', {
+        callId: call.id,
+        originalLength: artifact.transcript.length,
+        redactedLength: redactedTranscript.length,
+        orgId: callLog.org_id
+      });
+    }
+
     // Update call_logs with final data including recording metadata
     // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callLogsError } = await supabase
@@ -1415,7 +1425,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
         recording_signed_url_expires_at: recordingSignedUrl ? new Date(Date.now() + 3600000).toISOString() : null,
         recording_uploaded_at: recordingUploadedAt,
         recording_status: recordingStatus,
-        transcript: artifact?.transcript || null,
+        transcript: redactedTranscript || null,
         transcript_only_fallback: !recordingStoragePath && !!artifact?.transcript,
         cost: call.cost || 0,
         sentiment_score: sentimentResult.score,
@@ -1704,6 +1714,32 @@ async function handleEndOfCallReport(event: VapiEvent) {
       }
     }
     // ===== END CONTACT STATUS UPDATE =====
+
+    // ===== BILLING: Report call usage =====
+    if (callLog?.org_id && call.id && call.duration) {
+      try {
+        const { processCallUsage } = await import('../services/billing-manager');
+        await processCallUsage(
+          callLog.org_id,
+          call.id,
+          call.id,
+          Math.round(call.duration)
+        );
+        logger.info('webhooks', 'Call usage billed', {
+          callId: call.id,
+          orgId: callLog.org_id,
+          durationSeconds: Math.round(call.duration),
+        });
+      } catch (billingError: any) {
+        // CRITICAL: Billing failure must NOT block webhook processing
+        logger.error('webhooks', 'Billing failed (non-blocking)', {
+          error: billingError?.message,
+          callId: call.id,
+          orgId: callLog.org_id,
+        });
+      }
+    }
+    // ===== END BILLING =====
 
     // Lead/campaign follow-up automation intentionally disabled for this project.
   } catch (error) {
@@ -2252,7 +2288,7 @@ async function handleNotifyHotLead(
         error: smsError?.message
       });
       return {
-        result: 'Thank you for your interest! Our team will contact you soon to discuss your needs.'
+        result: 'Thank you! We\'ve noted your interest and will follow up with you shortly.'
       };
     }
   } catch (error: any) {

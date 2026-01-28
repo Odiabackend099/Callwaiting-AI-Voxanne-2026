@@ -1,32 +1,21 @@
 import type { Metadata } from "next";
-import { Lato, Playfair_Display, Poppins, Inter } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import JsonLd from "@/components/JsonLd";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastContainer } from "@/components/ToastContainer";
 import DevSwCleanup from "@/components/DevSwCleanup";
 
-const lato = Lato({
-  weight: ["100", "300", "400", "700", "900"],
-  subsets: ["latin"],
-  variable: "--font-lato",
-});
-
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-playfair",
-});
-
-const poppins = Poppins({
-  weight: ["400", "500", "600", "700", "800"],
-  subsets: ["latin"],
-  variable: "--font-poppins",
-});
-
 const inter = Inter({
-  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+});
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -45,17 +34,17 @@ export const metadata: Metadata = {
     "appointment booking AI",
     "24/7 call answering"
   ],
-  authors: [{ name: "CallWaiting AI" }],
-  creator: "CallWaiting AI",
-  metadataBase: new URL('https://callwaitingai.dev'),
+  authors: [{ name: "Voxanne AI" }],
+  creator: "Voxanne AI",
+  metadataBase: new URL('https://voxanne.ai'),
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: "CallWaiting AI | The #1 AI Receptionist",
+    title: "Voxanne AI | The #1 AI Receptionist for Clinics",
     description: "Replace your missed calls with revenue. The AI receptionist that books appointments for you.",
-    url: 'https://callwaitingai.dev',
-    siteName: 'CallWaiting AI',
+    url: 'https://voxanne.ai',
+    siteName: 'Voxanne AI',
     images: [
       {
         url: 'https://callwaitingai.dev/callwaiting-ai-logo.png',
@@ -70,8 +59,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "CallWaiting AI | The #1 AI Receptionist",
-    description: "Don't let missed calls cost you money. Switch to CallWaiting AI.",
+    title: "Voxanne AI | The #1 AI Receptionist for Clinics",
+    description: "Don't let missed calls cost you money. Switch to Voxanne AI.",
     images: ['/callwaiting-ai-logo.png'],
   },
   robots: {
@@ -106,7 +95,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${lato.variable} ${playfair.variable} ${poppins.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`} suppressHydrationWarning>
       <body
         className="antialiased font-sans min-h-screen bg-background text-foreground"
         suppressHydrationWarning

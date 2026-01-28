@@ -13,6 +13,7 @@ import { configureVapiWebhook, verifyWebhookConfiguration } from '../services/va
 import { log } from '../services/logger';
 import { VapiClient } from '../services/vapi-client';
 import { requireAuthOrDev } from '../middleware/auth';
+import { invalidateOrgSettingsCache } from '../services/cache';
 
 const router = express.Router();
 
@@ -25,23 +26,22 @@ interface IntegrationSettings {
   twilio_account_sid?: string;
   twilio_auth_token?: string;
   twilio_from_number?: string;
-  test_destination_number?: string;
 }
 
 /**
  * GET /api/founder-console/settings
  * Retrieve integration settings (without exposing raw keys)
- * 
- * Returns: { vapiConfigured, twilioConfigured, testDestination, lastVerified }
+ *
+ * Returns: { vapiConfigured, twilioConfigured, lastVerified }
  */
 router.get('/settings', async (req: Request, res: Response): Promise<void> => {
   try {
     // Use orgId from authenticated user (set by requireAuthOrDev middleware)
     const orgId = req.user?.orgId || 'founder-console'; // Fallback to legacy org_id for backward compatibility
-    
+
     const { data: settings, error } = await supabase
       .from('integration_settings')
-      .select('vapi_api_key, twilio_account_sid, test_destination_number, last_verified_at')
+      .select('vapi_api_key, twilio_account_sid, last_verified_at')
       .eq('org_id', orgId)
       .maybeSingle();
 
@@ -55,7 +55,6 @@ router.get('/settings', async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       vapiConfigured: !!settings?.vapi_api_key,
       twilioConfigured: !!settings?.twilio_account_sid,
-      testDestination: settings?.test_destination_number || null,
       lastVerified: settings?.last_verified_at || null
     });
   } catch (error: any) {
@@ -67,16 +66,15 @@ router.get('/settings', async (req: Request, res: Response): Promise<void> => {
 /**
  * POST /api/founder-console/settings
  * Save integration settings (Vapi/Twilio keys)
- * 
+ *
  * Request: {
  *   vapi_api_key?: string,
  *   vapi_webhook_secret?: string,
  *   twilio_account_sid?: string,
  *   twilio_auth_token?: string,
- *   twilio_from_number?: string,
- *   test_destination_number?: string
+ *   twilio_from_number?: string
  * }
- * 
+ *
  * Response: { success: true }
  */
 router.post('/settings', async (req: Request, res: Response): Promise<void> => {
@@ -87,8 +85,7 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       vapi_webhook_secret,
       twilio_account_sid,
       twilio_auth_token,
-      twilio_from_number,
-      test_destination_number
+      twilio_from_number
     } = req.body;
 
     // Use orgId from authenticated user (set by requireAuthOrDev middleware)
@@ -109,11 +106,6 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!validateE164(test_destination_number)) {
-      res.status(400).json({ error: 'Test destination must be E.164 format (e.g., +234...)' });
-      return;
-    }
-
     // Check if settings already exist
     const { data: existing } = await supabase
       .from('integration_settings')
@@ -131,7 +123,6 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
     if (twilio_account_sid !== undefined) updateData.twilio_account_sid = twilio_account_sid;
     if (twilio_auth_token !== undefined) updateData.twilio_auth_token = twilio_auth_token;
     if (twilio_from_number !== undefined) updateData.twilio_from_number = twilio_from_number;
-    if (test_destination_number !== undefined) updateData.test_destination_number = test_destination_number;
 
     let error;
 
@@ -158,6 +149,9 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
       res.status(500).json({ error: 'Failed to save settings' });
       return;
     }
+
+    // Invalidate org settings cache after update
+    invalidateOrgSettingsCache(orgId);
 
     // CRITICAL: When the UI saves a Vapi API key, also upsert into integrations.
     // The web-test and call flows read Vapi credentials from public.integrations.
@@ -521,44 +515,16 @@ router.post('/settings', async (req: Request, res: Response): Promise<void> => {
 
     log.info('Settings', 'Integration settings saved', {
       vapiConfigured: !!vapi_api_key,
-      twilioConfigured: !!twilio_account_sid,
-      testDestination: test_destination_number
+      twilioConfigured: !!twilio_account_sid
     });
 
-    // ========== CRITICAL: Sync agents from dashboard (single source of truth) ==========
-    // After saving API keys, sync inbound and outbound agents from dashboard configs
-    // This ensures agents table is always in sync with dashboard configuration
-    try {
-      log.info('Settings', 'Triggering agent sync from dashboard', { orgId: orgId });
-      
-      // Call the agent sync endpoint internally
-      const syncResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:3001'}/api/founder-console/sync-agents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (syncResponse.ok) {
-        const syncResult: any = await syncResponse.json();
-        log.info('Settings', 'Agent sync completed successfully', {
-          orgId: orgId,
-          inboundAgentId: syncResult?.inboundAgentId,
-          outboundAgentId: syncResult?.outboundAgentId
-        });
-      } else {
-        log.warn('Settings', 'Agent sync returned non-200 status (non-blocking)', {
-          orgId: orgId,
-          status: syncResponse.status
-        });
-      }
-    } catch (syncError: any) {
-      log.warn('Settings', 'Failed to trigger agent sync (non-blocking)', {
-        orgId: orgId,
-        error: syncError?.message
-      });
-      // Don't fail the request - agent sync is secondary to settings save
-    }
+    // ========== LEGACY: Agent sync removed ==========
+    // NOTE: This sync endpoint is no longer needed because:
+    // 1. The agents table is now the single source of truth (SSOT)
+    // 2. Agent configuration is saved directly to agents table via /agent/behavior
+    // 3. inbound_agent_config and outbound_agent_config tables are deprecated
+    // 4. No sync is needed - agents table is always up to date
+    log.info('Settings', 'Skipping legacy agent sync - agents table is SSOT', { orgId: orgId });
 
     // Auto-configure Vapi webhook if API key and assistant ID were provided
     let webhookConfigResult = null;
@@ -597,7 +563,7 @@ export async function getIntegrationSettings(orgId: string = 'founder-console'):
   try {
     const { data, error } = await supabase
       .from('integration_settings')
-      .select('vapi_api_key, vapi_webhook_secret, twilio_account_sid, twilio_auth_token, twilio_from_number, test_destination_number')
+      .select('vapi_api_key, vapi_webhook_secret, twilio_account_sid, twilio_auth_token, twilio_from_number')
       .eq('org_id', orgId)
       .maybeSingle();
 

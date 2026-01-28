@@ -1,3 +1,0 @@
-export NGROK_AUTH_TOKEN="35aXl1N52lOGdDE20Mfmr7WY0du_7AZmStxUgVhDNpn5WB7ZU"
-cd backend
-npm run startup

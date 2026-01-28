@@ -8,9 +8,11 @@ export const AGENT_CONFIG_CONSTRAINTS = {
 };
 
 export interface AgentConfig {
+    name: string;
     systemPrompt: string;
     firstMessage: string;
     voice: string;
+    voiceProvider?: string; // NEW: Voice provider (vapi, elevenlabs, openai, google, azure, playht, rime)
     language: string;
     maxDuration: number;
 }
@@ -26,6 +28,7 @@ interface AgentState {
 }
 
 export const INITIAL_CONFIG: AgentConfig = {
+    name: '',
     systemPrompt: '',
     firstMessage: '',
     voice: '',
@@ -47,6 +50,7 @@ const validateAgentConfig = (config: Partial<AgentConfig>, existingConfig: Agent
     // Ensure critical fields are never undefined/null after merge
     // Use nullish coalescing to preserve empty strings (valid for systemPrompt/firstMessage)
     const validated: AgentConfig = {
+        name: merged.name ?? '',
         systemPrompt: merged.systemPrompt ?? '',
         firstMessage: merged.firstMessage ?? '',
         voice: merged.voice ?? '',

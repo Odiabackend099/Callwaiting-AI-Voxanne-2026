@@ -27,7 +27,7 @@ This PRD incorporates:
 - **🔧 BACKEND INFRASTRUCTURE FIXES (2026-01-27)** - Fixed Redis BullMQ configuration, backend server startup resolved ✅ COMPLETE
 - **🚀 PRODUCTION DEPLOYMENT & MIGRATIONS (2026-01-27)** - All 4 critical database migrations applied via Supabase MCP, servers restarted, all 10 priorities verified operational ✅ COMPLETE
 - **🎯 AGENT CRUD IMPLEMENTATION (2026-01-29)** - Assistant naming in dashboard UI + hard delete from database and VAPI with graceful failure handling + rate limiting + multi-tenant isolation + comprehensive testing ✅ COMPLETE
-- **🎤 VOICE SYSTEM UPGRADE (2026-01-29)** - 100+ voices across 7 providers (Vapi, OpenAI, ElevenLabs, Google, Azure, PlayHT, Rime) + TypeScript voice registry SSOT + professional voice selector component + legacy voice auto-migration (paige→Savannah, harry→Rohan) + 50+ integration tests + comprehensive E2E testing procedures ✅ COMPLETE
+- **🎤 VOICE SYSTEM UPGRADE (2026-01-29)** - 100+ voices across 7 providers (Vapi, OpenAI, ElevenLabs, Google, Azure, PlayHT, Rime) + TypeScript voice registry SSOT with single active voice set + professional voice selector component + 50+ integration tests + comprehensive E2E testing procedures ✅ COMPLETE
 - **🛡️ RELIABILITY PROTOCOL (2026-01-29)** - 3-tier fallback cascade for transcriber and voice services + auto-apply fallbacks on assistant create/update + batch enforcement script for existing assistants + compliance verification tool + 12/12 unit tests passing + zero downtime deployment ✅ COMPLETE
 
 ---
@@ -84,17 +84,18 @@ This means:
    - Indexed for performance: `idx_agents_voice_provider`
    - CHECK constraint for valid providers: vapi, elevenlabs, openai, google, azure, playht, rime
 
-3. **Legacy Voice Auto-Migration:**
-   - Database migration auto-maps deprecated voices:
-     - Female legacy (paige, neha, hana, lily, kylie, leah, tara, jess, mia, zoe) → Savannah
-     - Male legacy (harry, cole, spencer, leo, dan, zac) → Rohan
-   - Runtime normalization via `normalizeLegacyVoice()` for edge cases
-   - Transparent to users (no manual reconfiguration needed)
+3. **Single Source of Truth (SSOT) Enforcement:**
+   - All voices must be defined in `backend/src/config/voice-registry.ts`
+   - Only active, current voices included (no deprecated/legacy voices)
+   - Database migration enforces SSOT: invalid voices default to Rohan (Vapi native)
+   - Validation prevents invalid voice/provider combinations at API layer
+   - No legacy voice mapping (clean architecture)
 
-4. **Voice Validation:**
-   - All voice/provider combinations validated before VAPI API calls via `isValidVoice()`
-   - Case-insensitive voice lookup with exact provider matching
-   - Graceful fallback to Rohan (default voice) for unknown voices
+4. **Voice Validation (SSOT):**
+   - All voice/provider combinations validated against voice registry via `isValidVoice()`
+   - Exact voice ID matching (case-sensitive) with provider validation
+   - Rejects unknown or invalid voices (no fallback mapping)
+   - Forces use of current, active voices only
 
 5. **API Endpoint:**
    - `GET /api/assistants/voices/available` returns filtered voices

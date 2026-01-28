@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface IntegrationStatus {
-    testDestination: string | null;
+    // Reserved for future use
 }
 
 interface CalendarStatus {
@@ -23,19 +23,15 @@ export default function ApiKeysPage() {
     const { user, loading } = useAuth();
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
     const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
     const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
-    const [status, setStatus] = useState<IntegrationStatus>({
-        testDestination: null
-    });
+    const [status, setStatus] = useState<IntegrationStatus>({});
     const [calendarStatus, setCalendarStatus] = useState<CalendarStatus>({
         connected: false
     });
     const [calendarError, setCalendarError] = useState<string | null>(null);
     const [calendarSuccess, setCalendarSuccess] = useState<string | null>(null);
 
-    // Form states
-    const [testDestination, setTestDestination] = useState('');
+    // Form states (reserved for future use)
 
     useEffect(() => {
         if (!loading && !user) {
@@ -48,9 +44,6 @@ export default function ApiKeysPage() {
         try {
             const data = await authedBackendFetch<any>('/api/founder-console/settings');
             setStatus(data);
-            if (data?.testDestination) {
-                setTestDestination(data.testDestination);
-            }
         } catch (error) {
             console.error('Error fetching settings:', error);
         } finally {
@@ -276,30 +269,6 @@ export default function ApiKeysPage() {
         }
     }, [fetchCalendarStatus]);
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            const payload: any = {};
-            if (testDestination) payload.test_destination_number = testDestination;
-
-            await authedBackendFetch<any>('/api/founder-console/settings', {
-                method: 'POST',
-                body: JSON.stringify(payload),
-                timeoutMs: 30000,
-                retries: 1,
-            });
-
-            // Refresh status
-            await fetchSettings();
-
-            alert('Settings saved successfully!');
-        } catch (error) {
-            console.error('Error saving settings:', error);
-            alert('Error saving settings');
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
     const handleConnectCalendar = async () => {
         setIsConnectingCalendar(true);
@@ -345,45 +314,6 @@ export default function ApiKeysPage() {
             </div>
 
             <div className="space-y-8">
-
-                {/* Common Settings */}
-                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Testing Defaults</h2>
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                            Default Test Phone Number
-                        </label>
-                        <input
-                            type="tel"
-                            value={testDestination}
-                            onChange={(e) => setTestDestination(e.target.value)}
-                            placeholder="+1234567890"
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
-                        />
-                        <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
-                            Used for &quot;Test Live&quot; calls from the dashboard.
-                        </p>
-                    </div>
-                    <div className="flex justify-end">
-                        <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSaving ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Saving...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="w-5 h-5" />
-                                    Save Changes
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
 
                 {/* Calendar Integration */}
                 <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">

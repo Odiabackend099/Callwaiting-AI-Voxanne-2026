@@ -2,9 +2,12 @@
  * Twilio Service
  * Handles SMS and WhatsApp messaging via Twilio
  * Supports multi-tenant credential injection
+ *
+ * 2026 Update: Circuit breaker pattern via safeCall for resilience
  */
 
 import twilio from 'twilio';
+import { safeCall } from './safe-call';
 
 // Interface for dynamic credentials
 export interface TwilioCredentials {
@@ -32,6 +35,14 @@ interface TwilioResult {
   success: boolean;
   message_sid?: string;
   error?: string;
+}
+
+// Type for Twilio message response
+interface TwilioMessageResponse {
+  sid: string;
+  status: string;
+  errorCode?: number;
+  errorMessage?: string;
 }
 
 export type { TwilioResult };
@@ -140,8 +151,25 @@ export async function sendSmsTwilio(
       }
     }
 
-    const message = await client.messages.create(messageParams);
+    // Use safeCall for circuit breaker protection
+    const result = await safeCall(
+      'twilio_sms',
+      () => client.messages.create(messageParams),
+      { retries: 3, backoffMs: 1000, timeoutMs: 15000 }
+    );
 
+    if (!result.success) {
+      console.error('[Twilio SMS] Error sending SMS:', result.error?.message || result.userMessage);
+      if (result.circuitOpen) {
+        console.error('[Twilio SMS] Circuit breaker is OPEN - Twilio service temporarily unavailable');
+      }
+      return {
+        success: false,
+        error: result.userMessage || result.error?.message || 'Failed to send SMS'
+      };
+    }
+
+    const message = result.data as TwilioMessageResponse;
     console.log(`[Twilio SMS] Message sent to ${options.to}`);
     console.log(`[Twilio SMS] SID: ${message.sid}`);
     console.log(`[Twilio SMS] Initial Status: ${message.status}`);
@@ -150,12 +178,12 @@ export async function sendSmsTwilio(
 
     // CRITICAL: Log if message is queued but may fail delivery
     if (message.status === 'queued' || message.status === 'accepted') {
-      console.log(`[Twilio SMS] ⚠️ Message ${message.sid} accepted by Twilio but delivery not yet confirmed`);
-      console.log(`[Twilio SMS] 💡 Check Twilio Console for delivery status: https://console.twilio.com/us1/monitor/logs/sms`);
+      console.log(`[Twilio SMS] Message ${message.sid} accepted by Twilio but delivery not yet confirmed`);
+      console.log(`[Twilio SMS] Check Twilio Console for delivery status: https://console.twilio.com/us1/monitor/logs/sms`);
     }
 
     if (message.status === 'failed' || message.status === 'undelivered') {
-      console.error(`[Twilio SMS] ❌ Message ${message.sid} failed immediately`);
+      console.error(`[Twilio SMS] Message ${message.sid} failed immediately`);
       console.error(`[Twilio SMS] Error Code: ${message.errorCode}`);
       console.error(`[Twilio SMS] Error Message: ${message.errorMessage}`);
     }
@@ -165,7 +193,7 @@ export async function sendSmsTwilio(
       message_sid: message.sid
     };
   } catch (error: any) {
-    console.error('[Twilio SMS] Error sending SMS:', error);
+    console.error('[Twilio SMS] Unexpected error sending SMS:', error);
 
     return {
       success: false,
@@ -203,12 +231,29 @@ export async function sendWhatsAppTwilio(
       ? options.to
       : `whatsapp:${options.to}`;
 
-    const message = await client.messages.create({
-      body: options.message,
-      from: fromNumber,
-      to: toNumber
-    });
+    // Use safeCall for circuit breaker protection
+    const result = await safeCall(
+      'twilio_whatsapp',
+      () => client.messages.create({
+        body: options.message,
+        from: fromNumber,
+        to: toNumber
+      }),
+      { retries: 3, backoffMs: 1000, timeoutMs: 15000 }
+    );
 
+    if (!result.success) {
+      console.error('[Twilio WhatsApp] Error sending WhatsApp:', result.error?.message || result.userMessage);
+      if (result.circuitOpen) {
+        console.error('[Twilio WhatsApp] Circuit breaker is OPEN - Twilio service temporarily unavailable');
+      }
+      return {
+        success: false,
+        error: result.userMessage || result.error?.message || 'Failed to send WhatsApp message'
+      };
+    }
+
+    const message = result.data as TwilioMessageResponse;
     console.log(`[Twilio WhatsApp] Message sent to ${options.to}`);
     console.log(`[Twilio WhatsApp] SID: ${message.sid}`);
 
@@ -217,7 +262,7 @@ export async function sendWhatsAppTwilio(
       message_sid: message.sid
     };
   } catch (error: any) {
-    console.error('[Twilio WhatsApp] Error sending WhatsApp:', error);
+    console.error('[Twilio WhatsApp] Unexpected error sending WhatsApp:', error);
 
     return {
       success: false,

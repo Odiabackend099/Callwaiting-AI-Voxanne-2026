@@ -28,31 +28,18 @@ function requireVapi(res: Response): VapiClient | null {
   return client;
 }
 
-// Helper to determine voice provider from voice ID (case-insensitive)
+// Helper to determine voice provider from voice ID using voice registry SSOT
 function determineVoiceProvider(voiceId: string): string {
-  const id = (voiceId || '').toLowerCase();
+  const { getVoiceById } = require('../config/voice-registry');
 
-  // Deepgram voices start with 'aura-'
-  if (id.startsWith('aura-')) return 'deepgram';
+  // Find voice in registry (single source of truth)
+  const voice = getVoiceById(voiceId);
 
-  // OpenAI voices
-  if (['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(id)) return 'openai';
+  if (voice) {
+    return voice.provider;
+  }
 
-  // Vapi native voices (case-insensitive)
-  const vapiVoices = ['paige', 'rohan', 'neha', 'hana', 'harry', 'elliot', 'lily', 'cole', 'savannah', 'spencer', 'kylie'];
-  if (vapiVoices.includes(id)) return 'vapi';
-
-  // ElevenLabs voices (most other named voices)
-  const elevenLabsVoices = [
-    'rachel', 'drew', 'clyde', 'paul', 'domi', 'dave', 'fin', 'sarah', 'antoni', 'thomas',
-    'charlie', 'george', 'emily', 'elli', 'callum', 'patrick', 'liam', 'dorothy', 'josh',
-    'arnold', 'charlotte', 'matilda', 'matthew', 'james', 'joseph', 'jeremy', 'michael',
-    'ethan', 'gigi', 'freya', 'grace', 'daniel', 'serena', 'adam', 'nicole', 'jessie',
-    'ryan', 'sam', 'glinda', 'giovanni', 'mimi'
-  ];
-  if (elevenLabsVoices.includes(id)) return 'elevenlabs';
-
-  // Default to vapi for unknown voices
+  // If voice not found, default to vapi
   return 'vapi';
 }
 
@@ -436,21 +423,46 @@ assistantsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// List available voices
+// List available voices with optional filtering
+// Query params: provider, gender, language, use_case, search
 assistantsRouter.get('/voices/available', async (req: Request, res: Response) => {
   try {
-    // ⚠️ VAPI 2026 ACTIVE VOICES ONLY
-    // Per https://docs.vapi.ai/providers/voice/vapi-voices (Jan 2026)
-    // CRITICAL: Only 3 voices support NEW assistant creation
-    // All others (Neha, Paige, Harry, etc.) are LEGACY and will be rejected by Vapi API
-    const voices = [
-      // ✅ ACTIVE Vapi Voices - Use ONLY these for new assistants
-      { id: 'Rohan', name: 'Rohan', gender: 'male', provider: 'vapi', isDefault: true, description: 'Professional, energetic, warm - healthcare-approved' },
-      { id: 'Elliot', name: 'Elliot', gender: 'male', provider: 'vapi', description: 'Calm, measured, professional tone' },
-      { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'Warm, approachable, friendly - excellent for patient comfort' },
-    ];
+    const { getActiveVoices, filterVoices } = await import('../config/voice-registry');
 
-    res.json(voices);
+    const {
+      provider,
+      gender,
+      language,
+      use_case,
+      search,
+    } = req.query;
+
+    // Apply filters if provided
+    const voices = filterVoices({
+      provider: provider as string | undefined,
+      gender: gender as string | undefined,
+      language: language as string | undefined,
+      use_case: use_case as string | undefined,
+      search: search as string | undefined,
+    });
+
+    // Transform to frontend-friendly format
+    const response = voices.map(v => ({
+      id: v.id,
+      name: v.name,
+      provider: v.provider,
+      gender: v.gender,
+      language: v.language,
+      characteristics: v.characteristics.join(', '),
+      accent: v.accent || '',
+      bestFor: v.use_cases.join(', '),
+      latency: v.latency,
+      quality: v.quality,
+      isDefault: v.id === 'Rohan' && v.provider === 'vapi',
+      requiresApiKey: v.requires_api_key || false,
+    }));
+
+    res.json({ voices: response });
   } catch (error: any) {
     console.error('[GET /assistants/voices/available] Error:', error.message);
     res.status(500).json({

@@ -15,6 +15,16 @@ export default function PrivacyPolicy() {
       </section>
       
       {/* Additional sections as required */}
+      
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">5. Data Retention</h2>
+        <p>We retain appointment data for 36 months to facilitate follow-up care. Calendar access tokens are stored encrypted and automatically revoked after 6 months of inactivity.</p>
+      </section>
+      
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">6. Third-Party Sharing</h2>
+        <p>We share appointment details with healthcare providers via secure APIs solely for care coordination. No data is sold to advertisers or third parties.</p>
+      </section>
     </div>
   );
 }

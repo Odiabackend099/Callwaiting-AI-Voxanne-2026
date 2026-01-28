@@ -776,6 +776,123 @@ export class IntegrationDecryptor {
       throw error;
     }
   }
+
+  /**
+   * Validate Google Calendar credentials health
+   *
+   * Tests if credentials are valid by making a lightweight API call.
+   * Used to detect expired OAuth tokens before attempting operations.
+   *
+   * @param orgId - Organization ID
+   * @returns Health status with error details if unhealthy
+   */
+  static async validateGoogleCalendarHealth(
+    orgId: string
+  ): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      const creds = await this.getGoogleCalendarCredentials(orgId);
+
+      if (!creds) {
+        return { healthy: false, error: 'No credentials found' };
+      }
+
+      // Test API call - minimal resource request
+      const { google } = require('googleapis');
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+      );
+
+      oauth2Client.setCredentials({
+        access_token: creds.access_token,
+        refresh_token: creds.refresh_token,
+      });
+
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+      // Lightweight test: List calendars (minimal quota usage)
+      await calendar.calendarList.list({ maxResults: 1 });
+
+      log.info('IntegrationDecryptor', 'Google Calendar health check passed', { orgId });
+      return { healthy: true };
+
+    } catch (error: any) {
+      log.error('IntegrationDecryptor', 'Google Calendar health check failed', {
+        orgId,
+        error: error?.message,
+        code: error?.code,
+      });
+
+      // Detect specific error types
+      if (error.code === 401) {
+        return {
+          healthy: false,
+          error: 'OAuth token expired - please reconnect Google Calendar in settings',
+        };
+      }
+
+      if (error.code === 403) {
+        return {
+          healthy: false,
+          error: 'Insufficient permissions - please re-authorize Google Calendar',
+        };
+      }
+
+      return {
+        healthy: false,
+        error: error?.message || 'Unknown error checking calendar health',
+      };
+    }
+  }
+
+  /**
+   * Validate Twilio credentials health
+   *
+   * Tests if credentials are valid by fetching account info.
+   *
+   * @param orgId - Organization ID
+   * @returns Health status with error details if unhealthy
+   */
+  static async validateTwilioHealth(
+    orgId: string
+  ): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      const creds = await this.getTwilioCredentials(orgId);
+
+      if (!creds) {
+        return { healthy: false, error: 'No credentials found' };
+      }
+
+      // Test API call
+      const twilio = require('twilio');
+      const client = twilio(creds.accountSid, creds.authToken);
+
+      // Lightweight test: Fetch account info
+      await client.api.accounts(creds.accountSid).fetch();
+
+      log.info('IntegrationDecryptor', 'Twilio health check passed', { orgId });
+      return { healthy: true };
+
+    } catch (error: any) {
+      log.error('IntegrationDecryptor', 'Twilio health check failed', {
+        orgId,
+        error: error?.message,
+        code: error?.code,
+      });
+
+      if (error.status === 401) {
+        return {
+          healthy: false,
+          error: 'Twilio credentials invalid - please update in settings',
+        };
+      }
+
+      return {
+        healthy: false,
+        error: error?.message || 'Unknown error checking Twilio health',
+      };
+    }
+  }
 }
 
 export default IntegrationDecryptor;

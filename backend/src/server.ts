@@ -34,6 +34,7 @@ import { createServer } from 'http';
 import { webhooksRouter } from './routes/webhooks';
 import smsStatusWebhookRouter from './routes/sms-status-webhook'; // default export
 import googleOAuthRouter from './routes/google-oauth';
+import webhookMetricsRouter from './routes/webhook-metrics';
 import { callsRouter } from './routes/calls';
 import { assistantsRouter } from './routes/assistants';
 import { phoneNumbersRouter } from './routes/phone-numbers';
@@ -57,17 +58,20 @@ import handoffRouter from './routes/handoff-routes';
 import vapiDiscoveryRouter from './routes/vapi-discovery'; // default export
 import verificationRouter from './routes/verification';
 import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; // named export
-import agentSyncRouter from './routes/agent-sync'; // default export
+// DEPRECATED: Agent sync no longer needed - agents table is SSOT
+// import agentSyncRouter from './routes/agent-sync'; // default export
 import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
 import { bookDemoRouter } from './routes/book-demo';
 import integrationsStatusRouter from './routes/integrations-status'; // default export
 import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
 import { scheduleTelephonyVerificationCleanup } from './jobs/telephony-verification-cleanup';
+import { scheduleWebhookEventsCleanup } from './jobs/webhook-events-cleanup';
 import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
 import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
 import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
+import gdprCleanupModule from './jobs/gdpr-cleanup';
 import escalationRulesRouter from './routes/escalation-rules'; // default export
 import teamRouter from './routes/team'; // default export
 import agentsRouter from './routes/agents'; // default export
@@ -88,9 +92,41 @@ import internalApiRoutes from './routes/internal-api-routes'; // default export
 import integrationsApiRouter from './routes/integrations-api'; // default export
 import telephonyRouter from './routes/telephony'; // default export - Hybrid Telephony
 import webhookHealthRouter from './routes/webhook-health'; // default export - Webhook Health Check
+import testErrorRouter from './routes/test-error'; // Test endpoint for exception handling
+import monitoringRouter from './routes/monitoring'; // default export - System monitoring endpoints
+import complianceRouter from './routes/compliance'; // default export - GDPR/HIPAA compliance endpoints
+import { orgRateLimit } from './middleware/org-rate-limiter';
+import {
+  initializeWebhookQueue,
+  initializeWebhookWorker,
+  closeWebhookQueue,
+  getQueueMetrics
+} from './config/webhook-queue';
+import { processWebhookJob } from './services/webhook-processor';
+import { initializeStripe } from './config/stripe';
+import {
+  initializeBillingQueue,
+  initializeBillingWorker,
+  closeBillingQueue
+} from './config/billing-queue';
+import { processBillingJob } from './services/billing-manager';
+import stripeWebhooksRouter from './routes/stripe-webhooks';
+import billingApiRouter from './routes/billing-api';
 
 // Initialize logger
 initLogger();
+import { setupExceptionHandlers } from './config/exception-handlers';
+import { initializeRedis, closeRedis } from './config/redis';
+import { sendSlackAlert, incrementErrorCount } from './services/slack-alerts';
+import { reportError, initializeSentry } from './config/sentry';
+initializeSentry(); // Initialize Sentry error monitoring
+setupExceptionHandlers(); // Add exception handlers
+initializeRedis(); // Initialize Redis connection
+initializeWebhookQueue();
+initializeWebhookWorker(processWebhookJob);
+initializeStripe(); // Initialize Stripe billing client
+initializeBillingQueue();
+initializeBillingWorker(processBillingJob);
 
 declare global {
   namespace Express {
@@ -138,7 +174,11 @@ app.use(cors({
 
     const allowed = [...defaultOrigins, ...envOrigins];
 
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // SECURITY NOTE: Allow requests with no origin for the following reasons:
+    // 1. Vapi/Twilio webhooks don't send Origin headers (required for call handling)
+    // 2. Mobile apps may not send Origin headers
+    // 3. Protected endpoints require JWT authentication (defense in depth)
+    // Real protection comes from auth middleware, not CORS
     if (!origin) {
       return callback(null, true);
     }
@@ -171,22 +211,8 @@ app.use(express.json({
 }));
 app.use(express.static('public')); // Add static file serving for public directory
 
-// General API rate limiter (100 req/15min in production, disabled in development)
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Increased from 100 to 1000 to handle rapid development/testing
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skip: (req: any) => {
-    // Skip rate limiting entirely in development mode for easier local testing
-    // This prevents 429 errors during development/Fast Refresh rebuilds
-    if (process.env.NODE_ENV === 'development') {
-      return true;
-    }
-    return false;
-  }
-});
-app.use(apiLimiter);
+// Org rate limiter middleware
+app.use('/api', orgRateLimit());
 
 // Webhook rate limiter (30 req/1min)
 const webhookLimiter = rateLimit({
@@ -234,6 +260,7 @@ app.get('/api/csrf-token', csrfTokenEndpoint);
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/webhooks', smsStatusWebhookRouter);
 app.use('/api/webhook', webhookHealthRouter); // Health check endpoint (no rate limiting)
+app.use('/test-error', testErrorRouter); // Test endpoint for exception handling
 app.use('/api/calls', callsRouter);
 app.use('/api/calls-dashboard', callsDashboardRouter);
 app.use('/api/assistants', assistantsRouter);
@@ -253,7 +280,8 @@ app.use('/api/handoff', handoffRouter);
 app.use('/api/vapi', vapiDiscoveryRouter);
 app.use('/api/founder-console', founderConsoleRouter);
 app.use('/api/founder-console', founderConsoleSettingsRouter);
-app.use('/api/founder-console', agentSyncRouter);
+// DEPRECATED: Agent sync no longer needed - agents table is SSOT
+// app.use('/api/founder-console', agentSyncRouter);
 app.use('/api/dashboard', dashboardLeadsRouter);
 app.use('/api/book-demo', bookDemoRouter);
 app.use('/api/escalation-rules', escalationRulesRouter);
@@ -264,6 +292,11 @@ app.use('/api/services', servicesRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/monitoring', monitoringRouter); // System monitoring and cache statistics
+app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
+app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
+app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
+app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
 app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/internal', internalApiRoutes); // Internal API routes (webhook configuration, etc.)
 app.use('/api/integrations', integrationsApiRouter); // Fetch decrypted credentials
@@ -288,11 +321,13 @@ app.get('/health', async (req, res) => {
     services: {
       database: false,
       supabase: false,
-      backgroundJobs: false
+      backgroundJobs: false,
+      webhookQueue: false
     },
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database_size_mb: 0
+    database_size_mb: 0,
+    queueMetrics: null
   };
 
   try {
@@ -350,6 +385,14 @@ app.get('/health', async (req, res) => {
   // (We don't track individual job state, but presence of scheduler indicates jobs are active)
   health.services.backgroundJobs = true; // Jobs are scheduled in main server startup
 
+  // Webhook queue check
+  const queueMetrics = await getQueueMetrics();
+  health.services.webhookQueue = queueMetrics ? true : false;
+
+  if (queueMetrics) {
+    health.queueMetrics = queueMetrics;
+  }
+
   // Return 503 if any critical service is down
   const statusCode = health.services.database ? 200 : 503;
   res.status(statusCode).json(health);
@@ -377,7 +420,31 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[Error]', err);
+  log.error('HTTP', 'Request error', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method
+  });
+
+  incrementErrorCount();
+
+  reportError(err, {
+    orgId: req.user?.orgId,
+    userId: req.user?.id,
+    path: req.path,
+    method: req.method
+  });
+
+  if (!err.status || err.status >= 500) {
+    sendSlackAlert('🔴 Server Error', {
+      error: err.message,
+      path: req.path,
+      method: req.method,
+      status: err.status || 500
+    }).catch(() => {});
+  }
+
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error'
   });
@@ -660,6 +727,13 @@ if (process.env.NODE_ENV !== 'test') {
     }
 
     try {
+      scheduleWebhookEventsCleanup();
+      console.log('Webhook events cleanup job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule webhook events cleanup job:', error.message);
+    }
+
+    try {
       scheduleRecordingUploadRetry();
       console.log('Recording upload retry job scheduled');
     } catch (error: any) {
@@ -678,6 +752,13 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('Recording queue worker job scheduled');
     } catch (error: any) {
       console.warn('Failed to schedule recording queue worker job:', error.message);
+    }
+
+    try {
+      gdprCleanupModule.scheduleGDPRCleanup();
+      console.log('GDPR data retention cleanup job scheduled (daily at 5 AM UTC)');
+    } catch (error: any) {
+      console.warn('Failed to schedule GDPR cleanup job:', error.message);
     }
 
     // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
@@ -710,7 +791,20 @@ app.use('/oauth-test', oauthTestRouter);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  console.log('SIGTERM signal received');
+
+  closeRedis().then(() => {
+    console.log('Redis connection closed');
+  });
+
+  closeWebhookQueue().then(() => {
+    console.log('Webhook queue closed');
+  });
+
+  closeBillingQueue().then(() => {
+    console.log('Billing queue closed');
+  });
+
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);
@@ -718,7 +812,20 @@ process.on('SIGTERM', () => {
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT signal received: closing HTTP server');
+  console.log('SIGINT signal received');
+
+  closeRedis().then(() => {
+    console.log('Redis connection closed');
+  });
+
+  closeWebhookQueue().then(() => {
+    console.log('Webhook queue closed');
+  });
+
+  closeBillingQueue().then(() => {
+    console.log('Billing queue closed');
+  });
+
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);

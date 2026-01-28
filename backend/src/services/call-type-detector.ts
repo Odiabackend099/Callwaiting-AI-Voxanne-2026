@@ -7,6 +7,7 @@
 
 import { supabase } from './supabase-client';
 import { createLogger } from './logger';
+import { getCachedInboundConfig } from './cache';
 
 const logger = createLogger('CallTypeDetector');
 
@@ -48,16 +49,12 @@ export async function detectCallType(
   try {
     // Single-number policy: the inbound config is the source of truth for the Twilio number.
     // If a call is TO our number -> inbound. Otherwise treat it as outbound.
-    const { data: inboundConfig, error: inboundError } = await supabase
-      .from('inbound_agent_config')
-      .select('id, twilio_phone_number')
-      .eq('org_id', orgId)
-      .single();
+    // Use cached config to avoid DB query on every call (cached for 5 minutes)
+    const inboundConfig = await getCachedInboundConfig(orgId);
 
-    if (inboundError) {
+    if (!inboundConfig) {
       logger.warn('Unable to detect call type: inbound config missing', {
-        orgId,
-        error: inboundError.message
+        orgId
       });
       return null;
     }
@@ -65,7 +62,7 @@ export async function detectCallType(
     // Normalize phone numbers for comparison
     const toNumberNormalized = normalizePhoneForComparison(toNumber);
     const fromNumberNormalized = normalizePhoneForComparison(fromNumber);
-    const inboundPhoneNormalized = normalizePhoneForComparison(inboundConfig?.twilio_phone_number);
+    const inboundPhoneNormalized = normalizePhoneForComparison((inboundConfig as any)?.twilio_phone_number);
 
     logger.debug('Comparing phone numbers', {
       orgId,
@@ -79,13 +76,13 @@ export async function detectCallType(
       logger.info('Detected INBOUND call', {
         orgId,
         toNumber: toNumberNormalized,
-        configId: inboundConfig.id
+        configId: (inboundConfig as any).id
       });
 
       return {
         callType: 'inbound',
-        twilioNumber: inboundConfig.twilio_phone_number,
-        configId: inboundConfig.id,
+        twilioNumber: (inboundConfig as any).twilio_phone_number,
+        configId: (inboundConfig as any).id,
         reason: 'toNumber matches inbound Twilio number'
       };
     }
@@ -99,7 +96,7 @@ export async function detectCallType(
 
     return {
       callType: 'outbound',
-      twilioNumber: inboundConfig.twilio_phone_number,
+      twilioNumber: (inboundConfig as any).twilio_phone_number,
       configId: 'outbound',
       reason: 'toNumber does not match inbound Twilio number'
     };
@@ -123,12 +120,13 @@ export async function getAgentConfigForCallType(
   callType: 'inbound' | 'outbound'
 ) {
   try {
-    const tableName = callType === 'inbound' ? 'inbound_agent_config' : 'outbound_agent_config';
+    const agentRole = callType; // 'inbound' or 'outbound'
 
     const { data, error } = await supabase
-      .from(tableName)
+      .from('agents')
       .select('*')
       .eq('org_id', orgId)
+      .eq('role', agentRole)
       .single();
 
     if (error) {
