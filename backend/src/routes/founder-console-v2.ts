@@ -744,7 +744,10 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
         operation: 'update'
       });
 
-      return agent.vapi_assistant_id;
+      return {
+        assistantId: agent.vapi_assistant_id,
+        toolsSynced: false
+      };
     } catch (updateError: unknown) {
       const error = updateError as Error;
       logger.warn('Failed to update assistant, will create new one', {
@@ -932,7 +935,10 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     if (fallbackError) {
       logger.warn('Failed to save fallback assistant ID', { agentId, error: fallbackError.message });
     }
-    return assistant.id;
+    return {
+      assistantId: assistant.id,
+      toolsSynced: false
+    };
   }
 
   if (existing?.vapi_assistant_id) {
@@ -2211,7 +2217,7 @@ router.post(
           try {
             const syncResult = await ensureAssistantSynced(id, vapiApiKey!);
             // ensureAssistantSynced now returns { assistantId, toolsSynced }
-            const assistantId = syncResult.assistantId || syncResult;
+            const assistantId = syncResult.assistantId;
             return { agentId: id, assistantId, toolsSynced: syncResult.toolsSynced, success: true };
           } catch (error: any) {
             return { agentId: id, success: false, error: error.message || String(error) };
@@ -2546,7 +2552,7 @@ router.post(
 
       // Always re-sync to pick up latest system_prompt, voice, language, and other changes
       const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
-      const assistantId = syncResult.assistantId || syncResult;
+      const assistantId = syncResult.assistantId;
 
       // Get Twilio phone number from settings
       const twilioFromNumber = settings.twilio_from_number;
@@ -2794,7 +2800,7 @@ router.post(
 
       // Always re-sync to pick up latest system_prompt, voice, language, and other changes
       const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
-      const assistantId = syncResult.assistantId || syncResult;
+      const assistantId = syncResult.assistantId;
 
       // Create call_tracking row for web test
       const { data: trackingRow, error: trackingInsertError } = await supabase
@@ -3104,7 +3110,7 @@ router.post(
         logger.warn('No vapi_assistant_id in outbound config, falling back to legacy agent sync', { orgId });
         try {
           const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
-          assistantId = syncResult.assistantId || syncResult;
+          assistantId = syncResult.assistantId;
         } catch (syncError: any) {
           logger.error('Failed to sync assistant from legacy agents table', { error: syncError?.message });
           res.status(500).json({
