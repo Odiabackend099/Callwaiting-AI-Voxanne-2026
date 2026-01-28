@@ -101,10 +101,10 @@ describe('Voice Registry', () => {
       expect(voice?.provider).toBe('openai');
     });
 
-    it('should find voice by deprecated alias', () => {
-      const voice = getVoiceById('neha');
+    it('should return undefined for voice not in SSOT', () => {
+      const voice = getVoiceById('unknown-legacy-voice');
 
-      expect(voice).toBeDefined();
+      expect(voice).toBeUndefined();
     });
 
     it('should return undefined for non-existent voice', () => {
@@ -272,21 +272,24 @@ describe('Voice Registry', () => {
     });
   });
 
-  describe('Backward Compatibility', () => {
-    it('should maintain deprecated voices in registry for reference', () => {
-      expect(DEPRECATED_VOICES.length).toBeGreaterThan(0);
-      expect(DEPRECATED_VOICES.every(v => v.status === 'deprecated')).toBe(true);
+  describe('SSOT Enforcement', () => {
+    it('should only contain active voices in registry', () => {
+      const voices = getActiveVoices();
+
+      expect(voices.length).toBeGreaterThan(0);
+      expect(voices.every(v => v.status === 'active')).toBe(true);
+      expect(voices.every(v => v.status !== 'deprecated')).toBe(true);
     });
 
-    it('should map all deprecated voices to active equivalents', () => {
-      const deprecatedIds = DEPRECATED_VOICES.map(v => v.id.toLowerCase());
+    it('should reject invalid voices from any provider', () => {
+      const invalidVoices = ['paige', 'neha', 'harry', 'luna', 'asteria', 'unknown'];
 
-      deprecatedIds.forEach(voiceId => {
-        const result = normalizeLegacyVoice(voiceId);
-        const activeVoice = getVoiceById(result.voice);
-
-        expect(activeVoice).toBeDefined();
-        expect(activeVoice?.status).toBe('active');
+      invalidVoices.forEach(voiceId => {
+        // Try common providers
+        ['vapi', 'openai', 'elevenlabs', 'google', 'azure'].forEach(provider => {
+          const valid = isValidVoice(voiceId, provider as any);
+          expect(valid).toBe(false);
+        });
       });
     });
   });

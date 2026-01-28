@@ -61,15 +61,16 @@ export interface EnsureAssistantResult {
 
 export class VapiAssistantManager {
   /**
-   * Helper to resolve voice configuration using voice registry
+   * Helper to resolve voice configuration using voice registry SSOT
    *
    * Handles:
-   * - Legacy Vapi voices (neha, paige, harry, etc.) → Normalized to 2026 active voices
-   * - Invalid voice/provider combinations → Falls back to Rohan (default)
+   * - Valid active voices → Pass through with provider from voice registry
+   * - Invalid voice/provider combinations → Falls back to Rohan (default Vapi native)
    * - Empty voice IDs → Defaults to Rohan
-   * - Valid active voices → Pass through with provider
+   * - Any voice not in SSOT → Rejects and defaults to Rohan
    *
    * Uses voice registry as single source of truth for 100+ voices across 7 providers
+   * No legacy voice mapping - only current active voices allowed
    */
   private static async resolveVoiceConfig(config: AssistantConfig): Promise<{ provider: string; voiceId: string }> {
     try {

@@ -73,56 +73,22 @@ const DEFAULT_VOICE = 'Rohan';
  * - Rohan → Rohan (active, no mapping needed)
  */
 function convertToVapiVoiceId(dbVoiceId: string): string {
-  if (!dbVoiceId) return 'Rohan'; // Default to ACTIVE voice
+  if (!dbVoiceId) return 'Rohan'; // Default to SSOT voice
 
   const normalizedId = dbVoiceId.trim();
-  
-  // Map LEGACY voices to ACTIVE Vapi 2026 voices
-  const legacyMap: Record<string, string> = {
-    // Female legacy → Savannah (warm, female replacement)
-    'neha': 'Savannah',
-    'paige': 'Savannah',
-    'hana': 'Savannah',
-    'lily': 'Savannah',
-    'kylie': 'Savannah',
-    'leah': 'Savannah',
-    'tara': 'Savannah',
-    'jess': 'Savannah',
-    'mia': 'Savannah',
-    'zoe': 'Savannah',
-    // Male legacy → Rohan (professional male replacement)
-    'harry': 'Rohan',
-    'cole': 'Rohan',
-    'spencer': 'Rohan',
-    'leo': 'Rohan',
-    'dan': 'Rohan',
-    'zac': 'Rohan',
-    // Old defaults
-    'jennifer': 'Rohan',  // Very old default
-    'sam': 'Rohan',       // Very old default
-    // Active voices (normalized)
-    'rohan': 'Rohan',
-    'elliot': 'Elliot',
-    'savannah': 'Savannah',
-  };
-  
   const lowerNormalized = normalizedId.toLowerCase();
-  
-  // Check legacy mapping
-  if (legacyMap[lowerNormalized]) {
-    return legacyMap[lowerNormalized];
-  }
-  
-  // If already valid Vapi voice, return as-is
-  if (VOICE_REGISTRY.some(v => v.id === normalizedId)) {
+
+  // Check exact match in VOICE_REGISTRY SSOT
+  if (VOICE_REGISTRY.some(v => v.id === normalizedId && v.status === 'active')) {
     return normalizedId;
   }
-  
-  // Try case-insensitive match
-  const found = VOICE_REGISTRY.find(v => v.id.toLowerCase() === lowerNormalized);
+
+  // Try case-insensitive match in VOICE_REGISTRY SSOT
+  const found = VOICE_REGISTRY.find(v => v.id.toLowerCase() === lowerNormalized && v.status === 'active');
   if (found) return found.id;
-  
-  // Ultimate fallback to active voice
+
+  // Any voice not in SSOT defaults to Rohan (Vapi native voice)
+  // No legacy voice mapping - enforce SSOT only
   return 'Rohan';
 }
 

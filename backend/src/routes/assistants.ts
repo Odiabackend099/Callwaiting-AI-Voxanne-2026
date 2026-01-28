@@ -220,7 +220,7 @@ assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response):
       logger.info('Updating existing Vapi assistant', { agentId, vapiAssistantId: agent.vapi_assistant_id });
 
       // Determine voice provider from agent voice configuration
-      const voiceId = agent.voice || 'paige';
+      const voiceId = agent.voice || 'Rohan'; // Default to Rohan (Vapi native SSOT)
       const voiceProvider = determineVoiceProvider(voiceId);
 
       // CRITICAL: Fetch existing assistant to preserve query tools
@@ -282,7 +282,7 @@ assistantsRouter.post('/sync', requireAuth, async (req: Request, res: Response):
       const logger = createLogger('AssistantsSync');
       logger.info('Creating new Vapi assistant', { agentId, agentName: agent.name });
 
-      const voiceId = agent.voice || 'paige';
+      const voiceId = agent.voice || 'Rohan'; // Default to Rohan (Vapi native SSOT)
       const voiceProvider = determineVoiceProvider(voiceId);
 
       vapiAssistant = await localVapi.createAssistant({
@@ -544,7 +544,7 @@ assistantsRouter.post('/auto-sync', requireAuth, async (req: Request, res: Respo
     } else {
       // Create if doesn't exist
       const context = await buildAgentContext(agent);
-      const voiceId = agent.voice || 'paige';
+      const voiceId = agent.voice || 'Rohan'; // Default to Rohan (Vapi native SSOT)
       const voiceProvider = determineVoiceProvider(voiceId);
       const newAssistant = await client.createAssistant({
         name: agent.name,
