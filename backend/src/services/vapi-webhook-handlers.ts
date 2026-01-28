@@ -87,26 +87,97 @@ export async function processTranscript(event: any, orgId: string): Promise<void
 
 export async function processEndOfCallReport(event: any, orgId: string): Promise<void> {
   log.info('VapiWebhookHandlers', `Processing end-of-call report for org ${orgId}`);
-  
-  // TODO: Implement end-of-call report processing
-  // - Store summary and analysis
-  // - Update call record with report
-  // - Trigger follow-up actions
-  
+
   try {
-    // Example implementation
-    await supabase
-      .from('call_reports')
-      .insert({
-        call_id: event.call?.id,
+    const callId = event.call?.id;
+    if (!callId) {
+      log.error('VapiWebhookHandlers', 'Missing call ID in end-of-call report');
+      return;
+    }
+
+    // Extract call metadata
+    const phoneNumber = event.call?.customer?.number || null;
+    const callerName = event.call?.customer?.name || null;
+    const startedAt = event.call?.startedAt ? new Date(event.call.startedAt) : new Date();
+    const endedAt = event.call?.endedAt ? new Date(event.call.endedAt) : new Date();
+    const durationSeconds = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
+    const recordingUrl = event.call?.artifact?.recordingUrl || null;
+    const transcript = event.transcript || event.analysis?.transcript || '';
+
+    // Extract sentiment analysis if available
+    const sentimentLabel = event.analysis?.sentiment?.label || 'neutral';
+    const sentimentScore = event.analysis?.sentiment?.score || 0.5;
+    const sentimentSummary = event.analysis?.sentiment?.summary || '';
+    const sentimentUrgency = event.analysis?.sentiment?.urgency || 'normal';
+
+    // Determine call status based on end reason
+    let status = 'completed';
+    if (event.call?.endedReason === 'max-duration-reached') {
+      status = 'completed';
+    } else if (event.call?.endedReason === 'transfer') {
+      status = 'transferred';
+    } else if (event.call?.endedReason === 'customer-hangup' || event.call?.endedReason === 'assistant-hangup') {
+      status = 'completed';
+    }
+
+    // Insert into call_logs table
+    const { data: callLogData, error: callLogError } = await supabase
+      .from('call_logs')
+      .upsert({
+        id: callId,
         org_id: orgId,
-        summary: event.summary,
-        analysis: event.analysis,
-        cost: event.cost,
-        metadata: event
+        vapi_call_id: callId,
+        phone_number: phoneNumber,
+        caller_name: callerName,
+        duration_seconds: durationSeconds,
+        status: status,
+        transcript: transcript,
+        recording_storage_path: recordingUrl,
+        sentiment_label: sentimentLabel,
+        sentiment_score: sentimentScore,
+        sentiment_summary: sentimentSummary,
+        sentiment_urgency: sentimentUrgency,
+        call_type: 'inbound',
+        created_at: startedAt.toISOString(),
+        ended_at: endedAt.toISOString(),
+        metadata: {
+          vapi_end_reason: event.call?.endedReason,
+          vapi_cost: event.call?.cost,
+          vapi_customer: event.call?.customer,
+          analysis: event.analysis
+        }
+      }, {
+        onConflict: 'vapi_call_id'
       });
-      
-    log.info('VapiWebhookHandlers', `End-of-call report for call ${event.call?.id} processed successfully`);
+
+    if (callLogError) {
+      log.error('VapiWebhookHandlers', `Failed to insert call_logs: ${callLogError.message}`, { callId, orgId });
+    } else {
+      log.info('VapiWebhookHandlers', `Call log created/updated for call ${callId}`);
+    }
+
+    // Also store detailed report in call_reports table if it exists
+    try {
+      await supabase
+        .from('call_reports')
+        .upsert({
+          call_id: callId,
+          org_id: orgId,
+          summary: event.analysis?.summary || transcript.substring(0, 500),
+          analysis: event.analysis || {},
+          cost: event.call?.cost || 0,
+          metadata: event
+        }, {
+          onConflict: 'call_id'
+        })
+        .catch(() => {
+          // Table might not exist, continue anyway
+        });
+    } catch (reportError) {
+      log.warn('VapiWebhookHandlers', 'call_reports table may not exist, skipping detailed report');
+    }
+
+    log.info('VapiWebhookHandlers', `End-of-call report for call ${callId} processed successfully`);
   } catch (error) {
     log.error('VapiWebhookHandlers', `Failed to process end-of-call report: ${error}`);
     throw error;

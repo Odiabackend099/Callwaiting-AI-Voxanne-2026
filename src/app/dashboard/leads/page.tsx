@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 // LeftSidebar removed (now in layout)
 import useSWR, { useSWRConfig } from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { useToast } from '@/hooks/useToast';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
@@ -72,6 +73,10 @@ const LeadsDashboardContent = () => {
     const [filterScore, setFilterScore] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [showSMSModal, setShowSMSModal] = useState(false);
+    const [smsMessage, setSMSMessage] = useState('');
+    const [smsSendingLeadId, setSmsSendingLeadId] = useState<string | null>(null);
+    const { success, error: showError } = useToast();
 
     const leadsPerPage = 20;
 
@@ -188,26 +193,36 @@ const LeadsDashboardContent = () => {
 
     const handleCallBack = async (leadId: string) => {
         try {
-            const response = await authedBackendFetch<any>(`/api/contacts/${leadId}/initiate-call`, {
+            const response = await authedBackendFetch<any>(`/api/contacts/${leadId}/call-back`, {
                 method: 'POST'
             });
-            alert('Call initiated. Connecting now...');
+            success('Call initiated. Connecting now...');
         } catch (err: any) {
+            showError(err?.message || 'Failed to initiate call');
             setError(err?.message || 'Failed to initiate call');
         }
     };
 
     const handleSendSMS = async (leadId: string) => {
-        const message = prompt('Enter SMS message:');
-        if (!message) return;
+        setSmsSendingLeadId(leadId);
+        setSMSMessage('');
+        setShowSMSModal(true);
+    };
+
+    const handleSubmitSMS = async () => {
+        if (!smsMessage.trim() || !smsSendingLeadId) return;
 
         try {
-            await authedBackendFetch(`/api/contacts/${leadId}/sms`, {
+            await authedBackendFetch(`/api/contacts/${smsSendingLeadId}/sms`, {
                 method: 'POST',
-                body: JSON.stringify({ message })
+                body: JSON.stringify({ message: smsMessage })
             });
-            alert('SMS sent successfully');
+            success('SMS sent successfully');
+            setShowSMSModal(false);
+            setSMSMessage('');
+            setSmsSendingLeadId(null);
         } catch (err: any) {
+            showError(err?.message || 'Failed to send SMS');
             setError(err?.message || 'Failed to send SMS');
         }
     };
@@ -218,14 +233,11 @@ const LeadsDashboardContent = () => {
                 method: 'PATCH',
                 body: JSON.stringify({ lead_status: 'booked' })
             });
-            await authedBackendFetch(`/api/contacts/${leadId}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ lead_status: 'booked' })
-            });
             mutateLeads();
             mutateStats();
-            alert('Lead marked as booked');
+            success('Lead marked as booked');
         } catch (err: any) {
+            showError(err?.message || 'Failed to update lead status');
             setError(err?.message || 'Failed to update lead status');
         }
     };
@@ -236,14 +248,11 @@ const LeadsDashboardContent = () => {
                 method: 'PATCH',
                 body: JSON.stringify({ lead_status: 'lost' })
             });
-            await authedBackendFetch(`/api/contacts/${leadId}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ lead_status: 'lost' })
-            });
             mutateLeads();
             mutateStats();
-            alert('Lead marked as lost');
+            success('Lead marked as lost');
         } catch (err: any) {
+            showError(err?.message || 'Failed to update lead status');
             setError(err?.message || 'Failed to update lead status');
         }
     };
@@ -719,6 +728,53 @@ const LeadsDashboardContent = () => {
                     </div>
                 )
             }
+
+            {/* SMS Modal */}
+            {showSMSModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-md w-full">
+                        <div className="border-b border-gray-200 dark:border-slate-800 p-6">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-slate-50">Send SMS to Lead</h2>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                                    Message
+                                </label>
+                                <textarea
+                                    value={smsMessage}
+                                    onChange={(e) => setSMSMessage(e.target.value)}
+                                    placeholder="Enter your SMS message..."
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-50 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    rows={4}
+                                />
+                                <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
+                                    {smsMessage.length} characters
+                                </p>
+                            </div>
+                        </div>
+                        <div className="border-t border-gray-200 dark:border-slate-800 p-6 flex gap-3 justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowSMSModal(false);
+                                    setSMSMessage('');
+                                    setSmsSendingLeadId(null);
+                                }}
+                                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmitSMS}
+                                disabled={!smsMessage.trim()}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };
