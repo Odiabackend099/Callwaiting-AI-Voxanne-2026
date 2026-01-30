@@ -1,5 +1,10 @@
+import NavbarRedesigned from '@/components/NavbarRedesigned';
+import FooterRedesigned from '@/components/FooterRedesigned';
+
 export default function SupportPage() {
   return (
+    <>
+    <NavbarRedesigned />
     <main className="min-h-screen bg-white">
       <section className="py-20 border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 space-y-4">
@@ -70,5 +75,7 @@ export default function SupportPage() {
         </div>
       </section>
     </main>
+    <FooterRedesigned />
+    </>
   );
 }

@@ -22,7 +22,7 @@ const testimonials: Testimonial[] = [
         role: "Plastic Surgeon",
         clinic: "Chen Aesthetic Institute",
         image: "/images/testimonials/michael.png",
-        quote: "Call Waiting AI isn't just an answering service. She captured roughly $120k in missed revenue in the first month alone. I can't imagine running my practice without her now.",
+        quote: "Voxanne AI isn't just an answering service. She captured roughly $120k in missed revenue in the first month alone. I can't imagine running my practice without her now.",
         metric: "+$120k/mo Revenue"
     },
     {
@@ -31,7 +31,7 @@ const testimonials: Testimonial[] = [
         role: "Marketing Director",
         clinic: "Elite MedSpa",
         image: "/images/testimonials/sarah.png",
-        quote: "Our front desk was overwhelmed. Call Waiting AI took over 80% of the call load instantly. Our patient satisfaction scores went up because humans could focus on the people in the room.",
+        quote: "Our front desk was overwhelmed. Voxanne AI took over 80% of the call load instantly. Our patient satisfaction scores went up because humans could focus on the people in the room.",
         metric: "80% Call Automation"
     },
     {
@@ -87,7 +87,7 @@ export default function TestimonialCarousel() {
                         Trusted by Leading Clinics
                     </h2>
                     <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl mx-auto">
-                        See how top practices are using Call Waiting AI to grow revenue and delight patients.
+                        See how top practices are using Voxanne AI to grow revenue and delight patients.
                     </p>
                 </div>
 

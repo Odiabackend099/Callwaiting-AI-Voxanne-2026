@@ -14,8 +14,8 @@ import {
   Database,
   ArrowRight
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import NavbarRedesigned from "@/components/NavbarRedesigned";
+import FooterRedesigned from "@/components/FooterRedesigned";
 
 export const metadata: Metadata = {
   title: "Documentation - Voxanne AI",
@@ -143,7 +143,7 @@ const popularGuides = [
 export default function DocsPage() {
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
+      <NavbarRedesigned />
 
       <main className="max-w-7xl mx-auto px-4 py-16">
         {/* Header */}
@@ -297,7 +297,7 @@ export default function DocsPage() {
         </div>
       </main>
 
-      <Footer />
+      <FooterRedesigned />
     </div>
   );
 }

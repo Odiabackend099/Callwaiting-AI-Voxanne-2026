@@ -7,6 +7,7 @@ import useSWR from 'swr';
 import { Phone, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { useDashboardWebSocket } from '@/contexts/DashboardWebSocketContext';
 import HotLeadDashboard from '@/components/dashboard/HotLeadDashboard';
 import ClinicalPulse from '@/components/dashboard/ClinicalPulse';
 
@@ -38,15 +39,11 @@ export default function CallWaitingAIDashboard() {
     const { user, loading: authLoading } = useAuth();
 
     // Use SWR for recent activity
-    const { data: recentActivityData, isLoading: swrLoading } = useSWR(
+    const { data: recentActivityData, isLoading: swrLoading, mutate: mutateActivity } = useSWR(
         user ? '/api/analytics/recent-activity' : null,
         fetcher,
         {
-            refreshInterval: 10000,
-            revalidateOnFocus: false,      // Prevent reload on tab switch
-            revalidateOnMount: false,      // Use cache if available
-            dedupingInterval: 5000,        // Prevent duplicate requests within 5s
-            revalidateIfStale: true,       // Only refetch if data is stale
+            revalidateOnMount: true,
         }
     );
 
@@ -58,6 +55,15 @@ export default function CallWaitingAIDashboard() {
             router.push('/login');
         }
     }, [user, authLoading, router]);
+
+    // Real-time updates via shared WebSocket context
+    const { subscribe } = useDashboardWebSocket();
+    useEffect(() => {
+        const unsub1 = subscribe('call_ended', () => { mutateActivity(); });
+        const unsub2 = subscribe('hot_lead_alert', () => { mutateActivity(); });
+        const unsub3 = subscribe('call_update', () => { mutateActivity(); });
+        return () => { unsub1(); unsub2(); unsub3(); };
+    }, [subscribe, mutateActivity]);
 
     const formatDuration = (seconds: number | null) => {
         if (!seconds) return '0:00';

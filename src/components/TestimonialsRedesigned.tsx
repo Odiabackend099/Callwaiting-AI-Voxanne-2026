@@ -8,7 +8,7 @@ const testimonials = [
     {
         name: "Dr. Sarah Mitchell",
         role: "Dermatology Clinic Owner",
-        content: "CallWaiting AI increased our appointment bookings by 40% in the first month. The AI sounds natural and patients love the instant responses.",
+        content: "Voxanne AI increased our appointment bookings by 40% in the first month. The AI sounds natural and patients love the instant responses.",
         rating: 5,
         image: "👩‍⚕️",
     },
@@ -58,7 +58,7 @@ export default function TestimonialsRedesigned() {
                                 Loved by Clinic Owners
                             </h2>
                             <p className="text-lg text-charcoal/70 max-w-2xl mx-auto">
-                                See how CallWaiting AI is transforming patient communication for aesthetic clinics.
+                                See how Voxanne AI is transforming patient communication for aesthetic clinics.
                             </p>
                         </motion.div>
                     </div>
@@ -125,7 +125,7 @@ export default function TestimonialsRedesigned() {
                         <div className="grid md:grid-cols-4 gap-8 text-center">
                             <div>
                                 <p className="text-3xl font-bold text-blue-deep mb-2">500+</p>
-                                <p className="text-charcoal/70">Clinics Using CallWaiting AI</p>
+                                <p className="text-charcoal/70">Clinics Using Voxanne AI</p>
                             </div>
                             <div>
                                 <p className="text-3xl font-bold text-cyan mb-2">98%</p>

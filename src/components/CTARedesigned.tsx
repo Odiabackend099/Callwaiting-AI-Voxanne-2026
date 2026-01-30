@@ -30,7 +30,7 @@ export default function CTARedesigned({ onBookDemo }: CTARedesignedProps) {
                             Ready to Stop Missing Calls?
                         </h2>
                         <p className="text-xl text-cream/90 mb-8 leading-relaxed">
-                            Join 500+ aesthetic clinics using CallWaiting AI to automate patient communication and grow their practice.
+                            Join 500+ aesthetic clinics using Voxanne AI to automate patient communication and grow their practice.
                         </p>
                         
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">

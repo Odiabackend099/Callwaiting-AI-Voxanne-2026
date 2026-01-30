@@ -2,13 +2,13 @@
 
 import { motion } from "framer-motion";
 import { WifiOff, RefreshCw } from "lucide-react";
-import { brandColors } from "@/lib/animations";
+import { brandColors } from "@/lib/brand-colors";
 
 export default function OfflinePage() {
     return (
         <div
             className="min-h-screen flex items-center justify-center px-6"
-            style={{ backgroundColor: brandColors.navyDark }}
+            style={{ backgroundColor: brandColors.sterileWash }}
         >
             <motion.div
                 className="text-center max-w-md"
@@ -61,7 +61,7 @@ export default function OfflinePage() {
 
                 {/* Title */}
                 <motion.h1
-                    className="text-4xl font-bold text-white mb-4"
+                    className="text-4xl font-bold text-obsidian mb-4"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
@@ -72,7 +72,7 @@ export default function OfflinePage() {
                 {/* Description */}
                 <motion.p
                     className="text-lg mb-8"
-                    style={{ color: brandColors.offWhite + 'cc' }}
+                    style={{ color: brandColors.deepObsidian + 'aa' }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
@@ -104,7 +104,7 @@ export default function OfflinePage() {
                 {/* Helpful tips */}
                 <motion.div
                     className="mt-12 text-sm"
-                    style={{ color: brandColors.offWhite + '99' }}
+                    style={{ color: brandColors.deepObsidian + '80' }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.6 }}

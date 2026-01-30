@@ -1,9 +1,13 @@
 import React from 'react';
 import { ShieldCheck, Lock, Server, FileText, Eye, AlertTriangle, CheckCircle, Phone, Mail } from 'lucide-react';
 import Link from 'next/link';
+import NavbarRedesigned from '@/components/NavbarRedesigned';
+import FooterRedesigned from '@/components/FooterRedesigned';
 
 export default function HIPAACompliancePage() {
     return (
+        <>
+        <NavbarRedesigned />
         <div className="min-h-screen bg-slate-50 py-20 px-6">
             <div className="max-w-5xl mx-auto">
                 {/* Hero Section */}
@@ -848,5 +852,7 @@ export default function HIPAACompliancePage() {
                 </div>
             </div>
         </div>
+        <FooterRedesigned />
+        </>
     );
 }

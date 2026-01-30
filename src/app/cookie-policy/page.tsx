@@ -1,9 +1,13 @@
 import React from 'react';
 import { Cookie, Settings, Eye, Globe, CheckCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import NavbarRedesigned from '@/components/NavbarRedesigned';
+import FooterRedesigned from '@/components/FooterRedesigned';
 
 export default function CookiePolicyPage() {
     return (
+        <>
+        <NavbarRedesigned />
         <div className="min-h-screen bg-slate-50 py-20 px-6">
             <div className="max-w-4xl mx-auto">
                 {/* Hero Section */}
@@ -788,5 +792,7 @@ export default function CookiePolicyPage() {
                 </div>
             </div>
         </div>
+        <FooterRedesigned />
+        </>
     );
 }

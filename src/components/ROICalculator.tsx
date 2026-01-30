@@ -20,10 +20,10 @@ export const ROICalculator = () => {
     const monthlyRevenueLoss = Math.round(missedCallsPerMonth * avgProcedureValue * conversionRate);
     const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
-    // With Call Waiting AI (98% call answer rate - industry-leading)
-    const withCallWaitingAIMissed = Math.round(missedCallsPerMonth * 0.02);
-    const withCallWaitingAIRevenueSaved = Math.round((missedCallsPerMonth - withCallWaitingAIMissed) * avgProcedureValue * conversionRate);
-    const yearlyRevenueSaved = withCallWaitingAIRevenueSaved * 12;
+    // With Voxanne AI (98% call answer rate - industry-leading)
+    const withVoxanneAIMissed = Math.round(missedCallsPerMonth * 0.02);
+    const withVoxanneAIRevenueSaved = Math.round((missedCallsPerMonth - withVoxanneAIMissed) * avgProcedureValue * conversionRate);
+    const yearlyRevenueSaved = withVoxanneAIRevenueSaved * 12;
 
     return (
         <div className="relative py-24 px-6 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -95,7 +95,7 @@ export const ROICalculator = () => {
 
                     {/* Results Grid */}
                     <div className="grid md:grid-cols-2 gap-6">
-                        {/* Without Call Waiting AI */}
+                        {/* Without Voxanne AI */}
                         <motion.div
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
@@ -104,7 +104,7 @@ export const ROICalculator = () => {
                         >
                             <div className="flex items-center gap-2 mb-4">
                                 <TrendingDown className="w-5 h-5 text-red-400" />
-                                <h3 className="font-bold text-white">Without Call Waiting AI</h3>
+                                <h3 className="font-bold text-white">Without Voxanne AI</h3>
                             </div>
                             <div className="space-y-4">
                                 <div>
@@ -137,7 +137,7 @@ export const ROICalculator = () => {
                             </div>
                         </motion.div>
 
-                        {/* With Call Waiting AI */}
+                        {/* With Voxanne AI */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             whileInView={{ opacity: 1, x: 0 }}
@@ -147,7 +147,7 @@ export const ROICalculator = () => {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
                             <div className="flex items-center gap-2 mb-4 relative z-10">
                                 <TrendingUp className="w-5 h-5 text-emerald-400" />
-                                <h3 className="font-bold text-white">With Call Waiting AI</h3>
+                                <h3 className="font-bold text-white">With Voxanne AI</h3>
                             </div>
                             <div className="space-y-4 relative z-10">
                                 <div>

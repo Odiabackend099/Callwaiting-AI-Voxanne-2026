@@ -8,7 +8,7 @@ const steps = [
     {
         number: "01",
         title: "Patient Calls",
-        description: "A patient calls your clinic number. CallWaiting AI answers immediately.",
+        description: "A patient calls your clinic number. Voxanne AI answers immediately.",
         color: "bg-blue-deep",
     },
     {
@@ -51,7 +51,7 @@ export default function HowItWorksRedesigned() {
                             viewport={{ once: true }}
                         >
                             <h2 className="text-h2-desktop md:text-h2-mobile font-display font-bold text-charcoal mb-4">
-                                How CallWaiting AI Works
+                                How It Works
                             </h2>
                             <p className="text-lg text-charcoal/70 max-w-2xl mx-auto">
                                 Simple, automated, and seamless patient communication.

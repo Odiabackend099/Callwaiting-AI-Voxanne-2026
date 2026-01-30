@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +9,9 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
 import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
 import { VoiceSelector } from '@/components/VoiceSelector';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => authedBackendFetch<any>(url);
 
 const AGENT_CONFIG_CONSTRAINTS = {
     MIN_DURATION_SECONDS: 60,
@@ -56,7 +59,6 @@ export default function AgentConfigPage() {
     const initialTab = (tabParam === 'inbound' || tabParam === 'outbound') ? tabParam : 'inbound';
     const [activeTab, setActiveTab] = useState<'inbound' | 'outbound'>(initialTab as 'inbound' | 'outbound');
 
-    const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [savingAgent, setSavingAgent] = useState<'inbound' | 'outbound' | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -100,133 +102,126 @@ export default function AgentConfigPage() {
     const [originalOutboundConfig, setOriginalOutboundConfig] = useState<AgentConfig | null>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const loadData = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setError(null);
+    // SWR hooks — cached, deduplicated, instant on revisit
+    const { data: voicesRaw, error: voicesError } = useSWR(
+        user ? '/api/assistants/voices/available' : null, fetcher
+    );
+    const { data: agentData, error: agentError, isLoading: agentLoading } = useSWR(
+        user ? '/api/founder-console/agent/config' : null, fetcher
+    );
+    const { data: inboundRaw } = useSWR(
+        user ? '/api/inbound/status' : null, fetcher
+    );
+    const { data: numbersRaw } = useSWR(
+        user ? '/api/integrations/vapi/numbers' : null, fetcher
+    );
 
-            const results = await Promise.allSettled([
-                authedBackendFetch<any>('/api/assistants/voices/available'),
-                authedBackendFetch<any>('/api/founder-console/settings'),
-                authedBackendFetch<any>('/api/founder-console/agent/config'),
-                authedBackendFetch<any>('/api/inbound/status'),
-                authedBackendFetch<any>('/api/integrations/vapi/numbers'), // Fetch Vapi numbers
-            ]);
+    // Derive state from SWR data
+    const isLoading = agentLoading && !agentData;
 
-            const [voicesResult, settingsResult, agentResult, inboundResult, numbersResult] = results;
+    // Sync voices from SWR
+    useEffect(() => {
+        if (voicesRaw) {
+            setVoices(Array.isArray(voicesRaw) ? voicesRaw : (voicesRaw?.voices || []));
+        }
+    }, [voicesRaw]);
 
-            if (voicesResult.status === 'fulfilled') {
-                const voicesData = voicesResult.value;
-                setVoices(Array.isArray(voicesData) ? voicesData : (voicesData?.voices || []));
-            } else {
-                console.error('Failed to load voices:', voicesResult.reason);
-                setError('Failed to load available voices. Please refresh the page.');
-                setIsLoading(false);
-                return;
-            }
+    // Sync inbound status from SWR
+    useEffect(() => {
+        if (inboundRaw) {
+            setInboundStatus({
+                configured: Boolean(inboundRaw?.configured),
+                inboundNumber: inboundRaw?.inboundNumber
+            });
+        }
+    }, [inboundRaw]);
 
-            if (agentResult.status === 'fulfilled') {
-                const agentData = agentResult.value;
-                if (agentData?.agents) {
-                    const inboundAgent = agentData.agents.find((a: any) => a.role === 'inbound');
-                    const outboundAgent = agentData.agents.find((a: any) => a.role === 'outbound');
+    // Sync vapi numbers from SWR
+    useEffect(() => {
+        if (numbersRaw?.success) {
+            setVapiNumbers(numbersRaw.numbers || []);
+        }
+    }, [numbersRaw]);
 
-                    if (inboundAgent) {
-                        const loadedConfig = {
-                            name: inboundAgent.name || 'Inbound Agent',
-                            systemPrompt: inboundAgent.system_prompt || '',
-                            firstMessage: inboundAgent.first_message || '',
-                            voice: inboundAgent.voice || '',
-                            language: inboundAgent.language || 'en-US',
-                            maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                        };
+    // Sync agent config from SWR — handles draft detection
+    const configSyncedRef = useRef(false);
+    useEffect(() => {
+        if (!agentData?.agents || configSyncedRef.current) return;
+        configSyncedRef.current = true;
 
-                        // Check for drafts
-                        const currentStore = useAgentStore.getState().inboundConfig;
-                        if (!areConfigsEqual(currentStore, loadedConfig)) {
-                            // If store is default/empty, just overwrite
-                            if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
-                                setInboundConfig(loadedConfig);
-                                setOriginalInboundConfig(loadedConfig);
-                            } else {
-                                // Real draft exists
-                                setHasDraft(true);
-                                setServerInbound(loadedConfig);
-                                setOriginalInboundConfig(loadedConfig); // Original is server state
-                            }
-                        } else {
-                            setInboundConfig(loadedConfig);
-                            setOriginalInboundConfig(loadedConfig);
-                        }
-                    }
+        const inboundAgent = agentData.agents.find((a: any) => a.role === 'inbound');
+        const outboundAgent = agentData.agents.find((a: any) => a.role === 'outbound');
 
-                    if (outboundAgent) {
-                        const loadedConfig = {
-                            name: outboundAgent.name || 'Outbound Agent',
-                            systemPrompt: outboundAgent.system_prompt || '',
-                            firstMessage: outboundAgent.first_message || '',
-                            voice: outboundAgent.voice || '',
-                            language: outboundAgent.language || 'en-US',
-                            maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
-                        };
+        if (inboundAgent) {
+            const loadedConfig = {
+                name: inboundAgent.name || 'Inbound Agent',
+                systemPrompt: inboundAgent.system_prompt || '',
+                firstMessage: inboundAgent.first_message || '',
+                voice: inboundAgent.voice || '',
+                language: inboundAgent.language || 'en-US',
+                maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+            };
 
-                        // Load saved phone number ID
-                        if (outboundAgent.vapi_phone_number_id) {
-                            setSelectedOutboundNumberId(outboundAgent.vapi_phone_number_id);
-                            setOriginalOutboundPhoneNumberId(outboundAgent.vapi_phone_number_id);
-                        }
-
-                        // Check for drafts
-                        const currentStore = useAgentStore.getState().outboundConfig;
-                        if (!areConfigsEqual(currentStore, loadedConfig)) {
-                            // If store is default/empty, just overwrite
-                            if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
-                                setOutboundConfig(loadedConfig);
-                                setOriginalOutboundConfig(loadedConfig);
-                            } else {
-                                // Real draft exists
-                                setHasDraft(true);
-                                setServerOutbound(loadedConfig);
-                                setOriginalOutboundConfig(loadedConfig);
-                            }
-                        } else {
-                            setOutboundConfig(loadedConfig);
-                            setOriginalOutboundConfig(loadedConfig);
-                        }
-                    }
+            const currentStore = useAgentStore.getState().inboundConfig;
+            if (!areConfigsEqual(currentStore, loadedConfig)) {
+                if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
+                    setInboundConfig(loadedConfig);
+                    setOriginalInboundConfig(loadedConfig);
+                } else {
+                    setHasDraft(true);
+                    setServerInbound(loadedConfig);
+                    setOriginalInboundConfig(loadedConfig);
                 }
             } else {
-                console.error('Failed to load agent config:', agentResult.reason);
-                setError('Failed to load agent configuration. Please refresh the page.');
-                setIsLoading(false);
-                return;
+                setInboundConfig(loadedConfig);
+                setOriginalInboundConfig(loadedConfig);
             }
-
-            if (inboundResult.status === 'fulfilled') {
-                setInboundStatus({
-                    configured: Boolean(inboundResult.value?.configured),
-                    inboundNumber: inboundResult.value?.inboundNumber
-                });
-            }
-
-            if (numbersResult.status === 'fulfilled' && numbersResult.value.success) {
-                setVapiNumbers(numbersResult.value.numbers || []);
-            }
-        } catch (err) {
-            console.error('Unexpected error loading configuration:', err);
-            setError('An unexpected error occurred. Please refresh the page.');
-        } finally {
-            setIsLoading(false);
         }
-    }, []);
 
+        if (outboundAgent) {
+            const loadedConfig = {
+                name: outboundAgent.name || 'Outbound Agent',
+                systemPrompt: outboundAgent.system_prompt || '',
+                firstMessage: outboundAgent.first_message || '',
+                voice: outboundAgent.voice || '',
+                language: outboundAgent.language || 'en-US',
+                maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+            };
+
+            if (outboundAgent.vapi_phone_number_id) {
+                setSelectedOutboundNumberId(outboundAgent.vapi_phone_number_id);
+                setOriginalOutboundPhoneNumberId(outboundAgent.vapi_phone_number_id);
+            }
+
+            const currentStore = useAgentStore.getState().outboundConfig;
+            if (!areConfigsEqual(currentStore, loadedConfig)) {
+                if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
+                    setOutboundConfig(loadedConfig);
+                    setOriginalOutboundConfig(loadedConfig);
+                } else {
+                    setHasDraft(true);
+                    setServerOutbound(loadedConfig);
+                    setOriginalOutboundConfig(loadedConfig);
+                }
+            } else {
+                setOutboundConfig(loadedConfig);
+                setOriginalOutboundConfig(loadedConfig);
+            }
+        }
+    }, [agentData]);
+
+    // Sync SWR errors to local error state
+    useEffect(() => {
+        if (voicesError) setError('Failed to load available voices. Please refresh the page.');
+        else if (agentError) setError('Failed to load agent configuration. Please refresh the page.');
+    }, [voicesError, agentError]);
+
+    // Auth redirect
     useEffect(() => {
         if (!loading && !user) {
             router.push('/login');
-        } else if (user) {
-            loadData();
         }
-    }, [user, loading, router, loadData]);
+    }, [user, loading, router]);
 
     useEffect(() => {
         return () => {
@@ -384,24 +379,14 @@ export default function AgentConfigPage() {
         }
     };
 
-    const handleTestInbound = async () => {
-        try {
-            setError(null);
-            const inboundError = validateAgentConfig(inboundConfig, 'inbound');
-            if (inboundError) {
-                setError(inboundError);
-                return;
-            }
-            await authedBackendFetch<any>('/api/founder-console/agent/web-test', {
-                method: 'POST',
-                timeoutMs: 30000,
-                retries: 1,
-            });
-            router.push('/dashboard/test?tab=web');
-        } catch (err) {
-            console.error('Failed to start web test:', err);
-            setError(err instanceof Error ? err.message : 'Failed to start web test');
+    const handleTestInbound = () => {
+        setError(null);
+        const inboundError = validateAgentConfig(inboundConfig, 'inbound');
+        if (inboundError) {
+            setError(inboundError);
+            return;
         }
+        router.push('/dashboard/test?tab=web&autostart=1');
     };
 
     const handleTestOutbound = async () => {
@@ -542,24 +527,16 @@ export default function AgentConfigPage() {
         }
     };
 
-    if (loading || isLoading) {
-        return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-            </div>
-        );
-    }
-
-    if (!user) return null;
+    if (!user && !loading) return null;
 
     const currentConfig = activeTab === 'inbound' ? inboundConfig : outboundConfig;
     const setConfig = activeTab === 'inbound' ? setInboundConfig : setOutboundConfig;
     const templates = activeTab === 'inbound' ? PROMPT_TEMPLATES : OUTBOUND_PROMPT_TEMPLATES;
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20">
+        <div className="min-h-screen bg-clinical-bg pb-20">
             {/* Sticky Header */}
-            <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+            <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
@@ -679,6 +656,12 @@ export default function AgentConfigPage() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {isLoading && (
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2 className="w-6 h-6 text-surgical-600 animate-spin" />
+                    </div>
+                )}
+
                 {error && (
                     <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 flex items-center gap-3">
                         <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -714,7 +697,7 @@ export default function AgentConfigPage() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${isLoading ? 'hidden' : ''}`}>
                     {/* LEFT COLUMN - Configuration */}
                     <div className="lg:col-span-1 space-y-6">
                         {/* Agent Identity Card */}

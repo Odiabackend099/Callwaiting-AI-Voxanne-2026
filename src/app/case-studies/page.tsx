@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, TrendingUp, Users, Clock } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import NavbarRedesigned from "@/components/NavbarRedesigned";
+import FooterRedesigned from "@/components/FooterRedesigned";
 
 export const metadata: Metadata = {
   title: "Case Studies - Voxanne AI",
@@ -66,7 +66,7 @@ const caseStudies = [
 export default function CaseStudiesPage() {
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
+      <NavbarRedesigned />
 
       <main className="max-w-7xl mx-auto px-4 py-16">
         {/* Header */}
@@ -191,7 +191,7 @@ export default function CaseStudiesPage() {
         </div>
       </main>
 
-      <Footer />
+      <FooterRedesigned />
     </div>
   );
 }

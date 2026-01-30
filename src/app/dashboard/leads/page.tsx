@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, MessageCircle, CheckCircle, XCircle, Search, Filter, RotateCw, AlertCircle, MessageSquare, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 // LeftSidebar removed (now in layout)
-import useSWR, { useSWRConfig } from 'swr';
+import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { useDashboardWebSocket } from '@/contexts/DashboardWebSocketContext';
 import { useToast } from '@/hooks/useToast';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
@@ -98,9 +99,7 @@ const LeadsDashboardContent = () => {
         user ? `/api/contacts?${leadsQueryParams}` : null,
         fetcher,
         {
-            keepPreviousData: true,
-            refreshInterval: 0,
-            revalidateOnFocus: false,
+            revalidateOnMount: true,
         }
     );
 
@@ -125,7 +124,7 @@ const LeadsDashboardContent = () => {
         user ? '/api/contacts/stats' : null,
         fetcher,
         {
-            revalidateOnFocus: false,
+            revalidateOnMount: true,
         }
     );
 
@@ -143,43 +142,19 @@ const LeadsDashboardContent = () => {
         }
     }, [leadsError]);
 
-    // WebSocket real-time updates
+    // Real-time updates via shared WebSocket context
+    const { subscribe } = useDashboardWebSocket();
     useEffect(() => {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-        const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
-        const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;
-
-        let ws: WebSocket | null = null;
-
-        try {
-            ws = new WebSocket(wsUrl);
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'hot_lead_alert' || data.type === 'contact_updated') {
-                        mutateLeads();
-                        mutateStats();
-                    }
-                } catch (err) {
-                    console.error('Failed to parse WebSocket message:', err);
-                }
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-        } catch (err) {
-            console.error('WebSocket connection error:', err);
-        }
-
-        return () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
-        };
-    }, [mutateLeads, mutateStats]);
+        const unsub1 = subscribe('hot_lead_alert', () => {
+            mutateLeads();
+            mutateStats();
+        });
+        const unsub2 = subscribe('contact_updated', () => {
+            mutateLeads();
+            mutateStats();
+        });
+        return () => { unsub1(); unsub2(); };
+    }, [subscribe, mutateLeads, mutateStats]);
 
     const fetchLeadDetail = async (leadId: string) => {
         try {
@@ -303,18 +278,7 @@ const LeadsDashboardContent = () => {
 
     const totalPages = Math.ceil(totalLeads / leadsPerPage);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!user) return null;
+    if (!user && !loading) return null;
 
     const leadScoreBadge = getLeadScoreBadge(0);
 

@@ -39,7 +39,7 @@ export default function Integrations() {
             <div className="max-w-7xl mx-auto px-6">
                 <FadeIn>
                     <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-3xl font-bold text-navy-900 tracking-tight mb-4">
+                        <h2 className="text-3xl font-bold text-deep-obsidian tracking-tight mb-4">
                             Integrates with your existing stack
                         </h2>
                         <p className="text-lg text-slate-600">
@@ -55,18 +55,21 @@ export default function Integrations() {
                                 {row.tools.map((tool) => (
                                     <div
                                         key={tool.name}
-                                        className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex items-center justify-center h-24 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
+                                        className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center h-32 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
                                     >
-                                        <div className="relative w-20 h-20 flex items-center justify-center">
+                                        <div className="relative w-14 h-14 flex items-center justify-center mb-2">
                                             <Image
                                                 src={tool.logo}
                                                 alt={`${tool.name} logo`}
-                                                width={80}
-                                                height={80}
+                                                width={56}
+                                                height={56}
                                                 className="object-contain group-hover:scale-110 transition-transform duration-300"
                                                 priority={false}
                                             />
                                         </div>
+                                        <p className="text-sm font-medium text-slate-700 text-center leading-tight">
+                                            {tool.name}
+                                        </p>
                                     </div>
                                 ))}
                             </div>

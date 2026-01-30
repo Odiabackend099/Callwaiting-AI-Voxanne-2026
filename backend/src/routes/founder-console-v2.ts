@@ -25,7 +25,7 @@ import { withTimeout } from '../utils/timeout-helper';
 import { validateE164Format } from '../utils/phone-validation';
 import { phoneNumbersRouter } from './phone-numbers';
 import { createWebVoiceSession, endWebVoiceSession } from '../services/web-voice-bridge';
-import { getVoiceById, isValidVoice } from '../config/voice-registry';
+import { getVoiceById, isValidVoice, getActiveVoices } from '../config/voice-registry';
 import { config } from '../config/index';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
@@ -51,54 +51,41 @@ function sanitizeName(name: string): string {
     .trim();
 }
 
-// SINGLE SOURCE OF TRUTH - Vapi 2026 ACTIVE VOICES ONLY
-// Per https://docs.vapi.ai/providers/voice/vapi-voices (Jan 2026)
-// ⚠️  All other voices (Neha, Paige, etc.) are LEGACY - new assistants rejected
-const VOICE_REGISTRY = [
-  // Only these 3 voices support NEW assistant creation in Vapi 2026
-  { id: 'Rohan', name: 'Rohan', gender: 'male', provider: 'vapi', description: 'Professional, energetic, warm (healthcare-approved)' },
-  { id: 'Elliot', name: 'Elliot', gender: 'male', provider: 'vapi', description: 'Calm, measured, professional' },
-  { id: 'Savannah', name: 'Savannah', gender: 'female', provider: 'vapi', description: 'Warm, friendly, approachable' },
-] as const;
+// SINGLE SOURCE OF TRUTH - Use comprehensive voice registry
+// Supports 100+ voices across 7 providers (Vapi, OpenAI, ElevenLabs, Google, Azure, PlayHT, Rime)
+// Imported from voice-registry.ts which maintains the authoritative voice list
+const VOICE_REGISTRY = getActiveVoices();
 
 // ✅ ACTIVE default voice (Rohan replaces legacy Neha)
 const DEFAULT_VOICE = 'Rohan';
 
 /**
- * Convert database voice format to Vapi 2026 active voice
- * Maps ALL legacy voices to 3 currently-supported voices:
- * - Neha, Paige, Hana, Lily, Kylie, Leah, Tara, Jess, Mia, Zoe → Savannah (female replacements)
- * - Harry, Cole, Spencer, Leo, Dan, Zac → Rohan (male replacements)
- * - Elliot → Elliot (active, no mapping needed)
- * - Rohan → Rohan (active, no mapping needed)
+ * Validate voice ID against comprehensive voice registry
+ * Uses getVoiceById for case-insensitive lookup against all 100+ active voices
  */
 function convertToVapiVoiceId(dbVoiceId: string): string {
-  if (!dbVoiceId) return 'Rohan'; // Default to SSOT voice
+  if (!dbVoiceId) return 'Rohan'; // Default to Rohan if no voice specified
 
-  const normalizedId = dbVoiceId.trim();
-  const lowerNormalized = normalizedId.toLowerCase();
+  // Try to find voice in comprehensive registry (case-insensitive)
+  const voice = getVoiceById(dbVoiceId);
 
-  // Check exact match in VOICE_REGISTRY SSOT
-  if (VOICE_REGISTRY.some(v => v.id === normalizedId && v.status === 'active')) {
-    return normalizedId;
+  if (voice && voice.status === 'active') {
+    return voice.id; // Return canonical voice ID from registry
   }
 
-  // Try case-insensitive match in VOICE_REGISTRY SSOT
-  const found = VOICE_REGISTRY.find(v => v.id.toLowerCase() === lowerNormalized && v.status === 'active');
-  if (found) return found.id;
-
-  // Any voice not in SSOT defaults to Rohan (Vapi native voice)
-  // No legacy voice mapping - enforce SSOT only
+  // Voice not found or deprecated - default to Rohan
+  // This preserves data but ensures valid Vapi voice is used
   return 'Rohan';
 }
 
 /**
- * Maps a voice ID to its provider (case-insensitive lookup)
+ * Maps a voice ID to its provider
  * @param voiceId - Voice identifier
- * @returns Provider name ('vapi', 'playht', 'openai', 'deepgram')
+ * @returns Provider name ('vapi', 'elevenlabs', 'openai', 'google', 'azure', 'playht', 'rime')
  */
 function getVoiceProvider(voiceId: string): string {
-  const voice = VOICE_REGISTRY.find(v => v.id.toLowerCase() === (voiceId || '').toLowerCase());
+  if (!voiceId) return 'vapi';
+  const voice = getVoiceById(voiceId);
   return voice?.provider || 'vapi';
 }
 
@@ -110,14 +97,16 @@ function getAvailableVoices() {
 }
 
 /**
- * Validates if a voice ID exists in the registry
+ * Validates if a voice ID exists in the comprehensive voice registry
+ * Supports 100+ voices across 7 providers
  */
 function isValidVoiceId(voiceId: string): boolean {
   // Allow empty/undefined voice (let Vapi use default)
   if (!voiceId) {
     return true;
   }
-  return VOICE_REGISTRY.some(v => v.id.toLowerCase() === (voiceId || '').toLowerCase());
+  const voice = getVoiceById(voiceId);
+  return voice !== undefined && voice.status === 'active';
 }
 
 /**
@@ -394,7 +383,13 @@ const configRateLimiter = rateLimit({
 const deleteAgentRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour window
   max: 10, // Max 10 deletions per hour per org
-  keyGenerator: (req) => req.user?.app_metadata?.org_id || req.ip || 'unknown',
+  keyGenerator: (req) => {
+    const orgId = req.user?.app_metadata?.org_id;
+    if (orgId) return orgId;
+    // Use IP address with IPv6 support
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    return ip;
+  },
   message: { error: 'Too many agent deletions. Please try again later.' },
   standardHeaders: true,
 });
@@ -600,7 +595,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   console.time(`${timerId}-db-fetch`);
   const { data: agents, error: agentError } = await supabase
     .from('agents')
-    .select('id, name, system_prompt, voice, language, first_message, max_call_duration, vapi_assistant_id')
+    .select('id, name, system_prompt, voice, voice_provider, language, first_message, max_call_duration, vapi_assistant_id')
     .eq('id', agentId);
   console.timeEnd(`${timerId}-db-fetch`);
 
@@ -641,11 +636,13 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     fromDatabase: {
       system_prompt: agent.system_prompt ? `"${agent.system_prompt.substring(0, 50)}..."` : 'NULL',
       voice: agent.voice,
+      voice_provider: agent.voice_provider,
       first_message: agent.first_message ? `"${agent.first_message.substring(0, 30)}..."` : 'NULL'
     },
     resolved: {
       systemPrompt: `"${resolvedSystemPrompt.substring(0, 50)}..."`,
       voiceId: resolvedVoiceId,
+      voiceProvider: resolvedVoiceProvider,
       language: resolvedLanguage,
       firstMessage: `"${resolvedFirstMessage.substring(0, 30)}..."`
     },
@@ -1952,6 +1949,26 @@ router.post(
             throw new Error(`Invalid voice selection for ${agentRole} agent`);
           }
           payload.voice = voiceValue;
+
+          // ✅ NEW: Extract and validate voice provider
+          const voiceProviderValue = config.voiceProvider || config.voice_provider;
+          if (voiceProviderValue) {
+            const validProviders = ['vapi', 'elevenlabs', 'openai', 'google', 'azure', 'playht', 'rime'];
+            if (!validProviders.includes(voiceProviderValue)) {
+              throw new Error(`Invalid voice provider '${voiceProviderValue}' for ${agentRole} agent. Must be one of: ${validProviders.join(', ')}`);
+            }
+            payload.voice_provider = voiceProviderValue;
+          } else {
+            // Auto-detect provider from voice registry
+            const voiceData = getVoiceById(voiceValue);
+            if (voiceData?.provider) {
+              payload.voice_provider = voiceData.provider;
+              logger.info(`Auto-detected voice provider from registry for ${agentRole}`, {
+                voiceId: voiceValue,
+                detectedProvider: voiceData.provider
+              });
+            }
+          }
         }
         if (config.language !== undefined && config.language !== null && config.language !== '') {
           if (!isValidLanguage(config.language)) {
@@ -1982,10 +1999,18 @@ router.post(
       const outboundPayload = buildUpdatePayload(outbound, 'outbound');
 
       // CRITICAL DEBUG: Log what was built
-      console.log('[SYSTEM_PROMPT_DEBUG] Inbound payload:', JSON.stringify(inboundPayload, null, 2));
-      console.log('[SYSTEM_PROMPT_DEBUG] Outbound payload:', JSON.stringify(outboundPayload, null, 2));
+      console.log('\n=== AGENT SAVE DEBUG ===');
+      console.log('Inbound received:', JSON.stringify(inbound, null, 2));
+      console.log('Inbound payload built:', JSON.stringify(inboundPayload, null, 2));
+      console.log('Outbound received:', JSON.stringify(outbound, null, 2));
+      console.log('Outbound payload built:', JSON.stringify(outboundPayload, null, 2));
+      console.log('=== END DEBUG ===\n');
       logger.info('Payloads built for agent update', {
         requestId,
+        inboundReceived: Boolean(inbound),
+        outboundReceived: Boolean(outbound),
+        inboundPayload: Boolean(inboundPayload),
+        outboundPayload: Boolean(outboundPayload),
         inboundHasSystemPrompt: inboundPayload?.system_prompt ? 'YES' : 'NO',
         inboundSystemPromptLength: inboundPayload?.system_prompt?.length || 0,
         outboundHasSystemPrompt: outboundPayload?.system_prompt ? 'YES' : 'NO',
@@ -2051,7 +2076,11 @@ router.post(
       const agentMap: Record<string, string> = {}; // role -> agentId
       const creationErrors: string[] = [];
 
+      console.log('\n=== AGENT CREATION LOOP ===');
+      console.log('Processing roles:', [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND]);
+
       for (const role of [AGENT_ROLES.OUTBOUND, AGENT_ROLES.INBOUND]) {
+        console.log(`\n--- Processing role: ${role} ---`);
         const { data: existingAgent, error: existingError } = await supabase
           .from('agents')
           .select('id')
@@ -2059,6 +2088,12 @@ router.post(
           .eq('org_id', orgId)
           .limit(1)
           .maybeSingle();
+
+        console.log(`Existing agent query result for ${role}:`, {
+          found: existingAgent ? 'YES' : 'NO',
+          agentId: existingAgent?.id || 'NULL',
+          error: existingError?.message || 'NONE'
+        });
 
         if (existingError) {
           const errorMsg = `Failed to fetch ${role} agent: ${existingError.message}`;
@@ -2070,6 +2105,7 @@ router.post(
         let agentId = existingAgent?.id;
 
         if (!agentId) {
+          console.log(`No existing agent for ${role}, creating new one...`);
           const name = role === AGENT_ROLES.OUTBOUND ? 'CallWaiting AI Outbound' : 'CallWaiting AI Inbound';
           const defaultSystemPrompt = role === AGENT_ROLES.OUTBOUND
             ? 'You are a helpful assistant making outbound calls on behalf of the business.'
@@ -2086,6 +2122,12 @@ router.post(
             .select('id')
             .single();
 
+          console.log(`Insert result for ${role}:`, {
+            created: newAgent ? 'YES' : 'NO',
+            agentId: newAgent?.id || 'NULL',
+            error: insertError?.message || 'NONE'
+          });
+
           if (insertError) {
             const errorMsg = `Failed to create ${role} agent: ${insertError.message}`;
             logger.error(errorMsg, { requestId });
@@ -2101,13 +2143,18 @@ router.post(
           }
 
           agentId = newAgent.id;
+          console.log(`Successfully created ${role} agent with ID: ${agentId}`);
         }
 
         if (agentId) {
           agentMap[role] = agentId;
+          console.log(`Added to agentMap: ${role} -> ${agentId}`);
           logger.info(`Agent found/created for ${role}`, { agentId, requestId });
         }
       }
+
+      console.log('\nFinal agentMap:', agentMap);
+      console.log('=== END CREATION LOOP ===\n');
 
       // CRITICAL: Validate that both agents were created/found
       if (Object.keys(agentMap).length === 0) {
@@ -2120,8 +2167,16 @@ router.post(
       // Update each agent independently with its own payload
       const updateResults: Array<{ role: string; agentId: string; success: boolean; error?: string }> = [];
 
+      console.log('\n=== AGENT UPDATE LOOP ===');
+      console.log('agentMap:', agentMap);
+      console.log('inboundPayload exists:', Boolean(inboundPayload));
+      console.log('outboundPayload exists:', Boolean(outboundPayload));
+      console.log('agentMap[INBOUND]:', agentMap[AGENT_ROLES.INBOUND]);
+      console.log('agentMap[OUTBOUND]:', agentMap[AGENT_ROLES.OUTBOUND]);
+
       // Update INBOUND agent if payload exists
       if (inboundPayload && agentMap[AGENT_ROLES.INBOUND]) {
+        console.log('\n--- Updating INBOUND agent ---');
         const inboundAgentId = agentMap[AGENT_ROLES.INBOUND];
         console.log('[SYSTEM_PROMPT_DEBUG] Updating INBOUND agent', {
           agentId: inboundAgentId,
@@ -2157,6 +2212,7 @@ router.post(
 
       // Update OUTBOUND agent if payload exists
       if (outboundPayload && agentMap[AGENT_ROLES.OUTBOUND]) {
+        console.log('\n--- Updating OUTBOUND agent ---');
         const outboundAgentId = agentMap[AGENT_ROLES.OUTBOUND];
         console.log('[SYSTEM_PROMPT_DEBUG] Updating OUTBOUND agent', {
           agentId: outboundAgentId,
@@ -2195,7 +2251,15 @@ router.post(
         .filter(r => r.success)
         .map(r => r.agentId);
 
+      console.log('\n=== UPDATE RESULTS ===');
+      console.log('updateResults:', JSON.stringify(updateResults, null, 2));
+      console.log('agentIdsToSync:', agentIdsToSync);
+      console.log('=== END UPDATE RESULTS ===\n');
+
       if (agentIdsToSync.length === 0) {
+        console.log('ERROR: No agents were successfully updated!');
+        console.log('updateResults length:', updateResults.length);
+        console.log('updateResults:', updateResults);
         res.status(400).json({ error: 'No agents were updated', requestId });
         return;
       }
@@ -2781,18 +2845,21 @@ router.post(
         return;
       }
 
-      // Validate agent has all required behavior fields
+      // Validate agent has all required behavior fields for voice testing
       if (!agent.system_prompt || !agent.first_message || !agent.voice || !agent.language || !agent.max_call_duration) {
         const missingFields = [
-          !agent.system_prompt && 'System Prompt',
-          !agent.first_message && 'First Message',
-          !agent.voice && 'Voice',
-          !agent.language && 'Language',
-          !agent.max_call_duration && 'Max Call Duration'
-        ].filter(Boolean);
+          { missing: !agent.system_prompt, name: 'System Prompt', hint: 'Set in Agent Behavior tab' },
+          { missing: !agent.first_message, name: 'First Message', hint: 'Opening greeting for calls' },
+          { missing: !agent.voice, name: 'Voice', hint: 'Select from Voice dropdown' },
+          { missing: !agent.language, name: 'Language', hint: 'e.g., en-US (defaults if empty)' },
+          { missing: !agent.max_call_duration, name: 'Max Call Duration', hint: 'Seconds (60-3600)' }
+        ].filter(f => f.missing);
 
         res.status(400).json({
-          error: `Agent behavior incomplete. Missing: ${missingFields.join(', ')}. Fill all fields and save.`,
+          error: 'Agent configuration incomplete for voice testing',
+          missing_fields: missingFields.map(f => `${f.name} (${f.hint})`),
+          action: 'Go to Agent Configuration page and fill all required fields',
+          help_url: '/dashboard/agent-config',
           requestId
         });
         return;
@@ -3045,17 +3112,13 @@ router.post(
         return;
       }
 
-      const { data: vapiIntegration } = await supabase
-        .from('integrations')
-        .select('config')
-        .eq('provider', INTEGRATION_PROVIDERS.VAPI)
-        .eq('org_id', orgId)
-        .maybeSingle();
-
-      const vapiApiKey: string | undefined = vapiIntegration?.config?.vapi_api_key || vapiIntegration?.config?.vapi_secret_key;
+      // PRD Rule: Use backend's master VAPI_PRIVATE_KEY (not org-specific)
+      // All organizations share the single backend Vapi API key
+      const vapiApiKey = process.env.VAPI_PRIVATE_KEY;
 
       if (!vapiApiKey) {
-        res.status(400).json({ error: 'Vapi connection not configured', requestId });
+        logger.error('VAPI_PRIVATE_KEY not configured in environment', { requestId });
+        res.status(500).json({ error: 'Vapi is not configured on this server', requestId });
         return;
       }
 

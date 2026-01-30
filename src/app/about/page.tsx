@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import NavbarRedesigned from '@/components/NavbarRedesigned';
+import FooterRedesigned from '@/components/FooterRedesigned';
 
 export default function AboutPage() {
   const team = [
@@ -23,6 +25,8 @@ export default function AboutPage() {
   ];
 
   return (
+    <>
+    <NavbarRedesigned />
     <main className="min-h-screen bg-white">
       <section className="py-20 border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 space-y-6">
@@ -121,5 +125,7 @@ export default function AboutPage() {
         </div>
       </section>
     </main>
+    <FooterRedesigned />
+    </>
   );
 }

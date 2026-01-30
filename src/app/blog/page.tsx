@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { Calendar, Clock } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import NavbarRedesigned from "@/components/NavbarRedesigned";
+import FooterRedesigned from "@/components/FooterRedesigned";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -44,7 +44,7 @@ const blogPosts = [
 export default function BlogPage() {
     return (
         <div className="min-h-screen bg-white">
-            <Navbar />
+            <NavbarRedesigned />
 
             <main className="max-w-7xl mx-auto px-4 py-16">
                 {/* Header */}
@@ -126,7 +126,7 @@ export default function BlogPage() {
                 </div>
             </main>
 
-            <Footer />
+            <FooterRedesigned />
         </div>
     );
 }

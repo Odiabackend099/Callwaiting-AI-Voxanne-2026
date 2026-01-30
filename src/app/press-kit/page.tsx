@@ -1,5 +1,10 @@
+import NavbarRedesigned from '@/components/NavbarRedesigned';
+import FooterRedesigned from '@/components/FooterRedesigned';
+
 export default function PressKitPage() {
   return (
+    <>
+    <NavbarRedesigned />
     <main className="min-h-screen bg-white">
       <section className="py-20 border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-6 space-y-4">
@@ -17,7 +22,7 @@ export default function PressKitPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-semibold text-slate-900">Downloads</h2>
             <ul className="space-y-3 text-sm text-slate-700 leading-relaxed list-disc list-inside">
-              <li><a className="text-slate-900 font-semibold hover:underline" href="/branding/callwaiting-ai-logo.png" download>Primary logo (PNG)</a></li>
+              <li><a className="text-slate-900 font-semibold hover:underline" href="/Brand/1.png" download>Primary logo (PNG)</a></li>
               <li><a className="text-slate-900 font-semibold hover:underline" href="/public/branding/resource_8Yu5GfUCC29dqKx3x0skXr.png" download>Product hero (PNG)</a></li>
               <li><a className="text-slate-900 font-semibold hover:underline" href="/public/branding/resource_9Fnvkd0qdNf9kUnicIO_4i.png" download>Dashboard screenshot (PNG)</a></li>
             </ul>
@@ -41,5 +46,7 @@ export default function PressKitPage() {
         </div>
       </section>
     </main>
+    <FooterRedesigned />
+    </>
   );
 }

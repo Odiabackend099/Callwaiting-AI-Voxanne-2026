@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { FileText, Video, Download, BookOpen } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import NavbarRedesigned from "@/components/NavbarRedesigned";
+import FooterRedesigned from "@/components/FooterRedesigned";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -58,7 +58,7 @@ const resources = [
 export default function ResourcesPage() {
     return (
         <div className="min-h-screen bg-white">
-            <Navbar />
+            <NavbarRedesigned />
 
             <main className="max-w-7xl mx-auto px-4 py-16">
                 {/* Header */}
@@ -128,7 +128,7 @@ export default function ResourcesPage() {
                 </div>
             </main>
 
-            <Footer />
+            <FooterRedesigned />
         </div>
     );
 }

@@ -83,7 +83,7 @@ export default function OfficeLocation() {
                             allowFullScreen
                             loading="lazy"
                             referrerPolicy="no-referrer-when-downgrade"
-                            title="CallWaiting AI Office Location"
+                            title="Voxanne AI Office Location"
                             className="grayscale"
                         ></iframe>
 

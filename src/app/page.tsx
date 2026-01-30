@@ -1,27 +1,27 @@
-import Navbar from "@/components/Navbar";
-import Hero from "@/components/Hero";
-import TrustBar from "@/components/TrustBar";
-import Features from "@/components/Features";
+import NavbarRedesigned from "@/components/NavbarRedesigned";
+import { HeroCalendlyReplica } from "@/components/HeroCalendlyReplica";
+import { TrustBarSimple } from "@/components/TrustBarSimple";
+import { FeaturesBentoGrid } from "@/components/FeaturesBentoGrid";
+import HowItWorksRedesigned from "@/components/HowItWorksRedesigned";
 import Integrations from "@/components/Integrations";
-import Testimonials from "@/components/Testimonials";
+import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 import Pricing from "@/components/Pricing";
 import FAQ from "@/components/FAQ";
-import Contact from "@/components/Contact";
-import Footer from "@/components/Footer";
+import FooterRedesigned from "@/components/FooterRedesigned";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
-      <Navbar />
-      <Hero />
-      <TrustBar />
-      <Features />
+      <NavbarRedesigned />
+      <HeroCalendlyReplica />
+      <TrustBarSimple />
+      <FeaturesBentoGrid />
+      <HowItWorksRedesigned />
       <Integrations />
-      <Testimonials />
+      <TestimonialsCarousel />
       <Pricing />
       <FAQ />
-      <Contact />
-      <Footer />
+      <FooterRedesigned />
     </main>
   );
 }

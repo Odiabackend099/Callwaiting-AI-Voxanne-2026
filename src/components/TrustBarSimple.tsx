@@ -1,54 +1,72 @@
 'use client';
-import { motion } from 'framer-motion';
 import Image from 'next/image';
 
 const partners = [
+    { name: 'Vapi', logo: '/integrations/vapi.png' },
     { name: 'Google Calendar', logo: '/integrations/google-calendar.png' },
     { name: 'Twilio', logo: '/integrations/twilio.png' },
     { name: 'Salesforce', logo: '/integrations/salesforce.png' },
-    { name: 'Calendly', logo: '/integrations/calendly.png' },
     { name: 'Supabase', logo: '/integrations/supabase.png' },
-    { name: 'Vapi', logo: '/integrations/vapi.png' },
+    { name: 'Calendly', logo: '/integrations/calendly.png' },
 ];
 
 export function TrustBarSimple() {
-    // ✅ UPDATED: Duplicate partners array for seamless infinite scroll
-    const allPartners = [...partners, ...partners];
-
     return (
-        <section className="bg-sterile-wash py-16 overflow-hidden">
-            <div className="container mx-auto">
-                <div className="mb-12 text-center">
-                    <h2 className="text-2xl font-bold text-clinical-blue mb-2">
-                        Trusted Integrations
-                    </h2>
-                    <p className="text-sm text-deep-obsidian/70">
-                        Seamlessly connects with the tools you already use
-                    </p>
-                </div>
+        <section className="bg-white py-12 border-y border-slate-100 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-6 mb-8 text-center">
+                <h2 className="text-2xl font-bold text-deep-obsidian mb-2">
+                    Trusted Integrations
+                </h2>
+                <p className="text-sm text-slate-500">
+                    Seamlessly connects with the tools you already use
+                </p>
+            </div>
 
-                {/* ✅ NEW: Horizontal scrolling marquee animation */}
-                <div className="relative">
-                    <div className="flex animate-marquee gap-12">
-                        {allPartners.map((partner, index) => (
-                            <motion.div
-                                key={`${partner.name}-${index}`}
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: (index % partners.length) * 0.1 }}
-                                className="group flex items-center justify-center flex-shrink-0"
+            <div className="relative">
+                {/* Edge fade gradients */}
+                <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+                <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+
+                {/* Seamless marquee: two identical rows side-by-side */}
+                <div className="flex">
+                    <div className="flex animate-marquee items-center gap-16 pr-16 flex-shrink-0">
+                        {partners.map((partner) => (
+                            <div
+                                key={partner.name}
+                                className="group flex items-center gap-3 flex-shrink-0"
                             >
-                                <div className="relative h-12 w-36">
-                                    {/* ✅ UPDATED: Removed grayscale - logos display in full color */}
+                                <div className="relative h-10 w-10 flex-shrink-0">
                                     <Image
                                         src={partner.logo}
                                         alt={partner.name}
                                         fill
-                                        className="object-contain opacity-80 transition-all duration-300 group-hover:opacity-100 group-hover:scale-105"
+                                        className="object-contain opacity-70 group-hover:opacity-100 transition-all duration-300"
                                     />
                                 </div>
-                            </motion.div>
+                                <span className="text-sm font-semibold text-slate-400 group-hover:text-deep-obsidian transition-colors duration-300 whitespace-nowrap">
+                                    {partner.name}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex animate-marquee items-center gap-16 pr-16 flex-shrink-0" aria-hidden="true">
+                        {partners.map((partner) => (
+                            <div
+                                key={partner.name}
+                                className="group flex items-center gap-3 flex-shrink-0"
+                            >
+                                <div className="relative h-10 w-10 flex-shrink-0">
+                                    <Image
+                                        src={partner.logo}
+                                        alt={partner.name}
+                                        fill
+                                        className="object-contain opacity-70 group-hover:opacity-100 transition-all duration-300"
+                                    />
+                                </div>
+                                <span className="text-sm font-semibold text-slate-400 group-hover:text-deep-obsidian transition-colors duration-300 whitespace-nowrap">
+                                    {partner.name}
+                                </span>
+                            </div>
                         ))}
                     </div>
                 </div>

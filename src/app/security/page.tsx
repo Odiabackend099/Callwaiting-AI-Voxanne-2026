@@ -1,6 +1,6 @@
 import React from 'react';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import NavbarRedesigned from '@/components/NavbarRedesigned';
+import FooterRedesigned from '@/components/FooterRedesigned';
 import { ShieldCheck, Lock, Server, FileCheck, Eye } from 'lucide-react';
 
 export const metadata = {
@@ -11,7 +11,7 @@ export const metadata = {
 export default function SecurityPage() {
     return (
         <main className="min-h-screen bg-white">
-            <Navbar />
+            <NavbarRedesigned />
             <div className="max-w-4xl mx-auto px-6 py-32">
                 <div className="text-center mb-16">
                     <h1 className="text-4xl md:text-5xl font-bold text-navy-900 mb-6">Security & Compliance</h1>
@@ -76,7 +76,7 @@ export default function SecurityPage() {
                     </a>
                 </div>
             </div>
-            <Footer />
+            <FooterRedesigned />
         </main>
     );
 }

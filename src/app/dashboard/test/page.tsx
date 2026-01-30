@@ -76,10 +76,12 @@ const TestAgentPageContent = () => {
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
 
-    // Initialize activeTab from query param if present
+    // Initialize activeTab and autostart from query params
     const tabParam = searchParams.get('tab');
     const initialTab = (tabParam === 'web' || tabParam === 'phone') ? tabParam : 'web';
     const [activeTab, setActiveTab] = useState<'web' | 'phone'>(initialTab);
+    const autostartParam = searchParams.get('autostart') === '1';
+    const autostartFiredRef = useRef(false);
 
     // --- Web Test State ---
     const {
@@ -118,12 +120,13 @@ const TestAgentPageContent = () => {
     const outboundWsRef = useRef<WebSocket | null>(null);
     const outboundTranscriptEndRef = useRef<HTMLDivElement>(null);
 
+    // Auto-start session when arriving from agent-config with ?autostart=1
     useEffect(() => {
-        if (!loading && !user) {
-            router.push('/login');
+        if (autostartParam && !autostartFiredRef.current && user && !loading && activeTab === 'web' && !isConnected && !callInitiating) {
+            autostartFiredRef.current = true;
+            handleToggleWebCall();
         }
-    }, [user, loading, router]);
-
+    }, [autostartParam, user, loading, activeTab, isConnected, callInitiating]);
 
     // --- Web Test Effects ---
     useEffect(() => {
@@ -479,18 +482,7 @@ const TestAgentPageContent = () => {
     }, [activeTab, outboundTrackingId]);
 
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-                <div className="text-center">
-                    <Loader2 className="w-10 h-10 text-emerald-400 animate-spin mx-auto mb-3" />
-                    <p className="text-sm text-slate-400 tracking-tight">Loading...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!user) return null;
+    if (!user && !loading) return null;
 
     return (
         <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col overflow-hidden">

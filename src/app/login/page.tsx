@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
-import { ShieldCheck, ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import Logo from "@/components/Logo";
 import { useState } from "react";
 import FadeIn from "@/components/ui/FadeIn";
 import Image from "next/image";
@@ -65,21 +66,23 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen grid lg:grid-cols-2">
+        <div className="h-screen overflow-hidden grid lg:grid-cols-2">
             {/* Left Column: Form */}
-            <div className="flex flex-col justify-center px-8 py-12 lg:px-20 xl:px-32 bg-white relative">
-                <Link
-                    href="/"
-                    className="absolute top-8 left-8 lg:left-20 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-navy-900 transition-colors"
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Voxanne
-                </Link>
-
+            <div className="flex flex-col justify-center px-8 py-12 lg:px-20 xl:px-32 bg-white relative overflow-y-auto">
                 <FadeIn>
                     <div className="mb-10">
-                        <div className="h-12 w-12 rounded-full bg-surgical-50 flex items-center justify-center mb-6">
-                            <ShieldCheck className="h-6 w-6 text-surgical-600" />
+                        <div className="mb-6 flex items-center justify-between">
+                            <Logo
+                                variant="icon-blue"
+                                size="lg"
+                                className="h-12 w-auto"
+                            />
+                            <Link
+                                href="/"
+                                className="text-sm font-medium text-surgical-600 hover:text-surgical-700 transition-colors"
+                            >
+                                Back to Home Page
+                            </Link>
                         </div>
                         <h1 className="text-4xl font-bold text-navy-900 tracking-tight mb-2">
                             Welcome Back
@@ -196,8 +199,8 @@ export default function LoginPage() {
 
                     <p className="mt-8 text-center text-sm text-slate-500">
                         Don&apos;t have an account?{" "}
-                        <Link href="https://calendly.com/callwaitingai/demo" target="_blank" className="font-medium text-surgical-600 hover:text-surgical-700">
-                            Contact Sales
+                        <Link href="https://calendly.com/voxanneai/demo" target="_blank" className="font-medium text-surgical-600 hover:text-surgical-700">
+                            Book a Demo
                         </Link>
                     </p>
                 </FadeIn>
@@ -214,7 +217,7 @@ export default function LoginPage() {
 
                 <div className="relative z-10 max-w-lg px-12 text-center">
                     <FadeIn delay={0.2}>
-                        <blockquote className="text-3xl font-bold leading-relaxed mb-8 bg-gradient-to-r from-white via-surgical-300 to-surgical-500 bg-clip-text text-transparent animate-gradient-x bg-[length:200%_auto]">
+                        <blockquote className="text-3xl font-bold leading-relaxed mb-8 text-white">
                             &quot;The most trusted voice AI for medical professionals.&quot;
                         </blockquote>
                         <div className="flex flex-col items-center gap-4">
@@ -224,27 +227,32 @@ export default function LoginPage() {
                             </p>
                         </div>
 
-                        <div className="mt-16 flex items-center justify-center gap-4">
-                            <div className="flex -space-x-3">
+                        <div className="mt-16 flex items-center justify-center gap-6">
+                            <div className="flex -space-x-4">
                                 {[
-                                    "/branding/resource_8Yu5GfUCC29dqKx3x0skXr.png",
-                                    "/branding/resource_8vxcerNBlWE4yxe6z7t4nh.png",
-                                    "/branding/resource_9Fnvkd0qdNf9kUnicIO_4i.png",
-                                    "/branding/resource_9Jl0RXn61UJdSrgTMuDOHn.png"
-                                ].map((src, i) => (
-                                    <div key={i} className="h-10 w-10 rounded-full border-2 border-navy-900 bg-slate-200 overflow-hidden relative">
+                                    { name: 'Twilio', logo: '/integrations/twilio.png' },
+                                    { name: 'Vapi', logo: '/integrations/vapi.png' },
+                                    { name: 'Google Calendar', logo: '/integrations/google-calendar.png' }
+                                ].map((integration, i) => (
+                                    <div key={i} className="h-12 w-12 rounded-full border-2 border-navy-900 bg-white overflow-hidden relative flex items-center justify-center p-2">
                                         <Image
-                                            src={src}
-                                            alt={`Clinic member ${i + 1}`}
-                                            fill
-                                            className="object-cover"
+                                            src={integration.logo}
+                                            alt={integration.name}
+                                            width={40}
+                                            height={40}
+                                            className="object-contain"
                                         />
                                     </div>
                                 ))}
                             </div>
-                            <p className="text-white font-medium">
-                                Join 500+ clinics automating their front desk
-                            </p>
+                            <div className="text-left">
+                                <p className="text-white font-semibold text-base mb-1">
+                                    Trusted Integrations
+                                </p>
+                                <p className="text-surgical-100 text-sm">
+                                    to help you automate your front desk
+                                </p>
+                            </div>
                         </div>
                     </FadeIn>
                 </div>

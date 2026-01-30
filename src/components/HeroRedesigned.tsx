@@ -80,7 +80,7 @@ export default function HeroRedesigned({ onBookDemo }: HeroRedesignedProps) {
                         transition={{ duration: 0.6, delay: 0.2 }}
                         className="text-lg md:text-xl text-charcoal/80 mb-8 max-w-2xl leading-relaxed"
                     >
-                        CallWaiting AI handles patient calls 24/7, books appointments, answers questions, and qualifies leads—so your team focuses on care.
+                        Voxanne AI handles patient calls 24/7, books appointments, answers questions, and qualifies leads—so your team focuses on care.
                     </motion.p>
                 </FadeInOnScroll>
 

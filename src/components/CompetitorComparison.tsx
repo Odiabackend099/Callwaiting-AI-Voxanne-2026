@@ -42,7 +42,7 @@ export default function CompetitorComparison() {
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-medium mb-6"
                     >
                         <Zap className="w-4 h-4" />
-                        <span>Why Call Waiting AI Wins</span>
+                        <span>Why Voxanne AI Wins</span>
                     </motion.div>
 
                     <motion.h2
@@ -51,7 +51,7 @@ export default function CompetitorComparison() {
                         transition={{ delay: 0.1 }}
                         className="text-3xl md:text-5xl font-bold text-white mb-6"
                     >
-                        Call Waiting AI vs. Generic AI Receptionists
+                        Voxanne AI vs. Generic AI Receptionists
                     </motion.h2>
 
                     <motion.p
@@ -78,7 +78,7 @@ export default function CompetitorComparison() {
                             <div className="text-center">
                                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-sm">
                                     <Check className="w-4 h-4" />
-                                    Call Waiting AI
+                                    Voxanne AI
                                 </div>
                             </div>
                             <div className="text-center text-slate-400 font-medium">Generic AI</div>
@@ -109,7 +109,7 @@ export default function CompetitorComparison() {
                                         )}
                                     </div>
 
-                                    {/* Call Waiting AI Column */}
+                                    {/* Voxanne AI Column */}
                                     <div className="flex items-center justify-center">
                                         {typeof row.voxanne === 'boolean' ? (
                                             row.voxanne ? (

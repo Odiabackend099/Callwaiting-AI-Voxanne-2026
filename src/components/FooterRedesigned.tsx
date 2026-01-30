@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { FadeInOnScroll } from "./ParallaxSection";
 import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook, Lock } from "lucide-react";
+import Logo from "./Logo";
 
 export default function FooterRedesigned() {
     const currentYear = new Date().getFullYear();
@@ -24,24 +25,24 @@ export default function FooterRedesigned() {
         ],
         Resources: [
             { label: "Documentation", href: "/docs" },
-            { label: "API Reference", href: "/api" },
+            { label: "API Reference", href: "/api-reference" },
             { label: "Support", href: "/support" },
             { label: "Contact", href: "/contact" },
         ],
         Legal: [
             { label: "Privacy Policy", href: "/privacy" },
             { label: "Terms of Service", href: "/terms" },
-            { label: "HIPAA Compliance", href: "/hipaa" },
-            { label: "Cookie Policy", href: "/cookies" },
+            { label: "HIPAA Compliance", href: "/hipaa-compliance" },
+            { label: "Cookie Policy", href: "/cookie-policy" },
         ],
     };
 
     return (
-        <footer className="relative bg-charcoal text-cream overflow-hidden">
+        <footer className="relative bg-deep-obsidian text-pure-white overflow-hidden">
             {/* Background Elements */}
             <div className="absolute inset-0 pointer-events-none opacity-10">
-                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-cyan rounded-full blur-[100px]" />
-                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-lime rounded-full blur-[80px]" />
+                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-clinical-blue rounded-full blur-[100px]" />
+                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-sky-mist rounded-full blur-[80px]" />
             </div>
 
             <div className="container relative z-10 mx-auto px-4 md:px-6">
@@ -55,29 +56,36 @@ export default function FooterRedesigned() {
                             transition={{ duration: 0.6 }}
                             viewport={{ once: true }}
                         >
-                            <Link href="/" className="flex items-center gap-2 mb-6 group">
-                                <div className="w-10 h-10 bg-gradient-to-br from-blue-deep via-cyan to-lime rounded-lg flex items-center justify-center font-display font-bold text-cream text-lg">
-                                    C
-                                </div>
-                                <span className="font-display font-bold text-lg text-cream">
-                                    CallWaiting AI
-                                </span>
-                            </Link>
-                            <p className="text-cream/70 mb-6 leading-relaxed">
+                            <div className="mb-6">
+                                <Logo
+                                    variant="icon-white"
+                                    size="lg"
+                                    href="/"
+                                    priority={false}
+                                    showText={true}
+                                />
+                            </div>
+                            <p className="text-pure-white/70 mb-6 leading-relaxed">
                                 AI-powered receptionist for aesthetic clinics, med spas, and plastic surgery practices.
                             </p>
                             <div className="space-y-3">
-                                <div className="flex items-center gap-3 text-cream/70 hover:text-cream transition-colors">
+                                <div className="flex items-center gap-3 text-pure-white/70 hover:text-pure-white transition-colors">
                                     <Mail className="w-5 h-5" />
-                                    <a href="mailto:hello@callwaitingai.com">hello@callwaitingai.com</a>
+                                    <a href="mailto:support@voxanne.ai">support@voxanne.ai</a>
                                 </div>
-                                <div className="flex items-center gap-3 text-cream/70 hover:text-cream transition-colors">
+                                <div className="flex items-center gap-3 text-pure-white/70 hover:text-pure-white transition-colors">
                                     <Phone className="w-5 h-5" />
                                     <a href="tel:+1234567890">+1 (234) 567-890</a>
                                 </div>
-                                <div className="flex items-center gap-3 text-cream/70">
-                                    <MapPin className="w-5 h-5" />
-                                    <span>San Francisco, CA</span>
+                                <div className="flex items-start gap-3 text-pure-white/70">
+                                    <MapPin className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                                    <div className="text-sm leading-relaxed">
+                                        <div className="font-medium text-pure-white/80 mb-1">Global Headquarters</div>
+                                        <div>Collage House, 2nd Floor</div>
+                                        <div>17 King Edward Road</div>
+                                        <div>Ruislip, London HA4 7AE</div>
+                                        <div>United Kingdom</div>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
@@ -92,13 +100,13 @@ export default function FooterRedesigned() {
                                 transition={{ duration: 0.6, delay: index * 0.1 }}
                                 viewport={{ once: true }}
                             >
-                                <h3 className="font-bold text-cream mb-4">{category}</h3>
+                                <h3 className="font-bold text-pure-white mb-4">{category}</h3>
                                 <ul className="space-y-3">
                                     {links.map((link) => (
                                         <li key={link.href}>
                                             <Link
                                                 href={link.href}
-                                                className="text-cream/70 hover:text-cream transition-colors"
+                                                className="text-pure-white/70 hover:text-pure-white transition-colors"
                                             >
                                                 {link.label}
                                             </Link>
@@ -121,28 +129,32 @@ export default function FooterRedesigned() {
                     >
                         <div className="flex items-center justify-center gap-8 flex-wrap">
                             <div className="flex flex-col items-center">
-                                <Image
-                                    src="/badges/hipaa-compliant.jpg"
-                                    alt="HIPAA Compliant - Full compliance with Business Associate Agreement"
-                                    width={100}
-                                    height={100}
-                                    className="w-20 h-20 md:w-24 md:h-24 object-contain opacity-80 hover:opacity-100 transition-opacity"
-                                    loading="lazy"
-                                />
+                                <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                                    <Image
+                                        src="/badges/hipaa-compliant.jpg"
+                                        alt="HIPAA Compliant - Full compliance with Business Associate Agreement"
+                                        width={120}
+                                        height={60}
+                                        className="w-28 h-14 md:w-32 md:h-16 object-contain opacity-100 hover:opacity-90 transition-opacity"
+                                        loading="lazy"
+                                    />
+                                </div>
                             </div>
                             <div className="flex flex-col items-center">
-                                <Image
-                                    src="/badges/gdpr-ready.png"
-                                    alt="GDPR Ready - EU data protection standards compliance"
-                                    width={100}
-                                    height={100}
-                                    className="w-20 h-20 md:w-24 md:h-24 object-contain opacity-80 hover:opacity-100 transition-opacity"
-                                    loading="lazy"
-                                />
+                                <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                                    <Image
+                                        src="/badges/gdpr-ready.png"
+                                        alt="GDPR Ready - EU data protection standards compliance"
+                                        width={120}
+                                        height={60}
+                                        className="w-28 h-14 md:w-32 md:h-16 object-contain opacity-100 hover:opacity-90 transition-opacity"
+                                        loading="lazy"
+                                    />
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-cream/5 border border-cream/10 hover:border-cream/20 transition-colors">
-                                <Lock className="w-4 h-4 text-cream/60" />
-                                <span className="text-xs text-cream/60 font-medium">SOC 2 Type II</span>
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 hover:border-white/30 transition-colors backdrop-blur-sm">
+                                <Lock className="w-4 h-4 text-pure-white/80" />
+                                <span className="text-xs text-pure-white/80 font-medium">SOC 2 Type II</span>
                             </div>
                         </div>
                     </motion.div>
@@ -154,15 +166,21 @@ export default function FooterRedesigned() {
                 {/* Bottom Section */}
                 <div className="py-8 flex flex-col md:flex-row items-center justify-between gap-6">
                     <FadeInOnScroll>
-                        <motion.p
+                        <motion.div
                             initial={{ opacity: 0 }}
                             whileInView={{ opacity: 1 }}
                             transition={{ duration: 0.6 }}
                             viewport={{ once: true }}
-                            className="text-cream/60 text-sm"
+                            className="text-pure-white/60 text-sm space-y-2"
                         >
-                            © {currentYear} CallWaiting AI. All rights reserved. HIPAA Compliant.
-                        </motion.p>
+                            <p>{currentYear} Voxanne AI. All rights reserved. HIPAA Compliant.</p>
+                            <div className="flex items-center gap-2 text-sm text-pure-white/70">
+                                <span>A product of</span>
+                                <a href="https://www.callwaitingai.dev/" target="_blank" rel="noopener noreferrer" className="font-medium text-surgical-blue hover:text-surgical-blue/80 transition-colors underline">
+                                    Call Waiting AI
+                                </a>
+                            </div>
+                        </motion.div>
                     </FadeInOnScroll>
 
                     {/* Social Links */}
@@ -176,19 +194,19 @@ export default function FooterRedesigned() {
                         >
                             <a
                                 href="#"
-                                className="w-10 h-10 rounded-full bg-cream/10 hover:bg-cyan/20 flex items-center justify-center transition-colors"
+                                className="w-10 h-10 rounded-full bg-cream/10 hover:bg-clinical-blue/20 flex items-center justify-center transition-colors"
                             >
                                 <Linkedin className="w-5 h-5" />
                             </a>
                             <a
                                 href="#"
-                                className="w-10 h-10 rounded-full bg-cream/10 hover:bg-cyan/20 flex items-center justify-center transition-colors"
+                                className="w-10 h-10 rounded-full bg-cream/10 hover:bg-clinical-blue/20 flex items-center justify-center transition-colors"
                             >
                                 <Twitter className="w-5 h-5" />
                             </a>
                             <a
                                 href="#"
-                                className="w-10 h-10 rounded-full bg-cream/10 hover:bg-cyan/20 flex items-center justify-center transition-colors"
+                                className="w-10 h-10 rounded-full bg-cream/10 hover:bg-clinical-blue/20 flex items-center justify-center transition-colors"
                             >
                                 <Facebook className="w-5 h-5" />
                             </a>

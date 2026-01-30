@@ -2,42 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
-  /* Clinical Trust Theme - Light Mode Only */
-  --background: #FFFFFF;
-  --foreground: #0F172A;
-  /* Slate 900 */
+  /* ✅ APPROVED Clinical Trust Theme - Light Mode Only */
+  /* Based on approved color palette (Brand/9.png) */
 
-  --card: #FFFFFF;
-  --card-foreground: #0F172A;
+  --background: #FFFFFF;                    /* Pure White */
+  --foreground: #020412;                    /* ✅ FIXED: Deep Obsidian (was Slate 900) */
 
-  --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
+  --card: #FFFFFF;                          /* Pure White */
+  --card-foreground: #020412;               /* ✅ FIXED: Deep Obsidian */
 
-  --primary: #006BFF;
-  /* Calendly Blue */
-  --primary-foreground: #FFFFFF;
+  --popover: #FFFFFF;                       /* Pure White */
+  --popover-foreground: #020412;            /* ✅ FIXED: Deep Obsidian */
 
-  --secondary: #F1F5F9;
-  /* Slate 100 */
-  --secondary-foreground: #0F172A;
+  --primary: #1D4ED8;                       /* ✅ FIXED: Surgical Blue (was Calendly Blue #006BFF) */
+  --primary-foreground: #FFFFFF;            /* Pure White */
 
-  --muted: #F8FAFC;
-  /* Slate 50 */
-  --muted-foreground: #64748B;
-  /* Slate 500 */
+  --secondary: #F0F9FF;                     /* ✅ FIXED: Sterile Wash (was Slate 100) */
+  --secondary-foreground: #020412;          /* ✅ FIXED: Deep Obsidian */
 
-  --accent: #F1F5F9;
-  --accent-foreground: #0F172A;
+  --muted: #F0F9FF;                         /* Sterile Wash */
+  --muted-foreground: #3B82F6;              /* ✅ FIXED: Clinical Blue (was Slate 500) */
 
-  --destructive: #EF4444;
-  --destructive-foreground: #FFFFFF;
+  --accent: #BFDBFE;                        /* ✅ FIXED: Sky Mist (was Slate 100) */
+  --accent-foreground: #020412;             /* ✅ FIXED: Deep Obsidian */
 
-  --border: #E2E8F0;
-  /* Slate 200 */
-  --input: #E2E8F0;
-  --ring: #006BFF;
-  /* Calendly Blue */
+  --destructive: #EF4444;                   /* Red (error states) - acceptable */
+  --destructive-foreground: #FFFFFF;        /* Pure White */
+
+  --border: #BFDBFE;                        /* ✅ FIXED: Sky Mist (was Slate 200) */
+  --input: #BFDBFE;                         /* ✅ FIXED: Sky Mist */
+  --ring: #1D4ED8;                          /* ✅ FIXED: Surgical Blue (was Calendly Blue) */
 
   --radius: 0.5rem;
 
@@ -50,26 +49,27 @@
 }
 
 /* Enforce Light Mode even if system is dark */
+/* ✅ UPDATED to match approved color palette */
 .dark {
-  --background: #FFFFFF;
-  --foreground: #0F172A;
-  --card: #FFFFFF;
-  --card-foreground: #0F172A;
-  --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
-  --primary: #006BFF;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F1F5F9;
-  --secondary-foreground: #0F172A;
-  --muted: #F8FAFC;
-  --muted-foreground: #64748B;
-  --accent: #F1F5F9;
-  --accent-foreground: #0F172A;
-  --destructive: #EF4444;
-  --destructive-foreground: #FFFFFF;
-  --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #006BFF;
+  --background: #FFFFFF;                    /* Pure White */
+  --foreground: #020412;                    /* ✅ FIXED: Deep Obsidian */
+  --card: #FFFFFF;                          /* Pure White */
+  --card-foreground: #020412;               /* ✅ FIXED: Deep Obsidian */
+  --popover: #FFFFFF;                       /* Pure White */
+  --popover-foreground: #020412;            /* ✅ FIXED: Deep Obsidian */
+  --primary: #1D4ED8;                       /* ✅ FIXED: Surgical Blue */
+  --primary-foreground: #FFFFFF;            /* Pure White */
+  --secondary: #F0F9FF;                     /* ✅ FIXED: Sterile Wash */
+  --secondary-foreground: #020412;          /* ✅ FIXED: Deep Obsidian */
+  --muted: #F0F9FF;                         /* Sterile Wash */
+  --muted-foreground: #3B82F6;              /* ✅ FIXED: Clinical Blue */
+  --accent: #BFDBFE;                        /* ✅ FIXED: Sky Mist */
+  --accent-foreground: #020412;             /* ✅ FIXED: Deep Obsidian */
+  --destructive: #EF4444;                   /* Red (error states) */
+  --destructive-foreground: #FFFFFF;        /* Pure White */
+  --border: #BFDBFE;                        /* ✅ FIXED: Sky Mist */
+  --input: #BFDBFE;                         /* ✅ FIXED: Sky Mist */
+  --ring: #1D4ED8;                          /* ✅ FIXED: Surgical Blue */
 }
 
 body {
@@ -104,4 +104,16 @@ select {
 .tracking-tight-swiss {
   letter-spacing: -0.02em;
   /* Less aggressive than before */
+}
+
+/* Ripple Animation for Button Click Effect */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
 }

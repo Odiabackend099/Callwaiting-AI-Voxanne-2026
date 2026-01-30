@@ -10,8 +10,9 @@ import { RecordingPlayer } from '@/components/RecordingPlayer';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useTranscript } from '@/hooks/useTranscript';
 import { useToast } from '@/hooks/useToast';
-import useSWR, { useSWRConfig } from 'swr';
+import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { useDashboardWebSocket } from '@/contexts/DashboardWebSocketContext';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
@@ -124,9 +125,7 @@ const CallsPageContent = () => {
         user ? `/api/calls-dashboard?${callsQueryParams}` : null,
         fetcher,
         {
-            keepPreviousData: true,
-            refreshInterval: 0, // Disable polling, rely on WebSocket
-            revalidateOnFocus: false, // Prevent unnecessary reloads
+            revalidateOnMount: true,
         }
     );
 
@@ -139,7 +138,7 @@ const CallsPageContent = () => {
         user ? '/api/calls-dashboard/analytics/summary' : null,
         fetcher,
         {
-            revalidateOnFocus: false,
+            revalidateOnMount: true,
         }
     );
     const analytics = analyticsData;
@@ -151,46 +150,19 @@ const CallsPageContent = () => {
         }
     }, [callsError]);
 
-    // Auto-refresh calls when new calls arrive via WebSocket
+    // Real-time updates via shared WebSocket context
+    const { subscribe } = useDashboardWebSocket();
     useEffect(() => {
-        // Connect to WebSocket on backend (port 3001)
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-        const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
-        const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;
-
-        let ws: WebSocket | null = null;
-
-        try {
-            ws = new WebSocket(wsUrl);
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    // Refresh calls when a new call_ended event arrives
-                    if (data.type === 'call_ended' || data.type === 'call_update') {
-                        // Refresh the calls list and analytics
-                        mutateCalls();
-                        mutateAnalytics();
-                    }
-                } catch (err) {
-                    console.error('Failed to parse WebSocket message:', err);
-                }
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-        } catch (err) {
-            console.error('Failed to connect to WebSocket:', err);
-        }
-
-        return () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
-        };
-    }, [mutateCalls, mutateAnalytics]);
+        const unsub1 = subscribe('call_ended', () => {
+            mutateCalls();
+            mutateAnalytics();
+        });
+        const unsub2 = subscribe('call_update', () => {
+            mutateCalls();
+            mutateAnalytics();
+        });
+        return () => { unsub1(); unsub2(); };
+    }, [subscribe, mutateCalls, mutateAnalytics]);
 
     // Keyboard shortcuts for power users
     useEffect(() => {
@@ -577,18 +549,7 @@ const CallsPageContent = () => {
 
     const totalPages = Math.ceil(totalCalls / callsPerPage);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!user) return null;
+    if (!user && !loading) return null;
 
     return (
         <>
