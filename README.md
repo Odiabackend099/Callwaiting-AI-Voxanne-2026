@@ -88,8 +88,59 @@ callwaiting-ai/
 ├── scripts/              # Shared scripts
 │   └── shared/          # Shared utility scripts
 │
+├── .archive/             # Historical documentation & test files
+│   ├── 2026-01-30-production-cleanup/
+│   │   ├── docs/        # Organized by category
+│   │   ├── test-scripts/
+│   │   ├── test-directories/
+│   │   └── MANIFEST.md  # Index of all archived files
+│   └── [older archives] # Previous cleanup archives
+│
 └── public/               # Static assets
 ```
+
+---
+
+## 📂 Archive & Historical Documentation
+
+This repository maintains a clean root directory by archiving historical documentation and test files.
+
+**Archive Location:** `.archive/MANIFEST.md`
+
+**Structure:**
+```
+.archive/
+├── MANIFEST.md (master index)
+├── 2026-01-30-production-cleanup/
+│   ├── docs/
+│   │   ├── implementation/    (feature completion reports)
+│   │   ├── priorities/        (priority & phase documentation)
+│   │   ├── testing/          (test reports & QA)
+│   │   ├── deployment/       (deployment guides)
+│   │   ├── fixes/            (bug fixes & improvements)
+│   │   ├── quick-reference/  (quick guides)
+│   │   ├── sessions/         (session summaries)
+│   │   └── misc/             (other documentation)
+│   ├── test-scripts/         (archived test scripts)
+│   ├── test-directories/     (archived test directories)
+│   └── configs/              (legacy configurations)
+├── 2026-01-26-operation-lean-ship/ (previous cleanup)
+└── archived-directory/       (historical files)
+```
+
+**To find archived documentation:**
+```bash
+# Search in archive
+grep -r "keyword" .archive/
+
+# List by category
+ls .archive/2026-01-30-production-cleanup/docs/implementation/
+
+# Restore a file
+cp .archive/2026-01-30-production-cleanup/docs/[category]/[file].md .
+```
+
+**Note:** Archive directory is not deployed to production. It's preserved locally for reference and historical tracking.
 
 ---
 
