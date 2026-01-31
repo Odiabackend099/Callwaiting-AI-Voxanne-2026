@@ -21,7 +21,7 @@ const nextConfig = {
             },
             {
                 protocol: 'https',
-                hostname: 'callwaitingai.dev',
+                hostname: 'voxanne.ai',
             },
         ],
     },
@@ -41,10 +41,10 @@ const nextConfig = {
                 has: [
                     {
                         type: 'host',
-                        value: 'www.callwaitingai.dev',
+                        value: 'www.voxanne.ai',
                     },
                 ],
-                destination: 'https://callwaitingai.dev/:path*',
+                destination: 'https://voxanne.ai/:path*',
                 permanent: true,
             },
             {

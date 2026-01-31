@@ -1,34 +1,7 @@
 services:
-  # Frontend Service
+  # Backend Service (Frontend deploys to Vercel separately)
   - type: web
-    name: callwaiting-ai-frontend
-    env: node
-    plan: standard
-    buildCommand: npm run build
-    startCommand: npm run start
-    healthCheckPath: /
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        fromDatabase:
-          name: callwaiting-ai-db
-          property: supabaseUrl
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        fromDatabase:
-          name: callwaiting-ai-db
-          property: supabaseAnonKey
-      - key: NEXT_PUBLIC_BACKEND_URL
-        value: https://callwaitingai-backend-sjbi.onrender.com
-      - key: NEXT_PUBLIC_GA_ID
-        value: ${NEXT_PUBLIC_GA_ID}
-    routes:
-      - path: /
-        matchType: prefix
-
-  # Backend Service
-  - type: web
-    name: callwaiting-ai-backend
+    name: voxanne-backend
     env: node
     plan: standard
     buildCommand: cd backend && npm install && npm run build
@@ -40,9 +13,11 @@ services:
       - key: PORT
         value: "3001"
       - key: BACKEND_URL
-        value: https://callwaitingai-backend-sjbi.onrender.com
+        value: https://api.voxanne.ai
       - key: FRONTEND_URL
-        value: https://callwaiting-ai-frontend.onrender.com
+        value: https://voxanne.ai
+      - key: CORS_ORIGIN
+        value: https://voxanne.ai
       - key: SUPABASE_URL
         fromDatabase:
           name: callwaiting-ai-db
@@ -64,7 +39,7 @@ services:
           name: callwaiting-ai-db
           property: googleClientSecret
       - key: GOOGLE_REDIRECT_URI
-        value: https://callwaitingai-backend-sjbi.onrender.com/api/google-oauth/callback
+        value: https://api.voxanne.ai/api/google-oauth/callback
       - key: VAPI_PRIVATE_KEY
         fromDatabase:
           name: callwaiting-ai-db
