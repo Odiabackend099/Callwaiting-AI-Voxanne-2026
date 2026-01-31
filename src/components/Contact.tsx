@@ -1,7 +1,7 @@
 "use client";
 
 import FadeIn from "@/components/ui/FadeIn";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { Mail, Phone, MapPin, Loader2, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

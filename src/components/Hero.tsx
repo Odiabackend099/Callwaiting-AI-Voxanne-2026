@@ -1,7 +1,7 @@
 "use client";
 
 import FadeIn from "@/components/ui/FadeIn";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { ShieldCheck, Check, Play, Pause, Calendar } from "lucide-react";
 import HeroChatAnimation from "@/components/HeroChatAnimation";
 import { useState, useRef, useEffect } from "react";

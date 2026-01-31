@@ -1,7 +1,7 @@
 "use client";
 
 import FadeIn from "@/components/ui/FadeIn";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
 const plans = [
