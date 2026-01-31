@@ -27,6 +27,53 @@ The platform has successfully completed all production priorities and is now ful
 
 ---
 
+## CRITICAL INVARIANTS — DO NOT BREAK
+
+**These rules protect the outbound calling pipeline. Any AI assistant (Claude, Copilot, Cursor, etc.) reading this file MUST follow these rules. Breaking any of them will cause outbound calls to fail silently in production.**
+
+### Rule 1: Never remove `vapi_phone_number_id` from agent-sync writes
+- File: `backend/src/routes/agent-sync.ts` (both update and insert payloads)
+- File: `backend/src/routes/founder-console-v2.ts` (agent save payload)
+- The `agents.vapi_phone_number_id` column is SSOT for the Vapi phone number UUID used by outbound calls.
+- If this field is removed from sync writes, the column stays NULL and outbound calls fail with "No phone number available."
+
+### Rule 2: Never change `.maybeSingle()` back to `.single()` on outbound agent queries
+- File: `backend/src/routes/contacts.ts` (call-back endpoint agent query)
+- `.single()` throws Postgres error PGRST116 when 0 rows match. `.maybeSingle()` returns null gracefully.
+- Changing this back will cause a 500 error instead of a clear "Outbound agent not configured" message.
+
+### Rule 3: Never pass raw phone strings as Vapi `phoneNumberId`
+- Vapi API expects a UUID (e.g., `abc123-def456`) for `phoneNumberId`, NOT an E.164 phone number (e.g., `+12125551234`).
+- Always use `resolveOrgPhoneNumberId()` from `backend/src/services/phone-number-resolver.ts` to get the correct UUID.
+- The pre-flight assertion in `VapiClient.createOutboundCall()` will throw if a `+` prefix is detected.
+
+### Rule 4: Never remove the phone number auto-resolution fallback in contacts.ts
+- File: `backend/src/routes/contacts.ts` (lines after agent query)
+- If `agents.vapi_phone_number_id` is NULL, the endpoint auto-resolves via `resolveOrgPhoneNumberId()` and backfills.
+- Removing this fallback breaks outbound calls for any org that hasn't re-saved their agent config.
+
+### Rule 5: Never remove the pre-flight assertion in `createOutboundCall()`
+- File: `backend/src/services/vapi-client.ts` (`createOutboundCall()` method)
+- The `assertOutboundCallReady()` call validates assistantId, phoneNumberId (UUID format), and customer number.
+- This is the single defense layer protecting ALL 8 call sites across the codebase.
+
+### Rule 6: Never auto-recreate Vapi assistants in error handlers
+- File: `backend/src/routes/contacts.ts` (catch block in call-back endpoint)
+- Creating a new assistant inline destroys the user's configured agent (loses tools, knowledge base, system prompt).
+- On Vapi errors, return a clear error message telling the user to re-save in Agent Configuration.
+
+### Key Files (outbound call pipeline)
+| File | Role |
+|------|------|
+| `backend/src/utils/outbound-call-preflight.ts` | Pre-flight validation for all outbound calls |
+| `backend/src/services/phone-number-resolver.ts` | Resolves Vapi phone number UUID from org credentials |
+| `backend/src/services/vapi-client.ts` | Vapi API client — calls pre-flight before every outbound call |
+| `backend/src/routes/contacts.ts` | Call-back endpoint — resolution chain + backfill |
+| `backend/src/routes/founder-console-v2.ts` | Agent save (writes vapi_phone_number_id) + test call |
+| `backend/src/routes/agent-sync.ts` | Dashboard sync (writes vapi_phone_number_id to agents table) |
+
+---
+
 ## Priority 8: Disaster Recovery & Backup Verification - DETAILED DOCUMENTATION
 
 **Completion Date:** 2026-01-28  

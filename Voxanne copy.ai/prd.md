@@ -1,7 +1,7 @@
 This is the **Master PRD (Product Requirement Document)** for Voxanne AI, version 2026.5.
 
-**Last Updated:** 2026-01-28 (Dashboard UX Optimization - Instant Navigation + Tab-Switch Fix)
-**Status:** 🚀 PRODUCTION READY - Enterprise-Grade Performance & Security
+**Last Updated:** 2026-01-28 (GDPR-First Compliance Infrastructure + Dashboard UX Optimization)
+**Status:** 🚀 PRODUCTION READY - Enterprise-Grade Performance, Security & Compliance (UK GDPR + HIPAA)
 
 This PRD incorporates:
 
@@ -21,6 +21,14 @@ This PRD incorporates:
 - **🔐 SECURITY AUDIT (2026-01-27)** - Fixed 11 tables missing RLS, 100% multi-tenant isolation ✅ COMPLETE
 - **🏰 FORTRESS PROTOCOL (2026-01-28)** - Centralized, type-safe credential architecture ✅ COMPLETE
 - **⚡ DASHBOARD UX OPTIMIZATION (2026-01-28)** - SWR caching + optimistic rendering for instant navigation ✅ COMPLETE
+- **🇬🇧 GDPR-FIRST COMPLIANCE INFRASTRUCTURE (2026-01-28)** - UK GDPR primary, HIPAA secondary ✅ COMPLETE
+  - ✅ **Phase 1:** Footer & compliance badge reordering (GDPR → SOC 2 → HIPAA)
+  - ✅ **Phase 2:** Data Processing Agreement (GDPR Article 28) template page
+  - ✅ **Phase 3:** Sub-Processor disclosure (GDPR Article 28 transparency)
+  - ✅ **Phase 4:** Privacy Policy updated (UK GDPR compliance as primary framework)
+  - ✅ **Phase 5:** Cookie Policy enhanced (PECR compliance section)
+  - ✅ **Phase 6:** Cookie Consent Banner (PECR-compliant, 4-category consent management)
+  - ✅ **Phase 7:** Terms of Service updated (England & Wales law primary, exclusive UK jurisdiction)
 
 ---
 
@@ -69,6 +77,215 @@ This means:
 - **Appointments:** `scheduled_at` → `scheduled_time` (renamed + flattened nested contacts)
 
 **Impact:** Zero breaking changes - all old fields still work via transformation layer.
+
+---
+
+## 🚨 WEBHOOK ARCHITECTURE - CRITICAL (2026-01-31)
+
+**Status:** ✅ PRODUCTION VERIFIED (Live Fire Test Passed)
+**Primary Endpoint:** `/api/vapi/webhook` → `backend/src/routes/vapi-webhook.ts`
+
+### **Two Webhook Endpoints - Only ONE Used by Vapi**
+
+| Endpoint | File | Used by Vapi? | Purpose |
+|----------|------|--------------|---------|
+| `/api/vapi/webhook` | `vapi-webhook.ts` | **✅ YES (PRIMARY)** | End-of-call, tool calls, RAG |
+| `/api/webhooks/vapi` | `webhooks.ts` | ❌ NO (UNUSED) | Legacy/alternative |
+
+**WHY THIS MATTERS:**
+- Vapi assistant's `serverUrl` is **hardcoded** to `/api/vapi/webhook` in `founder-console-v2.ts:645`
+- ALL production webhooks route to `vapi-webhook.ts`
+- Modifying `webhooks.ts` will **NOT affect** production call logging
+- **DO NOT confuse** the two files - they have similar names but serve different roles
+
+### **Webhook Flow (Production)**
+
+```
+Vapi → POST /api/vapi/webhook → vapi-webhook.ts (lines 211-293)
+  ├─ [1] Resolve org_id from assistantId
+  ├─ [2] Upsert call_logs (vapi_call_id as conflict key)
+  ├─ [3] Broadcast WebSocket event to dashboard
+  └─ [4] Run analytics (fire-and-forget)
+```
+
+### **Critical Database Column Mappings**
+
+The `call_logs` table uses **different column names** than Vapi webhook field names:
+
+| Vapi Field | ❌ WRONG Column | ✅ CORRECT Column |
+|------------|----------------|------------------|
+| `call.customer.number` | `phone_number` | `from_number` |
+| `call.customer.name` | `caller_name` | ❌ DOESN'T EXIST |
+| `message.cost` | `cost` | `total_cost` |
+| `analysis.sentiment` | `sentiment_label` | `sentiment` |
+| `message.durationSeconds` | `call.duration` | `message.durationSeconds` |
+| `artifact.recordingUrl` | `artifact.recording` | `artifact.recordingUrl` |
+| ANY Vapi call | (omitted) | `call_sid` (**REQUIRED**) |
+
+**🚨 CRITICAL:** The `call_sid` field has a **NOT NULL** constraint. For Vapi calls, use placeholder: `"vapi-{call_id}"`
+
+### **Verified Working Code (2026-01-31)**
+
+```typescript
+// File: backend/src/routes/vapi-webhook.ts (lines 244-268)
+const { error: upsertError } = await supabase
+  .from('call_logs')
+  .upsert({
+    vapi_call_id: call?.id,
+    call_sid: `vapi-${call?.id}`,  // ← REQUIRED placeholder
+    org_id: orgId,  // ← Resolved from agent lookup
+    from_number: call?.customer?.number || null,  // ← Correct column
+    duration_seconds: Math.round(message.durationSeconds || 0),
+    status: 'completed',
+    outcome: 'completed',
+    outcome_summary: analysis?.summary || null,  // ← Populated
+    transcript: artifact?.transcript || null,
+    recording_url: typeof artifact?.recordingUrl === 'string'
+      ? artifact.recordingUrl : null,
+    call_type: 'inbound',
+    total_cost: message.cost || 0,  // ← Correct column
+    started_at: message.startedAt || new Date().toISOString(),
+    ended_at: message.endedAt || new Date().toISOString(),
+    sentiment: analysis?.sentiment || null,  // ← Correct column
+    metadata: {
+      source: 'vapi-webhook-handler',
+      endedReason: message.endedReason,
+      successEvaluation: analysis?.successEvaluation
+    }
+  }, { onConflict: 'vapi_call_id' });  // ← Idempotent upsert
+```
+
+### **Live Fire Test Results (2026-01-31 04:25:41 UTC)**
+
+**Test Call ID:** `019c1238-85f2-7887-a7ab-fbca50b1b79e`
+**Result:** ✅ SUCCESS - All fields populated correctly
+
+**Database Verification:**
+- ✅ `vapi_call_id`: 019c1238-85f2-7887-a7ab-fbca50b1b79e
+- ✅ `call_sid`: vapi-019c1238-85f2-7887-a7ab-fbca50b1b79e
+- ✅ `org_id`: 46cf2995-2bee-44e3-838b-24151486fe4e
+- ✅ `from_number`: +2348141995397
+- ✅ `outcome_summary`: "The user called Serenity MedSpa intending to rebook..."
+- ✅ `recording_url`: https://storage.vapi.ai/...
+- ✅ `total_cost`: 0.1661
+- ✅ `sentiment`: null
+- ✅ `transcript`: 780 characters (PHI-redacted)
+
+### **Common Mistakes to Avoid**
+
+1. ❌ Modifying `webhooks.ts` thinking it affects production
+2. ❌ Using wrong column names (`phone_number`, `cost`, `sentiment_label`)
+3. ❌ Omitting `call_sid` field (NOT NULL constraint violation)
+4. ❌ Using wrong data paths (`call.duration` instead of `message.durationSeconds`)
+
+### **Documentation Reference**
+
+For complete webhook architecture documentation, see:
+
+→ **`CRITICAL_WEBHOOK_ARCHITECTURE.md`** (Root directory)
+
+This document contains:
+- Detailed webhook flow diagrams
+- Complete database column mappings
+- Verification scripts and procedures
+- Troubleshooting guide
+- Production deployment checklist
+
+---
+
+## 🇬🇧 UK GDPR-FIRST COMPLIANCE INFRASTRUCTURE (2026-01-28)
+
+**Company Status:** Call Waiting AI Ltd (UK Registered, Company 16917594)
+**Primary Compliance Framework:** UK GDPR (General Data Protection Regulation)
+**Secondary Compliance:** HIPAA (for US healthcare customers only)
+
+### **Compliance Pages & Features Implemented**
+
+#### **1. Data Processing Agreement (DPA) - GDPR Article 28 (/dpa)**
+- Template for EU/UK customers
+- Covers processor obligations per Article 28
+- 13 comprehensive sections: Parties, Scope of Processing, Processing Instructions, Sub-Processors, Security Measures, Data Subject Rights, Breach Notification, International Data Transfers, Audit Rights, Termination & Data Return, Execution Process
+- Contact: support@voxanne.ai for DPA execution
+
+#### **2. Sub-Processor Disclosure - GDPR Article 28 (/sub-processors)**
+- Public disclosure of all sub-processors handling personal data
+- 9 sub-processors documented: Supabase, Vapi, Twilio, Deepgram, ElevenLabs, OpenAI, Stripe, Sentry, Google Cloud
+- Per-processor: Data processed, Location, Certifications, Safeguards
+- 30-day notification requirement for adding new sub-processors
+
+#### **3. Privacy Policy - UK GDPR First (/privacy)**
+- **Section 2 (PRIMARY):** UK GDPR Compliance Framework
+  - Data Controller: Call Waiting AI Ltd, Company 16917594
+  - Legal bases for processing (GDPR Articles 6): Contract, Legitimate Interests, Consent, Legal Obligation
+  - Special category data/health data (GDPR Article 9) with lawful bases
+  - 6 data subject rights: Access (15), Rectification (16), Erasure (17), Portability (20), Object (21), Restrict (18)
+  - Response time: 30 days (extendable to 60 days for complex requests)
+  - ICO complaint procedure (ico.org.uk)
+- **Section 12 (SECONDARY):** Healthcare Compliance (HIPAA for US customers only)
+- **Section 13:** EU GDPR specifics (post-Brexit distinctions)
+
+#### **4. Cookie Policy - PECR Compliant (/cookie-policy)**
+- **Section 2 (NEW):** UK Privacy and Electronic Communications Regulations (PECR)
+  - Consent requirement before storing non-essential cookies
+  - Essential cookies exemption (PECR Regulation 6(4)): Authentication, Security, Load Balancing
+  - Your PECR rights: Know what cookies, Refuse, Withdraw Consent, Complain to ICO
+  - ICO guidance and contact information
+
+#### **5. Cookie Consent Banner - PECR Article 7(4) Compliant**
+- **4-Category Consent Management:**
+  - ✅ Essential (always on) - Authentication, security, functionality
+  - ☐ Analytics (optional) - Google Analytics, performance monitoring
+  - ☐ Functional (optional) - Theme preferences, language selection
+  - ☐ Marketing (optional) - Placeholder for future campaigns
+- **Features:**
+  - Fixed bottom banner (mobile-responsive)
+  - 3-action buttons: Accept All, Reject Non-Essential, Customize
+  - Detailed settings modal with category descriptions
+  - 12-month consent expiry with localStorage persistence
+  - Respects browser Do Not Track (DNT) signals
+  - Event-based notifications for consent changes
+  - Conditional Google Analytics loading (only with consent)
+
+#### **6. Terms of Service - UK Law Primary (/terms)**
+- **Section 14 (Governing Law):** England and Wales PRIMARY
+  - Exclusive jurisdiction: English courts
+  - Reflects UK company status (no US law references)
+  - Note for US customers: Governed by English law
+
+### **Implementation Summary**
+
+| Component | File | Status | Compliance |
+|-----------|------|--------|-----------|
+| DPA Template | `/app/dpa/page.tsx` | ✅ Complete | GDPR Article 28 |
+| Sub-Processors | `/app/sub-processors/page.tsx` | ✅ Complete | GDPR Article 28 |
+| Cookie Consent | `/components/cookie-consent/*.tsx` | ✅ Complete | PECR Article 7(4) |
+| Cookie Consent Hook | `useCookieConsent.ts` | ✅ Complete | LocalStorage persistence |
+| Analytics Loader | `GoogleAnalyticsLoader.tsx` | ✅ Complete | GDPR-compliant GA (anon IPs) |
+| Privacy Policy | `/app/privacy/page.tsx` | ✅ Updated | UK GDPR first |
+| Cookie Policy | `/app/cookie-policy/page.tsx` | ✅ Updated | PECR section added |
+| Terms of Service | `/app/terms/page.tsx` | ✅ Updated | English law primary |
+| Footer | `/components/FooterRedesigned.tsx` | ✅ Updated | Badges reordered: GDPR → SOC 2 → HIPAA |
+
+### **Messaging Priority**
+
+**New Compliance Order:**
+1. 🇬🇧 **UK GDPR Compliant** (Primary - all customers)
+2. 🛡️ **SOC 2 Type II** (Security certification)
+3. 🏥 **HIPAA Compliant** (Secondary - US healthcare only)
+
+**Footer Copyright (Updated):**
+"UK GDPR & HIPAA Compliant"
+
+### **Key Features**
+
+- ✅ Multi-category cookie consent (PECR required)
+- ✅ 12-month consent expiry tracking
+- ✅ Do Not Track signal respect (browser privacy)
+- ✅ Google Analytics loads ONLY with analytics consent
+- ✅ Data subject rights documented (Articles 15-21)
+- ✅ GDPR Article 28 DPA available for B2B customers
+- ✅ Sub-processor transparency (Article 28(4))
+- ✅ International data transfer mechanisms documented (SCCs, UK IDTA)
 
 ---
 

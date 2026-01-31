@@ -39,7 +39,7 @@ export default function Hero() {
                     <FadeIn>
                         <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-surgical-50 border border-surgical-100 rounded-full text-sm font-semibold text-surgical-700 mb-8 shadow-sm">
                             <ShieldCheck className="h-4 w-4" />
-                            HIPAA Compliant AI Receptionist
+                            UK GDPR & HIPAA Compliant AI Receptionist
                         </span>
                     </FadeIn>
 

@@ -5,6 +5,8 @@ import JsonLd from "@/components/JsonLd";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastContainer } from "@/components/ToastContainer";
 import DevSwCleanup from "@/components/DevSwCleanup";
+import { CookieConsentBanner } from "@/components/cookie-consent/CookieConsentBanner";
+import { GoogleAnalyticsLoader } from "@/components/GoogleAnalyticsLoader";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -110,9 +112,11 @@ export default function RootLayout({
       >
         <JsonLd />
         <DevSwCleanup />
+        <GoogleAnalyticsLoader />
         <AuthProvider>
           {children}
           <ToastContainer />
+          <CookieConsentBanner />
         </AuthProvider>
       </body>
     </html>

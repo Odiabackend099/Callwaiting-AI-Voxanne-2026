@@ -165,7 +165,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
         <form onSubmit={handleSubmit} className="space-y-4">
             {/* Error Alert */}
             {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-800">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span className="text-sm">{error}</span>
                 </div>
@@ -173,7 +173,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
 
             {/* Success Alert */}
             {success && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-800">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
                     <CheckCircle className="w-4 h-4 flex-shrink-0" />
                     <span className="text-sm">{success}</span>
                 </div>
@@ -181,26 +181,26 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
 
             {/* Rule Name */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rule Name *</label>
+                <label className="block text-sm font-medium text-obsidian/70 mb-1">Rule Name *</label>
                 <input
                     type="text"
                     name="name"
                     value={formData.name || ''}
                     onChange={handleInputChange}
                     placeholder="e.g., Wait 5 minutes then transfer"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-surgical-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-surgical-500"
                     disabled={isSubmitting}
                 />
             </div>
 
             {/* Agent Selection */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agent (Optional)</label>
+                <label className="block text-sm font-medium text-obsidian/70 mb-1">Agent (Optional)</label>
                 <select
                     name="agent_id"
                     value={formData.agent_id || ''}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-surgical-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-surgical-500"
                     disabled={isSubmitting || agentsLoading}
                 >
                     <option value="">All Agents</option>
@@ -210,12 +210,12 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                         </option>
                     ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">Leave empty to apply to all agents</p>
+                <p className="text-xs text-obsidian/60 mt-1">Leave empty to apply to all agents</p>
             </div>
 
             {/* Trigger Type */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Trigger Type *</label>
+                <label className="block text-sm font-medium text-obsidian/70 mb-2">Trigger Type *</label>
                 <div className="space-y-2">
                     {(['wait_time', 'sentiment', 'ai_request', 'manual'] as const).map(trigger => (
                         <label key={trigger} className="flex items-center">
@@ -226,7 +226,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                                 checked={formData.trigger_type === trigger}
                                 onChange={handleInputChange}
                                 disabled={isSubmitting}
-                                className="w-4 h-4 text-emerald-600"
+                                className="w-4 h-4 text-surgical-600"
                             />
                             <span className="ml-2 text-sm">
                                 {trigger === 'wait_time' && 'Wait Time: Transfer after X seconds'}
@@ -242,7 +242,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
             {/* Conditional: Wait Time */}
             {formData.trigger_type === 'wait_time' && (
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Wait Time (seconds) *</label>
+                    <label className="block text-sm font-medium text-obsidian/70 mb-1">Max Wait Time (seconds) *</label>
                     <input
                         type="number"
                         name="max_wait_seconds"
@@ -251,17 +251,17 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                         min="60"
                         max="600"
                         step="30"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full px-3 py-2 border border-surgical-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-surgical-500"
                         disabled={isSubmitting}
                     />
-                    <p className="text-xs text-gray-500 mt-1">60-600 seconds (1-10 minutes)</p>
+                    <p className="text-xs text-obsidian/60 mt-1">60-600 seconds (1-10 minutes)</p>
                 </div>
             )}
 
             {/* Conditional: Sentiment Threshold */}
             {formData.trigger_type === 'sentiment' && (
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Sentiment Threshold *</label>
+                    <label className="block text-sm font-medium text-obsidian/70 mb-1">Sentiment Threshold *</label>
                     <input
                         type="range"
                         name="sentiment_threshold"
@@ -273,12 +273,12 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                         className="w-full"
                         disabled={isSubmitting}
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-xs text-obsidian/60 mt-1">
                         <span>Positive (0)</span>
                         <span className="font-medium">{(formData.sentiment_threshold || 0.5).toFixed(1)}</span>
                         <span>Negative (1)</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-xs text-obsidian/60 mt-2">
                         Transfer if sentiment score is higher than {(formData.sentiment_threshold || 0.5).toFixed(1)}
                     </p>
                 </div>
@@ -286,22 +286,22 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
 
             {/* Transfer Number */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Transfer To (Phone Number) *</label>
+                <label className="block text-sm font-medium text-obsidian/70 mb-1">Transfer To (Phone Number) *</label>
                 <input
                     type="tel"
                     name="transfer_number"
                     value={formData.transfer_number || ''}
                     onChange={handleInputChange}
                     placeholder="+1-202-555-0123"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-surgical-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-surgical-500"
                     disabled={isSubmitting}
                 />
-                <p className="text-xs text-gray-500 mt-1">E.164 format: +1-XXX-XXX-XXXX</p>
+                <p className="text-xs text-obsidian/60 mt-1">E.164 format: +1-XXX-XXX-XXXX</p>
             </div>
 
             {/* Priority */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Priority (1-100) *</label>
+                <label className="block text-sm font-medium text-obsidian/70 mb-1">Priority (1-100) *</label>
                 <input
                     type="number"
                     name="priority"
@@ -309,10 +309,10 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                     onChange={handleInputChange}
                     min="1"
                     max="100"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 border border-surgical-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-surgical-500"
                     disabled={isSubmitting}
                 />
-                <p className="text-xs text-gray-500 mt-1">Lower number = higher priority</p>
+                <p className="text-xs text-obsidian/60 mt-1">Lower number = higher priority</p>
             </div>
 
             {/* Enabled Toggle */}
@@ -322,10 +322,10 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                     name="enabled"
                     checked={formData.enabled !== false}
                     onChange={handleInputChange}
-                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    className="w-4 h-4 text-surgical-600 rounded focus:ring-surgical-500"
                     disabled={isSubmitting}
                 />
-                <label className="ml-2 text-sm font-medium text-gray-700">Enabled</label>
+                <label className="ml-2 text-sm font-medium text-obsidian/70">Enabled</label>
             </div>
 
             {/* Buttons */}
@@ -333,7 +333,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                 <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 bg-surgical-600 text-white px-4 py-2 rounded-lg hover:bg-surgical-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                     {isSubmitting && <Loader className="w-4 h-4 animate-spin" />}
                     {isSubmitting ? 'Saving...' : rule ? 'Update Rule' : 'Create Rule'}
@@ -342,7 +342,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({ rule, onClose, onSuccess }) 
                     type="button"
                     onClick={onClose}
                     disabled={isSubmitting}
-                    className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                    className="flex-1 bg-surgical-100 text-obsidian px-4 py-2 rounded-lg hover:bg-surgical-50 disabled:opacity-50"
                 >
                     Cancel
                 </button>

@@ -659,27 +659,24 @@ export default function TermsOfService() {
 
                     {/* 14. Governing Law */}
                     <section id="governing-law" className="mb-12">
-                        <h2 className="text-3xl font-bold text-deep-obsidian mb-6">14. Governing Law</h2>
+                        <h2 className="text-3xl font-bold text-deep-obsidian mb-6">14. Governing Law & Jurisdiction</h2>
                         <p className="mb-4">
-                            These Terms and any dispute arising out of or related to these Terms or the Service shall be
-                            governed by and construed in accordance with:
+                            <strong>Voxanne AI is registered in England and Wales (Company Number 16917594).</strong> These Terms and any dispute arising out of or related to these Terms or the Service shall be governed by and construed in accordance with the laws of England and Wales, without regard to its conflict of law provisions.
                         </p>
-                        <ul className="list-disc ml-6 mb-6 space-y-2">
-                            <li>
-                                <strong>For customers based in the United States:</strong> The laws of the State of Delaware,
-                                without regard to its conflict of law provisions
-                            </li>
-                            <li>
-                                <strong>For customers based in the United Kingdom or European Union:</strong> The laws of
-                                England and Wales, without regard to its conflict of law provisions
-                            </li>
-                            <li>
-                                <strong>For all other customers:</strong> The laws of the State of Delaware, USA
-                            </li>
-                        </ul>
+                        <div className="bg-blue-50 border-l-4 border-blue-600 p-6 rounded-r-lg mb-6">
+                            <p className="text-blue-800 font-semibold mb-2">Exclusive Jurisdiction</p>
+                            <p className="text-blue-700 text-sm">
+                                The courts of England and Wales shall have exclusive jurisdiction to hear and determine all disputes arising from or relating to these Terms, the Service, or your use thereof. Each party irrevocably submits to the jurisdiction of these courts.
+                            </p>
+                        </div>
                         <p className="mb-4">
-                            The United Nations Convention on Contracts for the International Sale of Goods does not apply
-                            to these Terms.
+                            <strong>For US Customers:</strong> If you are based in the United States, you acknowledge that these Terms are governed by English law, not Delaware or US law. However, for specific payment processing disputes, PCI-DSS and US payment regulations may apply in addition to English law where permitted.
+                        </p>
+                        <p className="mb-4">
+                            <strong>Exception:</strong> Nothing in these Terms prevents either party from seeking injunctive or other equitable relief in any court of competent jurisdiction to prevent infringement of intellectual property rights or unauthorized disclosure of confidential information.
+                        </p>
+                        <p className="mb-4">
+                            The United Nations Convention on Contracts for the International Sale of Goods does not apply to these Terms.
                         </p>
                     </section>
 

@@ -12,7 +12,7 @@ export default function TelephonyPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-surgical-600" />
       </div>
     );
   }
@@ -21,14 +21,14 @@ export default function TelephonyPage() {
     <div className="max-w-5xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/20">
-          <Smartphone className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+        <div className="w-12 h-12 rounded-xl bg-surgical-50 flex items-center justify-center border border-surgical-200">
+          <Smartphone className="w-6 h-6 text-surgical-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-obsidian">
             Hybrid Telephony Setup
           </h1>
-          <p className="text-gray-600 dark:text-slate-400">
+          <p className="text-obsidian/60">
             Connect your personal phone number to AI without porting
           </p>
         </div>
@@ -42,8 +42,8 @@ export default function TelephonyPage() {
 
         {/* How It Works Sidebar */}
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <div className="bg-white border border-surgical-200 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-obsidian mb-4">
               How It Works
             </h3>
             <div className="space-y-4">
@@ -65,28 +65,28 @@ export default function TelephonyPage() {
             </div>
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
+          <div className="bg-surgical-50 border border-surgical-200 rounded-xl p-6">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-surgical-600 mt-0.5" />
               <div>
-                <h4 className="font-medium text-blue-900 dark:text-blue-300 mb-1">
+                <h4 className="font-medium text-obsidian mb-1">
                   No Porting Required
                 </h4>
-                <p className="text-sm text-blue-700 dark:text-blue-400">
+                <p className="text-sm text-obsidian/60">
                   Your phone number stays with your current carrier. We use call forwarding to route calls to AI.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-6">
+          <div className="bg-green-50 border border-surgical-200 rounded-xl p-6">
             <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+              <CheckCircle className="w-5 h-5 text-green-700 mt-0.5" />
               <div>
-                <h4 className="font-medium text-emerald-900 dark:text-emerald-300 mb-1">
+                <h4 className="font-medium text-obsidian mb-1">
                   Your Caller ID
                 </h4>
-                <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                <p className="text-sm text-obsidian/60">
                   When AI makes outbound calls, recipients see your personal number, not a random Twilio number.
                 </p>
               </div>
@@ -101,12 +101,12 @@ export default function TelephonyPage() {
 function Step({ number, title, description }: { number: number; title: string; description: string }) {
   return (
     <div className="flex gap-3">
-      <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-400 flex-shrink-0">
+      <div className="w-6 h-6 rounded-full bg-surgical-50 flex items-center justify-center text-xs font-bold text-obsidian/60 flex-shrink-0">
         {number}
       </div>
       <div>
-        <h4 className="font-medium text-gray-900 dark:text-white text-sm">{title}</h4>
-        <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">{description}</p>
+        <h4 className="font-medium text-obsidian text-sm">{title}</h4>
+        <p className="text-xs text-obsidian/60 mt-0.5">{description}</p>
       </div>
     </div>
   );

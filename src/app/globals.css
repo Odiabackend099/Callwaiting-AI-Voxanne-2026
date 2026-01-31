@@ -93,11 +93,11 @@ select {
 
 /* Clinical Glassmorphism - Subtle & Clean */
 .glass-panel {
-  @apply bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm;
+  @apply bg-white/80 backdrop-blur-md border border-surgical-200 shadow-sm;
 }
 
 .glass-card {
-  @apply bg-white/60 backdrop-blur-sm border border-slate-200 transition-all duration-300 hover:shadow-md;
+  @apply bg-white/60 backdrop-blur-sm border border-surgical-200 transition-all duration-300 hover:shadow-md;
 }
 
 /* Swiss Typography Utilities */

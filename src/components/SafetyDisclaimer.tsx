@@ -18,9 +18,12 @@ export function SafetyDisclaimer() {
                 </div>
                 <p className="text-xs sm:text-sm text-slate-300 text-center sm:text-left flex-1">
                     Voxanne does not provide medical advice, diagnosis, or treatment. Clinical questions are routed to licensed staff.
-                    HIPAA/GDPR certified with BAA included.
+                    UK GDPR & HIPAA certified with DPA and BAA included.
                 </p>
                 <div className="flex items-center gap-4 text-[11px] uppercase tracking-wide text-slate-400">
+                    <span className="flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> GDPR
+                    </span>
                     <span className="flex items-center gap-1">
                         <Lock className="w-3 h-3" /> HIPAA
                     </span>

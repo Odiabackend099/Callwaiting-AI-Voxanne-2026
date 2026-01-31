@@ -44,10 +44,10 @@ export function HeroCalendlyStyle() {
             <div className="container mx-auto grid min-h-screen gap-12 px-4 py-20 md:grid-cols-[60%_40%] md:items-center">
                 {/* LEFT SIDE (60%) */}
                 <div className="relative z-10 space-y-8">
-                    {/* HIPAA Badge */}
+                    {/* UK GDPR & HIPAA Badge */}
                     <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2">
                         <ShieldCheck className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-600">HIPAA Compliant AI</span>
+                        <span className="text-sm font-medium text-blue-600">UK GDPR & HIPAA Compliant AI</span>
                     </div>
 
                     {/* Headline */}

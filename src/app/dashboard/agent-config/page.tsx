@@ -536,15 +536,15 @@ export default function AgentConfigPage() {
     return (
         <div className="min-h-screen bg-clinical-bg pb-20">
             {/* Sticky Header */}
-            <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200">
+            <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-surgical-200">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <Bot className="w-6 h-6 text-emerald-500" />
+                            <h1 className="text-2xl font-bold text-obsidian flex items-center gap-2">
+                                <Bot className="w-6 h-6 text-surgical-600" />
                                 Agent Configuration
                             </h1>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                            <p className="text-sm text-obsidian/60">
                                 Configure behavior and settings for your AI agents
                             </p>
                         </div>
@@ -553,7 +553,7 @@ export default function AgentConfigPage() {
                             {activeTab === 'inbound' ? (
                                 <button
                                     onClick={handleTestInbound}
-                                    className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium transition-colors flex items-center gap-2 text-sm"
+                                    className="px-4 py-2 rounded-lg bg-surgical-50 text-obsidian/60 hover:bg-surgical-100 font-medium transition-colors flex items-center gap-2 text-sm"
                                 >
                                     <Globe className="w-4 h-4" />
                                     Test in Browser
@@ -561,7 +561,7 @@ export default function AgentConfigPage() {
                             ) : (
                                 <button
                                     onClick={handleTestOutbound}
-                                    className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium transition-colors flex items-center gap-2 text-sm"
+                                    className="px-4 py-2 rounded-lg bg-surgical-50 text-obsidian/60 hover:bg-surgical-100 font-medium transition-colors flex items-center gap-2 text-sm"
                                 >
                                     <Phone className="w-4 h-4" />
                                     Test Call
@@ -572,10 +572,10 @@ export default function AgentConfigPage() {
                                 onClick={handleSave}
                                 disabled={!hasActiveTabChanges() || isSaving}
                                 className={`px-6 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 text-sm ${saveSuccess
-                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800'
+                                    ? 'bg-surgical-50 text-surgical-600 border border-surgical-200'
                                     : hasActiveTabChanges()
-                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed border border-slate-200 dark:border-slate-700'
+                                        ? 'bg-surgical-600 hover:bg-surgical-700 text-white shadow-surgical-500/20'
+                                        : 'bg-surgical-50 text-obsidian/40 cursor-not-allowed border border-surgical-200'
                                     }`}
                             >
                                 {isSaving ? (
@@ -624,15 +624,15 @@ export default function AgentConfigPage() {
                     </div>
 
                     {/* Tab Navigation */}
-                    <div className="flex items-center gap-1 mt-6 border-b border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-1 mt-6 border-b border-surgical-200">
                         <button
                             onClick={() => {
                                 setActiveTab('inbound');
                                 router.push('/dashboard/agent-config?agent=inbound');
                             }}
                             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'inbound'
-                                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                ? 'border-surgical-600 text-surgical-600'
+                                : 'border-transparent text-obsidian/60 hover:text-obsidian'
                                 }`}
                         >
                             <Phone className="w-4 h-4" />
@@ -644,8 +644,8 @@ export default function AgentConfigPage() {
                                 router.push('/dashboard/agent-config?agent=outbound');
                             }}
                             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'outbound'
-                                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                ? 'border-surgical-600 text-surgical-600'
+                                : 'border-transparent text-obsidian/60 hover:text-obsidian'
                                 }`}
                         >
                             <ArrowRight className="w-4 h-4" />
@@ -663,33 +663,33 @@ export default function AgentConfigPage() {
                 )}
 
                 {error && (
-                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 flex items-center gap-3">
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-3">
                         <AlertCircle className="w-5 h-5 flex-shrink-0" />
                         {error}
                     </div>
                 )}
 
                 {hasDraft && (
-                    <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-between">
+                    <div className="mb-6 p-4 bg-surgical-50 border border-surgical-200 rounded-xl flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
-                                <Save className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            <div className="w-8 h-8 bg-surgical-100 rounded-full flex items-center justify-center">
+                                <Save className="w-4 h-4 text-surgical-600" />
                             </div>
                             <div>
-                                <h3 className="font-medium text-indigo-900 dark:text-indigo-300">Unsaved Changes Restored</h3>
-                                <p className="text-sm text-indigo-700 dark:text-indigo-400">We found unsaved changes from your last session.</p>
+                                <h3 className="font-medium text-obsidian">Unsaved Changes Restored</h3>
+                                <p className="text-sm text-obsidian/60">We found unsaved changes from your last session.</p>
                             </div>
                         </div>
                         <div className="flex gap-3">
                             <button
                                 onClick={discardDraft}
-                                className="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-colors"
+                                className="px-3 py-1.5 bg-white text-obsidian/60 border border-surgical-200 rounded-lg hover:bg-surgical-50 text-sm font-medium transition-colors"
                             >
                                 Discard
                             </button>
                             <button
                                 onClick={restoreDraft}
-                                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm"
+                                className="px-3 py-1.5 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 text-sm font-medium transition-colors shadow-sm"
                             >
                                 Keep Draft
                             </button>
@@ -701,13 +701,13 @@ export default function AgentConfigPage() {
                     {/* LEFT COLUMN - Configuration */}
                     <div className="lg:col-span-1 space-y-6">
                         {/* Agent Identity Card */}
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                <Bot className="w-5 h-5 text-purple-500" />
+                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                <Bot className="w-5 h-5 text-surgical-600" />
                                 Agent Identity
                             </h3>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-obsidian/60 mb-2">
                                     Agent Name
                                 </label>
                                 <input
@@ -715,10 +715,10 @@ export default function AgentConfigPage() {
                                     value={currentConfig.name}
                                     onChange={(e) => setConfig({ ...currentConfig, name: e.target.value.slice(0, 100) })}
                                     placeholder={activeTab === 'inbound' ? 'Inbound Agent' : 'Outbound Agent'}
-                                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-slate-800 dark:text-white outline-none transition-colors"
+                                    className="w-full px-4 py-2.5 border border-surgical-200 rounded-lg focus:ring-2 focus:ring-surgical-500 bg-white text-obsidian outline-none transition-colors"
                                     maxLength={100}
                                 />
-                                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                <p className="mt-2 text-xs text-obsidian/60">
                                     Give your agent a memorable name (e.g., "Receptionist Robin", "Sales Sarah")
                                 </p>
                             </div>
@@ -726,15 +726,15 @@ export default function AgentConfigPage() {
 
                         {/* Status Card (Inbound Only) */}
                         {activeTab === 'inbound' && (
-                            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                    <Phone className="w-5 h-5 text-emerald-500" />
+                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                                <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                    <Phone className="w-5 h-5 text-surgical-600" />
                                     Phone Number
                                 </h3>
                                 <div className="space-y-4">
-                                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-                                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Current Number</p>
-                                        <p className="text-lg font-mono text-slate-900 dark:text-white">
+                                    <div className="p-3 bg-surgical-50 rounded-lg border border-surgical-200">
+                                        <p className="text-xs font-medium text-obsidian/60 uppercase tracking-wider mb-1">Current Number</p>
+                                        <p className="text-lg font-mono text-obsidian">
                                             {inboundStatus?.configured && inboundStatus.inboundNumber
                                                 ? inboundStatus.inboundNumber
                                                 : 'Not Assigned'}
@@ -742,14 +742,14 @@ export default function AgentConfigPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-obsidian/60 mb-2">
                                             Assign New Number
                                         </label>
                                         <div className="flex gap-2">
                                             <select
                                                 value={selectedNumberId}
                                                 onChange={(e) => setSelectedNumberId(e.target.value)}
-                                                className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none"
                                             >
                                                 <option value="" disabled>Select number...</option>
                                                 {vapiNumbers.map((num) => (
@@ -761,7 +761,7 @@ export default function AgentConfigPage() {
                                             <button
                                                 onClick={handleAssignNumber}
                                                 disabled={assigningNumber || !selectedNumberId}
-                                                className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                className="px-3 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
                                                 {assigningNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                             </button>
@@ -773,15 +773,15 @@ export default function AgentConfigPage() {
 
                         {/* Caller ID Selection (Outbound Only) */}
                         {activeTab === 'outbound' && (
-                            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                    <Phone className="w-5 h-5 text-emerald-500" />
+                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                                <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                    <Phone className="w-5 h-5 text-surgical-600" />
                                     Outbound Caller ID
                                 </h3>
                                 <div className="space-y-4">
-                                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-                                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Selected Number</p>
-                                        <p className="text-lg font-mono text-slate-900 dark:text-white">
+                                    <div className="p-3 bg-surgical-50 rounded-lg border border-surgical-200">
+                                        <p className="text-xs font-medium text-obsidian/60 uppercase tracking-wider mb-1">Selected Number</p>
+                                        <p className="text-lg font-mono text-obsidian">
                                             {selectedOutboundNumberId && vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number
                                                 ? vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number
                                                 : 'Not Selected'}
@@ -789,14 +789,14 @@ export default function AgentConfigPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-obsidian/60 mb-2">
                                             Choose Caller ID Number
                                         </label>
                                         <div className="flex gap-2">
                                             <select
                                                 value={selectedOutboundNumberId}
                                                 onChange={(e) => setSelectedOutboundNumberId(e.target.value)}
-                                                className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none"
                                             >
                                                 <option value="" disabled>Select number...</option>
                                                 {vapiNumbers.map((num) => (
@@ -808,12 +808,12 @@ export default function AgentConfigPage() {
                                             <button
                                                 onClick={handleAssignOutboundNumber}
                                                 disabled={assigningOutboundNumber || !selectedOutboundNumberId}
-                                                className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                className="px-3 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
                                                 {assigningOutboundNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                             </button>
                                         </div>
-                                        <p className="text-xs text-slate-500 mt-2">
+                                        <p className="text-xs text-obsidian/60 mt-2">
                                             This number will be shown as Caller ID when calling leads.
                                         </p>
                                     </div>
@@ -822,9 +822,9 @@ export default function AgentConfigPage() {
                         )}
 
                         {/* Voice Settings */}
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                <Volume2 className="w-5 h-5 text-blue-500" />
+                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                <Volume2 className="w-5 h-5 text-surgical-600" />
                                 Voice Settings
                             </h3>
                             <div className="space-y-4">
@@ -842,13 +842,13 @@ export default function AgentConfigPage() {
                                 />
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-obsidian/60 mb-2">
                                         Language
                                     </label>
                                     <select
                                         value={currentConfig.language}
                                         onChange={(e) => setConfig({ ...currentConfig, language: e.target.value })}
-                                        className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full px-3 py-2.5 rounded-lg bg-white border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none"
                                     >
                                         <option value="en-US">English (US)</option>
                                         <option value="en-GB">English (UK)</option>
@@ -862,13 +862,13 @@ export default function AgentConfigPage() {
                         </div>
 
                         {/* Limits */}
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                <Clock className="w-5 h-5 text-amber-500" />
+                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-surgical-600" />
                                 Limits
                             </h3>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-obsidian/60 mb-2">
                                     Max Duration (Seconds)
                                 </label>
                                 <input
@@ -877,9 +877,9 @@ export default function AgentConfigPage() {
                                     onChange={(e) => setConfig({ ...currentConfig, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
                                     min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
                                     max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                    className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                                    className="w-full px-3 py-2.5 rounded-lg bg-white border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none"
                                 />
-                                <p className="text-xs text-slate-500 mt-1">
+                                <p className="text-xs text-obsidian/60 mt-1">
                                     Auto-end call after this time.
                                 </p>
                             </div>
@@ -889,9 +889,9 @@ export default function AgentConfigPage() {
                     {/* RIGHT COLUMN - Intelligence */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Template Selector */}
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                <LayoutTemplate className="w-5 h-5 text-purple-500" />
+                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                <LayoutTemplate className="w-5 h-5 text-surgical-600" />
                                 Quick Start Templates
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -899,15 +899,15 @@ export default function AgentConfigPage() {
                                     <button
                                         key={template.id}
                                         onClick={() => applyTemplate(template.id, activeTab)}
-                                        className="text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/10 transition-all group"
+                                        className="text-left p-4 rounded-xl border border-surgical-200 hover:border-surgical-600 hover:bg-surgical-50 transition-all group"
                                     >
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="font-medium text-slate-900 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-400">
+                                            <span className="font-medium text-obsidian group-hover:text-surgical-600">
                                                 {template.name}
                                             </span>
-                                            <Sparkles className="w-4 h-4 text-slate-400 group-hover:text-purple-500" />
+                                            <Sparkles className="w-4 h-4 text-obsidian/40 group-hover:text-surgical-600" />
                                         </div>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                                        <p className="text-xs text-obsidian/60 line-clamp-2">
                                             {template.description}
                                         </p>
                                     </button>
@@ -916,41 +916,41 @@ export default function AgentConfigPage() {
                         </div>
 
                         {/* System Prompt */}
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                                    <Bot className="w-5 h-5 text-emerald-500" />
+                                <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
+                                    <Bot className="w-5 h-5 text-surgical-600" />
                                     System Prompt
                                 </h3>
-                                <span className="text-xs px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+                                <span className="text-xs px-2 py-1 rounded-full bg-surgical-50 text-obsidian/60 font-medium">
                                     Core Personality
                                 </span>
                             </div>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                            <p className="text-sm text-obsidian/60 mb-4">
                                 Define how your agent behaves, speaks, and handles specific scenarios.
                             </p>
                             <textarea
                                 value={currentConfig.systemPrompt}
                                 onChange={(e) => setConfig({ ...currentConfig, systemPrompt: e.target.value })}
                                 placeholder="You are a helpful AI assistant..."
-                                className="w-full h-96 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                                className="w-full h-96 px-4 py-3 rounded-xl bg-surgical-50 border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none resize-none font-mono text-sm leading-relaxed"
                             />
                         </div>
 
                         {/* First Message */}
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                <MessageSquare className="w-5 h-5 text-blue-500" />
+                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
+                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
+                                <MessageSquare className="w-5 h-5 text-surgical-600" />
                                 First Message
                             </h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                            <p className="text-sm text-obsidian/60 mb-4">
                                 The very first thing your agent says when the call connects.
                             </p>
                             <textarea
                                 value={currentConfig.firstMessage}
                                 onChange={(e) => setConfig({ ...currentConfig, firstMessage: e.target.value })}
                                 placeholder="Hello! How can I help you today?"
-                                className="w-full h-24 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                className="w-full h-24 px-4 py-3 rounded-xl bg-surgical-50 border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none resize-none"
                             />
                         </div>
                     </div>
@@ -960,37 +960,37 @@ export default function AgentConfigPage() {
             {/* Delete Confirmation Modal */}
             {showDeleteModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-red-200 dark:border-red-900">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-red-200">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-full">
-                                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                            <div className="p-3 bg-red-50 rounded-full">
+                                <AlertCircle className="w-6 h-6 text-red-600" />
                             </div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                            <h3 className="text-xl font-bold text-obsidian">
                                 Delete {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Agent
                             </h3>
                         </div>
 
                         <div className="mb-6 space-y-3">
-                            <p className="text-gray-700 dark:text-gray-300">
+                            <p className="text-obsidian/60">
                                 Are you sure you want to delete this agent? This action cannot be undone.
                             </p>
 
-                            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900 rounded-lg p-4 space-y-2">
-                                <p className="text-sm font-medium text-red-800 dark:text-red-400">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
+                                <p className="text-sm font-medium text-red-700">
                                     What will be deleted:
                                 </p>
-                                <ul className="text-sm text-red-700 dark:text-red-300 space-y-1 ml-4 list-disc">
+                                <ul className="text-sm text-red-700 space-y-1 ml-4 list-disc">
                                     <li>Agent configuration (name, prompts, voice, settings)</li>
                                     <li>Phone number assignment (if any)</li>
                                     <li>VAPI assistant registration</li>
                                 </ul>
                             </div>
 
-                            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900 rounded-lg p-4 space-y-2">
-                                <p className="text-sm font-medium text-blue-800 dark:text-blue-400">
+                            <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4 space-y-2">
+                                <p className="text-sm font-medium text-obsidian">
                                     What will be preserved:
                                 </p>
-                                <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 ml-4 list-disc">
+                                <ul className="text-sm text-obsidian/60 space-y-1 ml-4 list-disc">
                                     <li>Historical call logs (for compliance)</li>
                                     <li>Appointment records</li>
                                     <li>Contact database</li>
@@ -1002,7 +1002,7 @@ export default function AgentConfigPage() {
                             <button
                                 onClick={() => setShowDeleteModal(false)}
                                 disabled={isDeleting}
-                                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 font-medium"
+                                className="flex-1 px-4 py-2 bg-surgical-100 text-obsidian/60 rounded-lg hover:bg-surgical-200 transition-colors disabled:opacity-50 font-medium"
                             >
                                 Cancel
                             </button>

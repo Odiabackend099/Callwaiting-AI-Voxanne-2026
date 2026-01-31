@@ -50,7 +50,6 @@ export default function LeftSidebar() {
     ]), []);
 
     const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-        // Voice session check
         try {
             const isVoiceActive = typeof window !== 'undefined' && window.sessionStorage.getItem('voice_session_active') === 'true';
             const leavingDashboard = !href.startsWith('/dashboard');
@@ -89,7 +88,7 @@ export default function LeftSidebar() {
         <>
             <div className="p-6">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-blue-500/20 flex items-center justify-center border border-white/10 shadow-inner overflow-hidden backdrop-blur-sm">
+                    <div className="w-8 h-8 rounded-xl bg-surgical-50 flex items-center justify-center border border-surgical-200 shadow-inner overflow-hidden">
                         <Image
                             src="/callwaiting-ai-logo.png"
                             alt="CallWaiting AI"
@@ -99,7 +98,7 @@ export default function LeftSidebar() {
                             priority
                         />
                     </div>
-                    <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 tracking-tight">
+                    <span className="text-lg font-bold text-obsidian tracking-tight">
                         Voxanne
                     </span>
                 </div>
@@ -108,7 +107,7 @@ export default function LeftSidebar() {
             <nav className="flex-1 px-3 space-y-6 overflow-y-auto custom-scrollbar">
                 {navSections.map((section) => (
                     <div key={section.label}>
-                        <h3 className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-80">
+                        <h3 className="px-3 py-2 text-[10px] font-bold text-obsidian/40 uppercase tracking-widest opacity-80">
                             {section.label}
                         </h3>
                         <div className="space-y-0.5">
@@ -124,8 +123,8 @@ export default function LeftSidebar() {
                                         href={item.href}
                                         onClick={(e) => handleLinkClick(e, item.href)}
                                         className={`group relative w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-200 font-medium text-sm text-left ${isActive
-                                            ? 'text-slate-900 bg-slate-100/80 shadow-sm backdrop-blur-sm'
-                                            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50/50'
+                                            ? 'text-surgical-600 bg-surgical-50 shadow-sm'
+                                            : 'text-obsidian/60 hover:text-obsidian hover:bg-surgical-50'
                                             }`}
                                     >
                                         {isActive && (
@@ -133,7 +132,7 @@ export default function LeftSidebar() {
                                         )}
                                         <Icon className={`w-4 h-4 transition-colors ${isActive
                                             ? 'text-surgical-600'
-                                            : 'text-slate-400 group-hover:text-slate-600'
+                                            : 'text-obsidian/40 group-hover:text-obsidian/60'
                                             }`} />
                                         <span className="tracking-tight">{item.label}</span>
                                     </Link>
@@ -144,8 +143,8 @@ export default function LeftSidebar() {
                 ))}
 
                 {/* Divider before footer items */}
-                <div className="pt-4 mt-2 border-t border-slate-100">
-                    <h3 className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-80">
+                <div className="pt-4 mt-2 border-t border-surgical-200">
+                    <h3 className="px-3 py-2 text-[10px] font-bold text-obsidian/40 uppercase tracking-widest opacity-80">
                         QUICK ACCESS
                     </h3>
                     <div className="space-y-0.5">
@@ -159,13 +158,13 @@ export default function LeftSidebar() {
                                     href={item.href}
                                     onClick={(e) => handleLinkClick(e, item.href)}
                                     className={`group relative w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-200 font-medium text-sm text-left ${isActive
-                                        ? 'text-slate-900 bg-white/80 shadow-sm border border-slate-200/50 backdrop-blur-sm'
-                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50'
+                                        ? 'text-surgical-600 bg-surgical-50 shadow-sm border border-surgical-200'
+                                        : 'text-obsidian/60 hover:text-obsidian hover:bg-surgical-50'
                                         }`}
                                 >
                                     <Icon className={`w-4 h-4 transition-colors ${isActive
                                         ? 'text-surgical-600'
-                                        : 'text-slate-400 group-hover:text-slate-600'
+                                        : 'text-obsidian/40 group-hover:text-obsidian/60'
                                         }`} />
                                     <span className="tracking-tight">{item.label}</span>
                                 </Link>
@@ -176,15 +175,15 @@ export default function LeftSidebar() {
             </nav>
 
             <div className="p-4 space-y-1">
-                <div className="px-3 py-2 rounded-lg border border-slate-200 bg-white/60 backdrop-blur-sm mb-2">
-                    <p className="text-xs font-semibold text-slate-900 truncate tracking-tight">
+                <div className="px-3 py-2 rounded-lg border border-surgical-200 bg-white mb-2">
+                    <p className="text-xs font-semibold text-obsidian truncate tracking-tight">
                         {user?.email}
                     </p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Pro Plan</p>
+                    <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium">Pro Plan</p>
                 </div>
                 <button
                     onClick={handleLogout}
-                    className="w-full px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                    className="w-full px-3 py-1.5 rounded-lg text-xs font-medium text-obsidian/60 hover:text-red-600 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
                 >
                     <LogOut className="w-3.5 h-3.5" />
                     Logout
@@ -196,16 +195,16 @@ export default function LeftSidebar() {
     return (
         <>
             {/* Mobile Header */}
-            <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 border-b border-slate-200 z-20 flex items-center justify-between px-4 backdrop-blur-md">
+            <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 border-b border-surgical-200 z-20 flex items-center justify-between px-4 backdrop-blur-md">
                 <button
                     onClick={() => setMobileOpen(true)}
-                    className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+                    className="p-2 rounded-lg text-obsidian/60 hover:bg-surgical-50 transition-colors"
                 >
                     <Menu className="w-5 h-5" />
                 </button>
 
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900">
+                    <span className="text-sm font-bold text-obsidian">
                         Voxanne
                     </span>
                 </div>
@@ -214,20 +213,20 @@ export default function LeftSidebar() {
             </div>
 
             {/* Desktop Sidebar */}
-            <div className="hidden md:flex fixed left-4 top-4 bottom-4 w-60 bg-white/80 border border-slate-200/60 rounded-2xl flex-col z-10 backdrop-blur-xl shadow-2xl shadow-slate-200/20">
+            <div className="hidden md:flex fixed left-4 top-4 bottom-4 w-60 bg-white/80 border border-surgical-200 rounded-2xl flex-col z-10 backdrop-blur-xl shadow-2xl shadow-surgical-200/20">
                 {SidebarContents}
             </div>
 
             {/* Mobile Drawer */}
             {mobileOpen && (
                 <div className="md:hidden fixed inset-0 z-30">
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-                    <div className="absolute left-0 top-0 h-full w-72 bg-white border-r border-slate-200 flex flex-col shadow-2xl">
-                        <div className="p-4 flex items-center justify-between border-b border-slate-100">
-                            <span className="text-lg font-bold text-slate-900 tracking-tight">Voxanne</span>
+                    <div className="absolute inset-0 bg-obsidian/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+                    <div className="absolute left-0 top-0 h-full w-72 bg-white border-r border-surgical-200 flex flex-col shadow-2xl">
+                        <div className="p-4 flex items-center justify-between border-b border-surgical-200">
+                            <span className="text-lg font-bold text-obsidian tracking-tight">Voxanne</span>
                             <button
                                 onClick={() => setMobileOpen(false)}
-                                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                                className="p-2 rounded-lg text-obsidian/60 hover:bg-surgical-50 transition-colors"
                             >
                                 <X className="w-5 h-5" />
                             </button>

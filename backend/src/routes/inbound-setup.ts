@@ -447,7 +447,7 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
       .eq('provider', 'vapi')
       .maybeSingle();
 
-    const vapiKey = (vapiRow as any)?.config?.vapi_api_key;
+    const vapiKey = vapiRow?.config?.vapi_api_key || process.env.VAPI_PRIVATE_KEY;
     const currentLast4 = typeof vapiKey === 'string' ? keyLast4(vapiKey) : null;
     const storedLast4 = typeof cfg.vapiApiKeyLast4Used === 'string' ? cfg.vapiApiKeyLast4Used : null;
     const workspaceMismatch = !!(cfg.phoneNumber && currentLast4 && storedLast4 && currentLast4 !== storedLast4);
@@ -464,9 +464,7 @@ router.get('/status', requireAuthOrDev, async (req: Request, res: Response): Pro
   } catch (error: any) {
     console.error('[InboundSetup][status] Unexpected error', {
       error: error.message,
-      stack: error.stack,
       orgId: req.user?.orgId,
-      user: req.user,
       hasAuthHeader: !!req.headers.authorization,
       nodeEnv: process.env.NODE_ENV
     });

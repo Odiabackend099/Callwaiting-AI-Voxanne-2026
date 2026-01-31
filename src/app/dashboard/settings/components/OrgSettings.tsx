@@ -96,9 +96,9 @@ export function OrgSettings() {
 
   if (loading) {
     return (
-      <div className="p-6 rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50">
+      <div className="p-6 rounded-2xl bg-white backdrop-blur-md border border-surgical-200">
         <div className="flex items-center justify-center py-8">
-          <Loader className="w-5 h-5 animate-spin text-slate-400" />
+          <Loader className="w-5 h-5 animate-spin text-obsidian/40" />
         </div>
       </div>
     );
@@ -106,8 +106,8 @@ export function OrgSettings() {
 
   if (!isAdmin) {
     return (
-      <div className="p-6 rounded-2xl bg-amber-900/20 backdrop-blur-md border border-amber-800/50">
-        <p className="text-sm text-amber-200 tracking-tight">
+      <div className="p-6 rounded-2xl bg-surgical-50 backdrop-blur-md border border-surgical-200">
+        <p className="text-sm text-obsidian/60 tracking-tight">
           Only administrators can modify organization settings.
         </p>
       </div>
@@ -117,26 +117,26 @@ export function OrgSettings() {
   return (
     <div className="space-y-6">
       {/* Card */}
-      <div className="p-6 rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 transition-all duration-200">
+      <div className="p-6 rounded-2xl bg-white backdrop-blur-md border border-surgical-200 transition-all duration-200">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Building2 className="w-5 h-5 text-emerald-500" />
-          <h2 className="text-lg font-semibold text-slate-50 tracking-tight">Organization</h2>
+          <Building2 className="w-5 h-5 text-surgical-500" />
+          <h2 className="text-lg font-semibold text-obsidian tracking-tight">Organization</h2>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="mb-6 p-4 rounded-lg bg-red-900/20 border border-red-800/50 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-300 tracking-tight">{error}</p>
+          <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 tracking-tight">{error}</p>
           </div>
         )}
 
         {/* Success */}
         {success && (
-          <div className="mb-6 p-4 rounded-lg bg-emerald-900/20 border border-emerald-800/50 flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-emerald-300 tracking-tight">{success}</p>
+          <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200 flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-green-700 tracking-tight">{success}</p>
           </div>
         )}
 
@@ -144,7 +144,7 @@ export function OrgSettings() {
         <div className="space-y-4">
           {/* Name Input */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 tracking-tight mb-2 uppercase">
+            <label className="block text-xs font-medium text-obsidian/40 tracking-tight mb-2 uppercase">
               Organization Name
             </label>
             <input
@@ -153,30 +153,30 @@ export function OrgSettings() {
               onChange={(e) => setFormData({ name: e.target.value })}
               placeholder="Enter organization name"
               disabled={saving}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-50 placeholder-slate-500 text-sm tracking-tight focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all duration-200 disabled:opacity-50"
+              className="w-full px-4 py-2 rounded-lg bg-surgical-50 border border-surgical-200 text-obsidian placeholder-obsidian/40 text-sm tracking-tight focus:outline-none focus:border-surgical-500 focus:ring-1 focus:ring-surgical-500 transition-all duration-200 disabled:opacity-50"
             />
-            <p className="text-xs text-slate-500 mt-2 tracking-tight">
+            <p className="text-xs text-obsidian/60 mt-2 tracking-tight">
               {formData.name.length}/100 characters
             </p>
           </div>
 
           {/* Status (Read-Only) */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 tracking-tight mb-2 uppercase">
+            <label className="block text-xs font-medium text-obsidian/40 tracking-tight mb-2 uppercase">
               Status
             </label>
-            <div className="px-4 py-2 rounded-lg bg-slate-800/30 border border-slate-700/30 text-slate-400 text-sm tracking-tight capitalize flex items-center justify-between">
+            <div className="px-4 py-2 rounded-lg bg-surgical-50 border border-surgical-200 text-obsidian/60 text-sm tracking-tight capitalize flex items-center justify-between">
               <span>{org?.status || 'active'}</span>
-              <span className="text-xs text-slate-500">(managed by support)</span>
+              <span className="text-xs text-obsidian/40">(managed by support)</span>
             </div>
           </div>
 
           {/* Org ID (Read-Only) */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 tracking-tight mb-2 uppercase">
+            <label className="block text-xs font-medium text-obsidian/40 tracking-tight mb-2 uppercase">
               Organization ID
             </label>
-            <div className="px-4 py-2 rounded-lg bg-slate-800/30 border border-slate-700/30 text-slate-400 text-xs tracking-tight font-mono">
+            <div className="px-4 py-2 rounded-lg bg-surgical-50 border border-surgical-200 text-obsidian/60 text-xs tracking-tight font-mono">
               {orgId}
             </div>
           </div>
@@ -185,7 +185,7 @@ export function OrgSettings() {
           <button
             onClick={handleSave}
             disabled={saving || !formData.name.trim()}
-            className="w-full mt-6 px-4 py-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-slate-700 text-slate-50 font-medium text-sm tracking-tight transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-6 px-4 py-2 rounded-lg bg-surgical-600 hover:bg-surgical-700 disabled:bg-surgical-100 text-white font-medium text-sm tracking-tight transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? <Loader className="w-4 h-4 animate-spin" /> : null}
             {saving ? 'Saving...' : 'Save Changes'}

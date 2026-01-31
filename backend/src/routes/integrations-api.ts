@@ -24,7 +24,7 @@ const router = Router();
 router.get('/:provider', requireAuth, async (req: Request, res: Response) => {
   try {
     const { provider } = req.params;
-    const orgId = (req as any).orgId; // Set by requireAuth middleware
+    const orgId = req.user?.orgId; // Set by requireAuth middleware
 
     if (!orgId) {
       return res.status(401).json({ error: 'Missing org context' });

@@ -88,17 +88,17 @@ export default function VapiSetupPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <Settings className="w-8 h-8 text-emerald-600" />
-          <h1 className="text-3xl font-bold text-gray-900">Vapi Webhook Setup</h1>
+          <Settings className="w-8 h-8 text-surgical-600" />
+          <h1 className="text-3xl font-bold text-obsidian">Vapi Webhook Setup</h1>
         </div>
-        <p className="text-gray-600">Configure your Vapi assistant to use the Knowledge Base RAG system</p>
+        <p className="text-obsidian/60">Configure your Vapi assistant to use the Knowledge Base RAG system</p>
       </div>
 
       {/* Status Card */}
       {loading ? (
         <div className="bg-white rounded-lg shadow p-8 flex items-center justify-center gap-3">
-          <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
-          <span className="text-gray-600">Checking Vapi configuration status...</span>
+          <Loader2 className="w-5 h-5 animate-spin text-surgical-600" />
+          <span className="text-obsidian/60">Checking Vapi configuration status...</span>
         </div>
       ) : (
         <>
@@ -106,7 +106,7 @@ export default function VapiSetupPage() {
           <div className="bg-white rounded-lg shadow p-6 mb-6">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-2">Current Status</h2>
+                <h2 className="text-lg font-semibold text-obsidian mb-2">Current Status</h2>
                 <div className="flex items-center gap-2">
                   {status?.configured ? (
                     <>
@@ -115,8 +115,8 @@ export default function VapiSetupPage() {
                     </>
                   ) : (
                     <>
-                      <AlertCircle className="w-5 h-5 text-amber-600" />
-                      <span className="text-amber-700 font-medium">Webhook Not Configured</span>
+                      <AlertCircle className="w-5 h-5 text-red-600" />
+                      <span className="text-red-700 font-medium">Webhook Not Configured</span>
                     </>
                   )}
                 </div>
@@ -126,24 +126,24 @@ export default function VapiSetupPage() {
             {status?.configured && (
               <div className="space-y-3 text-sm">
                 <div>
-                  <label className="text-gray-600 block mb-1">Assistant ID</label>
-                  <code className="bg-gray-100 px-3 py-2 rounded block text-gray-900 font-mono">
+                  <label className="text-obsidian/60 block mb-1">Assistant ID</label>
+                  <code className="bg-surgical-50 px-3 py-2 rounded block text-obsidian font-mono">
                     {status.assistantId}
                   </code>
                 </div>
                 <div>
-                  <label className="text-gray-600 block mb-1">Assistant Name</label>
-                  <p className="text-gray-900">{status.assistantName}</p>
+                  <label className="text-obsidian/60 block mb-1">Assistant Name</label>
+                  <p className="text-obsidian">{status.assistantName}</p>
                 </div>
                 <div>
-                  <label className="text-gray-600 block mb-1">Webhook URL</label>
+                  <label className="text-obsidian/60 block mb-1">Webhook URL</label>
                   <div className="flex gap-2">
-                    <code className="bg-gray-100 px-3 py-2 rounded flex-1 text-gray-900 font-mono text-xs overflow-auto">
+                    <code className="bg-surgical-50 px-3 py-2 rounded flex-1 text-obsidian font-mono text-xs overflow-auto">
                       {status.webhookUrl}
                     </code>
                     <button
                       onClick={copyWebhookUrl}
-                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded transition flex items-center gap-2"
+                      className="px-3 py-2 bg-surgical-100 hover:bg-surgical-50 rounded transition flex items-center gap-2"
                     >
                       {copied ? (
                         <>
@@ -160,16 +160,16 @@ export default function VapiSetupPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-gray-600 block mb-1">System Prompt Updated</label>
-                  <p className="text-gray-900">
-                    {status.systemPromptUpdated ? '✅ Yes' : '❌ No'}
+                  <label className="text-obsidian/60 block mb-1">System Prompt Updated</label>
+                  <p className="text-obsidian">
+                    {status.systemPromptUpdated ? 'Yes' : 'No'}
                   </p>
                 </div>
               </div>
             )}
 
             {!status?.configured && status?.reason && (
-              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
                 {status.reason}
               </div>
             )}
@@ -178,10 +178,10 @@ export default function VapiSetupPage() {
           {/* Configuration Section */}
           {!status?.configured && (
             <div className="bg-white rounded-lg shadow p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Configure Webhook</h2>
+              <h2 className="text-lg font-semibold text-obsidian mb-4">Configure Webhook</h2>
 
-              <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
-                <p className="text-sm text-blue-900">
+              <div className="bg-surgical-50 border border-surgical-200 rounded p-4 mb-6">
+                <p className="text-sm text-obsidian/70">
                   <strong>What this does:</strong> Configures your Vapi assistant to call the Knowledge Base RAG webhook before generating responses. This enables the AI to use your uploaded documents to answer questions accurately.
                 </p>
               </div>
@@ -189,7 +189,7 @@ export default function VapiSetupPage() {
               <button
                 onClick={handleConfigureWebhook}
                 disabled={configuring}
-                className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+                className="w-full px-6 py-3 bg-surgical-600 hover:bg-surgical-700 disabled:bg-surgical-100 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
               >
                 {configuring ? (
                   <>
@@ -211,8 +211,8 @@ export default function VapiSetupPage() {
             <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-medium text-green-900">Success!</h3>
-                <p className="text-sm text-green-800 mt-1">{success}</p>
+                <h3 className="font-medium text-green-700">Success!</h3>
+                <p className="text-sm text-green-700 mt-1">{success}</p>
               </div>
             </div>
           )}
@@ -222,54 +222,54 @@ export default function VapiSetupPage() {
             <div className="bg-red-50 border border-red-200 rounded p-4 mb-6 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-medium text-red-900">Error</h3>
-                <p className="text-sm text-red-800 mt-1">{error}</p>
+                <h3 className="font-medium text-red-700">Error</h3>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
               </div>
             </div>
           )}
 
           {/* How It Works */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">How It Works</h2>
+            <h2 className="text-lg font-semibold text-obsidian mb-4">How It Works</h2>
 
             <div className="space-y-4">
               <div className="flex gap-4">
-                <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-semibold">
+                <div className="flex-shrink-0 w-8 h-8 bg-surgical-50 rounded-full flex items-center justify-center text-surgical-600 font-semibold">
                   1
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">Upload Documents</h3>
-                  <p className="text-sm text-gray-600 mt-1">Go to Knowledge Base and upload your documents (pricing, services, objections, etc.)</p>
+                  <h3 className="font-medium text-obsidian">Upload Documents</h3>
+                  <p className="text-sm text-obsidian/60 mt-1">Go to Knowledge Base and upload your documents (pricing, services, objections, etc.)</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-semibold">
+                <div className="flex-shrink-0 w-8 h-8 bg-surgical-50 rounded-full flex items-center justify-center text-surgical-600 font-semibold">
                   2
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">Auto-Chunk & Embed</h3>
-                  <p className="text-sm text-gray-600 mt-1">Documents are automatically chunked and embedded into vectors for semantic search</p>
+                  <h3 className="font-medium text-obsidian">Auto-Chunk & Embed</h3>
+                  <p className="text-sm text-obsidian/60 mt-1">Documents are automatically chunked and embedded into vectors for semantic search</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-semibold">
+                <div className="flex-shrink-0 w-8 h-8 bg-surgical-50 rounded-full flex items-center justify-center text-surgical-600 font-semibold">
                   3
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">Configure Webhook</h3>
-                  <p className="text-sm text-gray-600 mt-1">Click the button above to configure Vapi to use the RAG webhook</p>
+                  <h3 className="font-medium text-obsidian">Configure Webhook</h3>
+                  <p className="text-sm text-obsidian/60 mt-1">Click the button above to configure Vapi to use the RAG webhook</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-semibold">
+                <div className="flex-shrink-0 w-8 h-8 bg-surgical-50 rounded-full flex items-center justify-center text-surgical-600 font-semibold">
                   4
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">AI Uses Knowledge Base</h3>
-                  <p className="text-sm text-gray-600 mt-1">When customers call, Vapi retrieves relevant chunks and uses them to answer questions accurately</p>
+                  <h3 className="font-medium text-obsidian">AI Uses Knowledge Base</h3>
+                  <p className="text-sm text-obsidian/60 mt-1">When customers call, Vapi retrieves relevant chunks and uses them to answer questions accurately</p>
                 </div>
               </div>
             </div>

@@ -61,11 +61,18 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
     const body = req.body;
     const message = body.message;
 
-    // DEBUG
-    log.info('Vapi-Webhook', 'Received webhook', { 
-      messageType: body.messageType, 
+    // DEBUG - Log COMPLETE webhook payload
+    log.info('Vapi-Webhook', 'RAW WEBHOOK PAYLOAD:', JSON.stringify(body, null, 2));
+
+    // DEBUG - Log ALL webhook types
+    log.info('Vapi-Webhook', 'Received webhook', {
+      bodyMessageType: body.messageType,
+      messageType: message?.type,
+      hasMessage: !!message,
       hasToolCall: !!body.toolCall,
-      toolName: body.toolCall?.function?.name 
+      toolName: body.toolCall?.function?.name,
+      callId: message?.call?.id,
+      webhookKeys: Object.keys(body)
     });
 
     // 2a. Handle Tool Calls (bookClinicAppointment)
@@ -203,9 +210,106 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
     // 2. Handle End-of-Call Report (Analytics)
     if (message && message.type === 'end-of-call-report') {
-      log.info('Vapi-Webhook', 'Received End-of-Call Report', { callId: message.call?.id });
+      const call = message.call;
+      const artifact = message.artifact;
+      const analysis = message.analysis;
 
-      // Async Hook: Process analytics in background
+      log.info('Vapi-Webhook', '📞 END-OF-CALL RECEIVED', {
+        callId: call?.id,
+        customer: call?.customer?.number,
+        duration: call?.duration,
+        hasSummary: !!analysis?.summary,
+        hasTranscript: !!artifact?.transcript,
+        hasRecording: !!artifact?.recording
+      });
+
+      // 1. Resolve org_id from assistant
+      let orgId: string | null = null;
+      const assistantId = call?.assistantId || body.assistantId;
+
+      log.info('Vapi-Webhook', 'Looking up agent', {
+        assistantId,
+        hasCallAssistantId: !!call?.assistantId,
+        hasBodyAssistantId: !!body.assistantId
+      });
+
+      if (assistantId) {
+        const { data: agent, error: agentError } = await supabase
+          .from('agents')
+          .select('org_id')
+          .eq('vapi_assistant_id', assistantId)
+          .maybeSingle();
+
+        if (agentError) {
+          log.error('Vapi-Webhook', 'Agent lookup error', {
+            error: agentError.message,
+            assistantId
+          });
+        }
+
+        log.info('Vapi-Webhook', 'Agent lookup result', {
+          foundAgent: !!agent,
+          orgId: agent?.org_id
+        });
+
+        orgId = agent?.org_id || null;
+      }
+
+      if (!orgId) {
+        log.error('Vapi-Webhook', 'Cannot resolve org_id for call', {
+          callId: call?.id,
+          assistantId
+        });
+        return res.json({ success: true, received: true });
+      }
+
+      // 2. Upsert call_logs entry (creates if not exists, updates if exists)
+      const { error: upsertError } = await supabase
+        .from('call_logs')
+        .upsert({
+          vapi_call_id: call?.id,
+          call_sid: `vapi-${call?.id}`, // Placeholder for Vapi calls (no Twilio SID)
+          org_id: orgId,
+          from_number: call?.customer?.number || null,
+          duration_seconds: Math.round(message.durationSeconds || 0),
+          status: 'completed',
+          outcome: 'completed',
+          outcome_summary: analysis?.summary || null,
+          transcript: artifact?.transcript || null,
+          recording_url: typeof artifact?.recordingUrl === 'string'
+            ? artifact.recordingUrl
+            : null,
+          call_type: 'inbound',
+          total_cost: message.cost || 0,
+          started_at: message.startedAt || new Date().toISOString(),
+          ended_at: message.endedAt || new Date().toISOString(),
+          sentiment: analysis?.sentiment || null,
+          metadata: {
+            source: 'vapi-webhook-handler',
+            endedReason: message.endedReason,
+            successEvaluation: analysis?.successEvaluation
+          }
+        }, { onConflict: 'vapi_call_id' });
+
+      if (upsertError) {
+        log.error('Vapi-Webhook', 'Failed to upsert call_logs', {
+          error: upsertError.message,
+          callId: call?.id
+        });
+      } else {
+        log.info('Vapi-Webhook', '✅ Call logged to call_logs', {
+          callId: call?.id,
+          orgId
+        });
+
+        // Broadcast to dashboard via WebSocket
+        try {
+          const { wsBroadcast } = await import('../services/websocket');
+          wsBroadcast(orgId, { type: 'call_ended', callId: call?.id });
+        } catch (e) { /* non-critical */ }
+      }
+
+      // Also run analytics (existing behavior)
       AnalyticsService.processEndOfCall(message);
 
       return res.json({ success: true, received: true });

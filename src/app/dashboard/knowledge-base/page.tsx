@@ -266,8 +266,8 @@ export default function KnowledgeBasePage() {
 
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+      <div className="min-h-screen bg-surgical-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-surgical-500 animate-spin" />
       </div>
     );
   }
@@ -279,23 +279,23 @@ export default function KnowledgeBasePage() {
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <BookOpen className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+          <h1 className="text-3xl font-bold text-obsidian flex items-center gap-3">
+            <BookOpen className="w-8 h-8 text-surgical-600" />
             Knowledge Base
           </h1>
-          <p className="text-gray-600 dark:text-slate-400 mt-2">Upload documents that your AI assistant will use to answer customer questions.</p>
+          <p className="text-obsidian/60 mt-2">Upload documents that your AI assistant will use to answer customer questions.</p>
         </div>
 
         {/* Messages */}
         {error && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 flex items-center gap-3">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-200 flex items-center gap-3">
+          <div className="p-4 bg-surgical-50 border border-surgical-200 rounded-lg text-surgical-600 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
             <span>{success}</span>
           </div>
@@ -306,13 +306,13 @@ export default function KnowledgeBasePage() {
           <button
             onClick={seedBeverly}
             disabled={isSaving}
-            className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition text-left"
+            className="p-4 bg-white border border-surgical-200 rounded-lg hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-left"
           >
             <div className="flex items-center gap-3">
-              {isSaving ? <Loader2 className="w-6 h-6 text-purple-600 dark:text-purple-400 flex-shrink-0 animate-spin" /> : <Sparkles className="w-6 h-6 text-purple-600 dark:text-purple-400 flex-shrink-0" />}
+              {isSaving ? <Loader2 className="w-6 h-6 text-surgical-600 flex-shrink-0 animate-spin" /> : <Sparkles className="w-6 h-6 text-surgical-600 flex-shrink-0" />}
               <div>
-                <div className="font-semibold text-gray-900 dark:text-purple-100">Load Sample KB</div>
-                <div className="text-sm text-gray-600 dark:text-purple-300">Get started with examples</div>
+                <div className="font-semibold text-obsidian">Load Sample KB</div>
+                <div className="text-sm text-obsidian/60">Get started with examples</div>
               </div>
             </div>
           </button>
@@ -320,13 +320,13 @@ export default function KnowledgeBasePage() {
           <button
             onClick={syncToBoth}
             disabled={isSaving || items.length === 0}
-            className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition text-left"
+            className="p-4 bg-white border border-surgical-200 rounded-lg hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-left"
           >
             <div className="flex items-center gap-3">
-              {isSaving ? <Loader2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0 animate-spin" /> : <CloudUpload className="w-6 h-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />}
+              {isSaving ? <Loader2 className="w-6 h-6 text-surgical-600 flex-shrink-0 animate-spin" /> : <CloudUpload className="w-6 h-6 text-surgical-600 flex-shrink-0" />}
               <div>
-                <div className="font-semibold text-gray-900 dark:text-emerald-100">Sync to AI</div>
-                <div className="text-sm text-gray-600 dark:text-emerald-300">Send to your assistants</div>
+                <div className="font-semibold text-obsidian">Sync to AI</div>
+                <div className="text-sm text-obsidian/60">Send to your assistants</div>
               </div>
             </div>
           </button>
@@ -334,13 +334,13 @@ export default function KnowledgeBasePage() {
           <button
             onClick={loadItems}
             disabled={isSaving}
-            className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition text-left"
+            className="p-4 bg-white border border-surgical-200 rounded-lg hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-left"
           >
             <div className="flex items-center gap-3">
-              {isSaving ? <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-spin" /> : <RefreshCw className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+              {isSaving ? <Loader2 className="w-6 h-6 text-surgical-600 flex-shrink-0 animate-spin" /> : <RefreshCw className="w-6 h-6 text-surgical-600 flex-shrink-0" />}
               <div>
-                <div className="font-semibold text-gray-900 dark:text-blue-100">Refresh</div>
-                <div className="text-sm text-gray-600 dark:text-blue-300">Reload documents</div>
+                <div className="font-semibold text-obsidian">Refresh</div>
+                <div className="text-sm text-obsidian/60">Reload documents</div>
               </div>
             </div>
           </button>
@@ -349,44 +349,44 @@ export default function KnowledgeBasePage() {
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Documents List */}
-          <div className="lg:col-span-1 glass-panel rounded-xl shadow-sm">
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+          <div className="lg:col-span-1 bg-white border border-surgical-200 rounded-xl shadow-sm">
+            <div className="p-6 border-b border-surgical-200">
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-gray-900 dark:text-white">Your Documents</h2>
+                <h2 className="font-semibold text-obsidian">Your Documents</h2>
                 <button
                   onClick={beginNew}
-                  className="px-3 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium flex items-center gap-2"
+                  className="px-3 py-1 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 text-sm font-medium flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Add
                 </button>
               </div>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">{items.length} document{items.length !== 1 ? 's' : ''}</p>
+              <p className="text-sm text-obsidian/60 mt-1">{items.length} document{items.length !== 1 ? 's' : ''}</p>
             </div>
-            <div className="divide-y divide-gray-100 dark:divide-slate-800 max-h-[500px] overflow-y-auto">
+            <div className="divide-y divide-surgical-200 max-h-[500px] overflow-y-auto">
               {items.length === 0 ? (
-                <div className="p-6 text-center text-gray-500 dark:text-slate-500">
+                <div className="p-6 text-center text-obsidian/60">
                   <p>No documents yet.</p>
-                  <p className="text-sm mt-1">Click "Add" or "Load Sample KB" to get started.</p>
+                  <p className="text-sm mt-1">Click &quot;Add&quot; or &quot;Load Sample KB&quot; to get started.</p>
                 </div>
               ) : (
                 items.map((item) => (
-                  <div key={item.id} className="p-4 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition">
+                  <div key={item.id} className="p-4 hover:bg-surgical-50 transition">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <button
                           onClick={() => beginEdit(item)}
-                          className="font-medium text-gray-900 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 truncate text-left"
+                          className="font-medium text-obsidian hover:text-surgical-600 truncate text-left"
                         >
                           {item.filename}
                         </button>
-                        <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                        <div className="text-xs text-obsidian/60 mt-1">
                           {item.category} · v{item.version} {item.active ? '✓' : '○'}
                         </div>
                       </div>
                       <button
                         onClick={() => remove(item.id)}
-                        className="p-1 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 flex-shrink-0"
+                        className="p-1 text-obsidian/40 hover:text-red-600 flex-shrink-0"
                         title="Delete"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -399,20 +399,20 @@ export default function KnowledgeBasePage() {
           </div>
 
           {/* Editor */}
-          <div className="lg:col-span-2 glass-panel rounded-xl shadow-sm flex flex-col h-fit">
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
-              <h2 className="font-semibold text-gray-900 dark:text-white">
+          <div className="lg:col-span-2 bg-white border border-surgical-200 rounded-xl shadow-sm flex flex-col h-fit">
+            <div className="p-6 border-b border-surgical-200 flex-shrink-0">
+              <h2 className="font-semibold text-obsidian">
                 {draft.id ? `Edit: ${draft.filename || 'Untitled'}` : 'Add New Document'}
               </h2>
             </div>
             <div className="p-6 space-y-4 flex-1 overflow-y-auto">
               <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-slate-200 mb-2">Upload File or Enter Text</label>
+                <label className="block text-sm font-semibold text-obsidian mb-2">Upload File or Enter Text</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isSaving}
-                    className="flex-1 px-4 py-2 border-2 border-dashed border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:opacity-50 text-emerald-700 dark:text-emerald-400 font-medium flex items-center justify-center gap-2 transition"
+                    className="flex-1 px-4 py-2 border-2 border-dashed border-surgical-300 bg-surgical-50 rounded-lg hover:bg-surgical-100 disabled:opacity-50 text-surgical-600 font-medium flex items-center justify-center gap-2 transition"
                   >
                     <Upload className="w-4 h-4" />
                     {uploadProgress > 0 ? `${uploadProgress}%` : 'Upload File'}
@@ -426,28 +426,28 @@ export default function KnowledgeBasePage() {
                     className="hidden"
                   />
                 </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Supports: TXT, Markdown (max 5MB)</p>
+                <p className="text-xs text-obsidian/60 mt-1">Supports: TXT, Markdown (max 5MB)</p>
               </div>
 
               <div>
-                <label htmlFor="kb-filename" className="block text-sm font-semibold text-gray-900 dark:text-slate-200 mb-2">Document Name</label>
+                <label htmlFor="kb-filename" className="block text-sm font-semibold text-obsidian mb-2">Document Name</label>
                 <input
                   id="kb-filename"
                   value={draft.filename}
                   onChange={(e) => setDraft((p) => ({ ...p, filename: e.target.value }))}
                   placeholder="e.g., pricing.md"
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-2 rounded-lg border border-surgical-200 bg-white text-obsidian placeholder-obsidian/40 focus:ring-2 focus:ring-surgical-500 focus:border-transparent outline-none"
                 />
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Auto-filled from uploaded file</p>
+                <p className="text-xs text-obsidian/60 mt-1">Auto-filled from uploaded file</p>
               </div>
 
               <div>
-                <label htmlFor="kb-category" className="block text-sm font-semibold text-gray-900 dark:text-slate-200 mb-2">Category</label>
+                <label htmlFor="kb-category" className="block text-sm font-semibold text-obsidian mb-2">Category</label>
                 <select
                   id="kb-category"
                   value={draft.category}
                   onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-2 rounded-lg border border-surgical-200 bg-white text-obsidian focus:ring-2 focus:ring-surgical-500 focus:border-transparent outline-none"
                 >
                   <option value="products_services">Products & Services</option>
                   <option value="operations">Operations</option>
@@ -457,25 +457,25 @@ export default function KnowledgeBasePage() {
               </div>
 
               <div>
-                <label htmlFor="kb-content" className="block text-sm font-semibold text-gray-900 dark:text-slate-200 mb-2">Content</label>
+                <label htmlFor="kb-content" className="block text-sm font-semibold text-obsidian mb-2">Content</label>
                 <textarea
                   id="kb-content"
                   value={draft.content}
                   onChange={(e) => setDraft((p) => ({ ...p, content: e.target.value }))}
                   placeholder="Paste your content here. Markdown is supported."
-                  className="w-full h-40 px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 font-mono text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none outline-none"
+                  className="w-full h-40 px-4 py-2 rounded-lg border border-surgical-200 bg-white text-obsidian placeholder-obsidian/40 font-mono text-sm focus:ring-2 focus:ring-surgical-500 focus:border-transparent resize-none outline-none"
                 />
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Max 300KB per document</p>
+                <p className="text-xs text-obsidian/60 mt-1">Max 300KB per document</p>
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between gap-4 flex-shrink-0 bg-gray-50 dark:bg-slate-900/50 rounded-b-xl">
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-6 border-t border-surgical-200 flex items-center justify-between gap-4 flex-shrink-0 bg-white rounded-b-xl">
+              <label className="flex items-center gap-2 text-sm text-obsidian/60">
                 <input
                   type="checkbox"
                   checked={draft.active}
                   onChange={(e) => setDraft((p) => ({ ...p, active: e.target.checked }))}
-                  className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+                  className="w-4 h-4 rounded border-surgical-200 bg-white"
                 />
                 <span>Active (AI can use this)</span>
               </label>
@@ -483,7 +483,7 @@ export default function KnowledgeBasePage() {
               <button
                 onClick={save}
                 disabled={isSaving || !draft.filename.trim() || !draft.content.trim()}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition flex-shrink-0"
+                className="px-6 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition flex-shrink-0"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {draft.id ? 'Update' : 'Create'}

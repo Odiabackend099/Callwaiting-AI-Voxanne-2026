@@ -31,7 +31,7 @@ interface VoiceSelectorProps {
  * Features:
  * - Simple mode: Basic dropdown (default for non-technical users)
  * - Advanced mode: Search, filter, categorized by provider
- * - Responsive design with dark mode support
+ * - Responsive design with light mode styling
  * - Voice metadata display (characteristics, accent, best for)
  * - Clear "API Key Required" badges for premium voices
  * - Mobile-friendly interface
@@ -97,12 +97,12 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
     <div className={`space-y-4 ${className}`}>
       {/* Header with Mode Toggle */}
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label className="block text-sm font-medium text-gray-700">
           Voice Persona
         </label>
         <button
           onClick={() => setSimpleMode(!simpleMode)}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+          className="text-xs text-blue-600 hover:underline transition-colors"
         >
           {simpleMode ? 'Show Advanced' : 'Show Simple'}
         </button>
@@ -116,7 +116,7 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
             const voice = voices.find(v => v.id === e.target.value);
             if (voice) onSelect(voice.id, voice.provider);
           }}
-          className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+          className="w-full px-3 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
         >
           <option value="">Select a voice...</option>
           {voices.map(v => (
@@ -136,7 +136,7 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search voices by name, characteristics, or accent..."
-              className="w-full pl-10 pr-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="w-full pl-10 pr-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
           </div>
 
@@ -145,7 +145,7 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
             <select
               value={providerFilter}
               onChange={(e) => setProviderFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             >
               <option value="all">All Providers</option>
               {providers.map(p => (
@@ -158,7 +158,7 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
             <select
               value={genderFilter}
               onChange={(e) => setGenderFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             >
               <option value="all">All Genders</option>
               <option value="male">Male</option>
@@ -168,22 +168,22 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
           </div>
 
           {/* Grouped Voice List */}
-          <div className="max-h-96 overflow-y-auto space-y-2 border border-gray-300 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-900">
+          <div className="max-h-96 overflow-y-auto space-y-2 border border-gray-300 rounded-lg p-2 bg-gray-50">
             {Object.entries(groupedVoices).length > 0 ? (
               Object.entries(groupedVoices).map(([provider, providerVoices]) => (
-                <div key={provider} className="border-b border-gray-200 dark:border-gray-700 last:border-0">
+                <div key={provider} className="border-b border-gray-200 last:border-0">
                   {/* Provider Collapsible Header */}
                   <button
                     onClick={() => toggleProvider(provider)}
-                    className="w-full flex items-center justify-between p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors text-left"
+                    className="w-full flex items-center justify-between p-2 hover:bg-gray-200 rounded-lg transition-colors text-left"
                   >
-                    <span className="font-medium text-gray-900 dark:text-white capitalize">
+                    <span className="font-medium text-gray-900 capitalize">
                       {provider} ({providerVoices.length})
                     </span>
                     {expandedProviders.has(provider) ? (
-                      <ChevronUp className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                      <ChevronUp className="w-4 h-4 text-gray-500" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                      <ChevronDown className="w-4 h-4 text-gray-500" />
                     )}
                   </button>
 
@@ -196,43 +196,43 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
                           onClick={() => onSelect(v.id, v.provider)}
                           className={`w-full text-left p-3 rounded-lg border-2 transition-all hover:shadow-md ${
                             selected === v.id
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
                           }`}
                         >
                           <div className="flex items-start gap-2">
-                            <Volume2 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${selected === v.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                            <Volume2 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${selected === v.id ? 'text-blue-600' : 'text-gray-400'}`} />
                             <div className="flex-1 min-w-0">
                               {/* Voice Name with Badges */}
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="font-medium text-gray-900 dark:text-white truncate">
+                                <span className="font-medium text-gray-900 truncate">
                                   {v.name}
                                 </span>
                                 {v.isDefault && (
-                                  <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full whitespace-nowrap">
+                                  <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full whitespace-nowrap">
                                     Default
                                   </span>
                                 )}
                                 {v.requiresApiKey && (
-                                  <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full whitespace-nowrap">
+                                  <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full whitespace-nowrap">
                                     API Key
                                   </span>
                                 )}
                               </div>
 
                               {/* Characteristics */}
-                              <div className="text-xs text-gray-600 dark:text-gray-400">
+                              <div className="text-xs text-gray-600">
                                 {v.characteristics}
                                 {v.accent && ` • ${v.accent}`}
                               </div>
 
                               {/* Best For */}
-                              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                              <div className="text-xs text-gray-500 mt-1">
                                 {v.bestFor && `Best for: ${v.bestFor}`}
                               </div>
 
                               {/* Latency & Quality */}
-                              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                              <div className="text-xs text-gray-500 mt-1">
                                 Latency: {v.latency} • Quality: {v.quality}
                               </div>
                             </div>
@@ -246,8 +246,8 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
             ) : (
               /* Empty State */
               <div className="text-center py-8">
-                <Info className="w-8 h-8 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <Info className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm text-gray-500">
                   No voices found matching your filters
                 </p>
               </div>
@@ -257,7 +257,7 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
       )}
 
       {/* Helper Text */}
-      <p className="text-xs text-gray-500 dark:text-gray-400">
+      <p className="text-xs text-gray-500">
         {filteredVoices.length} voice{filteredVoices.length !== 1 ? 's' : ''} available
         {search && ` (filtered from ${voices.length} total)`}
       </p>

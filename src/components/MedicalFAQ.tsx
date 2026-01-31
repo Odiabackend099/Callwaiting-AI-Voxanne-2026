@@ -20,7 +20,7 @@ const faqData: FAQCategory[] = [
         title: "Medical Compliance & Security",
         icon: ShieldCheck,
         items: [
-            { question: "Is Voxanne AI HIPAA compliant?", answer: "Yes, Voxanne AI is built with enterprise-grade security and is fully HIPAA compliant. We sign a BAA (Business Associate Agreement) with every medical practice." },
+            { question: "Is Voxanne AI compliant with data protection regulations?", answer: "Yes, Voxanne AI is built with enterprise-grade security and is fully UK GDPR and HIPAA compliant. We provide DPAs (Data Processing Agreements) for UK/EU customers and sign BAAs (Business Associate Agreements) with US healthcare practices." },
             { question: "Does she store patient data?", answer: "Voxanne AI only temporarily processes data needed for booking (name, reason for visit). All data is encrypted in transit and at rest, adhering to strict privacy standards." },
             { question: "Can she handle medical emergencies?", answer: "Voxanne AI is trained to recognize emergency keywords (e.g., 'bleeding', 'pain', 'breathing'). She immediately routes these calls to your emergency line or instructs the patient to hang up and dial 911/999." },
             { question: "What about liability if she makes a mistake?", answer: "Voxanne AI operates within your strict guardrails. If she is unsure, she executes a 'Human Escalation Protocol' to transfer the call or take a message. All calls are recorded for your review and liability protection." }

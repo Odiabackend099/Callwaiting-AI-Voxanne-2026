@@ -184,30 +184,30 @@ const AppointmentsDashboardContent = () => {
     const getStatusBadgeColor = (status: string) => {
         switch (status) {
             case 'pending':
-                return 'bg-blue-50 text-blue-700 border-blue-200';
+                return 'bg-surgical-50 text-surgical-600 border-surgical-200';
             case 'confirmed':
                 return 'bg-green-50 text-green-700 border-green-200';
             case 'completed':
-                return 'bg-gray-50 text-gray-700 border-gray-200';
+                return 'bg-surgical-50 text-obsidian/60 border-surgical-200';
             case 'cancelled':
                 return 'bg-red-50 text-red-700 border-red-200';
             default:
-                return 'bg-gray-50 text-gray-700 border-gray-200';
+                return 'bg-surgical-50 text-obsidian/60 border-surgical-200';
         }
     };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'pending':
-                return '⏳';
+                return '';
             case 'confirmed':
-                return '✅';
+                return '';
             case 'completed':
-                return '🏁';
+                return '';
             case 'cancelled':
-                return '❌';
+                return '';
             default:
-                return '•';
+                return '';
         }
     };
 
@@ -215,10 +215,10 @@ const AppointmentsDashboardContent = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-surgical-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading...</p>
+                    <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+                    <p className="text-obsidian/60">Loading...</p>
                 </div>
             </div>
         );
@@ -231,13 +231,13 @@ const AppointmentsDashboardContent = () => {
             <div className="max-w-7xl mx-auto px-6 py-8">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-50 mb-2">Appointments</h1>
-                    <p className="text-gray-600 dark:text-slate-400">Manage and track all scheduled appointments</p>
+                    <h1 className="text-4xl font-bold text-obsidian mb-2">Appointments</h1>
+                    <p className="text-obsidian/60">Manage and track all scheduled appointments</p>
                 </div>
 
                 {/* Error Message */}
                 {error && (
-                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg text-red-700 dark:text-red-400 text-sm">
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                         {error}
                     </div>
                 )}
@@ -245,7 +245,7 @@ const AppointmentsDashboardContent = () => {
                 {/* Filters */}
                 <div className="mb-6 flex gap-4 flex-wrap">
                     <div className="flex-1 min-w-64 relative">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-obsidian/40" />
                         <input
                             type="text"
                             placeholder="Search by contact name or phone..."
@@ -254,7 +254,7 @@ const AppointmentsDashboardContent = () => {
                                 setSearchQuery(e.target.value);
                                 setCurrentPage(1);
                             }}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="w-full pl-10 pr-4 py-2 border border-surgical-200 rounded-lg text-sm bg-white text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-500"
                         />
                     </div>
 
@@ -264,7 +264,7 @@ const AppointmentsDashboardContent = () => {
                             setFilterStatus(e.target.value);
                             setCurrentPage(1);
                         }}
-                        className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="px-4 py-2 border border-surgical-200 rounded-lg text-sm bg-white text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-500"
                     >
                         <option value="">All Status</option>
                         <option value="pending">Pending</option>
@@ -279,7 +279,7 @@ const AppointmentsDashboardContent = () => {
                             setFilterDate(e.target.value);
                             setCurrentPage(1);
                         }}
-                        className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="px-4 py-2 border border-surgical-200 rounded-lg text-sm bg-white text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-500"
                     >
                         <option value="">All Time</option>
                         <option value="week">This Week</option>
@@ -288,70 +288,70 @@ const AppointmentsDashboardContent = () => {
 
                     <button
                         onClick={() => fetchAppointments()}
-                        className="p-2 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                        className="p-2 border border-surgical-200 rounded-lg hover:bg-surgical-50 transition-colors"
                         title="Refresh"
                     >
-                        <RotateCw className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                        <RotateCw className="w-4 h-4 text-obsidian/60" />
                     </button>
                 </div>
 
                 {/* Appointments List */}
-                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm dark:shadow-lg">
+                <div className="bg-white border border-surgical-200 rounded-2xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                            <thead className="bg-surgical-50 border-b border-surgical-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Date & Time</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Service</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Contact</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Duration</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Status</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Actions</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Date & Time</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Service</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Contact</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Duration</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Status</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                            <tbody className="divide-y divide-surgical-200">
                                 {isLoading ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-3">
-                                                <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                                                <p className="text-gray-600 dark:text-slate-400">Loading appointments...</p>
+                                                <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+                                                <p className="text-obsidian/60">Loading appointments...</p>
                                             </div>
                                         </td>
                                     </tr>
                                 ) : appointments.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-12 text-center">
-                                            <Calendar className="w-12 h-12 text-gray-300 dark:text-slate-700 mx-auto mb-4" />
-                                            <p className="text-gray-600 dark:text-slate-400">No appointments scheduled</p>
+                                            <Calendar className="w-12 h-12 text-obsidian/40 mx-auto mb-4" />
+                                            <p className="text-obsidian/60">No appointments scheduled</p>
                                         </td>
                                     </tr>
                                 ) : (
                                     appointments.map((apt) => (
                                         <tr
                                             key={apt.id}
-                                            className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                                            className="hover:bg-surgical-50 transition-colors cursor-pointer"
                                             onClick={() => fetchAppointmentDetail(apt.id)}
                                         >
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-slate-200 font-medium">
-                                                    <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                                                <div className="flex items-center gap-2 text-sm text-obsidian font-medium">
+                                                    <Calendar className="w-4 h-4 text-obsidian/40" />
                                                     {formatDateTime(apt.scheduled_time)}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm font-medium text-gray-900 dark:text-slate-200">{apt.service_type}</span>
+                                                <span className="text-sm font-medium text-obsidian">{apt.service_type}</span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900 dark:text-slate-200">{apt.contact_name}</div>
-                                                <div className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1">
+                                                <div className="text-sm font-medium text-obsidian">{apt.contact_name}</div>
+                                                <div className="text-xs text-obsidian/60 flex items-center gap-1">
                                                     <Phone className="w-3 h-3" />
                                                     {apt.phone_number}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-slate-200 font-medium">
-                                                    <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                                                <div className="flex items-center gap-2 text-sm text-obsidian font-medium">
+                                                    <Clock className="w-4 h-4 text-obsidian/40" />
                                                     {apt.duration_minutes} min
                                                 </div>
                                             </td>
@@ -367,10 +367,10 @@ const AppointmentsDashboardContent = () => {
                                                         e.stopPropagation();
                                                         fetchAppointmentDetail(apt.id);
                                                     }}
-                                                    className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                                                    className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
                                                     title="Edit"
                                                 >
-                                                    <Edit2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                    <Edit2 className="w-4 h-4 text-surgical-600" />
                                                 </button>
                                             </td>
                                         </tr>
@@ -382,15 +382,15 @@ const AppointmentsDashboardContent = () => {
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-800 flex items-center justify-between">
-                            <div className="text-sm text-gray-700 dark:text-slate-400">
+                        <div className="px-6 py-4 border-t border-surgical-200 flex items-center justify-between">
+                            <div className="text-sm text-obsidian/60">
                                 Showing {(currentPage - 1) * appointmentsPerPage + 1} to {Math.min(currentPage * appointmentsPerPage, totalAppointments)} of {totalAppointments} appointments
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
-                                    className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                    className="px-3 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/60 hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                     Previous
@@ -412,8 +412,8 @@ const AppointmentsDashboardContent = () => {
                                                 key={pageNum}
                                                 onClick={() => setCurrentPage(pageNum)}
                                                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum
-                                                    ? 'bg-emerald-600 text-white'
-                                                    : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                                                    ? 'bg-surgical-600 text-white'
+                                                    : 'border border-surgical-200 text-obsidian/60 hover:bg-surgical-50'
                                                     }`}
                                             >
                                                 {pageNum}
@@ -424,7 +424,7 @@ const AppointmentsDashboardContent = () => {
                                 <button
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
-                                    className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                    className="px-3 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/60 hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
                                 >
                                     Next
                                     <ChevronRight className="w-4 h-4" />
@@ -440,18 +440,18 @@ const AppointmentsDashboardContent = () => {
                 {
                     showDetailModal && selectedAppointment && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl dark:shadow-2xl">
+                            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
                                 {/* Modal Header */}
-                                <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between">
+                                <div className="sticky top-0 bg-white border-b border-surgical-200 px-6 py-4 flex items-center justify-between">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-50">{selectedAppointment.contact_name}</h2>
-                                        <p className="text-sm text-gray-600 dark:text-slate-400">{selectedAppointment.service_type}</p>
+                                        <h2 className="text-2xl font-bold text-obsidian">{selectedAppointment.contact_name}</h2>
+                                        <p className="text-sm text-obsidian/60">{selectedAppointment.service_type}</p>
                                     </div>
                                     <button
                                         onClick={() => setShowDetailModal(false)}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                        className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
                                     >
-                                        <X className="w-6 h-6 text-gray-600 dark:text-slate-400" />
+                                        <X className="w-6 h-6 text-obsidian/60" />
                                     </button>
                                 </div>
 
@@ -460,38 +460,38 @@ const AppointmentsDashboardContent = () => {
                                     {/* Appointment Details */}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase mb-1">Scheduled Time</p>
-                                            <p className="text-lg font-bold text-gray-900 dark:text-slate-50">{formatDateTime(selectedAppointment.scheduled_time)}</p>
+                                            <p className="text-xs text-obsidian/60 font-medium uppercase mb-1">Scheduled Time</p>
+                                            <p className="text-lg font-bold text-obsidian">{formatDateTime(selectedAppointment.scheduled_time)}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase mb-1">Duration</p>
-                                            <p className="text-lg font-bold text-gray-900 dark:text-slate-50">{selectedAppointment.duration_minutes} minutes</p>
+                                            <p className="text-xs text-obsidian/60 font-medium uppercase mb-1">Duration</p>
+                                            <p className="text-lg font-bold text-obsidian">{selectedAppointment.duration_minutes} minutes</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase mb-1">Status</p>
+                                            <p className="text-xs text-obsidian/60 font-medium uppercase mb-1">Status</p>
                                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${getStatusBadgeColor(selectedAppointment.status)}`}>
                                                 {getStatusIcon(selectedAppointment.status)}
                                                 {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
                                             </span>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-gray-600 dark:text-slate-400 font-medium uppercase mb-1">Type</p>
-                                            <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{selectedAppointment.is_virtual ? 'Virtual' : 'In-Person'}</p>
+                                            <p className="text-xs text-obsidian/60 font-medium uppercase mb-1">Type</p>
+                                            <p className="text-sm font-medium text-obsidian">{selectedAppointment.is_virtual ? 'Virtual' : 'In-Person'}</p>
                                         </div>
                                     </div>
 
                                     {/* Contact Information */}
-                                    <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-                                        <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-3">Contact Information</p>
+                                    <div className="bg-surgical-50 rounded-lg p-4">
+                                        <p className="text-sm font-bold text-obsidian mb-3">Contact Information</p>
                                         <div className="space-y-2">
                                             <div className="flex items-center gap-2">
-                                                <Phone className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                                                <span className="text-sm text-gray-900 dark:text-slate-200">{selectedAppointment.phone_number}</span>
+                                                <Phone className="w-4 h-4 text-obsidian/40" />
+                                                <span className="text-sm text-obsidian">{selectedAppointment.phone_number}</span>
                                             </div>
                                             {selectedAppointment.location && (
                                                 <div className="flex items-start gap-2">
-                                                    <AlertCircle className="w-4 h-4 text-gray-400 dark:text-slate-500 mt-0.5" />
-                                                    <span className="text-sm text-gray-900 dark:text-slate-200">{selectedAppointment.location}</span>
+                                                    <AlertCircle className="w-4 h-4 text-obsidian/40 mt-0.5" />
+                                                    <span className="text-sm text-obsidian">{selectedAppointment.location}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -499,35 +499,35 @@ const AppointmentsDashboardContent = () => {
 
                                     {/* Notes */}
                                     {selectedAppointment.notes && (
-                                        <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-                                            <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-2">Notes</p>
-                                            <p className="text-sm text-gray-900 dark:text-slate-200">{selectedAppointment.notes}</p>
+                                        <div className="bg-surgical-50 rounded-lg p-4">
+                                            <p className="text-sm font-bold text-obsidian mb-2">Notes</p>
+                                            <p className="text-sm text-obsidian">{selectedAppointment.notes}</p>
                                         </div>
                                     )}
 
                                     {/* Outcome (if completed) */}
                                     {selectedAppointment.status === 'completed' && selectedAppointment.outcome_notes && (
-                                        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-900/50">
-                                            <p className="text-sm font-bold text-green-900 dark:text-green-400 mb-2">Appointment Outcome</p>
-                                            <p className="text-sm text-green-800 dark:text-green-300">{selectedAppointment.outcome_notes}</p>
+                                        <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                                            <p className="text-sm font-bold text-green-700 mb-2">Appointment Outcome</p>
+                                            <p className="text-sm text-green-700">{selectedAppointment.outcome_notes}</p>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Modal Footer */}
-                                <div className="border-t border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-end gap-3">
+                                <div className="border-t border-surgical-200 px-6 py-4 flex items-center justify-end gap-3">
                                     {selectedAppointment.status === 'pending' && (
                                         <>
                                             <button
                                                 onClick={handleReschedule}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-sm font-medium"
+                                                className="flex items-center gap-2 px-4 py-2 bg-surgical-50 text-surgical-600 rounded-lg hover:bg-surgical-100 transition-colors text-sm font-medium"
                                             >
                                                 <RotateCw className="w-4 h-4" />
                                                 Reschedule
                                             </button>
                                             <button
                                                 onClick={handleSendReminder}
-                                                className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-sm font-medium"
+                                                className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
                                             >
                                                 <MessageCircle className="w-4 h-4" />
                                                 Send Reminder
@@ -537,7 +537,7 @@ const AppointmentsDashboardContent = () => {
                                     {selectedAppointment.status !== 'cancelled' && selectedAppointment.status !== 'completed' && (
                                         <button
                                             onClick={handleCancelAppointment}
-                                            className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-sm font-medium"
+                                            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                                         >
                                             <X className="w-4 h-4" />
                                             Cancel
@@ -545,7 +545,7 @@ const AppointmentsDashboardContent = () => {
                                     )}
                                     <button
                                         onClick={() => setShowDetailModal(false)}
-                                        className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                        className="px-4 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/60 hover:bg-surgical-50 transition-colors"
                                     >
                                         Close
                                     </button>
@@ -565,10 +565,10 @@ const AppointmentsDashboardContent = () => {
 export default function AppointmentsPage() {
     return (
         <React.Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-surgical-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading...</p>
+                    <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+                    <p className="text-obsidian/60">Loading...</p>
                 </div>
             </div>
         }>
@@ -576,4 +576,3 @@ export default function AppointmentsPage() {
         </React.Suspense>
     );
 }
-

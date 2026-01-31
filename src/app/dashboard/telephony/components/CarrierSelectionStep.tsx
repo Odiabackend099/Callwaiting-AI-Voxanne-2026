@@ -49,17 +49,17 @@ export function CarrierSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white mb-2">
+        <h2 className="text-lg font-semibold tracking-tight text-obsidian mb-2">
           Configure Call Forwarding
         </h2>
-        <p className="text-sm text-gray-600 dark:text-slate-400">
+        <p className="text-sm text-obsidian/60">
           Choose your carrier and forwarding mode to generate the code you'll dial.
         </p>
       </div>
 
       {/* Forwarding type selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-obsidian/70 mb-3">
           Forwarding Type
         </label>
         <div className="space-y-2">
@@ -67,16 +67,16 @@ export function CarrierSelectionStep({
             <button
               key={type.value}
               onClick={() => onForwardingTypeChange(type.value)}
-              className={`w-full text-left p-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-full text-left p-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-surgical-500 ${
                 forwardingType === type.value
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
+                  ? 'border-surgical-600 bg-surgical-50'
+                  : 'border-surgical-200 hover:border-surgical-600'
               }`}
             >
-              <p className="font-medium text-sm text-gray-900 dark:text-white">
+              <p className="font-medium text-sm text-obsidian">
                 {type.label}
               </p>
-              <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
+              <p className="text-xs text-obsidian/60 mt-1">
                 {type.description}
               </p>
             </button>
@@ -86,7 +86,7 @@ export function CarrierSelectionStep({
 
       {/* Carrier selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-obsidian/70 mb-3">
           Mobile Carrier
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -94,10 +94,10 @@ export function CarrierSelectionStep({
             <button
               key={c.value}
               onClick={() => onCarrierChange(c.value)}
-              className={`p-3 rounded-lg border-2 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`p-3 rounded-lg border-2 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-surgical-500 ${
                 carrier === c.value
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-300'
-                  : 'border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white hover:border-gray-300 dark:hover:border-slate-600'
+                  ? 'border-surgical-600 bg-surgical-50 text-surgical-600'
+                  : 'border-surgical-200 text-obsidian hover:border-surgical-600'
               }`}
             >
               <div>{c.label}</div>
@@ -110,7 +110,7 @@ export function CarrierSelectionStep({
       {/* Ring time setting (only for safety net) */}
       {forwardingType === 'safety_net' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
+          <label className="block text-sm font-medium text-obsidian/70 mb-3">
             Ring Duration Before AI Answers
           </label>
           <div className="flex items-center gap-4">
@@ -120,13 +120,13 @@ export function CarrierSelectionStep({
               max="60"
               value={ringTimeSeconds}
               onChange={(e) => onRingTimeChange(parseInt(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+              className="flex-1 h-2 bg-surgical-100 rounded-lg appearance-none cursor-pointer"
             />
-            <span className="text-sm font-medium text-gray-900 dark:text-white w-12 text-right">
+            <span className="text-sm font-medium text-obsidian w-12 text-right">
               {ringTimeSeconds}s
             </span>
           </div>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">
+          <p className="text-xs text-obsidian/40 mt-2">
             Recommended: 20-30 seconds (allows time to answer)
           </p>
         </div>
@@ -134,14 +134,14 @@ export function CarrierSelectionStep({
 
       {/* Verizon limitation notice */}
       {carrier === 'verizon' && forwardingType === 'safety_net' && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+        <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
           <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-4 h-4 text-surgical-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-300 mb-1">
+              <p className="text-sm font-medium text-obsidian mb-1">
                 Verizon Limitation
               </p>
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs text-obsidian/60">
                 Verizon doesn't support custom ring time adjustment. Your phone will use carrier defaults (~30 seconds).
               </p>
             </div>
@@ -151,7 +151,7 @@ export function CarrierSelectionStep({
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-lg text-red-700 dark:text-red-400 text-sm flex items-center gap-2">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
@@ -161,7 +161,7 @@ export function CarrierSelectionStep({
       <button
         onClick={onSubmit}
         disabled={isLoading || !carrier}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
+        className="w-full py-3 bg-surgical-600 hover:bg-surgical-700 disabled:bg-surgical-100 disabled:text-obsidian/40 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:cursor-not-allowed focus:ring-2 focus:ring-surgical-500 focus:ring-offset-2"
       >
         {isLoading ? (
           <>

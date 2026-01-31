@@ -10,8 +10,10 @@ import twilio from 'twilio';
 import { supabase } from '../services/supabase-client';
 import { VapiClient } from '../services/vapi-client';
 import { ToolSyncService } from '../services/tool-sync-service';
+import { VapiAssistantManager } from '../services/vapi-assistant-manager';
 import { storeApiKey, getApiKey } from '../services/secrets-manager';
 import { invalidateInboundConfigCache } from '../services/cache';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { buildOutboundSystemPrompt, getDefaultPromptConfig, buildCallContextBlock, buildTierSpecificPrompt } from '../prompts/outbound-agent-template';
 import { CallOutcome, CallStatus, isActiveCall } from '../types/call-outcome';
 import { createLogger } from '../services/logger';
@@ -100,12 +102,31 @@ function getAvailableVoices() {
  * Validates if a voice ID exists in the comprehensive voice registry
  * Supports 100+ voices across 7 providers
  */
+/**
+ * Extract voice ID from display string or return as-is if already an ID
+ * Handles formats like "Rohan (Professional) (male) - vapi" -> "Rohan"
+ */
+function extractVoiceId(voiceInput: string): string {
+  if (!voiceInput) return voiceInput;
+  
+  // If it contains parentheses, it's likely a display string - extract the first part
+  if (voiceInput.includes('(')) {
+    return voiceInput.split('(')[0].trim();
+  }
+  
+  return voiceInput;
+}
+
 function isValidVoiceId(voiceId: string): boolean {
   // Allow empty/undefined voice (let Vapi use default)
   if (!voiceId) {
     return true;
   }
-  const voice = getVoiceById(voiceId);
+  
+  // Extract voice ID from display string if needed
+  const cleanVoiceId = extractVoiceId(voiceId);
+  
+  const voice = getVoiceById(cleanVoiceId);
   return voice !== undefined && voice.status === 'active';
 }
 
@@ -125,6 +146,9 @@ function isValidLanguage(language: string): boolean {
   ];
   return supportedLanguages.includes(language);
 }
+
+// Phone number resolution extracted to shared service
+import { resolveOrgPhoneNumberId } from '../services/phone-number-resolver';
 
 /**
  * Helper: Get organization and Vapi configuration
@@ -1943,10 +1967,18 @@ router.post(
           payload.first_message = config.firstMessage;
         }
         // Accept both 'voice' and 'voiceId' for flexibility
-        const voiceValue = config.voiceId || config.voice;
+        let voiceValue = config.voiceId || config.voice;
         if (voiceValue !== undefined && voiceValue !== null && voiceValue !== '') {
+          // Extract voice ID from display string if needed (e.g., "Rohan (Professional) (male) - vapi" -> "Rohan")
+          voiceValue = extractVoiceId(voiceValue);
+          
           if (!isValidVoiceId(voiceValue)) {
-            throw new Error(`Invalid voice selection for ${agentRole} agent`);
+            // Enhanced error with available voices
+            const availableVoices = getActiveVoices().map(v => v.id).slice(0, 10);
+            throw new Error(
+              `Invalid voice selection '${voiceValue}' for ${agentRole} agent. ` +
+              `Available voices include: ${availableVoices.join(', ')}...`
+            );
           }
           payload.voice = voiceValue;
 
@@ -1983,7 +2015,9 @@ router.post(
           payload.max_call_duration = config.maxDurationSeconds;
         }
 
-        // Accept phone number ID for outbound agents
+        // @ai-invariant DO NOT REMOVE this vapi_phone_number_id write.
+        // Without it, the outbound call-back endpoint in contacts.ts will fail because
+        // agents.vapi_phone_number_id will be null. This is the primary write path.
         if (agentRole === 'outbound' && config.vapiPhoneNumberId !== undefined) {
           payload.vapi_phone_number_id = config.vapiPhoneNumberId || null;
           logger.info('Outbound phone number ID included in payload', {
@@ -1991,19 +2025,47 @@ router.post(
           });
         }
 
-        return Object.keys(payload).length > 0 ? payload : null;
+        // Filter out null/undefined values to avoid database errors
+        const cleanPayload: Record<string, any> = {};
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            cleanPayload[key] = value;
+          }
+        });
+
+        return Object.keys(cleanPayload).length > 0 ? cleanPayload : null;
       };
 
       // Build payloads for each agent
       const inboundPayload = buildUpdatePayload(inbound, 'inbound');
       const outboundPayload = buildUpdatePayload(outbound, 'outbound');
 
-      // CRITICAL DEBUG: Log what was built
+      // CRITICAL DEBUG: Log what was built AND what was rejected
       console.log('\n=== AGENT SAVE DEBUG ===');
       console.log('Inbound received:', JSON.stringify(inbound, null, 2));
       console.log('Inbound payload built:', JSON.stringify(inboundPayload, null, 2));
+
+      if (inbound && !inboundPayload) {
+        console.log('⚠️ WARNING: Inbound config provided but payload is NULL');
+        console.log('Possible reasons:');
+        console.log('- All fields were undefined/null/empty');
+        console.log('- Voice validation failed (invalid voiceId)');
+        console.log('- Language validation failed (invalid language)');
+        console.log('- Field name mismatch (check camelCase vs snake_case)');
+      }
+
       console.log('Outbound received:', JSON.stringify(outbound, null, 2));
       console.log('Outbound payload built:', JSON.stringify(outboundPayload, null, 2));
+
+      if (outbound && !outboundPayload) {
+        console.log('⚠️ WARNING: Outbound config provided but payload is NULL');
+        console.log('Possible reasons:');
+        console.log('- All fields were undefined/null/empty');
+        console.log('- Voice validation failed (invalid voiceId)');
+        console.log('- Language validation failed (invalid language)');
+        console.log('- Field name mismatch (check camelCase vs snake_case)');
+      }
+
       console.log('=== END DEBUG ===\n');
       logger.info('Payloads built for agent update', {
         requestId,
@@ -2256,11 +2318,40 @@ router.post(
       console.log('agentIdsToSync:', agentIdsToSync);
       console.log('=== END UPDATE RESULTS ===\n');
 
+      // Check if agents exist even when no updates were made
       if (agentIdsToSync.length === 0) {
+        console.log('No agents were updated - checking if this is valid scenario');
+
+        // Case 1: Agents exist but no changes requested (not an error)
+        const existingAgents = Object.values(agentMap).filter(Boolean);
+        if (existingAgents.length > 0 && (!inboundPayload && !outboundPayload)) {
+          console.log('No changes requested for existing agents - returning success');
+          res.json({
+            success: true,
+            message: 'No changes to save',
+            agentsExist: true,
+            requestId
+          });
+          return;
+        }
+
+        // Case 2: Attempted updates but all failed (is an error)
         console.log('ERROR: No agents were successfully updated!');
-        console.log('updateResults length:', updateResults.length);
-        console.log('updateResults:', updateResults);
-        res.status(400).json({ error: 'No agents were updated', requestId });
+        console.log('Inbound payload:', inboundPayload);
+        console.log('Outbound payload:', outboundPayload);
+        console.log('Agent map:', agentMap);
+        console.log('Update results:', updateResults);
+
+        res.status(400).json({
+          error: 'No agents were updated. Check that all required fields are valid.',
+          details: {
+            inboundPayloadBuilt: Boolean(inboundPayload),
+            outboundPayloadBuilt: Boolean(outboundPayload),
+            inboundAgentExists: Boolean(agentMap[AGENT_ROLES.INBOUND]),
+            outboundAgentExists: Boolean(agentMap[AGENT_ROLES.OUTBOUND])
+          },
+          requestId
+        });
         return;
       }
 
@@ -2572,7 +2663,7 @@ router.post(
 
       const { data: agent } = await supabase
         .from('agents')
-        .select('id, vapi_assistant_id, system_prompt, first_message, voice, max_call_duration')
+        .select('id, vapi_assistant_id, vapi_phone_number_id, system_prompt, first_message, voice, max_call_duration')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .maybeSingle();
@@ -2618,10 +2709,28 @@ router.post(
       const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
       const assistantId = syncResult.assistantId;
 
-      // Get Twilio phone number from settings
-      const twilioFromNumber = settings.twilio_from_number;
-      if (!twilioFromNumber) {
-        res.status(400).json({ error: 'Twilio phone number not configured. Save settings first.', requestId });
+      // @ai-invariant: phoneNumberId MUST be a Vapi UUID, never a raw phone string.
+      // Use agent.vapi_phone_number_id first, then resolveOrgPhoneNumberId() as fallback.
+      let phoneNumberId = agent.vapi_phone_number_id;
+      if (!phoneNumberId) {
+        const resolved = await resolveOrgPhoneNumberId(orgId, vapiApiKey);
+        phoneNumberId = resolved.phoneNumberId;
+
+        // Backfill to agents table for future calls
+        if (phoneNumberId) {
+          await supabase
+            .from('agents')
+            .update({ vapi_phone_number_id: phoneNumberId })
+            .eq('id', agent.id)
+            .eq('org_id', orgId);
+        }
+      }
+
+      if (!phoneNumberId) {
+        res.status(400).json({
+          error: 'No phone number available for test call. Import a Twilio number in Settings > Telephony.',
+          requestId
+        });
         return;
       }
 
@@ -2648,7 +2757,7 @@ router.post(
       const vapiClient = new VapiClient(vapiApiKey);
       const call = await vapiClient.createOutboundCall({
         assistantId,
-        phoneNumberId: twilioFromNumber,
+        phoneNumberId,
         customer: {
           number: destination,
           name: 'Test Call'
@@ -3250,30 +3359,51 @@ router.post(
         return;
       }
 
-      const phoneNumberId = agentPhoneData?.vapi_phone_number_id;
-
-      // Edge case: No phone number selected yet
-      if (!phoneNumberId) {
-        res.status(400).json({
-          error: 'Outbound Caller ID not configured. Please select a phone number in Agent Configuration.',
-          action: 'Go to Agent Config > Outbound Agent > Select Caller ID Number',
-          requestId
-        });
-        return;
-      }
-
-      // Fetch phone number details for logging (optional but helpful)
+      let phoneNumberId = agentPhoneData?.vapi_phone_number_id;
       let callerNumber: string | undefined;
-      try {
-        const vapiClient = new VapiClient(vapiApiKey);
-        const phoneDetails = await vapiClient.getPhoneNumber(phoneNumberId);
-        callerNumber = phoneDetails?.number;
-      } catch (err) {
-        logger.warn('Failed to fetch phone number details for logging', {
-          phoneNumberId,
-          error: err
+
+      // Auto-resolve phone number if not set on agent (SSOT: org_credentials → Vapi)
+      if (!phoneNumberId) {
+        logger.info('No vapi_phone_number_id on outbound agent, auto-resolving from org credentials', {
+          orgId, agentId: agent.id, requestId
         });
-        // Non-critical - continue with call
+
+        const resolved = await resolveOrgPhoneNumberId(orgId, vapiApiKey);
+        phoneNumberId = resolved.phoneNumberId;
+        callerNumber = resolved.callerNumber;
+
+        if (phoneNumberId) {
+          // Store resolved phone number back to agents table for future calls
+          await supabase
+            .from('agents')
+            .update({ vapi_phone_number_id: phoneNumberId })
+            .eq('id', agent.id)
+            .eq('org_id', orgId);
+
+          logger.info('Auto-resolved and stored phone number on outbound agent', {
+            orgId, agentId: agent.id, phoneNumberId, requestId
+          });
+        } else {
+          res.status(400).json({
+            error: 'No phone number available for outbound calls. Please import a Twilio number in Settings > Telephony.',
+            action: 'Go to Settings > Telephony to import a phone number',
+            requestId
+          });
+          return;
+        }
+      } else {
+        // Fetch phone number details for logging (agent already has a phone number)
+        try {
+          const vapiClient = new VapiClient(vapiApiKey);
+          const phoneDetails = await vapiClient.getPhoneNumber(phoneNumberId);
+          callerNumber = phoneDetails?.number;
+        } catch (err) {
+          logger.warn('Failed to fetch phone number details for logging', {
+            phoneNumberId,
+            error: err
+          });
+          // Non-critical - continue with call
+        }
       }
 
       logger.info('Outbound test call using agent-specific phone number', {

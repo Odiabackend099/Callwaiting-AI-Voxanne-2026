@@ -18,8 +18,8 @@ const faqs = [
         answer: "Unlike robotic 'press 1 for appointments' systems, Voxanne understands natural language. Patients can speak normally, ask complex questions, and have a real conversation, just like they would with a human receptionist.",
     },
     {
-        question: "Is Voxanne HIPAA compliant?",
-        answer: "Yes, Voxanne is fully HIPAA compliant. All patient data is encrypted at rest and in transit, and we sign a Business Associate Agreement (BAA) with all healthcare clients.",
+        question: "Is Voxanne compliant with data protection regulations?",
+        answer: "Yes, Voxanne is fully UK GDPR and HIPAA compliant. All patient data is encrypted at rest and in transit. We provide Data Processing Agreements (DPA) for UK/EU customers and sign Business Associate Agreements (BAA) with US healthcare clients.",
     },
     {
         question: "Can Voxanne integrate with my existing calendar system?",

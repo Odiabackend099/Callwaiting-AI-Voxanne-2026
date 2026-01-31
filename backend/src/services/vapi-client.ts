@@ -1,7 +1,9 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { createLogger } from './logger';
 import { config } from '../config/index';
-import { mergeFallbacksIntoPayload } from '../config/vapi-fallbacks';
+import { assertOutboundCallReady } from '../utils/outbound-call-preflight';
+// DISABLED: Vapi API doesn't support fallbacks property
+// import { mergeFallbacksIntoPayload } from '../config/vapi-fallbacks';
 
 const logger = createLogger('VapiClient');
 
@@ -210,9 +212,16 @@ export class VapiClient {
       const response = await fn();
       this.recordSuccess();
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.recordFailure();
-      logger.exception('Vapi request failed', error as Error, logContext);
+      const errorDetails = {
+        ...logContext,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+        message: error?.message
+      };
+      logger.exception('Vapi request failed', error as Error, errorDetails);
       throw error;
     }
   }
@@ -263,17 +272,19 @@ export class VapiClient {
       payload.maxDurationSeconds = config.maxDurationSeconds;
     }
 
-    // Auto-apply provider fallbacks for reliability (Reliability Protocol)
-    const payloadWithFallbacks = mergeFallbacksIntoPayload(payload);
+    // DISABLED: Vapi API doesn't support fallbacks property (returns 400 error)
+    // const payloadWithFallbacks = mergeFallbacksIntoPayload(payload);
+    // return await this.request<any>(() => this.client.post('/assistant', payloadWithFallbacks), { route: 'POST /assistant' });
 
-    return await this.request<any>(() => this.client.post('/assistant', payloadWithFallbacks), { route: 'POST /assistant' });
+    return await this.request<any>(() => this.client.post('/assistant', payload), { route: 'POST /assistant' });
   }
 
   async updateAssistant(assistantId: string, updates: any) {
-    // Auto-apply provider fallbacks for reliability (Reliability Protocol)
-    const updatesWithFallbacks = mergeFallbacksIntoPayload(updates);
+    // DISABLED: Vapi API doesn't support fallbacks property (returns 400 error)
+    // const updatesWithFallbacks = mergeFallbacksIntoPayload(updates);
+    // return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updatesWithFallbacks), { route: 'PATCH /assistant/:id', assistantId });
 
-    return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updatesWithFallbacks), { route: 'PATCH /assistant/:id', assistantId });
+    return await this.request<any>(() => this.client.patch(`/assistant/${assistantId}`, updates), { route: 'PATCH /assistant/:id', assistantId });
   }
 
   /**
@@ -571,7 +582,20 @@ export class VapiClient {
 
   // ========== CALLS ==========
 
+  /**
+   * @ai-invariant DO NOT REMOVE the assertOutboundCallReady() call below.
+   * It validates that assistantId is present, phoneNumberId is a Vapi UUID
+   * (not a raw +1... phone string), and customer number exists.
+   * Removing it will allow silent failures that are hard to debug.
+   */
   async createOutboundCall(params: CreateCallParams) {
+    // Pre-flight validation — catches bad data before it reaches the Vapi API
+    assertOutboundCallReady({
+      assistantId: params.assistantId,
+      phoneNumberId: params.phoneNumberId,
+      customerNumber: params.customer?.number
+    });
+
     const payload: any = {
       assistantId: params.assistantId,
       phoneNumberId: params.phoneNumberId,

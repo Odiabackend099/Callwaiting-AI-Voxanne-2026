@@ -365,6 +365,15 @@ contactsRouter.delete('/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * E.164 phone number validation helper
+ * @param phone - Phone number to validate
+ * @returns True if phone is valid E.164 format (+[country code][number])
+ */
+function isValidE164Phone(phone: string): boolean {
+  return /^\+[1-9]\d{1,14}$/.test(phone);
+}
+
+/**
  * POST /api/contacts/:id/call-back
  * Initiate an outbound call to a contact via Vapi
  * @param id - Contact ID
@@ -397,50 +406,97 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
     }
 
     if (!contact.phone) {
-      return res.status(400).json({ error: 'Contact has no phone number' });
+      return res.status(400).json({
+        error: 'Contact has no phone number. Please add a phone number in Leads.'
+      });
     }
 
-    // Get organization's outbound agent configuration
+    // Validate E.164 format
+    if (!isValidE164Phone(contact.phone)) {
+      return res.status(400).json({
+        error: `Invalid phone format: ${contact.phone}. Must be E.164 format (e.g., +12125551234)`
+      });
+    }
+
+    // @ai-invariant DO NOT MODIFY this outbound agent resolution chain.
+    // 1. Query MUST use .maybeSingle() (NOT .single() — throws PGRST116 on 0 rows)
+    // 2. SELECT MUST include id, vapi_assistant_id, vapi_phone_number_id
+    // 3. assistantId comes from agent.vapi_assistant_id (NOT vapi_assistant_id_outbound)
+    // 4. If vapi_phone_number_id is null, MUST auto-resolve via resolveOrgPhoneNumberId()
+    // 5. Resolved phone number MUST be backfilled to agents table
+    // See: .claude/CLAUDE.md "CRITICAL INVARIANTS" section
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select('vapi_assistant_id, vapi_assistant_id_outbound, vapi_phone_number_id')
+      .select('id, vapi_assistant_id, vapi_phone_number_id')
       .eq('org_id', orgId)
-      .single();
+      .eq('role', 'outbound')
+      .maybeSingle();
 
     if (agentError || !agent) {
       log.error('Contacts', 'POST /:id/call-back - Agent not found', { orgId, error: agentError?.message });
       return res.status(400).json({ error: 'Outbound agent not configured. Please set up an agent in Agent Configuration.' });
     }
 
-    const assistantId = agent.vapi_assistant_id_outbound || agent.vapi_assistant_id;
-    const phoneNumberId = agent.vapi_phone_number_id;
+    const assistantId = agent.vapi_assistant_id;
 
-    if (!assistantId || !phoneNumberId) {
+    if (!assistantId) {
       return res.status(400).json({
-        error: 'Outbound agent or phone number not configured. Please complete Agent Configuration.'
+        error: 'Outbound assistant not synced to Vapi. Please save the Outbound Configuration in Agent Configuration first.'
       });
     }
 
-    // Create outbound call record with status 'pending' (waiting for Vapi to accept)
-    const { data: call, error: callError } = await supabase
-      .from('calls')
+    // Resolve phone number: try agents table first, then auto-resolve from org credentials
+    let phoneNumberId = agent.vapi_phone_number_id;
+
+    if (!phoneNumberId) {
+      log.info('Contacts', 'No vapi_phone_number_id on outbound agent, auto-resolving', { orgId });
+
+      const vapiApiKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiApiKey) {
+        return res.status(500).json({ error: 'Vapi is not configured on this server. Contact support.' });
+      }
+
+      const { resolveOrgPhoneNumberId } = await import('../services/phone-number-resolver');
+      const resolved = await resolveOrgPhoneNumberId(orgId, vapiApiKey);
+      phoneNumberId = resolved.phoneNumberId;
+
+      // Backfill onto agents table for future calls
+      if (phoneNumberId && agent.id) {
+        await supabase
+          .from('agents')
+          .update({ vapi_phone_number_id: phoneNumberId })
+          .eq('id', agent.id)
+          .eq('org_id', orgId);
+
+        log.info('Contacts', 'Auto-resolved and stored phone number on outbound agent', {
+          orgId, agentId: agent.id, phoneNumberId
+        });
+      }
+    }
+
+    if (!phoneNumberId) {
+      return res.status(400).json({
+        error: 'No phone number available for outbound calls. Please import a Twilio number in Settings > Telephony.'
+      });
+    }
+
+    // Create outbound call tracking record with status 'queued' (waiting to be initiated via Vapi)
+    const { data: callTracking, error: callTrackingError } = await supabase
+      .from('call_tracking')
       .insert({
         org_id: orgId,
-        contact_id: id,
-        phone_number: contact.phone,
-        caller_name: contact.name,
-        call_type: 'outbound',
-        direction: 'outbound',
-        status: 'pending',
-        call_date: new Date().toISOString(),
+        phone: contact.phone,
+        agent_id: agent.id,
+        status: 'queued',
+        called_at: new Date().toISOString(),
         created_at: new Date().toISOString()
       })
       .select('*')
       .single();
 
-    if (callError) {
-      log.error('Contacts', 'POST /:id/call-back - Failed to create call record', {
-        orgId, contactId: id, error: callError.message
+    if (callTrackingError) {
+      log.error('Contacts', 'POST /:id/call-back - Failed to create call tracking record', {
+        orgId, contactId: id, error: callTrackingError.message
       });
       return res.status(500).json({ error: 'Failed to create call record' });
     }
@@ -459,14 +515,14 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
         phoneNumberId
       });
 
-      // Update call record with Vapi call ID and change status to 'initiated'
+      // Update call tracking record with Vapi call ID and change status to 'ringing'
       const { error: updateError } = await supabase
-        .from('calls')
+        .from('call_tracking')
         .update({
           vapi_call_id: vapiCall.id,
-          status: 'initiated'
+          status: 'ringing'
         })
-        .eq('id', call.id)
+        .eq('id', callTracking.id)
         .eq('org_id', orgId);
 
       if (updateError) {
@@ -477,33 +533,56 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
       }
 
       log.info('Contacts', 'Outbound call initiated via Vapi', {
-        orgId, contactId: id, callId: call.id, vapiCallId: vapiCall.id, phone: contact.phone
+        orgId, contactId: id, callTrackingId: callTracking.id, vapiCallId: vapiCall.id, phone: contact.phone
       });
 
       return res.status(201).json({
-        callId: call.id,
+        callTrackingId: callTracking.id,
         vapiCallId: vapiCall.id,
         contactId: id,
         phone: contact.phone,
-        status: 'initiated',
+        status: 'ringing',
         message: `📞 Calling ${contact.phone}...`
       });
 
     } catch (vapiError: any) {
+      const errorMessage = vapiError?.response?.data?.message || vapiError?.message || 'Unknown Vapi error';
+
+      // @ai-invariant DO NOT auto-recreate the Vapi assistant here.
+      // A previous version created a new assistant with NO tools, NO knowledge base,
+      // and a generic system prompt, then overwrote agents.vapi_assistant_id — silently
+      // destroying the user's configured agent. Instead, tell the user to re-save.
+      if (errorMessage.includes('Couldn\'t get tool for hook') || (errorMessage.includes('toolId') && errorMessage.includes('does not exist'))) {
+        log.error('Contacts', 'POST /:id/call-back - Assistant has invalid tool reference. User must re-save in Agent Configuration.', {
+          orgId, callTrackingId: callTracking.id, error: errorMessage
+        });
+
+        await supabase
+          .from('call_tracking')
+          .update({ status: 'failed' })
+          .eq('id', callTracking.id)
+          .eq('org_id', orgId);
+
+        return res.status(400).json({
+          error: 'The outbound assistant has a stale tool reference. Please go to Agent Configuration, re-save the Outbound agent, and try again.',
+          details: errorMessage
+        });
+      }
+
       log.error('Contacts', 'POST /:id/call-back - Vapi API error', {
-        orgId, callId: call.id, error: vapiError?.message || 'Unknown Vapi error'
+        orgId, callTrackingId: callTracking.id, error: errorMessage
       });
 
-      // Update call status to 'failed'
+      // Update call tracking status to 'failed'
       await supabase
-        .from('calls')
+        .from('call_tracking')
         .update({ status: 'failed' })
-        .eq('id', call.id)
+        .eq('id', callTracking.id)
         .eq('org_id', orgId);
 
       return res.status(500).json({
         error: 'Failed to initiate Vapi call. Please try again.',
-        details: vapiError?.message || 'Unknown error'
+        details: errorMessage
       });
     }
 

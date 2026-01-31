@@ -176,19 +176,19 @@ const NotificationsCenterContent = () => {
     const getNotificationColor = (type: string) => {
         switch (type) {
             case 'hot_lead':
-                return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400';
+                return 'bg-red-50 border-red-200 text-red-700';
             case 'appointment_booked':
             case 'appointment_reminder':
             case 'appointment': // Legacy fallback
-                return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400';
+                return 'bg-surgical-50 border-surgical-200 text-surgical-600';
             case 'missed_call':
             case 'voicemail':
             case 'call': // Legacy fallback
-                return 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-900/50 text-cyan-700 dark:text-cyan-400';
+                return 'bg-surgical-50 border-surgical-200 text-surgical-600';
             case 'lead_update':
-                return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-400';
+                return 'bg-green-50 border-green-200 text-green-700';
             default:
-                return 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300';
+                return 'bg-surgical-50 border-surgical-200 text-obsidian/60';
         }
     };
 
@@ -210,10 +210,10 @@ const NotificationsCenterContent = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-surgical-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading...</p>
+                    <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+                    <p className="text-obsidian/60">Loading...</p>
                 </div>
             </div>
         );
@@ -227,10 +227,10 @@ const NotificationsCenterContent = () => {
             <div className="mb-8">
                 <div className="flex items-start justify-between">
                     <div>
-                        <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-50 mb-2">Notifications</h1>
-                        <p className="text-gray-600 dark:text-slate-400">
+                        <h1 className="text-4xl font-bold text-obsidian mb-2">Notifications</h1>
+                        <p className="text-obsidian/60">
                             {unreadCount > 0 ? (
-                                <span>You have <span className="font-bold text-red-600 dark:text-red-400">{unreadCount}</span> unread notifications</span>
+                                <span>You have <span className="font-bold text-red-700">{unreadCount}</span> unread notifications</span>
                             ) : (
                                 'All notifications read'
                             )}
@@ -239,7 +239,7 @@ const NotificationsCenterContent = () => {
                     {unreadCount > 0 && (
                         <button
                             onClick={handleMarkAllAsRead}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium"
+                            className="px-4 py-2 bg-surgical-600 hover:bg-surgical-700 text-white rounded-lg transition-colors text-sm font-medium"
                         >
                             Mark All as Read
                         </button>
@@ -249,7 +249,7 @@ const NotificationsCenterContent = () => {
 
             {/* Error Message */}
             {error && (
-                <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg text-red-700 dark:text-red-400 text-sm">
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {error}
                 </div>
             )}
@@ -262,8 +262,8 @@ const NotificationsCenterContent = () => {
                         setCurrentPage(1);
                     }}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterUnread
-                        ? 'bg-emerald-600 text-white'
-                        : 'border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                        ? 'bg-surgical-600 text-white'
+                        : 'border border-surgical-200 text-obsidian/60 hover:bg-surgical-50'
                         }`}
                 >
                     <Filter className="w-4 h-4" />
@@ -276,7 +276,7 @@ const NotificationsCenterContent = () => {
                         setFilterType(e.target.value);
                         setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-800 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="px-4 py-2 border border-surgical-200 rounded-lg text-sm bg-white text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-500"
                 >
                     <option value="">All Types</option>
                     <option value="hot_lead">Hot Leads</option>
@@ -289,18 +289,18 @@ const NotificationsCenterContent = () => {
             {/* Notifications List */}
             <div className="space-y-4">
                 {isLoading ? (
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-12">
+                    <div className="bg-white border border-surgical-200 rounded-2xl p-12">
                         <div className="flex flex-col items-center gap-3">
-                            <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                            <p className="text-gray-600 dark:text-slate-400">Loading notifications...</p>
+                            <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+                            <p className="text-obsidian/60">Loading notifications...</p>
                         </div>
                     </div>
                 ) : notifications.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-12">
+                    <div className="bg-white border border-surgical-200 rounded-2xl p-12">
                         <div className="flex flex-col items-center gap-4">
-                            <Bell className="w-12 h-12 text-gray-300 dark:text-slate-700" />
-                            <p className="text-gray-600 dark:text-slate-400">No notifications</p>
-                            <p className="text-sm text-gray-500 dark:text-slate-500">Your notifications will appear here</p>
+                            <Bell className="w-12 h-12 text-obsidian/40" />
+                            <p className="text-obsidian/60">No notifications</p>
+                            <p className="text-sm text-obsidian/40">Your notifications will appear here</p>
                         </div>
                     </div>
                 ) : (
@@ -309,8 +309,8 @@ const NotificationsCenterContent = () => {
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}
                             className={`border rounded-xl p-4 transition-all cursor-pointer hover:shadow-md ${notification.read
-                                ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
-                                : 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-900/50 ring-1 ring-emerald-200 dark:ring-emerald-900/50'
+                                ? 'bg-surgical-50 border-surgical-200'
+                                : 'bg-white border-surgical-200 ring-1 ring-surgical-200'
                                 }`}
                         >
                             <div className="flex items-start gap-4">
@@ -324,14 +324,14 @@ const NotificationsCenterContent = () => {
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1">
                                             <h3 className={`font-bold text-sm ${notification.read
-                                                ? 'text-gray-700 dark:text-slate-300'
-                                                : 'text-gray-900 dark:text-slate-50'
+                                                ? 'text-obsidian/60'
+                                                : 'text-obsidian'
                                                 }`}>
                                                 {notification.title}
                                             </h3>
                                             <p className={`text-sm mt-1 ${notification.read
-                                                ? 'text-gray-600 dark:text-slate-400'
-                                                : 'text-gray-700 dark:text-slate-300'
+                                                ? 'text-obsidian/60'
+                                                : 'text-obsidian/60'
                                                 }`}>
                                                 {notification.message}
                                             </p>
@@ -339,15 +339,15 @@ const NotificationsCenterContent = () => {
 
                                         {/* Unread Badge */}
                                         {!notification.read && (
-                                            <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-500 mt-1" />
+                                            <div className="flex-shrink-0 w-2 h-2 rounded-full bg-surgical-600 mt-1" />
                                         )}
                                     </div>
 
                                     {/* Footer */}
-                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-surgical-200">
                                         <span className={`text-xs font-medium ${notification.read
-                                            ? 'text-gray-500 dark:text-slate-500'
-                                            : 'text-gray-600 dark:text-slate-400'
+                                            ? 'text-obsidian/40'
+                                            : 'text-obsidian/60'
                                             }`}>
                                             {formatTimeAgo(notification.created_at)}
                                         </span>
@@ -356,10 +356,10 @@ const NotificationsCenterContent = () => {
                                                 e.stopPropagation();
                                                 handleDeleteNotification(notification.id);
                                             }}
-                                            className="p-1.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                            className="p-1.5 hover:bg-surgical-100 rounded-lg transition-colors"
                                             title="Delete notification"
                                         >
-                                            <Trash2 className="w-4 h-4 text-gray-500 dark:text-slate-500" />
+                                            <Trash2 className="w-4 h-4 text-obsidian/40" />
                                         </button>
                                     </div>
                                 </div>
@@ -371,14 +371,14 @@ const NotificationsCenterContent = () => {
                 {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between mt-8 px-6 py-4">
-                        <div className="text-sm text-gray-700 dark:text-slate-400">
+                        <div className="text-sm text-obsidian/60">
                             Showing {(currentPage - 1) * notificationsPerPage + 1} to {Math.min(currentPage * notificationsPerPage, totalNotifications)} of {totalNotifications} notifications
                         </div>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                className="px-3 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/60 hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Previous
@@ -400,8 +400,8 @@ const NotificationsCenterContent = () => {
                                             key={pageNum}
                                             onClick={() => setCurrentPage(pageNum)}
                                             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum
-                                                ? 'bg-emerald-600 text-white'
-                                                : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                                                ? 'bg-surgical-600 text-white'
+                                                : 'border border-surgical-200 text-obsidian/60 hover:bg-surgical-50'
                                                 }`}
                                         >
                                             {pageNum}
@@ -412,7 +412,7 @@ const NotificationsCenterContent = () => {
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                className="px-3 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/60 hover:bg-surgical-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
                             >
                                 Next
                                 <ChevronRight className="w-4 h-4" />
@@ -429,10 +429,10 @@ const NotificationsCenterContent = () => {
 export default function NotificationsPage() {
     return (
         <React.Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-surgical-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-4 border-emerald-200 dark:border-emerald-900 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading...</p>
+                    <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+                    <p className="text-obsidian/60">Loading...</p>
                 </div>
             </div>
         }>

@@ -35,7 +35,7 @@ export default function PreFlightChecklist() {
             const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/verification/pre-flight`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`, // Assuming simple token auth for now
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -54,34 +54,34 @@ export default function PreFlightChecklist() {
     };
 
     const getStatusIcon = (success: boolean) => {
-        if (success) return <CheckCircle className="h-6 w-6 text-green-500" />;
+        if (success) return <CheckCircle className="h-6 w-6 text-surgical-600" />;
         return <XCircle className="h-6 w-6 text-red-500" />;
     };
 
     const getOverallStatusColor = (health: string) => {
         switch (health) {
-            case 'healthy': return 'bg-green-100 text-green-800 border-green-200';
-            case 'degraded': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-            case 'critical': return 'bg-red-100 text-red-800 border-red-200';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+            case 'healthy': return 'bg-surgical-50 text-surgical-600 border-surgical-200';
+            case 'degraded': return 'bg-surgical-50 text-obsidian/70 border-surgical-200';
+            case 'critical': return 'bg-red-50 text-red-700 border-red-200';
+            default: return 'bg-surgical-50 text-obsidian border-surgical-200';
         }
     };
 
     return (
-        <div className="bg-white shadow sm:rounded-lg overflow-hidden border border-gray-200">
-            <div className="px-4 py-5 sm:px-6 flex justify-between items-center bg-gray-50 border-b border-gray-200">
+        <div className="bg-white shadow sm:rounded-lg overflow-hidden border border-surgical-200">
+            <div className="px-4 py-5 sm:px-6 flex justify-between items-center bg-surgical-50 border-b border-surgical-200">
                 <div>
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                    <h3 className="text-lg leading-6 font-medium text-obsidian">
                         System Pre-Flight Checklist
                     </h3>
-                    <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                    <p className="mt-1 max-w-2xl text-sm text-obsidian/60">
                         Verify all critical integrations before going live.
                     </p>
                 </div>
                 <button
                     onClick={runVerification}
                     disabled={loading}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${loading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-surgical-500 ${loading ? 'bg-surgical-400 cursor-not-allowed' : 'bg-surgical-600 hover:bg-surgical-700'
                         }`}
                 >
                     {loading ? (
@@ -116,8 +116,8 @@ export default function PreFlightChecklist() {
                 )}
 
                 {!status && !loading && !error && (
-                    <div className="text-center py-12 text-gray-500">
-                        <p>Click "Run Checks" to verify system health.</p>
+                    <div className="text-center py-12 text-obsidian/60">
+                        <p>Click &quot;Run Checks&quot; to verify system health.</p>
                     </div>
                 )}
 
@@ -149,11 +149,11 @@ export default function PreFlightChecklist() {
                             {status.checks.map((check) => (
                                 <div
                                     key={check.step}
-                                    className={`relative rounded-lg border p-5 shadow-sm flex flex-col justify-between ${check.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                                    className={`relative rounded-lg border p-5 shadow-sm flex flex-col justify-between ${check.success ? 'border-surgical-200 bg-surgical-50' : 'border-red-200 bg-red-50'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between mb-4">
-                                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium uppercase ${check.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium uppercase ${check.success ? 'bg-surgical-100 text-surgical-600' : 'bg-red-100 text-red-800'
                                             }`}>
                                             {check.step}
                                         </span>
@@ -161,22 +161,22 @@ export default function PreFlightChecklist() {
                                     </div>
 
                                     <div>
-                                        <h4 className="text-base font-semibold text-gray-900 capitalize mb-1">
+                                        <h4 className="text-base font-semibold text-obsidian capitalize mb-1">
                                             {check.step} Integration
                                         </h4>
-                                        <p className={`text-sm ${check.success ? 'text-green-700' : 'text-red-700'}`}>
+                                        <p className={`text-sm ${check.success ? 'text-surgical-600' : 'text-red-700'}`}>
                                             {check.message}
                                         </p>
                                     </div>
 
                                     {/* Technical Details (if any) */}
                                     {check.details && (
-                                        <div className="mt-4 pt-4 border-t border-gray-200 border-opacity-50">
+                                        <div className="mt-4 pt-4 border-t border-surgical-200 border-opacity-50">
                                             <dl className="space-y-1">
                                                 {Object.entries(check.details).map(([key, value]) => (
                                                     <div key={key} className="flex justify-between text-xs">
-                                                        <dt className="text-gray-500 font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</dt>
-                                                        <dd className="text-gray-900 font-mono truncate max-w-[120px]" title={String(value)}>
+                                                        <dt className="text-obsidian/60 font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</dt>
+                                                        <dd className="text-obsidian font-mono truncate max-w-[120px]" title={String(value)}>
                                                             {String(value)}
                                                         </dd>
                                                     </div>

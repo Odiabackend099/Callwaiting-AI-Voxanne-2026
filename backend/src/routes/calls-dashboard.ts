@@ -68,10 +68,10 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     if (!parsed.call_type || parsed.call_type === 'inbound') {
       let inboundQuery = supabase
         .from('call_logs')
-        .select('id, phone_number, caller_name, created_at, duration_seconds, status, recording_storage_path, transcript, sentiment_score, sentiment_label, sentiment_summary, sentiment_urgency', { count: 'exact' })
+        .select('id, phone_number, caller_name, created_at, duration_seconds, status, recording_url, recording_storage_path, transcript, sentiment_score, sentiment_label, sentiment_summary, sentiment_urgency', { count: 'exact' })
         .eq('org_id', orgId)  // CRITICAL FIX: Filter by org_id for tenant isolation
         .eq('call_type', 'inbound')
-        .not('recording_storage_path', 'is', null);
+        .or('recording_url.not.is.null,recording_storage_path.not.is.null');
 
       if (parsed.startDate) {
         inboundQuery = inboundQuery.gte('created_at', new Date(parsed.startDate).toISOString());
@@ -112,7 +112,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
             call_date: call.created_at,
             duration_seconds: call.duration_seconds || 0,
             status: call.status || 'completed',
-            has_recording: !!call.recording_storage_path,
+            has_recording: !!(call.recording_url || call.recording_storage_path),
             has_transcript: !!call.transcript,
             sentiment_score: call.sentiment_score,
             sentiment_label: call.sentiment_label,
@@ -471,6 +471,11 @@ callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) =>
       if (inboundCall.recording_url) {
         return res.json({ recording_url: inboundCall.recording_url });
       }
+    }
+
+    // If no Supabase storage path but has Vapi recording URL, return it directly
+    if (inboundCall?.recording_url) {
+      return res.json({ recording_url: inboundCall.recording_url });
     }
 
     // Fall back to calls table (outbound calls)

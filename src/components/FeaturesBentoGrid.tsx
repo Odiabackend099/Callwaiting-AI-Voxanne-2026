@@ -22,8 +22,8 @@ const features = [
     },
     {
         icon: Shield,
-        title: 'HIPAA Compliant',
-        description: 'Enterprise-grade security with full HIPAA compliance out of the box.',
+        title: 'UK GDPR & HIPAA Compliant',
+        description: 'Enterprise-grade security with full UK GDPR and HIPAA compliance built-in.',
         gradient: 'from-emerald-500 to-emerald-600',
     },
     {

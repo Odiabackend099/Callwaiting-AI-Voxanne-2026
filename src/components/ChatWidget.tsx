@@ -135,7 +135,7 @@ export const ChatWidget = () => {
                                                 💰 Pricing & Plans
                                             </button>
                                             <button
-                                                onClick={() => handleQuickAction("Is it HIPAA compliant?")}
+                                                onClick={() => handleQuickAction("Is it GDPR and HIPAA compliant?")}
                                                 className="w-full text-left px-3 py-2 rounded-lg bg-cyan-50 dark:bg-slate-800/50 hover:bg-cyan-100 dark:hover:bg-slate-700 text-xs text-slate-700 dark:text-slate-300 transition-colors border border-cyan-200 dark:border-slate-700"
                                             >
                                                 🔒 Security & Compliance

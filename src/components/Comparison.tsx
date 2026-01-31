@@ -64,7 +64,7 @@ export default function Comparison() {
                                 { text: "Zero Clinical Hallucinations", detail: "Strict medical guardrails enabled." },
                                 { text: "Trained on CPT Codes", detail: "Understands BBL, Rhinoplasty, etc." },
                                 { text: "Direct EMR Sync", detail: "Nextech, Mindbody, DrChrono." },
-                                { text: "HIPAA & BAA Certified", detail: "Enterprise-grade patient privacy." },
+                                { text: "UK GDPR & HIPAA Certified", detail: "Enterprise-grade patient privacy & compliance." },
                             ].map((item, i) => (
                                 <motion.li
                                     key={i}

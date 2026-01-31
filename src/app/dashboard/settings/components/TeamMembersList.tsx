@@ -94,12 +94,12 @@ export const TeamMembersList: React.FC = () => {
 
   const getRoleColor = (role: string) => {
     const colors: Record<string, string> = {
-      admin: 'bg-purple-100 text-purple-800',
-      manager: 'bg-blue-100 text-blue-800',
+      admin: 'bg-surgical-100 text-surgical-600',
+      manager: 'bg-surgical-100 text-surgical-600',
       agent: 'bg-green-100 text-green-800',
-      viewer: 'bg-gray-100 text-gray-800',
+      viewer: 'bg-surgical-50 text-obsidian/60',
     };
-    return colors[role] || 'bg-gray-100 text-gray-800';
+    return colors[role] || 'bg-surgical-50 text-obsidian/60';
   };
 
   return (
@@ -107,13 +107,13 @@ export const TeamMembersList: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Team Members</h2>
-          <p className="text-gray-600 dark:text-slate-400 mt-1">Manage your team and assign roles</p>
+          <h2 className="text-2xl font-bold text-obsidian">Team Members</h2>
+          <p className="text-obsidian/60 mt-1">Manage your team and assign roles</p>
         </div>
         <button
           type="button"
           onClick={() => setShowInviteForm(true)}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+          className="bg-surgical-600 text-white px-4 py-2 rounded-lg hover:bg-surgical-700 flex items-center gap-2"
         >
           <Plus className="w-5 h-5" />
           Invite Member
@@ -122,7 +122,7 @@ export const TeamMembersList: React.FC = () => {
 
       {/* Alert Messages */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3 text-red-800 dark:text-red-200">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-700">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-medium">Error</p>
@@ -131,7 +131,7 @@ export const TeamMembersList: React.FC = () => {
           <button
             type="button"
             onClick={() => setError(null)}
-            className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+            className="ml-auto text-red-600 hover:text-red-800"
           >
             ✕
           </button>
@@ -139,7 +139,7 @@ export const TeamMembersList: React.FC = () => {
       )}
 
       {success && (
-        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-3 text-green-800 dark:text-green-200">
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3 text-green-700">
           <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="font-medium">{success}</p>
         </div>
@@ -149,47 +149,47 @@ export const TeamMembersList: React.FC = () => {
       <div className="glass-panel rounded-lg shadow overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center">
-            <Loader className="w-6 h-6 animate-spin text-emerald-600" />
+            <Loader className="w-6 h-6 animate-spin text-surgical-600" />
           </div>
         ) : members.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-gray-600 dark:text-slate-400 mb-4">No team members yet</p>
+            <p className="text-obsidian/60 mb-4">No team members yet</p>
             <button
               type="button"
               onClick={() => setShowInviteForm(true)}
-              className="text-emerald-600 hover:text-emerald-700 font-medium"
+              className="text-surgical-600 hover:text-surgical-500 font-medium"
             >
               Invite your first team member
             </button>
           </div>
         ) : (
-          <table className="w-full divide-y divide-gray-200 dark:divide-slate-700">
-            <thead className="bg-gray-50 dark:bg-slate-800/50">
+          <table className="w-full divide-y divide-surgical-200">
+            <thead className="bg-surgical-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/70 uppercase tracking-wider">
                   Member
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/70 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/70 uppercase tracking-wider">
                   Joined
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/70 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+            <tbody className="divide-y divide-surgical-200">
               {members.map((member: TeamMember) => (
-                <tr key={member.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors">
+                <tr key={member.id} className="hover:bg-surgical-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                      <div className="w-8 h-8 bg-gradient-to-br from-surgical-400 to-surgical-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
                         {member.email?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-200">{member.email}</p>
+                        <p className="font-medium text-obsidian">{member.email}</p>
                       </div>
                     </div>
                   </td>
@@ -210,7 +210,7 @@ export const TeamMembersList: React.FC = () => {
                       </select>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
+                  <td className="px-6 py-4 text-sm text-obsidian/60">
                     {new Date(member.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-sm">
@@ -222,7 +222,7 @@ export const TeamMembersList: React.FC = () => {
                         }
                       }}
                       disabled={removingMemberId === member.id}
-                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center gap-1 disabled:opacity-50"
+                      className="text-red-600 hover:text-red-700 inline-flex items-center gap-1 disabled:opacity-50"
                     >
                       <Trash2 className="w-4 h-4" />
                       {removingMemberId === member.id ? 'Removing...' : 'Remove'}
@@ -238,8 +238,8 @@ export const TeamMembersList: React.FC = () => {
       {/* Invite Form Modal */}
       {showInviteForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-slate-700">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Invite Team Member</h2>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-surgical-200">
+            <h2 className="text-2xl font-bold mb-4 text-obsidian">Invite Team Member</h2>
             <InviteForm
               onClose={() => setShowInviteForm(false)}
               onSuccess={() => {

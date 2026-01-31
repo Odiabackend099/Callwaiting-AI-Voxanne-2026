@@ -14,7 +14,7 @@ export default function Footer() {
                             </span>
                         </Link>
                         <p className="text-slate-400 leading-relaxed">
-                            The Voice of Your Practice. Automate scheduling, answer patient queries, and reduce admin overhead with HIPAA-compliant voice AI.
+                            The Voice of Your Practice. Automate scheduling, answer patient queries, and reduce admin overhead with UK GDPR & HIPAA-compliant voice AI.
                         </p>
                         <div className="flex gap-4">
                             {/* Social Links placeholders */}
@@ -64,7 +64,7 @@ export default function Footer() {
                     <div>
                         <h3 className="text-white font-semibold mb-6">Legal & Compliance</h3>
                         <ul className="space-y-4 mb-8">
-                            {["Privacy Policy", "Terms of Service", "HIPAA Compliance", "Security", "Cookie Policy"].map((item) => (
+                            {["Privacy Policy", "Terms of Service", "Data Processing Agreement", "Security", "Cookie Policy"].map((item) => (
                                 <li key={item}>
                                     <Link href="#" className="hover:text-white transition-colors">
                                         {item}
@@ -75,15 +75,15 @@ export default function Footer() {
                         <div className="flex flex-col gap-3">
                             <div className="flex items-center gap-2 text-xs text-slate-400">
                                 <ShieldCheck className="h-4 w-4 text-surgical-500" />
-                                <span>HIPAA Compliant</span>
+                                <span>UK GDPR Compliant</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-slate-400">
                                 <Lock className="h-4 w-4 text-surgical-500" />
-                                <span>SOC 2 Type II Certified</span>
+                                <span>HIPAA Compliant (US Healthcare)</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-slate-400">
                                 <Activity className="h-4 w-4 text-surgical-500" />
-                                <span>99.9% Uptime SLA</span>
+                                <span>SOC 2 Type II Certified</span>
                             </div>
                         </div>
                     </div>

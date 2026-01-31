@@ -1,7 +1,112 @@
-This is the **Master PRD (Product Requirement Document)** for Voxanne AI, version 2026.7.
+This is the **Master PRD (Product Requirement Document)** for Voxanne AI, version 2026.9.
 
-**Last Updated:** 2026-01-29 (Critical Schema Fixes + Outcome Summary + MVP Simplification)
-**Status:** 🚀 PRODUCTION READY - Dashboard Schema Mismatch Fixed + Outcome Summary Implemented + Pipeline Value Removed + Summary Cards Removed
+**Last Updated:** 2026-01-31 (Defensive Guardrails + Pre-flight Validation for Outbound Calls)
+**Status:** 🚀 PRODUCTION READY - Outbound Calls Protected by Pre-flight Assertion + Guard Comments + CLAUDE.md Invariants
+
+---
+
+## 🔧 OUTBOUND CALL-BACK FIX (2026-01-31) - CRITICAL
+
+**Root Problem:** `POST /api/contacts/:id/call-back` returned "Outbound agent not configured" despite outbound agent existing in database.
+
+**Root Causes (3 compounding issues):**
+1. Query used `.single()` which throws Postgres error when no row exists or schema cache mismatch
+2. Phone number ID stored in `integrations.config` JSONB (via RPC), but call-back endpoint read from `agents.vapi_phone_number_id` column (NULL)
+3. No fallback resolution — test call endpoint had working auto-resolve pattern but call-back endpoint lacked it
+
+### Fix Applied ✅
+
+**Files Modified:**
+
+| File | Change | Impact |
+|------|--------|--------|
+| `backend/src/services/phone-number-resolver.ts` | **NEW** — Shared phone number resolution service | Eliminates code duplication between contacts and founder-console |
+| `backend/src/routes/contacts.ts` (lines 421-475) | Fixed call-back query + added auto-resolution | Call-back now works with auto-resolved phone numbers |
+| `backend/src/routes/founder-console-v2.ts` (lines 150-151, 2018-2026) | Import shared resolver + uncommented phone write | Single source of truth for phone resolution logic |
+| `supabase/migrations/20260131_add_vapi_phone_number_id.sql` | Made idempotent (`IF NOT EXISTS`) | Safe to re-run without errors |
+
+### Call-Back Query Fix
+
+| Aspect | Before (Broken) | After (Fixed) |
+|--------|-----------------|---------------|
+| Query method | `.single()` | `.maybeSingle()` |
+| SELECT columns | `vapi_assistant_id, vapi_assistant_id_outbound, vapi_phone_number_id` | `id, vapi_assistant_id, vapi_phone_number_id` |
+| Assistant ID | `agent.vapi_assistant_id_outbound \|\| agent.vapi_assistant_id` | `agent.vapi_assistant_id` (outbound agents use this column directly) |
+| Phone number | Hard fail if `agents.vapi_phone_number_id` is NULL | Auto-resolve from org credentials → Vapi phone list → backfill to agents table |
+
+### Phone Number Resolution Flow
+
+```
+agents.vapi_phone_number_id populated?
+  ├─ YES → use directly
+  └─ NO → resolveOrgPhoneNumberId(orgId, vapiApiKey)
+     → IntegrationDecryptor.getTwilioCredentials(orgId)
+     → VapiClient.listPhoneNumbers()
+     → Match Twilio number against Vapi list, or fall back to first available
+     → Backfill resolved ID to agents.vapi_phone_number_id
+     → Future calls skip resolution
+```
+
+### Deprecated Column: `vapi_assistant_id_outbound`
+
+- **Status:** Column exists but is NEVER populated by any code path
+- **Reason:** Outbound agents store their Vapi assistant ID in `vapi_assistant_id` (same column as inbound)
+- **Action:** Do NOT use `vapi_assistant_id_outbound` — always use `vapi_assistant_id` for both inbound and outbound agents
+- **Cleanup:** Column can be dropped in a future migration (non-blocking)
+
+### Shared Phone Resolver Service
+
+**File:** `backend/src/services/phone-number-resolver.ts`
+**Used by:** `contacts.ts` (call-back), `founder-console-v2.ts` (test call)
+**Function:** `resolveOrgPhoneNumberId(orgId, vapiApiKey)` → `{ phoneNumberId, callerNumber }`
+
+---
+
+## 🛡️ DEFENSIVE GUARDRAILS (2026-01-31) - REGRESSION PREVENTION
+
+**Purpose:** Prevent the outbound call pipeline from breaking again due to accidental code changes by AI assistants or developers.
+
+### Pre-flight Assertion (All Outbound Calls)
+
+**File:** `backend/src/utils/outbound-call-preflight.ts`
+**Called in:** `VapiClient.createOutboundCall()` — protects ALL 8 call sites automatically
+
+Validates before every outbound call:
+- `assistantId` is present (not null/undefined)
+- `phoneNumberId` is present and is a Vapi UUID (not a raw `+1...` phone string)
+- `customerNumber` is present
+
+If any check fails, throws a descriptive `PREFLIGHT:` error that makes the root cause immediately clear.
+
+### Phone Resolver Timeout
+
+**File:** `backend/src/services/phone-number-resolver.ts`
+**Timeout:** 10 seconds — prevents hung Vapi API calls from blocking users indefinitely.
+
+### Guard Comments (`@ai-invariant`)
+
+The following code sections are annotated with `@ai-invariant` comments. Any AI assistant encountering these comments MUST NOT modify the guarded code without verifying the stated invariant still holds:
+
+| File | Section | Invariant |
+|------|---------|-----------|
+| `contacts.ts` | Call-back agent query | Must use `.maybeSingle()`, SELECT must include `id, vapi_assistant_id, vapi_phone_number_id`, auto-resolution fallback must exist |
+| `founder-console-v2.ts` | Agent save payload | `vapi_phone_number_id` write must stay in outbound agent payloads |
+| `agent-sync.ts` | Outbound update + insert | `vapi_phone_number_id` and `vapi_assistant_id` fields must stay in both payloads |
+| `vapi-client.ts` | `createOutboundCall()` | Pre-flight assertion must not be removed |
+| `phone-number-resolver.ts` | Module header | This service must not be bypassed — it is the only correct way to resolve Vapi phone UUIDs |
+
+### Dangerous Pattern Removed
+
+The `contacts.ts` call-back endpoint previously contained an inline assistant recreation block (catch handler) that:
+- Created a new Vapi assistant with NO tools, NO knowledge base, and a generic system prompt
+- Overwrote `agents.vapi_assistant_id` with the new (broken) assistant ID
+- Silently destroyed the user's configured agent
+
+This has been replaced with a clear error message instructing the user to re-save in Agent Configuration.
+
+### CLAUDE.md Protection Rules
+
+See `.claude/CLAUDE.md` → "CRITICAL INVARIANTS — DO NOT BREAK" section for 6 rules that all AI assistants must follow.
 
 ---
 
@@ -360,6 +465,7 @@ This PRD incorporates:
 - **🛡️ RELIABILITY PROTOCOL (2026-01-29)** - 3-tier fallback cascade for transcriber and voice services + auto-apply fallbacks on assistant create/update + batch enforcement script for existing assistants + compliance verification tool + 12/12 unit tests passing + zero downtime deployment ✅ COMPLETE
 - **🌍 GLOBAL TELEPHONY INFRASTRUCTURE (2026-01-30)** - Multi-country hybrid BYOC telephony with smart routing (NG/TR → US for 92% cost savings, GB/US → local) + carrier_forwarding_rules SSOT table (4 countries, 16 carriers) + E.164 validation + Twilio purchase rollback + frontend race condition fix + API rate limiting (1000/hr per org) + country whitelist + performance index (10-100x faster queries) + 7/7 critical security fixes + 35+ senior engineer improvements (JSONB validation via GIN indexes, optimistic locking with updated_at, PII redaction in logs, Twilio SID validation, case-insensitive carrier matching, country-specific phone length validation, glassmorphism UI with backdrop-blur, skeleton loaders, gradient buttons, audit logging with RLS policies, E.164 constraints, shared Supabase client pattern) + database migration applied (15 indexes, 3 constraints, 1 audit table) + production readiness upgraded A+ (95/100) + automated test suite (20/26 passing, 77%) + comprehensive documentation (800+ lines) + production deployed ✅ COMPLETE
 - **🎯 DASHBOARD FIXES & COMPREHENSIVE TESTING (2026-01-28)** - 6 critical frontend/backend fixes (test call validation, recording playback endpoint, CRM field names, duplicate API call removal, call back endpoint, backend validation) + comprehensive testing suite (7 phases, 16 endpoints, 100% success rate) + live demo infrastructure (ngrok tunnel, all servers operational) + call forwarding setup for +2348128772405 + 7 comprehensive documentation guides + demo readiness assessment (90/100 confidence) + performance metrics (avg 120ms response time, 80% cache hit rate) + zero error rate ✅ COMPLETE
+- **🔧 OUTBOUND CALL-BACK FIX (2026-01-31)** - Fixed call-back endpoint returning "Outbound agent not configured" due to `.single()` vs `.maybeSingle()`, phone number stored in wrong location (integrations JSONB instead of agents column), and missing auto-resolution fallback. Created shared `phone-number-resolver.ts` service used by both contacts and founder-console routes. Auto-resolves phone number from org credentials + Vapi phone list + backfills to agents table. Deprecated unused `vapi_assistant_id_outbound` column (outbound agents use `vapi_assistant_id` directly). ✅ COMPLETE
 
 ---
 
@@ -552,6 +658,119 @@ This means:
 - **Appointments:** `scheduled_at` → `scheduled_time` (renamed + flattened nested contacts)
 
 **Impact:** Zero breaking changes - all old fields still work via transformation layer.
+
+---
+
+## 🚨 WEBHOOK ARCHITECTURE - CRITICAL (2026-01-31)
+
+**Status:** ✅ PRODUCTION VERIFIED (Live Fire Test Passed)
+**Primary Endpoint:** `/api/vapi/webhook` → `backend/src/routes/vapi-webhook.ts`
+
+### **Two Webhook Endpoints - Only ONE Used by Vapi**
+
+| Endpoint | File | Used by Vapi? | Purpose |
+|----------|------|--------------|---------|
+| `/api/vapi/webhook` | `vapi-webhook.ts` | **✅ YES (PRIMARY)** | End-of-call, tool calls, RAG |
+| `/api/webhooks/vapi` | `webhooks.ts` | ❌ NO (UNUSED) | Legacy/alternative |
+
+**WHY THIS MATTERS:**
+- Vapi assistant's `serverUrl` is **hardcoded** to `/api/vapi/webhook` in `founder-console-v2.ts:645`
+- ALL production webhooks route to `vapi-webhook.ts`
+- Modifying `webhooks.ts` will **NOT affect** production call logging
+- **DO NOT confuse** the two files - they have similar names but serve different roles
+
+### **Webhook Flow (Production)**
+
+```
+Vapi → POST /api/vapi/webhook → vapi-webhook.ts (lines 211-293)
+  ├─ [1] Resolve org_id from assistantId
+  ├─ [2] Upsert call_logs (vapi_call_id as conflict key)
+  ├─ [3] Broadcast WebSocket event to dashboard
+  └─ [4] Run analytics (fire-and-forget)
+```
+
+### **Critical Database Column Mappings**
+
+The `call_logs` table uses **different column names** than Vapi webhook field names:
+
+| Vapi Field | ❌ WRONG Column | ✅ CORRECT Column |
+|------------|----------------|------------------|
+| `call.customer.number` | `phone_number` | `from_number` |
+| `call.customer.name` | `caller_name` | ❌ DOESN'T EXIST |
+| `message.cost` | `cost` | `total_cost` |
+| `analysis.sentiment` | `sentiment_label` | `sentiment` |
+| `message.durationSeconds` | `call.duration` | `message.durationSeconds` |
+| `artifact.recordingUrl` | `artifact.recording` | `artifact.recordingUrl` |
+| ANY Vapi call | (omitted) | `call_sid` (**REQUIRED**) |
+
+**🚨 CRITICAL:** The `call_sid` field has a **NOT NULL** constraint. For Vapi calls, use placeholder: `"vapi-{call_id}"`
+
+### **Verified Working Code (2026-01-31)**
+
+```typescript
+// File: backend/src/routes/vapi-webhook.ts (lines 244-268)
+const { error: upsertError } = await supabase
+  .from('call_logs')
+  .upsert({
+    vapi_call_id: call?.id,
+    call_sid: `vapi-${call?.id}`,  // ← REQUIRED placeholder
+    org_id: orgId,  // ← Resolved from agent lookup
+    from_number: call?.customer?.number || null,  // ← Correct column
+    duration_seconds: Math.round(message.durationSeconds || 0),
+    status: 'completed',
+    outcome: 'completed',
+    outcome_summary: analysis?.summary || null,  // ← Populated
+    transcript: artifact?.transcript || null,
+    recording_url: typeof artifact?.recordingUrl === 'string'
+      ? artifact.recordingUrl : null,
+    call_type: 'inbound',
+    total_cost: message.cost || 0,  // ← Correct column
+    started_at: message.startedAt || new Date().toISOString(),
+    ended_at: message.endedAt || new Date().toISOString(),
+    sentiment: analysis?.sentiment || null,  // ← Correct column
+    metadata: {
+      source: 'vapi-webhook-handler',
+      endedReason: message.endedReason,
+      successEvaluation: analysis?.successEvaluation
+    }
+  }, { onConflict: 'vapi_call_id' });  // ← Idempotent upsert
+```
+
+### **Live Fire Test Results (2026-01-31 04:25:41 UTC)**
+
+**Test Call ID:** `019c1238-85f2-7887-a7ab-fbca50b1b79e`
+**Result:** ✅ SUCCESS - All fields populated correctly
+
+**Database Verification:**
+- ✅ `vapi_call_id`: 019c1238-85f2-7887-a7ab-fbca50b1b79e
+- ✅ `call_sid`: vapi-019c1238-85f2-7887-a7ab-fbca50b1b79e
+- ✅ `org_id`: 46cf2995-2bee-44e3-838b-24151486fe4e
+- ✅ `from_number`: +2348141995397
+- ✅ `outcome_summary`: "The user called Serenity MedSpa intending to rebook..."
+- ✅ `recording_url`: https://storage.vapi.ai/...
+- ✅ `total_cost`: 0.1661
+- ✅ `sentiment`: null
+- ✅ `transcript`: 780 characters (PHI-redacted)
+
+### **Common Mistakes to Avoid**
+
+1. ❌ Modifying `webhooks.ts` thinking it affects production
+2. ❌ Using wrong column names (`phone_number`, `cost`, `sentiment_label`)
+3. ❌ Omitting `call_sid` field (NOT NULL constraint violation)
+4. ❌ Using wrong data paths (`call.duration` instead of `message.durationSeconds`)
+
+### **Documentation Reference**
+
+For complete webhook architecture documentation, see:
+
+→ **`CRITICAL_WEBHOOK_ARCHITECTURE.md`** (Root directory)
+
+This document contains:
+- Detailed webhook flow diagrams
+- Complete database column mappings
+- Verification scripts and procedures
+- Troubleshooting guide
+- Production deployment checklist
 
 ---
 
@@ -839,10 +1058,10 @@ Message: "feat: dashboard API fixes - 100% best practices certified"
 - `outbound_agent_config` table references removed from active code
 - Legacy agent sync logic deprecated
 
-**Database Migration Created:**
+**Database Migration Applied:**
 - **File:** `backend/migrations/20260126_add_vapi_phone_number_id_to_agents.sql`
-- **Purpose:** Add `vapi_phone_number_id` column to `agents` table (optional - currently handled via VAPI API)
-- **Status:** Migration file created, not yet required (system works without it)
+- **Purpose:** Add `vapi_phone_number_id` column to `agents` table (REQUIRED for outbound call-back)
+- **Status:** ✅ Applied — column exists and is actively used by call-back endpoint + auto-resolution fallback
 
 #### **Frontend Changes** ✅
 
@@ -966,12 +1185,12 @@ Automated Script → Direct VAPI API → Call initiated
 
 **For New Deployments:**
 - No action needed - `agents` table is SSOT
-- Optional: Apply migration to add `vapi_phone_number_id` column
+- ✅ `vapi_phone_number_id` column is auto-created and auto-populated via phone number resolver
 
 **For Existing Deployments:**
-- Legacy code still works (backward compatible)
-- Recommended: Run migration to add column for future features
-- Phone number assignment currently handled via VAPI API (works without column)
+- ✅ Migration applied — `vapi_phone_number_id` column exists on agents table
+- ✅ Auto-resolution: call-back endpoint resolves phone number from org credentials and backfills to agents table
+- Phone number resolver shared service: `backend/src/services/phone-number-resolver.ts`
 
 #### **Breaking Changes**
 
@@ -1004,12 +1223,12 @@ Automated Script → Direct VAPI API → Call initiated
 - ✅ Frontend updates deployed
 - ✅ Backend updates deployed
 - ✅ Automated testing verified
-- 🟡 Optional migration pending (not required)
+- ✅ Migration applied — `vapi_phone_number_id` column active on agents table
+- ✅ Phone number auto-resolution implemented in call-back endpoint (2026-01-31)
 
 **Next Steps:**
 1. Enable Twilio geo-permissions for Nigeria (if international calling needed)
-2. Optionally apply database migration for `vapi_phone_number_id` column
-3. Monitor production for any remaining legacy references
+2. Monitor production for any remaining legacy references
 
 ---
 
@@ -4218,7 +4437,15 @@ User clicks "Call Back" on Leads page
   ↓
 POST /api/contacts/:id/call-back
   → Fetch contact details
-  → Get org's outbound agent config (assistantId, phoneNumberId)
+  → Query agents table: role='outbound', org_id (using .maybeSingle())
+  → Read agents.vapi_assistant_id (outbound agents use this column)
+  → Read agents.vapi_phone_number_id
+     ├─ If populated: use directly
+     └─ If NULL: auto-resolve via resolveOrgPhoneNumberId()
+        → Get Twilio creds from org_credentials
+        → List Vapi phone numbers
+        → Match or fall back to first available
+        → Backfill to agents.vapi_phone_number_id for future calls
   → Create call record (status = 'pending')
   ↓
 Trigger Vapi Outbound Call

@@ -156,7 +156,7 @@ export default function HeroRedesigned({ onBookDemo }: HeroRedesignedProps) {
                             <p className="text-sm">Always Available</p>
                         </div>
                         <div className="text-center">
-                            <p className="text-2xl font-bold text-lime">HIPAA</p>
+                            <p className="text-2xl font-bold text-lime">UK GDPR</p>
                             <p className="text-sm">Compliant & Secure</p>
                         </div>
                     </motion.div>

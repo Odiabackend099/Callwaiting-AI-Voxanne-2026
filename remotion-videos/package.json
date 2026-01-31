@@ -1,0 +1,25 @@
+{
+  "name": "voxanne-remotion-videos",
+  "version": "1.0.0",
+  "description": "Voxanne AI Product Tour Video Generator",
+  "scripts": {
+    "start": "remotion studio",
+    "build": "remotion render src/index.ts VoxanneDemo out/voxanne-demo.mp4",
+    "upgrade": "remotion upgrade"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.284"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.284",
+    "@remotion/tailwind": "^4.0.414",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}

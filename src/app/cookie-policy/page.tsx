@@ -38,15 +38,16 @@ export default function CookiePolicyPage() {
                             <nav className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {[
                                     { href: '#what-are-cookies', title: '1. What Are Cookies?' },
-                                    { href: '#types-of-cookies', title: '2. Types of Cookies We Use' },
-                                    { href: '#third-party-cookies', title: '3. Third-Party Cookies' },
-                                    { href: '#cookie-duration', title: '4. Cookie Duration' },
-                                    { href: '#cookie-table', title: '5. Detailed Cookie Table' },
-                                    { href: '#control-cookies', title: '6. How to Control Cookies' },
-                                    { href: '#do-not-track', title: '7. Do Not Track Signals' },
-                                    { href: '#cookie-consent', title: '8. Cookie Consent' },
-                                    { href: '#updates', title: '9. Updates to This Policy' },
-                                    { href: '#contact', title: '10. Contact Us' },
+                                    { href: '#pecr-compliance', title: '2. UK PECR Compliance' },
+                                    { href: '#types-of-cookies', title: '3. Types of Cookies We Use' },
+                                    { href: '#third-party-cookies', title: '4. Third-Party Cookies' },
+                                    { href: '#cookie-duration', title: '5. Cookie Duration' },
+                                    { href: '#cookie-table', title: '6. Detailed Cookie Table' },
+                                    { href: '#control-cookies', title: '7. How to Control Cookies' },
+                                    { href: '#do-not-track', title: '8. Do Not Track Signals' },
+                                    { href: '#cookie-consent', title: '9. Cookie Consent' },
+                                    { href: '#updates', title: '10. Updates to This Policy' },
+                                    { href: '#contact', title: '11. Contact Us' },
                                 ].map((item) => (
                                     <a
                                         key={item.href}
@@ -116,11 +117,68 @@ export default function CookiePolicyPage() {
                             </div>
                         </section>
 
-                        {/* Section 2: Types of Cookies */}
+                        {/* Section 2: PECR Compliance */}
+                        <section id="pecr-compliance" className="mb-12 scroll-mt-8">
+                            <div className="flex items-center gap-3 mb-4">
+                                <Eye className="h-8 w-8 text-amber-600" />
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">2. UK PECR Compliance</h2>
+                            </div>
+
+                            <p className="text-slate-700 leading-relaxed mb-6">
+                                <strong>Voxanne AI is subject to the Privacy and Electronic Communications Regulations (PECR)</strong>, which works alongside UK GDPR to regulate electronic communications, including cookies. The Information Commissioner's Office (ICO) enforces PECR in the UK.
+                            </p>
+
+                            <h3 className="text-2xl font-semibold text-slate-800 mt-8 mb-4">PECR Requirements We Follow</h3>
+                            <ul className="space-y-3 text-slate-700 mb-6">
+                                <li><strong>✓ Consent Before Cookies:</strong> We must obtain your consent <strong>before</strong> storing non-essential cookies on your device</li>
+                                <li><strong>✓ Clear Information:</strong> We provide clear, transparent information about which cookies we use and why</li>
+                                <li><strong>✓ Easy to Refuse:</strong> You can refuse non-essential cookies without affecting your access to our service</li>
+                                <li><strong>✓ Respect Do Not Track:</strong> We honor browser Do Not Track signals (PECR Regulation 6)</li>
+                                <li><strong>✓ Transparent Operation:</strong> You have the right to know what cookies are on your device and withdraw consent at any time</li>
+                            </ul>
+
+                            <div className="bg-red-50 border-l-4 border-red-600 p-6 rounded-r-lg mb-6">
+                                <p className="text-red-800 font-semibold mb-2">PECR Enforcement by ICO</p>
+                                <p className="text-red-700 text-sm">
+                                    The ICO can issue fines up to <strong>£500,000</strong> for serious PECR breaches. We conduct regular cookie audits to ensure ongoing compliance with PECR requirements.
+                                </p>
+                            </div>
+
+                            <h3 className="text-2xl font-semibold text-slate-800 mt-8 mb-4">Essential Cookies (No Consent Required)</h3>
+                            <p className="text-slate-700 leading-relaxed mb-4">
+                                PECR Regulation 6(4) provides an exemption for "strictly necessary" cookies that are essential for the service to operate. These cookies <strong>do not require your consent:</strong>
+                            </p>
+                            <ul className="space-y-2 text-slate-700 mb-6">
+                                <li>✓ <strong>Authentication Cookies:</strong> Required for you to log in and maintain your session</li>
+                                <li>✓ <strong>Security Cookies:</strong> Required to protect against fraud and unauthorized access (CSRF protection, rate limiting)</li>
+                                <li>✓ <strong>Load Balancing Cookies:</strong> Required to distribute server requests evenly</li>
+                                <li>✓ <strong>Session Management Cookies:</strong> Required to keep you logged in as you navigate</li>
+                            </ul>
+
+                            <h3 className="text-2xl font-semibold text-slate-800 mt-8 mb-4">Your PECR Rights</h3>
+                            <ul className="space-y-2 text-slate-700 mb-6">
+                                <li>✓ <strong>Right to Know:</strong> Know what cookies are on your device and their purpose</li>
+                                <li>✓ <strong>Right to Refuse:</strong> Opt-out of non-essential cookies without service interruption</li>
+                                <li>✓ <strong>Right to Withdraw Consent:</strong> Change your cookie preferences at any time via <Link href="#cookie-consent" className="text-amber-600 hover:text-amber-700 underline">Cookie Consent</Link></li>
+                                <li>✓ <strong>Right to Complain:</strong> File a complaint with the ICO if you believe we violate PECR at <a href="https://ico.org.uk" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700 underline">ico.org.uk</a></li>
+                            </ul>
+
+                            <div className="bg-blue-50 border-l-4 border-blue-600 p-6 rounded-r-lg">
+                                <p className="text-blue-800 font-semibold mb-2">ICO Guidance on PECR</p>
+                                <p className="text-blue-700 text-sm mb-2">
+                                    For more information about your rights under PECR, visit the <a href="https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guide-to-pecr/" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 underline font-semibold">ICO PECR Guidance Page</a>.
+                                </p>
+                                <p className="text-blue-700 text-sm">
+                                    ICO Helpline: <strong>0303 123 1113</strong> | Email: <a href="mailto:casework@ico.org.uk" className="text-blue-700 hover:text-blue-800 underline">casework@ico.org.uk</a>
+                                </p>
+                            </div>
+                        </section>
+
+                        {/* Section 3: Types of Cookies */}
                         <section id="types-of-cookies" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Settings className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">2. Types of Cookies We Use</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">3. Types of Cookies We Use</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-6">
@@ -241,7 +299,7 @@ export default function CookiePolicyPage() {
                         <section id="third-party-cookies" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Globe className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">3. Third-Party Cookies</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">4. Third-Party Cookies</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-6">
@@ -342,7 +400,7 @@ export default function CookiePolicyPage() {
                         <section id="cookie-duration" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Settings className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">4. Cookie Duration</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">5. Cookie Duration</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-6">
@@ -386,7 +444,7 @@ export default function CookiePolicyPage() {
                         <section id="cookie-table" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Cookie className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">5. Detailed Cookie Table</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">6. Detailed Cookie Table</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-6">
@@ -535,7 +593,7 @@ export default function CookiePolicyPage() {
                         <section id="control-cookies" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Settings className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">6. How to Control Cookies</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">7. How to Control Cookies</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-6">
@@ -648,11 +706,11 @@ export default function CookiePolicyPage() {
                             </div>
                         </section>
 
-                        {/* Section 7: Do Not Track */}
+                        {/* Section 8: Do Not Track */}
                         <section id="do-not-track" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Eye className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">7. Do Not Track (DNT) Signals</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">8. Do Not Track (DNT) Signals</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-4">
@@ -670,11 +728,11 @@ export default function CookiePolicyPage() {
                             </p>
                         </section>
 
-                        {/* Section 8: Cookie Consent */}
+                        {/* Section 9: Cookie Consent */}
                         <section id="cookie-consent" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <CheckCircle className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">8. Cookie Consent (EU/UK Users)</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">9. Cookie Consent (EU/UK Users)</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-4">
@@ -708,11 +766,11 @@ export default function CookiePolicyPage() {
                             </p>
                         </section>
 
-                        {/* Section 9: Updates */}
+                        {/* Section 10: Updates */}
                         <section id="updates" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Settings className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">9. Updates to This Cookie Policy</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">10. Updates to This Cookie Policy</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-4">
@@ -735,7 +793,7 @@ export default function CookiePolicyPage() {
                         <section id="contact" className="mb-12 scroll-mt-8">
                             <div className="flex items-center gap-3 mb-4">
                                 <Cookie className="h-8 w-8 text-amber-600" />
-                                <h2 className="text-3xl font-bold text-slate-900 m-0">10. Contact Us</h2>
+                                <h2 className="text-3xl font-bold text-slate-900 m-0">11. Contact Us</h2>
                             </div>
 
                             <p className="text-slate-700 leading-relaxed mb-6">

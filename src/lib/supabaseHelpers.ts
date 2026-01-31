@@ -134,3 +134,14 @@ export async function getDashboardStats(userId: string) {
         totalTranscripts: totalTranscripts || 0,
     };
 }
+
+// Helper to get inbound agent configuration via backend API
+export async function getInboundAgentConfig() {
+    try {
+        const data = await authedBackendFetch<any>('/api/founder-console/agent/config');
+        return data?.inbound || null;
+    } catch (error: any) {
+        console.error('Failed to fetch inbound agent config:', error);
+        throw error;
+    }
+}

@@ -298,8 +298,8 @@ export default function ApiKeysPage() {
 
     if (loading || isLoadingSettings) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            <div className="min-h-screen bg-surgical-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-surgical-600 animate-spin" />
             </div>
         );
     }
@@ -309,37 +309,37 @@ export default function ApiKeysPage() {
     return (
         <div className="max-w-4xl mx-auto px-6 py-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">API Keys & Integrations</h1>
-                <p className="text-gray-600 dark:text-slate-400">Manage your Vapi and Twilio credentials securely.</p>
+                <h1 className="text-3xl font-bold text-obsidian mb-2">API Keys & Integrations</h1>
+                <p className="text-obsidian/60">Manage your Vapi and Twilio credentials securely.</p>
             </div>
 
             <div className="space-y-8">
 
                 {/* Calendar Integration */}
-                <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-2">Calendar Integration</h3>
-                    <p className="text-sm text-slate-400 mb-6">
+                <div className="bg-white border border-surgical-200 rounded-2xl p-6">
+                    <h3 className="text-lg font-semibold text-obsidian mb-2">Calendar Integration</h3>
+                    <p className="text-sm text-obsidian/60 mb-6">
                         Authorize Voxanne to manage your clinic&apos;s schedule.
                     </p>
 
                     {/* Success Message */}
                     {calendarSuccess && (
-                        <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                            <p className="text-sm text-emerald-400">{calendarSuccess}</p>
+                        <div className="mb-4 p-4 bg-surgical-50 border border-surgical-200 rounded-lg">
+                            <p className="text-sm text-surgical-600">{calendarSuccess}</p>
                         </div>
                     )}
 
                     {/* Error Message */}
                     {calendarError && (
-                        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                            <p className="text-sm text-red-400 font-semibold mb-2">Connection Error</p>
-                            <p className="text-sm text-red-400 mb-2">{calendarError}</p>
+                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm text-red-700 font-semibold mb-2">Connection Error</p>
+                            <p className="text-sm text-red-700 mb-2">{calendarError}</p>
 
                             {/* Debug info in development */}
                             {process.env.NODE_ENV === 'development' && (
                                 <details className="mt-2">
-                                    <summary className="text-xs text-red-300 cursor-pointer font-medium">Debug Info</summary>
-                                    <pre className="mt-2 text-xs text-red-300 overflow-auto bg-black/30 p-2 rounded">
+                                    <summary className="text-xs text-red-700 cursor-pointer font-medium">Debug Info</summary>
+                                    <pre className="mt-2 text-xs text-red-700 overflow-auto bg-red-50 p-2 rounded">
                                         {JSON.stringify({
                                             timestamp: new Date().toISOString(),
                                             calendarStatus,
@@ -351,22 +351,22 @@ export default function ApiKeysPage() {
                         </div>
                     )}
 
-                    <div className="flex items-center justify-between p-4 bg-black/20 border border-white/5 rounded-xl">
+                    <div className="flex items-center justify-between p-4 bg-surgical-50 border border-surgical-200 rounded-xl">
                         <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${calendarStatus.connected
-                                ? 'bg-emerald-500/10'
-                                : 'bg-blue-500/10'
+                                ? 'bg-surgical-50'
+                                : 'bg-surgical-50'
                                 }`}>
                                 <Calendar className={`w-5 h-5 ${calendarStatus.connected
-                                    ? 'text-emerald-400'
-                                    : 'text-blue-400'
+                                    ? 'text-surgical-600'
+                                    : 'text-surgical-600'
                                     }`} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-white">Google Calendar</p>
+                                <p className="text-sm font-medium text-obsidian">Google Calendar</p>
                                 <p className={`text-xs ${calendarStatus.connected
-                                    ? 'text-emerald-400'
-                                    : 'text-slate-500'
+                                    ? 'text-surgical-600'
+                                    : 'text-obsidian/60'
                                     }`}>
                                     {calendarStatus.connected
                                         ? (calendarStatus.email ? `Connected as ${calendarStatus.email}` : 'Connected')
@@ -394,7 +394,7 @@ export default function ApiKeysPage() {
                                         }
                                     }}
                                     disabled={isConnectingCalendar}
-                                    className="px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                    className="px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 rounded-lg transition-all"
                                 >
                                     Disconnect
                                 </button>
@@ -403,8 +403,8 @@ export default function ApiKeysPage() {
                                 onClick={handleConnectCalendar}
                                 disabled={isConnectingCalendar || calendarStatus.connected}
                                 className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${calendarStatus.connected
-                                    ? 'bg-emerald-500/10 text-emerald-400 cursor-default border border-emerald-500/20'
-                                    : 'bg-white text-black hover:bg-slate-200 disabled:opacity-60 disabled:cursor-not-allowed'
+                                    ? 'bg-surgical-50 text-surgical-600 cursor-default border border-surgical-200'
+                                    : 'bg-obsidian text-white hover:bg-obsidian/80 disabled:opacity-60 disabled:cursor-not-allowed'
                                     }`}
                             >
                                 {isConnectingCalendar ? 'Working...' : calendarStatus.connected ? 'Connected' : 'Link My Google Calendar'}

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { FadeInOnScroll } from "./ParallaxSection";
-import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook, Lock } from "lucide-react";
+import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook, Lock, Settings } from "lucide-react";
 import Logo from "./Logo";
 
 export default function FooterRedesigned() {
@@ -31,9 +31,12 @@ export default function FooterRedesigned() {
         ],
         Legal: [
             { label: "Privacy Policy", href: "/privacy" },
-            { label: "Terms of Service", href: "/terms" },
-            { label: "HIPAA Compliance", href: "/hipaa-compliance" },
             { label: "Cookie Policy", href: "/cookie-policy" },
+            { label: "Data Processing Agreement", href: "/dpa" },
+            { label: "Sub-Processors", href: "/sub-processors" },
+            { label: "Terms of Service", href: "/terms" },
+            { label: "Healthcare Compliance", href: "/hipaa-compliance" },
+            { label: "Cookie Settings", href: "#cookie-settings", isButton: true },
         ],
     };
 
@@ -102,14 +105,24 @@ export default function FooterRedesigned() {
                             >
                                 <h3 className="font-bold text-pure-white mb-4">{category}</h3>
                                 <ul className="space-y-3">
-                                    {links.map((link) => (
+                                    {links.map((link: any) => (
                                         <li key={link.href}>
-                                            <Link
-                                                href={link.href}
-                                                className="text-pure-white/70 hover:text-pure-white transition-colors"
-                                            >
-                                                {link.label}
-                                            </Link>
+                                            {link.isButton ? (
+                                                <button
+                                                    onClick={() => window.dispatchEvent(new Event('openCookieSettings'))}
+                                                    className="flex items-center gap-2 text-pure-white/70 hover:text-pure-white transition-colors cursor-pointer"
+                                                >
+                                                    <Settings className="w-4 h-4" />
+                                                    {link.label}
+                                                </button>
+                                            ) : (
+                                                <Link
+                                                    href={link.href}
+                                                    className="text-pure-white/70 hover:text-pure-white transition-colors"
+                                                >
+                                                    {link.label}
+                                                </Link>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>
@@ -131,20 +144,8 @@ export default function FooterRedesigned() {
                             <div className="flex flex-col items-center">
                                 <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
                                     <Image
-                                        src="/badges/hipaa-compliant.jpg"
-                                        alt="HIPAA Compliant - Full compliance with Business Associate Agreement"
-                                        width={120}
-                                        height={60}
-                                        className="w-28 h-14 md:w-32 md:h-16 object-contain opacity-100 hover:opacity-90 transition-opacity"
-                                        loading="lazy"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
-                                    <Image
                                         src="/badges/gdpr-ready.png"
-                                        alt="GDPR Ready - EU data protection standards compliance"
+                                        alt="GDPR Ready - UK & EU data protection standards compliance"
                                         width={120}
                                         height={60}
                                         className="w-28 h-14 md:w-32 md:h-16 object-contain opacity-100 hover:opacity-90 transition-opacity"
@@ -155,6 +156,18 @@ export default function FooterRedesigned() {
                             <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 hover:border-white/30 transition-colors backdrop-blur-sm">
                                 <Lock className="w-4 h-4 text-pure-white/80" />
                                 <span className="text-xs text-pure-white/80 font-medium">SOC 2 Type II</span>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                                    <Image
+                                        src="/badges/hipaa-compliant.jpg"
+                                        alt="HIPAA Compliant - Full compliance with Business Associate Agreement"
+                                        width={120}
+                                        height={60}
+                                        className="w-28 h-14 md:w-32 md:h-16 object-contain opacity-100 hover:opacity-90 transition-opacity"
+                                        loading="lazy"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </motion.div>
@@ -173,7 +186,7 @@ export default function FooterRedesigned() {
                             viewport={{ once: true }}
                             className="text-pure-white/60 text-sm space-y-2"
                         >
-                            <p>{currentYear} Voxanne AI. All rights reserved. HIPAA Compliant.</p>
+                            <p>{currentYear} Voxanne AI. All rights reserved. UK GDPR & HIPAA Compliant.</p>
                             <div className="flex items-center gap-2 text-sm text-pure-white/70">
                                 <span>A product of</span>
                                 <a href="https://www.callwaitingai.dev/" target="_blank" rel="noopener noreferrer" className="font-medium text-surgical-blue hover:text-surgical-blue/80 transition-colors underline">

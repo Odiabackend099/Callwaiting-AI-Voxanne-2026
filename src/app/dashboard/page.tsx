@@ -92,8 +92,8 @@ export default function CallWaitingAIDashboard() {
         <div className="max-w-7xl mx-auto px-6 py-8 pb-32 space-y-8">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">Dashboard</h1>
-                <p className="text-slate-500 dark:text-slate-400">Welcome back. Here&apos;s your clinical system overview.</p>
+                <h1 className="text-3xl font-bold text-obsidian tracking-tight mb-2">Dashboard</h1>
+                <p className="text-obsidian/60">Welcome back. Here&apos;s your clinical system overview.</p>
             </div>
 
             {/* Clinical Pulse (Top ROI Metrics) */}
@@ -104,14 +104,14 @@ export default function CallWaitingAIDashboard() {
 
             {/* Recent Calls Table */}
             <div className="glass-panel rounded-2xl overflow-hidden">
-                <div className="p-6 border-b border-gray-100 dark:border-slate-800/60 flex items-center justify-between">
+                <div className="p-6 border-b border-surgical-200 flex items-center justify-between">
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Recent Activity</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Real-time call logs</p>
+                        <h3 className="text-lg font-bold text-obsidian tracking-tight">Recent Activity</h3>
+                        <p className="text-xs text-obsidian/60">Real-time call logs</p>
                     </div>
                     <button
                         onClick={() => router.push('/dashboard/calls')}
-                        className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20"
+                        className="text-xs font-medium text-surgical-600 hover:text-surgical-700 transition-colors bg-surgical-50 px-3 py-1.5 rounded-lg border border-surgical-200"
                     >
                         View All Activity
                     </button>
@@ -123,36 +123,32 @@ export default function CallWaitingAIDashboard() {
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="flex items-center justify-between animate-pulse">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800" />
+                                        <div className="w-10 h-10 rounded-full bg-surgical-100" />
                                         <div className="space-y-2">
-                                            <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
-                                            <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+                                            <div className="h-4 w-32 bg-surgical-100 rounded" />
+                                            <div className="h-3 w-20 bg-surgical-100 rounded" />
                                         </div>
                                     </div>
-                                    <div className="h-6 w-20 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                                    <div className="h-6 w-20 bg-surgical-100 rounded-full" />
                                 </div>
                             ))}
                         </div>
                     ) : recentEvents.length === 0 ? (
                         <div className="text-center py-16">
-                            <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-slate-800">
-                                <Phone className="w-8 h-8 text-slate-400" />
+                            <div className="w-16 h-16 bg-surgical-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-surgical-200">
+                                <Phone className="w-8 h-8 text-obsidian/40" />
                             </div>
-                            <p className="text-slate-900 dark:text-white font-medium">No recent activity yet</p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Waiting for your first call...</p>
+                            <p className="text-obsidian font-medium">No recent activity yet</p>
+                            <p className="text-sm text-obsidian/60 mt-1">Waiting for your first call...</p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-gray-100 dark:divide-slate-800/60">
+                        <div className="divide-y divide-surgical-200">
                             {recentEvents.map((event) => (
-                                <div key={event.id} className="px-6 py-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                                <div key={event.id} className="px-6 py-4 hover:bg-surgical-50 transition-colors">
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex items-start gap-4 flex-1">
                                             {/* Event Type Icon */}
-                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                                                event.type === 'call_completed' ? 'bg-blue-500/80' :
-                                                event.type === 'hot_lead_detected' ? 'bg-red-500/80' :
-                                                'bg-green-500/80'
-                                            }`}>
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-surgical-600/10 text-surgical-600 border border-surgical-200 font-bold">
                                                 {event.type === 'call_completed' ? '📞' :
                                                 event.type === 'hot_lead_detected' ? '🔥' :
                                                 '📅'}
@@ -160,7 +156,7 @@ export default function CallWaitingAIDashboard() {
 
                                             {/* Event Details */}
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-slate-900 dark:text-slate-200 truncate">
+                                                <p className="font-medium text-obsidian truncate">
                                                     {event.summary}
                                                 </p>
 
@@ -168,12 +164,12 @@ export default function CallWaitingAIDashboard() {
                                                 <div className="mt-2 space-y-1">
                                                     {event.type === 'call_completed' && event.metadata && (
                                                         <>
-                                                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                            <div className="text-xs text-obsidian/60">
                                                                 <span className="font-medium">Sentiment:</span> {event.metadata.sentiment || 'Unknown'}
                                                                 {event.metadata.sentiment_urgency && ` • ${event.metadata.sentiment_urgency} urgency`}
                                                             </div>
                                                             {event.metadata.sentiment_summary && (
-                                                                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                                                                <p className="text-xs text-obsidian/60 line-clamp-2">
                                                                     {event.metadata.sentiment_summary}
                                                                 </p>
                                                             )}
@@ -181,18 +177,18 @@ export default function CallWaitingAIDashboard() {
                                                     )}
                                                     {event.type === 'hot_lead_detected' && event.metadata && (
                                                         <>
-                                                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                            <div className="text-xs text-obsidian/60">
                                                                 <span className="font-medium">Score:</span> {event.metadata.lead_score}/100
                                                             </div>
                                                             {event.metadata.service_interest && (
-                                                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                                <div className="text-xs text-obsidian/60">
                                                                     <span className="font-medium">Interested in:</span> {event.metadata.service_interest}
                                                                 </div>
                                                             )}
                                                         </>
                                                     )}
                                                     {event.type === 'appointment_booked' && event.metadata && (
-                                                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                        <div className="text-xs text-obsidian/60">
                                                             {event.metadata.scheduled_at && (
                                                                 <span><span className="font-medium">Scheduled:</span> {new Date(event.metadata.scheduled_at).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                                             )}
@@ -204,7 +200,7 @@ export default function CallWaitingAIDashboard() {
 
                                         {/* Time */}
                                         <div className="flex-shrink-0">
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 text-right whitespace-nowrap">
+                                            <p className="text-xs text-obsidian/60 text-right whitespace-nowrap">
                                                 {formatTimeAgo(event.timestamp)}
                                             </p>
                                         </div>

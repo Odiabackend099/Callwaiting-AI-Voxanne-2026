@@ -6,12 +6,12 @@ import Image from "next/image";
 
 const badges = [
     {
-        name: "HIPAA Compliant",
+        name: "GDPR Compliant",
         type: "image",
-        imageSrc: "/badges/hipaa-compliant.jpg",
-        icon: Shield,
-        description: "Full HIPAA compliance with BAA",
-        color: "cyan"
+        imageSrc: "/badges/gdpr-ready.png",
+        icon: Award,
+        description: "UK GDPR & EU data protection standards",
+        color: "purple"
     },
     {
         name: "SOC 2 Type II",
@@ -28,12 +28,12 @@ const badges = [
         color: "green"
     },
     {
-        name: "GDPR Compliant",
+        name: "HIPAA Compliant",
         type: "image",
-        imageSrc: "/badges/gdpr-ready.png",
-        icon: Award,
-        description: "EU data protection standards",
-        color: "purple"
+        imageSrc: "/badges/hipaa-compliant.jpg",
+        icon: Shield,
+        description: "Full HIPAA compliance with BAA (US healthcare)",
+        color: "cyan"
     }
 ];
 

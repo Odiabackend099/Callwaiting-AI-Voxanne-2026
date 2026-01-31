@@ -167,6 +167,8 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
         // Update existing outbound agent
         const { error: updateError } = await supabase
           .from('agents')
+          // @ai-invariant DO NOT REMOVE vapi_phone_number_id or vapi_assistant_id from this payload.
+          // These fields are required for outbound calls to work. See .claude/CLAUDE.md "CRITICAL INVARIANTS".
           .update({
             name: 'Voxanne (Outbound SDR)',
             system_prompt: outboundConfig.system_prompt,
@@ -175,6 +177,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             language: outboundConfig.language,
             max_call_duration: outboundConfig.max_call_duration,
             vapi_assistant_id: outboundConfig.vapi_assistant_id,
+            vapi_phone_number_id: outboundConfig.vapi_phone_number_id,
             active: outboundConfig.is_active,
             updated_at: new Date().toISOString()
           })
@@ -196,6 +199,8 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
         // Create new outbound agent
         const { data: created, error: createError } = await supabase
           .from('agents')
+          // @ai-invariant DO NOT REMOVE vapi_phone_number_id or vapi_assistant_id from this payload.
+          // These fields are required for outbound calls to work. See .claude/CLAUDE.md "CRITICAL INVARIANTS".
           .insert({
             org_id: orgId,
             role: 'outbound',
@@ -206,6 +211,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             language: outboundConfig.language,
             max_call_duration: outboundConfig.max_call_duration,
             vapi_assistant_id: outboundConfig.vapi_assistant_id,
+            vapi_phone_number_id: outboundConfig.vapi_phone_number_id,
             active: outboundConfig.is_active,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()

@@ -1,7 +1,6 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-    darkMode: "class",
     content: [
         "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
         "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,21 +9,27 @@ const config: Config = {
     theme: {
         extend: {
             colors: {
-                // Clinical Trust Palette (Calendly Blue & Slate)
-                "surgical-50": "#eff6ff",
-                "surgical-100": "#dbeafe",
-                "surgical-200": "#bfdbfe",
-                "surgical-300": "#93c5fd",
-                "surgical-400": "#60a5fa",
-                "surgical-500": "#3b82f6",
-                "surgical-600": "#006BFF", // Calendly Blue
-                "surgical-700": "#1d4ed8",
-                "surgical-800": "#1e40af",
-                "surgical-900": "#1e3a8a",
-                "navy-900": "#0F172A", // Slate 900 (Sharp Text)
-                "slate-50": "#F8FAFC", // Subtle Background
-                "slate-100": "#F1F5F9",
-                "slate-600": "#475569",
+                // Clinical Trust Palette - Monochromatic Blue System
+                obsidian: {
+                    DEFAULT: "#020412", // Primary Text Only
+                },
+                surgical: {
+                    50: "#F0F9FF",   // Sterile Background
+                    100: "#E0F2FE",  // Hover states
+                    200: "#BFDBFE",  // Sky Mist (borders)
+                    300: "#93c5fd",
+                    400: "#60a5fa",
+                    500: "#3B82F6",  // Icons/Accents
+                    600: "#1D4ED8",  // Electric Cobalt (primary buttons)
+                    700: "#1e40af",
+                    800: "#1e3a8a",
+                    900: "#1e3a8a",
+                },
+                // Semantic Aliases for Clinical Trust
+                "clinical-bg": "#F0F9FF",      // Main app background
+                "clinical-surface": "#FFFFFF",  // Card backgrounds
+                "clinical-border": "#BFDBFE",   // Border color
+                // Legacy colors removed - use surgical palette only
                 // Shadcn/UI color system
                 background: "hsl(var(--background))",
                 foreground: "hsl(var(--foreground))",

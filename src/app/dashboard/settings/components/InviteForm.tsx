@@ -82,7 +82,7 @@ export const InviteForm: React.FC<InviteFormProps> = ({ onClose, onSuccess }) =>
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Error Alert */}
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-800">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span className="text-sm">{error}</span>
         </div>
@@ -90,7 +90,7 @@ export const InviteForm: React.FC<InviteFormProps> = ({ onClose, onSuccess }) =>
 
       {/* Success Alert */}
       {success && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-800">
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
           <CheckCircle className="w-4 h-4 flex-shrink-0" />
           <span className="text-sm">{success}</span>
         </div>
@@ -98,24 +98,24 @@ export const InviteForm: React.FC<InviteFormProps> = ({ onClose, onSuccess }) =>
 
       {/* Email Input */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+        <label className="block text-sm font-medium text-obsidian/70 mb-1">Email Address *</label>
         <input
           type="email"
           name="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="team@example.com"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full px-3 py-2 border border-surgical-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-surgical-500"
           disabled={isSubmitting}
         />
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-obsidian/60 mt-1">
           An invitation will be sent to this email address
         </p>
       </div>
 
       {/* Role Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+        <label className="block text-sm font-medium text-obsidian/70 mb-2">Role *</label>
         <div className="space-y-2">
           {(['admin', 'manager', 'agent', 'viewer'] as const).map((r) => (
             <label key={r} className="flex items-start">
@@ -126,11 +126,11 @@ export const InviteForm: React.FC<InviteFormProps> = ({ onClose, onSuccess }) =>
                 checked={role === r}
                 onChange={(e) => setRole(e.target.value as typeof role)}
                 disabled={isSubmitting}
-                className="w-4 h-4 text-emerald-600 mt-0.5"
+                className="w-4 h-4 text-surgical-600 mt-0.5"
               />
               <div className="ml-3">
-                <span className="text-sm font-medium text-gray-900 capitalize">{r}</span>
-                <p className="text-xs text-gray-500">{roleDescriptions[r]}</p>
+                <span className="text-sm font-medium text-obsidian capitalize">{r}</span>
+                <p className="text-xs text-obsidian/60">{roleDescriptions[r]}</p>
               </div>
             </label>
           ))}
@@ -142,7 +142,7 @@ export const InviteForm: React.FC<InviteFormProps> = ({ onClose, onSuccess }) =>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex-1 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex-1 bg-surgical-600 text-white px-4 py-2 rounded-lg hover:bg-surgical-700 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {isSubmitting && <Loader className="w-4 h-4 animate-spin" />}
           {isSubmitting ? 'Sending...' : 'Send Invitation'}
@@ -151,7 +151,7 @@ export const InviteForm: React.FC<InviteFormProps> = ({ onClose, onSuccess }) =>
           type="button"
           onClick={onClose}
           disabled={isSubmitting}
-          className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+          className="flex-1 bg-surgical-100 text-obsidian px-4 py-2 rounded-lg hover:bg-surgical-50 disabled:opacity-50"
         >
           Cancel
         </button>

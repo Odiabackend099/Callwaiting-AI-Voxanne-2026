@@ -29,15 +29,15 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 currentIndex > index
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-surgical-600 text-white'
                   : currentIndex === index
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-400'
+                  ? 'bg-surgical-600 text-white'
+                  : 'bg-surgical-100 text-obsidian/60'
               }`}
             >
               {currentIndex > index ? <Check className="w-4 h-4" /> : index + 1}
             </div>
-            <span className="text-xs mt-2 text-gray-600 dark:text-slate-400 hidden sm:block">
+            <span className="text-xs mt-2 text-obsidian/60 hidden sm:block">
               {s.label}
             </span>
           </div>
@@ -45,8 +45,8 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
             <div
               className={`flex-1 h-0.5 mx-2 transition-colors ${
                 currentIndex > index
-                  ? 'bg-emerald-600'
-                  : 'bg-gray-200 dark:bg-slate-700'
+                  ? 'bg-surgical-600'
+                  : 'bg-surgical-100'
               }`}
             />
           )}

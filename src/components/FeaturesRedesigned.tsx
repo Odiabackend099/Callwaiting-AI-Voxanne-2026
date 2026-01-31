@@ -19,8 +19,8 @@ const features = [
     },
     {
         icon: Shield,
-        title: "HIPAA Compliant",
-        description: "Medical-grade security and privacy for patient data.",
+        title: "UK GDPR & HIPAA Compliant",
+        description: "Medical-grade security and privacy for patient data with full compliance.",
         color: "text-blue-deep",
     },
     {

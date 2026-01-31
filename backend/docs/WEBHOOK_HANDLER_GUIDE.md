@@ -1,18 +1,93 @@
-# Vapi Webhook Handler - Technical Guide
+# ⚠️ OUTDATED DOCUMENTATION - DO NOT USE
+
+**This document is OUTDATED and documents the wrong file.**
+
+---
+
+## 🚨 Correct Documentation Location
+
+**For accurate, up-to-date webhook handler documentation, see:**
+
+→ **CRITICAL_WEBHOOK_ARCHITECTURE.md** (Root directory)
+
+---
+
+## Why This Document is Wrong
+
+This guide documents `backend/src/routes/webhooks.ts`, but that file is **NOT the primary webhook endpoint** for Vapi webhooks.
+
+**Actual Production Architecture (Verified 2026-01-31):**
+
+| What You Need | Where to Find It |
+|---------------|------------------|
+| **Primary Webhook Handler** | `backend/src/routes/vapi-webhook.ts` (lines 211-293) |
+| **Webhook Endpoint** | `/api/vapi/webhook` |
+| **Database Column Mappings** | See CRITICAL_WEBHOOK_ARCHITECTURE.md |
+| **Verification Scripts** | `backend/scripts/verify-call-logged.ts` |
+| **Configuration** | `backend/src/routes/founder-console-v2.ts:645` |
+
+---
+
+## Quick Reference
+
+### Correct Webhook Flow (Production)
+
+```
+Vapi → POST /api/vapi/webhook → vapi-webhook.ts → call_logs table → Dashboard
+```
+
+### Files to Modify for Production Changes
+
+- ✅ `backend/src/routes/vapi-webhook.ts` - Primary webhook handler
+- ❌ `backend/src/routes/webhooks.ts` - NOT used by Vapi
+
+---
+
+## Migration Notice
+
+**Old Documentation (This File):**
+- ❌ Documents `webhooks.ts` (wrong file)
+- ❌ Incorrect endpoint `/api/webhooks/vapi`
+- ❌ Outdated column mappings
+- ❌ Wrong function references
+
+**New Documentation (CRITICAL_WEBHOOK_ARCHITECTURE.md):**
+- ✅ Documents `vapi-webhook.ts` (correct file)
+- ✅ Correct endpoint `/api/vapi/webhook`
+- ✅ Verified column mappings (from_number, total_cost, etc.)
+- ✅ Production-tested code examples
+- ✅ Live fire test results included
+
+---
+
+## ⚠️ Do Not Use Below This Line
+
+The remainder of this document is preserved for historical reference only.
+It documents `backend/src/routes/webhooks.ts` which is NOT the primary Vapi webhook handler.
+
+For accurate information, see **CRITICAL_WEBHOOK_ARCHITECTURE.md**.
+
+---
+
+---
+
+# [OUTDATED] Vapi Webhook Handler - Technical Guide
 
 **Version:** 2026-01-29
-**Status:** Production Ready
+**Status:** ⚠️ OUTDATED - See CRITICAL_WEBHOOK_ARCHITECTURE.md instead
 **Last Updated:** 2026-01-29
 
 ---
 
-## Overview
+## [OUTDATED] Overview
+
+⚠️ **WARNING:** This section documents `backend/src/routes/webhooks.ts` which is NOT used for production Vapi webhooks.
 
 The Vapi webhook handler processes end-of-call reports from Vapi, extracting rich call data (transcript, recording, sentiment analysis) and updating the platform's database for analytics, billing, and lead management.
 
-**Location:** `backend/src/routes/webhooks.ts`
+**Location:** `backend/src/routes/webhooks.ts` ← ⚠️ NOT THE PRIMARY HANDLER
 **Primary Function:** `handleEndOfCallReport()` (lines 1208-1748, ~540 lines)
-**Status:** ✅ FULLY IMPLEMENTED AND PRODUCTION-READY
+**Status:** ⚠️ OUTDATED DOCUMENTATION
 
 ---
 

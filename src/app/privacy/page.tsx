@@ -22,21 +22,22 @@ export default function PrivacyPage() {
                             <h3 className="text-lg font-semibold text-deep-obsidian mb-4">Table of Contents</h3>
                             <ol className="space-y-2 text-sm">
                                 <li><a href="#introduction" className="text-clinical-blue hover:text-surgical-blue">1. Introduction</a></li>
-                                <li><a href="#information-collected" className="text-clinical-blue hover:text-surgical-blue">2. Information We Collect</a></li>
-                                <li><a href="#how-we-use" className="text-clinical-blue hover:text-surgical-blue">3. How We Use Your Information</a></li>
-                                <li><a href="#ai-technology" className="text-clinical-blue hover:text-surgical-blue">4. Artificial Intelligence & Voice Data</a></li>
-                                <li><a href="#data-sharing" className="text-clinical-blue hover:text-surgical-blue">5. Data Sharing & Disclosure</a></li>
-                                <li><a href="#data-security" className="text-clinical-blue hover:text-surgical-blue">6. Data Security</a></li>
-                                <li><a href="#hipaa" className="text-clinical-blue hover:text-surgical-blue">7. HIPAA Compliance</a></li>
-                                <li><a href="#data-retention" className="text-clinical-blue hover:text-surgical-blue">8. Data Retention</a></li>
-                                <li><a href="#your-rights" className="text-clinical-blue hover:text-surgical-blue">9. Your Rights</a></li>
-                                <li><a href="#gdpr" className="text-clinical-blue hover:text-surgical-blue">10. GDPR (European Users)</a></li>
-                                <li><a href="#ccpa" className="text-clinical-blue hover:text-surgical-blue">11. CCPA (California Users)</a></li>
-                                <li><a href="#cookies" className="text-clinical-blue hover:text-surgical-blue">12. Cookies & Tracking</a></li>
-                                <li><a href="#children" className="text-clinical-blue hover:text-surgical-blue">13. Children&apos;s Privacy</a></li>
-                                <li><a href="#international" className="text-clinical-blue hover:text-surgical-blue">14. International Data Transfers</a></li>
-                                <li><a href="#changes" className="text-clinical-blue hover:text-surgical-blue">15. Changes to This Policy</a></li>
-                                <li><a href="#contact" className="text-clinical-blue hover:text-surgical-blue">16. Contact Information</a></li>
+                                <li><a href="#uk-gdpr" className="text-clinical-blue hover:text-surgical-blue">2. UK GDPR Compliance (Primary Framework)</a></li>
+                                <li><a href="#information-collected" className="text-clinical-blue hover:text-surgical-blue">3. Information We Collect</a></li>
+                                <li><a href="#how-we-use" className="text-clinical-blue hover:text-surgical-blue">4. How We Use Your Information</a></li>
+                                <li><a href="#ai-technology" className="text-clinical-blue hover:text-surgical-blue">5. Artificial Intelligence & Voice Data</a></li>
+                                <li><a href="#data-sharing" className="text-clinical-blue hover:text-surgical-blue">6. Data Sharing & Disclosure</a></li>
+                                <li><a href="#data-security" className="text-clinical-blue hover:text-surgical-blue">7. Data Security</a></li>
+                                <li><a href="#healthcare" className="text-clinical-blue hover:text-surgical-blue">8. Healthcare Compliance (HIPAA)</a></li>
+                                <li><a href="#data-retention" className="text-clinical-blue hover:text-surgical-blue">9. Data Retention</a></li>
+                                <li><a href="#your-rights" className="text-clinical-blue hover:text-surgical-blue">10. Your Rights</a></li>
+                                <li><a href="#eu-gdpr" className="text-clinical-blue hover:text-surgical-blue">11. EU GDPR for EEA/EU Users</a></li>
+                                <li><a href="#ccpa" className="text-clinical-blue hover:text-surgical-blue">12. CCPA (California Users)</a></li>
+                                <li><a href="#cookies" className="text-clinical-blue hover:text-surgical-blue">13. Cookies & Tracking</a></li>
+                                <li><a href="#children" className="text-clinical-blue hover:text-surgical-blue">14. Children&apos;s Privacy</a></li>
+                                <li><a href="#international" className="text-clinical-blue hover:text-surgical-blue">15. International Data Transfers</a></li>
+                                <li><a href="#changes" className="text-clinical-blue hover:text-surgical-blue">16. Changes to This Policy</a></li>
+                                <li><a href="#contact" className="text-clinical-blue hover:text-surgical-blue">17. Contact Information</a></li>
                             </ol>
                         </div>
 
@@ -60,17 +61,118 @@ export default function PrivacyPage() {
                             <div className="bg-blue-50 border-l-4 border-clinical-blue p-4 my-6">
                                 <p className="text-sm text-blue-800">
                                     <strong>Healthcare Organizations:</strong> If you are a healthcare provider using Voxanne AI
-                                    to handle patient communications, please also review Section 7 (HIPAA Compliance) and our{' '}
+                                    to handle patient communications, please also review Section 8 (Healthcare Compliance) and our{' '}
                                     <a href="/hipaa-compliance" className="text-clinical-blue hover:text-surgical-blue underline">
-                                        HIPAA Compliance Page
+                                        Healthcare Compliance Page
                                     </a>.
                                 </p>
                             </div>
                         </section>
 
-                        {/* 2. Information We Collect */}
+                        {/* 2. UK GDPR Compliance */}
+                        <section id="uk-gdpr" className="mb-12">
+                            <h2 className="text-3xl font-bold text-deep-obsidian mb-6">2. UK GDPR Compliance (Primary Framework)</h2>
+                            <p className="mb-4">
+                                <strong>Voxanne AI is a UK-based company operating under UK GDPR as our primary compliance framework.</strong> We are committed to protecting the rights of individuals in the UK and EU in accordance with the UK General Data Protection Regulation (UK GDPR).
+                            </p>
+
+                            <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">2.1 Data Controller Information</h3>
+                            <div className="bg-clinical-blue/5 border-l-4 border-clinical-blue p-6 rounded-r-lg mb-6">
+                                <p className="font-semibold text-deep-obsidian mb-3">Call Waiting AI Ltd</p>
+                                <p className="text-slate-700 mb-3">Collage House, 2nd Floor</p>
+                                <p className="text-slate-700 mb-3">17 King Edward Road</p>
+                                <p className="text-slate-700 mb-3">Ruislip, London HA4 7AE</p>
+                                <p className="text-slate-700 mb-3">United Kingdom</p>
+                                <p className="text-slate-700 mb-1"><strong>Company Number:</strong> 16917594</p>
+                                <p className="text-slate-700"><strong>ICO Registration:</strong> [ICO Number]</p>
+                            </div>
+
+                            <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">2.2 Legal Bases for Processing (UK GDPR Article 6)</h3>
+                            <p className="mb-4">We process personal data under the following legal bases:</p>
+                            <ul className="list-disc ml-6 mb-6 space-y-3">
+                                <li><strong>Contract Performance (Article 6(1)(b)):</strong> Processing necessary to provide AI receptionist services (call handling, appointment booking, SMS sending)</li>
+                                <li><strong>Legitimate Interests (Article 6(1)(f)):</strong> Security, fraud prevention, service improvements, analytics, and business operations</li>
+                                <li><strong>Consent (Article 6(1)(a)):</strong> Marketing communications, non-essential cookies, and optional features (with easy opt-out)</li>
+                                <li><strong>Legal Obligation (Article 6(1)(c)):</strong> Tax compliance, financial record-keeping, and regulatory obligations</li>
+                            </ul>
+
+                            <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">2.3 Special Category Data (Health Data - Article 9)</h3>
+                            <p className="mb-4">
+                                If you process health-related information through our service (e.g., appointment bookings at medical clinics, diagnoses in call transcripts), this constitutes <strong>Special Category Data</strong> under UK GDPR Article 9, which requires additional protection.
+                            </p>
+                            <p className="mb-4"><strong>Legal bases for health data:</strong></p>
+                            <ul className="list-disc ml-6 mb-6 space-y-2">
+                                <li><strong>Explicit Consent (Article 9(2)(a)):</strong> Patients explicitly consent when calling or using services</li>
+                                <li><strong>Healthcare Provider Operations (Article 9(2)(h)):</strong> Processing necessary for healthcare provision</li>
+                                <li><strong>Public Health Interest (Article 9(2)(i)):</strong> Appointment scheduling for public health purposes</li>
+                            </ul>
+                            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-6">
+                                <p className="text-sm text-yellow-800">
+                                    <strong>Important:</strong> If you are a healthcare organization, please ensure you have appropriate consents from patients before processing their health data through Voxanne AI. Review our <a href="/hipaa-compliance" className="text-clinical-blue hover:text-surgical-blue underline">Healthcare Compliance Page</a> for healthcare-specific requirements.
+                                </p>
+                            </div>
+
+                            <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">2.4 UK GDPR vs EU GDPR (Post-Brexit)</h3>
+                            <p className="mb-4">Following Brexit, the UK maintains its own GDPR framework (UK GDPR) that is substantially similar to EU GDPR with minor differences:</p>
+                            <ul className="list-disc ml-6 mb-6 space-y-2">
+                                <li><strong>Supervisory Authority:</strong> Information Commissioner&apos;s Office (ICO) for UK customers</li>
+                                <li><strong>Data Transfer Mechanism:</strong> UK IDTA instead of SCCs for UK-to-third-country transfers</li>
+                                <li><strong>Adequacy Status:</strong> UK is recognized as adequate by the EU; EU is recognized as adequate by the UK</li>
+                                <li><strong>Regulatory Cooperation:</strong> ICO cooperates with EU supervisory authorities on cross-border matters</li>
+                            </ul>
+
+                            <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">2.5 Your Rights Under UK GDPR</h3>
+                            <p className="mb-4">You have the following rights, which we support through our APIs and dashboard:</p>
+                            <div className="overflow-x-auto mb-6">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-100">
+                                            <th className="border border-slate-300 px-4 py-2 text-left font-semibold">Right</th>
+                                            <th className="border border-slate-300 px-4 py-2 text-left font-semibold">Description</th>
+                                            <th className="border border-slate-300 px-4 py-2 text-left font-semibold">How to Exercise</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td className="border border-slate-300 px-4 py-2 font-semibold">Right to Access (Article 15)</td>
+                                            <td className="border border-slate-300 px-4 py-2">Request copy of your personal data</td>
+                                            <td className="border border-slate-300 px-4 py-2">Email privacy@voxanne.ai or use data export API</td>
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className="border border-slate-300 px-4 py-2 font-semibold">Right to Rectification (Article 16)</td>
+                                            <td className="border border-slate-300 px-4 py-2">Correct inaccurate personal data</td>
+                                            <td className="border border-slate-300 px-4 py-2">Update via dashboard or email privacy@voxanne.ai</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="border border-slate-300 px-4 py-2 font-semibold">Right to Erasure (Article 17)</td>
+                                            <td className="border border-slate-300 px-4 py-2">Request deletion of personal data</td>
+                                            <td className="border border-slate-300 px-4 py-2">Use data deletion API or email privacy@voxanne.ai (30-day process)</td>
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className="border border-slate-300 px-4 py-2 font-semibold">Right to Portability (Article 20)</td>
+                                            <td className="border border-slate-300 px-4 py-2">Receive data in machine-readable format</td>
+                                            <td className="border border-slate-300 px-4 py-2">Use data export API (JSON format)</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="border border-slate-300 px-4 py-2 font-semibold">Right to Object (Article 21)</td>
+                                            <td className="border border-slate-300 px-4 py-2">Object to processing based on legitimate interests</td>
+                                            <td className="border border-slate-300 px-4 py-2">Email privacy@voxanne.ai with objection details</td>
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className="border border-slate-300 px-4 py-2 font-semibold">Right to Restrict (Article 18)</td>
+                                            <td className="border border-slate-300 px-4 py-2">Limit how we process your data</td>
+                                            <td className="border border-slate-300 px-4 py-2">Email privacy@voxanne.ai with restriction request</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="mb-4"><strong>Response time:</strong> We will respond to all rights requests within 30 days (extendable to 60 days for complex requests). <strong>Fee:</strong> Free of charge (unless requests are manifestly unfounded or excessive).</p>
+                            <p className="mb-4"><strong>Complaints:</strong> If you believe we have violated your UK GDPR rights, you have the right to lodge a complaint with the Information Commissioner&apos;s Office (ICO) at <a href="https://ico.org.uk" target="_blank" rel="noopener noreferrer" className="text-clinical-blue hover:text-surgical-blue underline">ico.org.uk</a>.</p>
+                        </section>
+
+                        {/* 3. Information We Collect */}
                         <section id="information-collected" className="mb-12">
-                            <h2 className="text-3xl font-bold text-deep-obsidian mb-6">2. Information We Collect</h2>
+                            <h2 className="text-3xl font-bold text-deep-obsidian mb-6">3. Information We Collect</h2>
 
                             <h3 className="text-xl font-semibold text-deep-obsidian mb-4">2.1 Account Information</h3>
                             <p className="mb-4">When you register for the Service, we collect:</p>

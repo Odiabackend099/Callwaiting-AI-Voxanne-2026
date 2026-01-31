@@ -31,12 +31,12 @@ const features = [
     },
     {
         title: "Enterprise Security",
-        description: "SOC2 Type II and HIPAA compliant. Your patient data is encrypted at rest and in transit.",
+        description: "SOC2 Type II, UK GDPR and HIPAA compliant. Your patient data is encrypted at rest and in transit.",
         icon: Shield,
         colSpan: "lg:col-span-2",
         bg: "bg-white",
         delay: 0.3,
-        badges: ["HIPAA Compliant", "SOC2 Type II"],
+        badges: ["UK GDPR Compliant", "HIPAA Compliant", "SOC2 Type II"],
     },
 ];
 

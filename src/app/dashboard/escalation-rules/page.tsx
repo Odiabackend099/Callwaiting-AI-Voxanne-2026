@@ -130,15 +130,15 @@ const EscalationRulesPage = () => {
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Escalation Rules</h1>
-                        <p className="text-gray-600 dark:text-slate-400 mt-2">Manage call transfer rules and escalation triggers</p>
+                        <h1 className="text-3xl font-bold text-obsidian">Escalation Rules</h1>
+                        <p className="text-obsidian/60 mt-2">Manage call transfer rules and escalation triggers</p>
                     </div>
                     <button
                         onClick={() => {
                             setEditingRule(null);
                             setShowRuleModal(true);
                         }}
-                        className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+                        className="bg-surgical-600 text-white px-4 py-2 rounded-lg hover:bg-surgical-700 flex items-center gap-2"
                     >
                         <Plus className="w-5 h-5" />
                         Create Rule
@@ -147,88 +147,88 @@ const EscalationRulesPage = () => {
 
                 {/* Alert Messages */}
                 {error && (
-                    <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-lg flex items-center gap-2 text-red-800 dark:text-red-400">
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
                         <AlertCircle className="w-5 h-5" />
                         {error}
-                        <button onClick={() => setError(null)} className="ml-auto text-red-600 hover:text-red-800 dark:hover:text-red-300">
-                            ✕
+                        <button onClick={() => setError(null)} className="ml-auto text-red-700 hover:text-red-800">
+                            x
                         </button>
                     </div>
                 )}
 
                 {success && (
-                    <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/50 rounded-lg flex items-center gap-2 text-green-800 dark:text-green-400">
+                    <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
                         <CheckCircle className="w-5 h-5" />
                         {success}
                     </div>
                 )}
 
                 {/* Rules Table */}
-                <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-hidden border border-gray-200 dark:border-slate-800">
+                <div className="bg-white rounded-lg shadow overflow-hidden border border-surgical-200">
                     {isRulesLoading ? (
                         <div className="p-8 flex justify-center">
-                            <Loader className="w-6 h-6 animate-spin text-emerald-600" />
+                            <Loader className="w-6 h-6 animate-spin text-surgical-600" />
                         </div>
                     ) : rules.length === 0 ? (
                         <div className="p-8 text-center">
-                            <p className="text-gray-600 dark:text-slate-400 mb-4">No escalation rules created yet</p>
+                            <p className="text-obsidian/60 mb-4">No escalation rules created yet</p>
                             <button
                                 onClick={() => {
                                     setEditingRule(null);
                                     setShowRuleModal(true);
                                 }}
-                                className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium"
+                                className="text-surgical-600 hover:text-surgical-700 font-medium"
                             >
                                 Create your first rule
                             </button>
                         </div>
                     ) : (
-                        <table className="w-full divide-y divide-gray-200 dark:divide-slate-800">
-                            <thead className="bg-gray-50 dark:bg-slate-800/50">
+                        <table className="w-full divide-y divide-surgical-200">
+                            <thead className="bg-surgical-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/60 uppercase tracking-wider">
                                         Name
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/60 uppercase tracking-wider">
                                         Trigger
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/60 uppercase tracking-wider">
                                         Transfer Number
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/60 uppercase tracking-wider">
                                         Priority
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/60 uppercase tracking-wider">
                                         Status
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 uppercase tracking-wider">
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-obsidian/60 uppercase tracking-wider">
                                         Actions
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-800">
+                            <tbody className="bg-white divide-y divide-surgical-200">
                                 {rules.map(rule => (
-                                    <tr key={rule.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                                    <tr key={rule.id} className="hover:bg-surgical-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="font-medium text-gray-900 dark:text-white">{rule.name}</span>
+                                            <span className="font-medium text-obsidian">{rule.name}</span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded-full text-sm">
+                                            <span className="px-3 py-1 bg-surgical-50 text-surgical-600 rounded-full text-sm">
                                                 {getTriggerLabel(rule.trigger_type)}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-obsidian/60">
                                             {rule.transfer_number}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="font-medium text-gray-900 dark:text-white">{rule.priority}</span>
+                                            <span className="font-medium text-obsidian">{rule.priority}</span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <button
                                                 onClick={() => handleToggleEnabled(rule)}
                                                 className={`px-3 py-1 rounded-full text-sm font-medium ${rule.enabled
-                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                                                        : 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                                                        ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                                                        : 'bg-surgical-50 text-obsidian/60 hover:bg-surgical-100'
                                                     }`}
                                             >
                                                 {rule.enabled ? 'Enabled' : 'Disabled'}
@@ -240,7 +240,7 @@ const EscalationRulesPage = () => {
                                                     setEditingRule(rule);
                                                     setShowRuleModal(true);
                                                 }}
-                                                className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 inline-flex items-center gap-1"
+                                                className="text-surgical-600 hover:text-surgical-700 inline-flex items-center gap-1"
                                             >
                                                 <Edit2 className="w-4 h-4" />
                                                 Edit
@@ -252,7 +252,7 @@ const EscalationRulesPage = () => {
                                                     }
                                                 }}
                                                 disabled={deletingRuleId === rule.id}
-                                                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 inline-flex items-center gap-1 disabled:opacity-50"
+                                                className="text-red-700 hover:text-red-800 inline-flex items-center gap-1 disabled:opacity-50"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                                 {deletingRuleId === rule.id ? 'Deleting...' : 'Delete'}
@@ -268,17 +268,17 @@ const EscalationRulesPage = () => {
                 {/* Stats Footer */}
                 {rules.length > 0 && (
                     <div className="mt-6 grid grid-cols-3 gap-4">
-                        <div className="bg-white dark:bg-slate-900 p-4 rounded-lg shadow border border-gray-200 dark:border-slate-800">
-                            <p className="text-gray-600 dark:text-slate-400 text-sm">Total Rules</p>
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{rules.length}</p>
+                        <div className="bg-white p-4 rounded-lg shadow border border-surgical-200">
+                            <p className="text-obsidian/60 text-sm">Total Rules</p>
+                            <p className="text-2xl font-bold text-obsidian">{rules.length}</p>
                         </div>
-                        <div className="bg-white dark:bg-slate-900 p-4 rounded-lg shadow border border-gray-200 dark:border-slate-800">
-                            <p className="text-gray-600 dark:text-slate-400 text-sm">Enabled</p>
-                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{rules.filter(r => r.enabled).length}</p>
+                        <div className="bg-white p-4 rounded-lg shadow border border-surgical-200">
+                            <p className="text-obsidian/60 text-sm">Enabled</p>
+                            <p className="text-2xl font-bold text-green-700">{rules.filter(r => r.enabled).length}</p>
                         </div>
-                        <div className="bg-white dark:bg-slate-900 p-4 rounded-lg shadow border border-gray-200 dark:border-slate-800">
-                            <p className="text-gray-600 dark:text-slate-400 text-sm">Disabled</p>
-                            <p className="text-2xl font-bold text-gray-600 dark:text-slate-300">{rules.filter(r => !r.enabled).length}</p>
+                        <div className="bg-white p-4 rounded-lg shadow border border-surgical-200">
+                            <p className="text-obsidian/60 text-sm">Disabled</p>
+                            <p className="text-2xl font-bold text-obsidian/60">{rules.filter(r => !r.enabled).length}</p>
                         </div>
                     </div>
                 )}
@@ -286,8 +286,8 @@ const EscalationRulesPage = () => {
                 {/* Rule Modal */}
                 {showRuleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-slate-800">
-                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-surgical-200">
+                            <h2 className="text-2xl font-bold mb-4 text-obsidian">
                                 {editingRule ? 'Edit Rule' : 'Create New Rule'}
                             </h2>
                             <RuleForm

@@ -262,7 +262,7 @@ export default function TelephonySetupWizard() {
       <StepIndicator currentStep={step} />
 
       {/* Step content */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-8">
+      <div className="bg-white rounded-xl border border-surgical-200 p-8">
         {step === 'country_selection' && (
           <CountrySelectionStep
             selectedCountry={selectedCountry}

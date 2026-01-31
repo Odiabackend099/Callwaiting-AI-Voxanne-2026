@@ -232,7 +232,7 @@ export default function CommandPalette() {
       {/* Command Palette Trigger - Keyboard Shortcut Hint */}
       {!open && (
         <div
-          className="hidden md:fixed md:bottom-6 md:right-6 md:flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors z-40"
+          className="hidden md:fixed md:bottom-6 md:right-6 md:flex items-center gap-2 px-3 py-2 rounded-lg bg-surgical-50 text-obsidian/60 text-sm cursor-pointer hover:bg-surgical-100 transition-colors z-40"
           onClick={() => {
             setOpen(true);
             setSearch('');
@@ -241,23 +241,23 @@ export default function CommandPalette() {
         >
           <Search className="w-4 h-4" />
           <span className="hidden lg:inline">Command Palette</span>
-          <span className="text-xs bg-gray-200 dark:bg-slate-700 px-2 py-0.5 rounded ml-2">⌘K</span>
+          <span className="text-xs bg-surgical-100 px-2 py-0.5 rounded ml-2">⌘K</span>
         </div>
       )}
 
       {/* Overlay and Modal */}
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-20"
+          className="fixed inset-0 z-50 bg-obsidian/50 flex items-start justify-center pt-20"
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl flex flex-col max-h-96"
+            className="w-full max-w-2xl bg-white rounded-xl shadow-2xl flex flex-col max-h-96"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search Input */}
-            <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-200 dark:border-slate-800">
-              <Search className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-3 px-4 py-4 border-b border-surgical-200">
+              <Search className="w-5 h-5 text-obsidian/40" />
               <input
                 ref={inputRef}
                 type="text"
@@ -267,26 +267,26 @@ export default function CommandPalette() {
                   setSearch(e.target.value);
                   setSelectedIndex(0);
                 }}
-                className="flex-1 bg-transparent text-base outline-none placeholder-gray-400 dark:placeholder-slate-500"
+                className="flex-1 bg-transparent text-base outline-none placeholder-obsidian/40"
               />
               <button
                 onClick={() => setOpen(false)}
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-1 rounded hover:bg-surgical-50 transition-colors"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className="w-5 h-5 text-obsidian/40" />
               </button>
             </div>
 
             {/* Commands List */}
             <div ref={listRef} className="overflow-y-auto flex-1">
               {groupedCommands.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
+                <div className="px-4 py-8 text-center text-obsidian/60">
                   No commands found
                 </div>
               ) : (
                 groupedCommands.map((group) => (
                   <div key={group.category}>
-                    <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider bg-gray-50 dark:bg-slate-800/50 sticky top-0">
+                    <div className="px-4 py-2 text-xs font-semibold text-obsidian/60 uppercase tracking-wider bg-surgical-50 sticky top-0">
                       {group.category}
                     </div>
                     {group.commands.map((cmd, idx) => {
@@ -298,20 +298,20 @@ export default function CommandPalette() {
                           onClick={() => cmd.action()}
                           className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
                             isSelected
-                              ? 'bg-emerald-50 dark:bg-emerald-900/30'
-                              : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                              ? 'bg-surgical-50'
+                              : 'hover:bg-surgical-50'
                           }`}
                         >
-                          <div className="text-gray-600 dark:text-slate-400">
+                          <div className="text-obsidian/60">
                             {cmd.icon}
                           </div>
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-gray-900 dark:text-slate-50">
+                            <div className="text-sm font-medium text-obsidian">
                               {cmd.title}
                             </div>
                           </div>
                           {cmd.shortcut && (
-                            <span className="text-xs text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded">
+                            <span className="text-xs text-obsidian/40 bg-surgical-50 px-2 py-1 rounded">
                               {cmd.shortcut}
                             </span>
                           )}
@@ -324,7 +324,7 @@ export default function CommandPalette() {
             </div>
 
             {/* Footer Help */}
-            <div className="px-4 py-3 border-t border-gray-200 dark:border-slate-800 flex justify-between text-xs text-gray-500 dark:text-slate-400">
+            <div className="px-4 py-3 border-t border-surgical-200 flex justify-between text-xs text-obsidian/60">
               <div className="flex gap-4">
                 <span>↑↓ Navigate</span>
                 <span>⏎ Select</span>

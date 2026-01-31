@@ -31,6 +31,32 @@ import { verifyWebhookSignature } from '../middleware/verify-webhook-signature';
 import { enqueueWebhook } from '../config/webhook-queue';
 import { redactPHI } from '../services/phi-redaction';
 
+// ╔═══════════════════════════════════════════════════════════════════════╗
+// ║  ⚠️  CRITICAL WARNING - READ BEFORE MODIFYING THIS FILE              ║
+// ╠═══════════════════════════════════════════════════════════════════════╣
+// ║                                                                       ║
+// ║  This file handles `/api/webhooks/vapi` but is NOT the primary       ║
+// ║  webhook endpoint for Vapi end-of-call-report webhooks.              ║
+// ║                                                                       ║
+// ║  PRIMARY VAPI WEBHOOK ENDPOINT:                                      ║
+// ║    → /api/vapi/webhook                                               ║
+// ║    → File: backend/src/routes/vapi-webhook.ts                        ║
+// ║    → Handles: end-of-call-report, tool-calls, RAG requests           ║
+// ║                                                                       ║
+// ║  WHY THIS MATTERS:                                                   ║
+// ║    - Vapi assistant's serverUrl is hardcoded to /api/vapi/webhook   ║
+// ║      in founder-console-v2.ts:645                                    ║
+// ║    - ALL production webhooks go to vapi-webhook.ts                   ║
+// ║    - Modifying THIS file will NOT affect production call logging     ║
+// ║                                                                       ║
+// ║  VERIFIED ARCHITECTURE (2026-01-31):                                 ║
+// ║    Vapi → /api/vapi/webhook → vapi-webhook.ts → call_logs table     ║
+// ║                                                                       ║
+// ║  For detailed documentation, see:                                    ║
+// ║    → CRITICAL_WEBHOOK_ARCHITECTURE.md                                ║
+// ║                                                                       ║
+// ╚═══════════════════════════════════════════════════════════════════════╝
+
 export const webhooksRouter = express.Router();
 
 // ===== CRITICAL FIX #5: Zod validation schema for Vapi events =====
@@ -364,6 +390,15 @@ interface VapiEvent {
   artifact?: {
     transcript?: string;
     recording?: string;
+  };
+  analysis?: {
+    summary?: string;
+    sentiment?: {
+      label?: string;
+      score?: number;
+      summary?: string;
+    };
+    successEvaluation?: string;
   };
 }
 
@@ -756,7 +791,7 @@ async function handleCallStarted(event: VapiEvent) {
     const { error: logError } = await supabase.from('call_logs').upsert({
       vapi_call_id: call.id,
       lead_id: lead?.id || null,
-      org_id: callTracking?.org_id || null, // CRITICAL: Include org_id for multi-tenant isolation
+      org_id: agent.org_id, // CRITICAL FIX: Use agent.org_id directly (always available, never null)
       to_number: call.customer?.number || null,
       status: 'in-progress',
       started_at: new Date().toISOString(),
@@ -1213,6 +1248,21 @@ async function handleEndOfCallReport(event: VapiEvent) {
     return;
   }
 
+  // CRITICAL FIX: Debug logging for complete end-of-call data visibility
+  logger.info('webhooks', '📞 END-OF-CALL DATA RECEIVED:', {
+    vapi_call_id: call.id,
+    call_duration: call.duration,
+    call_cost: call.cost,
+    customer_number: call.customer?.number,
+    customer_name: call.customer?.name,
+    has_transcript: !!artifact?.transcript,
+    has_recording: !!artifact?.recording,
+    has_analysis: !!event.analysis,
+    outcome_summary: event.analysis?.summary,
+    sentiment_label: event.analysis?.sentiment?.label,
+    timestamp: new Date().toISOString()
+  });
+
   try {
     const eventId = `end-of-call-report:${call.id}`;
 
@@ -1399,19 +1449,29 @@ async function handleEndOfCallReport(event: VapiEvent) {
     // PRIORITY 7: HIPAA COMPLIANCE - Redact PHI from transcript before storage
     let redactedTranscript: string | null = null;
     if (artifact?.transcript) {
-      redactedTranscript = await redactPHI(artifact.transcript, {
-        redactDates: true,
-        redactPhones: true,
-        redactEmails: true,
-        redactMedicalTerms: true
-      });
+      try {
+        redactedTranscript = await redactPHI(artifact.transcript, {
+          redactDates: true,
+          redactPhones: true,
+          redactEmails: true,
+          redactMedicalTerms: true
+        });
 
-      logger.info('webhooks', 'PHI redaction applied to end-of-call transcript', {
-        callId: call.id,
-        originalLength: artifact.transcript.length,
-        redactedLength: redactedTranscript.length,
-        orgId: callLog.org_id
-      });
+        logger.info('webhooks', 'PHI redaction applied to end-of-call transcript', {
+          callId: call.id,
+          originalLength: artifact.transcript.length,
+          redactedLength: redactedTranscript.length,
+          orgId: callLog.org_id
+        });
+      } catch (error) {
+        // CRITICAL FIX: Prevent webhook failure if PHI redaction crashes
+        logger.error('webhooks', 'PHI redaction failed, storing original transcript', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          callId: call.id,
+          orgId: callLog.org_id
+        });
+        redactedTranscript = artifact.transcript; // Fallback to original
+      }
     }
 
     // Update call_logs with final data including recording metadata
@@ -1420,6 +1480,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
       .from('call_logs')
       .update({
         outcome: 'completed',
+        outcome_summary: event.analysis?.summary || 'No summary available', // CRITICAL FIX: Extract Vapi AI analysis summary
         recording_url: recordingSignedUrl || null,
         recording_storage_path: recordingStoragePath || null,
         recording_signed_url_expires_at: recordingSignedUrl ? new Date(Date.now() + 3600000).toISOString() : null,
