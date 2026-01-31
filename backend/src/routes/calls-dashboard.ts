@@ -58,9 +58,10 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
     // UNIFIED CALLS TABLE QUERY
     // Single query to unified 'calls' table with call_direction filter
+    // NOTE: Schema uses from_number instead of phone_number, sentiment packed as string
     let query = supabase
       .from('calls')  // ← Unified table for both inbound + outbound
-      .select('id, call_direction, phone_number, caller_name, contact_id, created_at, duration_seconds, status, recording_url, recording_storage_path, transcript, sentiment_score, sentiment_label, sentiment_summary, sentiment_urgency', { count: 'exact' })
+      .select('id, call_direction, from_number, call_type, contact_id, created_at, duration_seconds, status, recording_url, recording_storage_path, transcript, sentiment, intent', { count: 'exact' })
       .eq('org_id', orgId);  // CRITICAL: Tenant isolation
 
     // Filter by call direction if specified
@@ -84,9 +85,9 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       query = query.eq('status', parsed.status);
     }
 
-    // Apply search filter (phone number or caller name)
+    // Apply search filter (phone number or call type)
     if (parsed.search) {
-      query = query.or(`caller_name.ilike.%${parsed.search}%,phone_number.ilike.%${parsed.search}%`);
+      query = query.or(`call_type.ilike.%${parsed.search}%,from_number.ilike.%${parsed.search}%`);
     }
 
     // Order by created_at descending (newest first)
@@ -98,28 +99,54 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     const { data: calls, error, count } = await query;
 
     if (error) {
-      log.error('Calls', 'Failed to fetch calls from unified table', { error: error.message, orgId });
-      return res.status(500).json({ error: 'Failed to fetch calls' });
+      log.error('Calls', 'Failed to fetch calls from unified table', {
+        error: error.message,
+        errorCode: (error as any).code,
+        errorDetails: JSON.stringify(error),
+        orgId,
+        queryInfo: {
+          table: 'calls',
+          columns: 'id, call_direction, from_number, call_type, contact_id, created_at, duration_seconds, status, recording_url, recording_storage_path, transcript, sentiment, intent',
+          orgIdFilter: orgId,
+          callTypeFilter: parsed.call_type || 'all'
+        }
+      });
+      return res.status(500).json({
+        error: 'Failed to fetch calls',
+        details: error.message,
+        code: (error as any).code
+      });
     }
 
     // Transform response (handle both inbound + outbound)
     // PERFORMANCE OPTIMIZATION: No longer generate signed URLs on list load
     // URLs generated on-demand when user clicks play (see /:callId/recording-url endpoint)
     const finalCalls = (calls || []).map((call: any) => {
+      // Parse sentiment field (may be packed as "label:score:summary" or just "label")
+      let sentimentLabel = null;
+      let sentimentScore = null;
+      let sentimentSummary = null;
+      if (call.sentiment) {
+        const parts = call.sentiment.split(':');
+        sentimentLabel = parts[0] || null;
+        sentimentScore = parts[1] ? parseFloat(parts[1]) : null;
+        sentimentSummary = parts[2] || call.sentiment;
+      }
+
       return {
         id: call.id,
-        phone_number: call.phone_number || call.contact_id || 'Unknown',  // Fallback to contact_id for outbound
-        caller_name: call.caller_name || (call.call_direction === 'outbound' ? 'Outbound Call' : 'Unknown'),
+        phone_number: call.from_number || call.contact_id || 'Unknown',  // Use from_number, fallback to contact_id for outbound
+        caller_name: call.call_type || (call.call_direction === 'outbound' ? 'Outbound Call' : 'Unknown'),
         call_date: call.created_at,
         duration_seconds: call.duration_seconds || 0,
         status: call.status || 'completed',
-        call_direction: call.call_direction,  // NEW: Expose direction to frontend
+        call_direction: call.call_direction,  // Expose direction to frontend
         has_recording: !!(call.recording_url || call.recording_storage_path),
         has_transcript: !!call.transcript,
-        sentiment_score: call.sentiment_score,
-        sentiment_label: call.sentiment_label,
-        sentiment_summary: call.sentiment_summary,
-        sentiment_urgency: call.sentiment_urgency,
+        sentiment_score: sentimentScore,
+        sentiment_label: sentimentLabel,
+        sentiment_summary: sentimentSummary,
+        sentiment_urgency: null,  // Not available in current schema (will be added in proper fix)
         call_type: call.call_direction  // For backward compatibility
       };
     });
@@ -217,7 +244,7 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       // Recent calls (last 5) - still need actual data for display
       supabase
         .from('calls')  // ← Unified table
-        .select('id, phone_number, caller_name, created_at, duration_seconds, status, call_direction, metadata')
+        .select('id, from_number, call_type, created_at, duration_seconds, status, call_direction, metadata')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })  // ← Unified field
         .limit(5),
@@ -257,22 +284,22 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       }, 0);
     }
 
-    // Format recent calls for frontend (include both old and new field names for compatibility)
+    // Format recent calls for frontend (map actual schema columns to expected output)
     const recentCallsData = recentCallsResult.data || [];
     const recentCalls = recentCallsData.map((c: any) => ({
       id: c.id,
-      // New field names
-      phone_number: c.phone_number || c.to_number || 'Unknown',
-      caller_name: c.caller_name || 'Unknown',
-      call_date: c.started_at || c.created_at,
-      call_type: c.call_type || (c.metadata?.channel === 'inbound' ? 'inbound' : 'outbound'),
+      // New field names (use from_number from actual schema)
+      phone_number: c.from_number || 'Unknown',
+      caller_name: c.call_type || 'Unknown',
+      call_date: c.created_at,
+      call_type: c.call_direction || (c.metadata?.channel === 'inbound' ? 'inbound' : 'outbound'),
       // Legacy field names (for backwards compatibility with frontend)
-      to_number: c.to_number || c.phone_number || 'Unknown',
-      started_at: c.started_at || c.created_at,
+      to_number: c.from_number || 'Unknown',
+      started_at: c.created_at,
       duration_seconds: c.duration_seconds || 0,
       status: c.status || 'completed',
       metadata: {
-        channel: c.metadata?.channel || (c.call_type === 'inbound' ? 'inbound' : 'outbound')
+        channel: c.call_direction || (c.metadata?.channel || 'inbound')
       }
     }));
 
@@ -314,15 +341,15 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
       // All calls - only fetch columns needed for aggregate stats (no large text fields)
       supabase
         .from('calls')
-        .select('id, call_date, status, duration_seconds, sentiment_score')
+        .select('id, created_at, status, duration_seconds, sentiment')
         .eq('org_id', orgId),
 
       // Month's calls - includes today and week (smart fetch eliminates 2 redundant queries)
       supabase
         .from('calls')
-        .select('id, call_date')
+        .select('id, created_at')
         .eq('org_id', orgId)
-        .gte('call_date', monthAgo.toISOString())
+        .gte('created_at', monthAgo.toISOString())
     ]);
 
     const calls = allCallsResult.data || [];
@@ -332,8 +359,8 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
     const todayISO = today.toISOString().split('T')[0];
     const weekAgoISO = weekAgo.toISOString();
 
-    const todayCalls = monthCalls.filter((c: any) => c.call_date >= todayISO);
-    const weekCalls = monthCalls.filter((c: any) => c.call_date >= weekAgoISO);
+    const todayCalls = monthCalls.filter((c: any) => c.created_at >= todayISO);
+    const weekCalls = monthCalls.filter((c: any) => c.created_at >= weekAgoISO);
 
     // Calculate aggregate stats from all calls
     const completedCalls = calls.filter((c: any) => c.status === 'completed');
@@ -343,9 +370,18 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
       ? Math.round(completedCalls.reduce((sum: number, c: any) => sum + (c.duration_seconds || 0), 0) / completedCalls.length)
       : 0;
 
-    const callsWithSentiment = calls.filter((c: any) => c.sentiment_score != null);
+    const callsWithSentiment = calls.filter((c: any) => c.sentiment != null);
     const avgSentiment = callsWithSentiment.length > 0
-      ? callsWithSentiment.reduce((sum: number, c: any) => sum + c.sentiment_score, 0) / callsWithSentiment.length
+      ? callsWithSentiment.reduce((sum: number, c: any) => {
+          // Parse sentiment if packed as "label:score:summary" format
+          if (typeof c.sentiment === 'string' && c.sentiment.includes(':')) {
+            const score = parseFloat(c.sentiment.split(':')[1]);
+            return sum + (isNaN(score) ? 0 : score);
+          }
+          // Try to parse as number if sentiment is numeric
+          const numScore = parseFloat(c.sentiment);
+          return sum + (isNaN(numScore) ? 0 : numScore);
+        }, 0) / callsWithSentiment.length
       : 0;
 
     return res.json({

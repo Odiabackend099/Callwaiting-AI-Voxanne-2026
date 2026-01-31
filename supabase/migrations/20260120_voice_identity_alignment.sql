@@ -7,6 +7,17 @@
 
 BEGIN;
 
+-- 0. Add voice_id column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'agents' AND column_name = 'voice_id'
+  ) THEN
+    ALTER TABLE public.agents ADD COLUMN voice_id TEXT DEFAULT 'Neha';
+  END IF;
+END$$;
+
 -- 1. Fix "jennifer" (legacy default) → "Neha" (current healthcare voice)
 UPDATE public.agents 
 SET voice_id = 'Neha'

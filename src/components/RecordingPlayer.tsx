@@ -22,13 +22,13 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/api/calls/${callId}/recording`);
+        const response = await fetch(`/api/calls-dashboard/${callId}/recording-url`);
         if (!response.ok) {
           throw new Error('Failed to fetch recording');
         }
         const data = await response.json();
         if (audioRef.current) {
-          audioRef.current.src = data.recordingUrl;
+          audioRef.current.src = data.recording_url;
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load recording');

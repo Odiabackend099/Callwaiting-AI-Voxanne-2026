@@ -26,13 +26,10 @@ CREATE INDEX IF NOT EXISTS idx_org_tools_vapi_tool_id ON org_tools(vapi_tool_id)
 ALTER TABLE org_tools ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can only see org_tools for their organization
-CREATE POLICY IF NOT EXISTS org_tools_org_isolation ON org_tools
+DROP POLICY IF EXISTS org_tools_org_isolation ON org_tools;
+CREATE POLICY org_tools_org_isolation ON org_tools
     FOR ALL
     USING (org_id = (SELECT auth.jwt() -> 'app_metadata' ->> 'org_id')::UUID);
-
--- RLS Policy: Service role (from backend) can bypass org isolation
-ALTER POLICY org_tools_org_isolation ON org_tools
-    USING (true);  -- Will be enforced by auth context
 
 -- Create updated_at trigger
 CREATE OR REPLACE FUNCTION update_org_tools_updated_at()

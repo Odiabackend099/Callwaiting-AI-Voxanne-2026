@@ -291,36 +291,46 @@ const CallsPageContent = () => {
     };
 
     const handlePlayRecordingFromList = async (call: Call) => {
-        if (!call.recording_url) {
-            setError('No recording available for this call');
-            return;
-        }
-
         try {
-            const audio = new Audio(call.recording_url);
+            setError(null);
+
+            // Fetch signed URL from dedicated endpoint
+            const response = await authedBackendFetch<any>(`/api/calls-dashboard/${call.id}/recording-url`);
+
+            if (!response.recording_url) {
+                setError('No recording available for this call');
+                return;
+            }
+
+            const audio = new Audio(response.recording_url);
             audio.play().catch((err) => {
                 setError('Failed to play recording: ' + err.message);
             });
         } catch (err: any) {
-            setError('Failed to play recording');
+            setError('Failed to load recording: ' + (err.message || 'Unknown error'));
         }
     };
 
     const handleDownloadRecordingFromList = async (call: Call) => {
-        if (!call.recording_url) {
-            setError('No recording available for this call');
-            return;
-        }
-
         try {
+            setError(null);
+
+            // Fetch signed URL from dedicated endpoint
+            const response = await authedBackendFetch<any>(`/api/calls-dashboard/${call.id}/recording-url`);
+
+            if (!response.recording_url) {
+                setError('No recording available for this call');
+                return;
+            }
+
             const link = document.createElement('a');
-            link.href = call.recording_url;
+            link.href = response.recording_url;
             link.download = `call_${call.id}_${formatDateTime(call.call_date)}.wav`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         } catch (err: any) {
-            setError('Failed to download recording');
+            setError('Failed to download recording: ' + (err.message || 'Unknown error'));
         }
     };
 

@@ -10,6 +10,7 @@ import { generateEmbedding } from '../services/embeddings';
 import { log } from '../services/logger';
 import { verifyVapiSignature } from '../utils/vapi-webhook-signature';
 import { AnalyticsService } from '../services/analytics-service';
+import { OutcomeSummaryService } from '../services/outcome-summary';
 import { RAG_CONFIG } from '../config/rag-config';
 
 const vapiWebhookRouter = Router();
@@ -312,7 +313,35 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       const sentimentSummary = analysis?.sentimentSummary || null;
       const sentimentUrgency = analysis?.sentimentUrgency || null;
 
+      // 3.5 Generate meaningful outcome summary using GPT-4o
+      let outcomeShort = analysis?.structuredData?.outcome || 'Call Completed';
+      let outcomeDetailed = analysis?.summary || 'Call completed successfully.';
+
+      try {
+        if (artifact?.transcript) {
+          const outcomeSummary = await OutcomeSummaryService.generateOutcomeSummary(
+            artifact.transcript,
+            sentimentLabel
+          );
+          outcomeShort = outcomeSummary.shortOutcome;
+          outcomeDetailed = outcomeSummary.detailedSummary;
+
+          log.info('Vapi-Webhook', 'Outcome summary generated', {
+            callId: call?.id,
+            shortOutcome: outcomeShort,
+            summaryLength: outcomeDetailed.length
+          });
+        }
+      } catch (summaryError: any) {
+        log.error('Vapi-Webhook', 'Failed to generate outcome summary', {
+          error: summaryError.message,
+          callId: call?.id
+        });
+        // Continue with default outcome if summary generation fails
+      }
+
       // 4. Upsert to unified calls table (creates if not exists, updates if exists)
+      // NOTE: Mapping to actual schema columns (from_number, call_type, sentiment packed as string)
       const { error: upsertError } = await supabase
         .from('calls')  // ← Changed from 'call_logs' to unified 'calls' table
         .upsert({
@@ -328,11 +357,12 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             ? (call?.customer?.contactId || null)
             : null,
 
-          // Caller info (inbound only)
-          phone_number: callDirection === 'inbound'
+          // Caller info (inbound only) - Map to actual schema columns
+          from_number: callDirection === 'inbound'
             ? (call?.customer?.number || null)
             : null,
-          caller_name: callDirection === 'inbound'
+          // NOTE: caller_name doesn't exist in current schema, store in metadata or intent field
+          intent: callDirection === 'inbound'
             ? (call?.customer?.name || 'Unknown Caller')
             : null,
 
@@ -350,16 +380,17 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           recording_storage_path: null,  // Will be populated if uploaded to Supabase
           transcript: artifact?.transcript || null,
 
-          // Analytics (all 4 sentiment fields)
-          sentiment: sentimentLabel,
-          sentiment_label: sentimentLabel,
-          sentiment_score: sentimentScore,
-          sentiment_summary: sentimentSummary,
-          sentiment_urgency: sentimentUrgency,
+          // Analytics - Pack sentiment fields into single sentiment field (temporary until schema fixed)
+          // Format: "label:score:summary"
+          sentiment: sentimentLabel
+            ? `${sentimentLabel}${sentimentScore ? ':' + sentimentScore : ''}${sentimentSummary ? ':' + sentimentSummary : ''}`
+            : null,
+          // NOTE: sentiment_label, sentiment_score, sentiment_summary, sentiment_urgency don't exist in current schema
+          // They will be added in proper schema fix migration
 
-          // Outcomes
-          outcome: analysis?.structuredData?.outcome || 'completed',
-          outcome_summary: analysis?.summary || null,
+          // Outcomes - Use generated summaries
+          outcome: outcomeShort,
+          outcome_summary: outcomeDetailed,
           notes: null,
 
           // Metadata
@@ -372,12 +403,17 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             success_evaluation: analysis?.successEvaluation,
             has_assistant_overrides: !!call?.assistantOverrides,
             messages: call?.messages || [],
+            // Store all sentiment details in metadata for later retrieval
             sentiment_analysis: {
               label: sentimentLabel,
               score: sentimentScore,
               summary: sentimentSummary,
               urgency: sentimentUrgency
-            }
+            },
+            // Store caller_name in metadata since column doesn't exist
+            caller_name: callDirection === 'inbound'
+              ? (call?.customer?.name || 'Unknown Caller')
+              : null
           }
         }, { onConflict: 'vapi_call_id' });
 

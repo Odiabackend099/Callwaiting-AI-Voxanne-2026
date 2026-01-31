@@ -20,30 +20,59 @@ analyticsRouter.get('/dashboard-pulse', requireAuth, async (req: Request, res: R
             return res.status(401).json({ error: 'Authentication required' });
         }
 
-        const { data, error } = await supabase
+        // Query the view for both inbound and outbound calls
+        const { data: pulseData, error: pulseError } = await supabase
             .from('view_clinical_dashboard_pulse')
             .select('*')
-            .eq('org_id', orgId)
-            .single();
+            .eq('org_id', orgId);
 
-        if (error) {
-            log.error('AnalyticsAPI', 'Failed to fetch dashboard pulse', { error: error.message });
-            // If no data found (0 calls), return zeros
-            if (error.code === 'PGRST116') {
-                return res.json({
-                    total_calls: 0,
-                    inbound_calls: 0,
-                    outbound_calls: 0,
-                    avg_duration_seconds: 0,
-                    success_rate: 0,
-                    pipeline_value: 0,
-                    hot_leads_count: 0
-                });
-            }
-            return res.status(500).json({ error: 'Database error' });
+        if (pulseError) {
+            log.error('AnalyticsAPI', 'Failed to fetch dashboard pulse', { error: pulseError.message });
+            // Return zeros if no data found
+            return res.json({
+                total_calls: 0,
+                inbound_calls: 0,
+                outbound_calls: 0,
+                avg_duration_seconds: 0,
+                success_rate: 0,
+                pipeline_value: 0,
+                hot_leads_count: 0
+            });
         }
 
-        return res.json(data);
+        // Aggregate inbound and outbound data
+        let totalCalls = 0;
+        let inboundCalls = 0;
+        let outboundCalls = 0;
+        let totalDuration = 0;
+        let callCountForAvg = 0;
+
+        if (pulseData && Array.isArray(pulseData)) {
+            for (const row of pulseData) {
+                const rowTotal = row.total_calls || 0;
+                totalCalls += rowTotal;
+                callCountForAvg += rowTotal;
+                totalDuration += (row.avg_duration_seconds || 0) * rowTotal;
+
+                if (row.call_direction === 'inbound') {
+                    inboundCalls = rowTotal;
+                } else if (row.call_direction === 'outbound') {
+                    outboundCalls = rowTotal;
+                }
+            }
+        }
+
+        const avgDuration = callCountForAvg > 0 ? Math.round(totalDuration / callCountForAvg) : 0;
+
+        return res.json({
+            total_calls: totalCalls,
+            inbound_calls: inboundCalls,
+            outbound_calls: outboundCalls,
+            avg_duration_seconds: avgDuration,
+            success_rate: 0, // TODO: Calculate from outcomes
+            pipeline_value: 0, // TODO: Calculate from lead scores
+            hot_leads_count: 0 // TODO: Count from contacts table
+        });
     } catch (err: any) {
         log.error('AnalyticsAPI', 'Internal error', { error: err.message });
         return res.status(500).json({ error: 'Internal server error' });
@@ -94,12 +123,12 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
             return res.status(401).json({ error: 'Authentication required' });
         }
 
-        // Fetch recent calls
+        // Fetch recent calls from unified calls table
         const { data: calls, error: callsError } = await supabase
-            .from('call_logs')
+            .from('calls')
             .select('id, created_at, caller_name, duration_seconds, sentiment_label, sentiment_summary, sentiment_urgency')
             .eq('org_id', orgId)
-            .eq('call_type', 'inbound')
+            .eq('call_direction', 'inbound')
             .order('created_at', { ascending: false })
             .limit(10);
 
@@ -126,17 +155,18 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
         // Add call events
         if (calls && !callsError) {
             calls.forEach((call: any) => {
+                const durationMinutes = Math.floor((call.duration_seconds || 0) / 60);
                 events.push({
                     id: `call_${call.id}`,
                     type: 'call_completed',
                     timestamp: call.created_at,
-                    summary: `Call from ${call.caller_name || 'Unknown'} - ${Math.floor((call.duration_seconds || 0) / 60)}m`,
+                    summary: `Call from ${call.caller_name || 'Unknown'} - ${durationMinutes}m`,
                     metadata: {
-                        caller_name: call.caller_name,
-                        sentiment: call.sentiment_label,
-                        sentiment_summary: call.sentiment_summary,
-                        sentiment_urgency: call.sentiment_urgency,
-                        duration_seconds: call.duration_seconds
+                        caller_name: call.caller_name || 'Unknown Caller',
+                        sentiment_label: call.sentiment_label || 'neutral',
+                        sentiment_summary: call.sentiment_summary || 'Call completed',
+                        sentiment_urgency: call.sentiment_urgency || 'low',
+                        duration_seconds: call.duration_seconds || 0
                     }
                 });
             });

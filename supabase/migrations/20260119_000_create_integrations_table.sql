@@ -29,8 +29,18 @@ END$$;
 
 -- 3) Migrate Twilio credentials from customer_twilio_keys (if present)
 DO $$
+DECLARE
+  sara_org uuid := '46cf2995-2bee-44e3-838b-24151486fe4e';
+  sara_had_twilio boolean;
+  exists_twilio boolean;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'customer_twilio_keys') THEN
+    -- Check if Sara org had Twilio keys BEFORE migration
+    SELECT EXISTS (
+      SELECT 1 FROM customer_twilio_keys WHERE org_id = sara_org LIMIT 1
+    ) INTO sara_had_twilio;
+    
+    -- Migrate all Twilio credentials
     INSERT INTO integrations (org_id, provider, encrypted_config, encrypted, created_at, updated_at)
     SELECT
       org_id,
@@ -48,6 +58,17 @@ BEGIN
     ON CONFLICT (org_id, provider) DO UPDATE
       SET encrypted_config = EXCLUDED.encrypted_config,
           updated_at = NOW();
+    
+    -- Validate Sara org migration if she had Twilio credentials
+    IF sara_had_twilio THEN
+      SELECT EXISTS (
+        SELECT 1 FROM integrations WHERE org_id = sara_org AND provider = 'TWILIO'
+      ) INTO exists_twilio;
+
+      IF NOT exists_twilio THEN
+        RAISE EXCEPTION 'Migration ABORTED: TWILIO credentials existed for Sara org % but were not found in integrations after migration. Aborting to prevent outage.', sara_org;
+      END IF;
+    END IF;
   END IF;
 END$$;
 
@@ -69,28 +90,6 @@ END$$;
 
 -- 5) Ensure RLS is enabled
 ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
-
--- 6) Final validation: ensure Sara org has TWILIO credentials (if they existed before)
--- Note: If no customer_twilio_keys exist in the database, this check is skipped
-DO $$
-DECLARE
-  sara_org uuid := '46cf2995-2bee-44e3-838b-24151486fe4e';
-  exists_twilio boolean;
-  had_any_twilio boolean;
-BEGIN
-  -- First check if there were any Twilio keys at all
-  SELECT EXISTS (SELECT 1 FROM deprecated_customer_twilio_keys LIMIT 1) INTO had_any_twilio;
-  
-  IF had_any_twilio THEN
-    SELECT EXISTS (
-      SELECT 1 FROM integrations WHERE org_id = sara_org AND provider = 'TWILIO'
-    ) INTO exists_twilio;
-
-    IF NOT exists_twilio THEN
-      RAISE EXCEPTION 'Migration ABORTED: TWILIO credentials existed but were not found for Sara org % in integrations after migration. Aborting to prevent outage.', sara_org;
-    END IF;
-  END IF;
-END$$;
 
 COMMIT;
 
