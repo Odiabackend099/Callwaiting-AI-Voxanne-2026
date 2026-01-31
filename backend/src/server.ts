@@ -675,6 +675,13 @@ webTestWss.on('connection', (ws, req) => {
 
 // Start listening (critical: use server.listen, not app.listen)
 if (process.env.NODE_ENV !== 'test') {
+  // Initialize database views before starting server
+  import('./services/db-migrations').then(({ initializeDatabase }) => {
+    initializeDatabase().catch((err) => {
+      console.error('Failed to initialize database:', err);
+    });
+  });
+
   server.listen(PORT, () => {
 
     console.log(`

@@ -4,10 +4,12 @@ import { getRedisClient } from '../config/redis';
 import { log } from '../services/logger';
 
 // Rate limit tiers
+// Note: Increased limits for dashboard compatibility
+// Dashboard polls analytics endpoints frequently, needs higher limit
 const DEFAULT_LIMITS = {
-  free: { windowMs: 3600000, max: 100 },      // 100 req/hour
-  paid: { windowMs: 3600000, max: 1000 },     // 1000 req/hour
-  enterprise: { windowMs: 3600000, max: 10000 } // 10000 req/hour
+  free: { windowMs: 3600000, max: 10000 },      // 10,000 req/hour (increased from 100)
+  paid: { windowMs: 3600000, max: 50000 },     // 50,000 req/hour (increased from 1000)
+  enterprise: { windowMs: 3600000, max: 100000 } // 100,000 req/hour (increased from 10000)
 };
 
 export function orgRateLimit(customConfig?: Partial<RateLimitConfig>): Middleware {

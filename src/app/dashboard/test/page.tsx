@@ -199,32 +199,6 @@ const TestAgentPageContent = () => {
         };
     }, [isConnected, isRecording]);
 
-    // Keyboard shortcuts for web test
-    useEffect(() => {
-        if (activeTab !== 'web') return;
-
-        const handleKeyPress = (e: KeyboardEvent) => {
-            // Ignore if typing in input fields
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-                return;
-            }
-
-            // Spacebar: Toggle mute
-            if (e.code === 'Space' && isConnected && !callInitiating) {
-                e.preventDefault();
-                handleToggleMute();
-            }
-
-            // Ctrl/Cmd + E: End call
-            if ((e.ctrlKey || e.metaKey) && e.key === 'e' && isConnected && !callInitiating) {
-                e.preventDefault();
-                handleToggleWebCall();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyPress);
-        return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [isConnected, isMuted, callInitiating, activeTab]);
 
     // --- Phone Test Effects ---
     const getAuthToken = async () => {
@@ -472,20 +446,9 @@ const TestAgentPageContent = () => {
 
     return (
         <div className="min-h-screen bg-clinical-bg flex flex-col overflow-hidden p-6">
-            <div className="flex-none max-w-5xl mx-auto w-full">
-                {/* Clinical Trust Header */}
-                <div className="mb-6 p-6 rounded-xl bg-white border border-surgical-200 shadow-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-lg bg-surgical-600 flex items-center justify-center">
-                            <Activity className="w-5 h-5 text-white" />
-                        </div>
-                        <h1 className="text-2xl font-semibold text-obsidian">Test Agent</h1>
-                    </div>
-                    <p className="text-sm text-obsidian/70 ml-[52px]">Interact with your agent in real-time to verify behavior and responses.</p>
-                </div>
-
-                {/* Tab Switcher */}
-                <div className="bg-white border border-surgical-200 p-1 rounded-lg inline-flex mb-6 shadow-sm">
+            <div className="flex-none max-w-5xl mx-auto w-full mb-4">
+                {/* Tab Switcher - TOP POSITION */}
+                <div className="bg-white border border-surgical-200 p-1 rounded-lg inline-flex shadow-sm">
                     <button
                         onClick={() => setActiveTab('web')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'web'
@@ -514,32 +477,6 @@ const TestAgentPageContent = () => {
                 {/* --- Web Test Interface --- */}
                 {activeTab === 'web' && (
                     <div className="flex-1 flex flex-col min-h-0">
-                        {/* Status Header */}
-                        <div className="flex-none px-6 py-4 border-b border-surgical-200 bg-white flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-2.5 h-2.5 rounded-full transition-all ${isConnected ? 'bg-surgical-600 animate-pulse' : 'bg-surgical-200'
-                                    }`} />
-                                <span className="text-xs font-medium text-obsidian/60 uppercase">
-                                    {isConnected ? 'Connected' : 'Ready'}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                {isRecording && !isMuted && (
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 rounded-full border border-red-200">
-                                        <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                                        <span className="text-xs font-medium text-red-600">Recording</span>
-                                    </div>
-                                )}
-                                {isMuted && (
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surgical-50 rounded-full border border-surgical-200">
-                                        <MicOff className="w-3.5 h-3.5 text-obsidian/60" />
-                                        <span className="text-xs font-medium text-obsidian/60">Muted</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
                         {/* Transcript Area - Paper Style */}
                         <div
                             className="flex-1 p-6 overflow-y-auto space-y-4 bg-white"
@@ -549,11 +486,9 @@ const TestAgentPageContent = () => {
                         >
                             {displayTranscripts.length === 0 ? (
                                 <div className="flex-1 flex flex-col min-h-0 items-center justify-center text-obsidian/60">
-                                    <div className="w-16 h-16 rounded-2xl bg-surgical-50 border border-surgical-200 flex items-center justify-center mb-4">
-                                        <Mic className="w-8 h-8 text-surgical-500" />
+                                    <div className="w-20 h-20 rounded-2xl bg-surgical-50 border border-surgical-200 flex items-center justify-center">
+                                        <Mic className="w-10 h-10 text-surgical-500" />
                                     </div>
-                                    <p className="text-sm font-medium text-obsidian/60 tracking-tight">Start the session to begin speaking</p>
-                                    <p className="text-xs text-obsidian/40 mt-1 tracking-tight">Press the call button below</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -591,7 +526,7 @@ const TestAgentPageContent = () => {
                                 disabled={!isConnected}
                                 aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
                                 aria-pressed={isMuted}
-                                title={isMuted ? 'Unmute (Spacebar)' : 'Mute (Spacebar)'}
+                                title={isMuted ? 'Unmute' : 'Mute'}
                                 className={`group relative w-11 h-11 sm:w-14 sm:h-14 rounded-full transition-all duration-300 flex items-center justify-center ${isMuted
                                     ? 'bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100 shadow-lg shadow-red-500/10'
                                     : 'bg-surgical-50 text-obsidian/60 hover:text-obsidian hover:bg-surgical-100 border border-surgical-200'
@@ -610,7 +545,7 @@ const TestAgentPageContent = () => {
                                 onClick={handleToggleWebCall}
                                 disabled={callInitiating}
                                 aria-label={isConnected ? 'End call' : 'Start call'}
-                                title={isConnected ? 'End session (Ctrl+E)' : 'Start session'}
+                                title={isConnected ? 'End session' : 'Start session'}
                                 className={`w-12 h-12 rounded-full transition-all flex items-center justify-center ${isConnected
                                     ? 'bg-red-600 hover:bg-red-700 text-white'
                                     : 'bg-surgical-600 hover:bg-surgical-700 text-white'

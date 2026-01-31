@@ -20,34 +20,20 @@ analyticsRouter.get('/dashboard-pulse', requireAuth, async (req: Request, res: R
             return res.status(401).json({ error: 'Authentication required' });
         }
 
-        // Query the view for both inbound and outbound calls
-        const { data: pulseData, error: pulseError } = await supabase
-            .from('view_clinical_dashboard_pulse')
-            .select('*')
-            .eq('org_id', orgId);
-
-        if (pulseError) {
-            log.error('AnalyticsAPI', 'Failed to fetch dashboard pulse', { error: pulseError.message });
-            // Return zeros if no data found
-            return res.json({
-                total_calls: 0,
-                inbound_calls: 0,
-                outbound_calls: 0,
-                avg_duration_seconds: 0,
-                success_rate: 0,
-                pipeline_value: 0,
-                hot_leads_count: 0
-            });
-        }
-
-        // Aggregate inbound and outbound data
+        // Try to use view first (if it exists), fall back to direct aggregation
         let totalCalls = 0;
         let inboundCalls = 0;
         let outboundCalls = 0;
         let totalDuration = 0;
         let callCountForAvg = 0;
 
-        if (pulseData && Array.isArray(pulseData)) {
+        const { data: pulseData, error: pulseError } = await supabase
+            .from('view_clinical_dashboard_pulse')
+            .select('*')
+            .eq('org_id', orgId);
+
+        if (!pulseError && pulseData) {
+            // View exists and worked
             for (const row of pulseData) {
                 const rowTotal = row.total_calls || 0;
                 totalCalls += rowTotal;
@@ -58,6 +44,44 @@ analyticsRouter.get('/dashboard-pulse', requireAuth, async (req: Request, res: R
                     inboundCalls = rowTotal;
                 } else if (row.call_direction === 'outbound') {
                     outboundCalls = rowTotal;
+                }
+            }
+        } else {
+            // View doesn't exist or errored - aggregate directly from calls table
+            log.info('AnalyticsAPI', 'View not available, using direct aggregation', { error: pulseError?.message });
+
+            const { data: calls, error: callsError } = await supabase
+                .from('calls')
+                .select('id, call_direction, duration_seconds, created_at')
+                .eq('org_id', orgId)
+                .gt('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+            if (callsError) {
+                log.error('AnalyticsAPI', 'Failed to fetch calls for aggregation', { error: callsError.message });
+                // Return zeros if no data found
+                return res.json({
+                    total_calls: 0,
+                    inbound_calls: 0,
+                    outbound_calls: 0,
+                    avg_duration_seconds: 0,
+                    success_rate: 0,
+                    pipeline_value: 0,
+                    hot_leads_count: 0
+                });
+            }
+
+            // Aggregate the calls
+            if (calls && Array.isArray(calls)) {
+                for (const call of calls) {
+                    totalCalls += 1;
+                    callCountForAvg += 1;
+                    totalDuration += call.duration_seconds || 0;
+
+                    if (call.call_direction === 'inbound') {
+                        inboundCalls += 1;
+                    } else if (call.call_direction === 'outbound') {
+                        outboundCalls += 1;
+                    }
                 }
             }
         }
@@ -123,12 +147,11 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
             return res.status(401).json({ error: 'Authentication required' });
         }
 
-        // Fetch recent calls from unified calls table
+        // Fetch recent calls from unified calls table (both inbound and outbound)
         const { data: calls, error: callsError } = await supabase
             .from('calls')
-            .select('id, created_at, caller_name, duration_seconds, sentiment_label, sentiment_summary, sentiment_urgency')
+            .select('id, created_at, caller_name, duration_seconds, sentiment_label, sentiment_summary, sentiment_urgency, call_direction')
             .eq('org_id', orgId)
-            .eq('call_direction', 'inbound')
             .order('created_at', { ascending: false })
             .limit(10);
 
@@ -152,17 +175,21 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
         // Combine and sort by timestamp
         const events: any[] = [];
 
-        // Add call events
+        // Add call events (both inbound and outbound)
         if (calls && !callsError) {
             calls.forEach((call: any) => {
                 const durationMinutes = Math.floor((call.duration_seconds || 0) / 60);
+                const callTypeIcon = call.call_direction === 'outbound' ? '📞' : '📲';
+                const callTypeLabel = call.call_direction === 'outbound' ? 'to' : 'from';
+
                 events.push({
                     id: `call_${call.id}`,
                     type: 'call_completed',
                     timestamp: call.created_at,
-                    summary: `Call from ${call.caller_name || 'Unknown'} - ${durationMinutes}m`,
+                    summary: `${callTypeIcon} Call ${callTypeLabel} ${call.caller_name || 'Unknown'} - ${durationMinutes}m`,
                     metadata: {
                         caller_name: call.caller_name || 'Unknown Caller',
+                        call_direction: call.call_direction || 'inbound',
                         sentiment_label: call.sentiment_label || 'neutral',
                         sentiment_summary: call.sentiment_summary || 'Call completed',
                         sentiment_urgency: call.sentiment_urgency || 'low',
