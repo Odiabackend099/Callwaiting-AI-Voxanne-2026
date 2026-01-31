@@ -94,6 +94,7 @@ import telephonyRouter from './routes/telephony'; // default export - Hybrid Tel
 import webhookHealthRouter from './routes/webhook-health'; // default export - Webhook Health Check
 import testErrorRouter from './routes/test-error'; // Test endpoint for exception handling
 import monitoringRouter from './routes/monitoring'; // default export - System monitoring endpoints
+import toolHealthRouter from './routes/tool-health'; // default export - Tool chain health monitoring
 import complianceRouter from './routes/compliance'; // default export - GDPR/HIPAA compliance endpoints
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
@@ -157,6 +158,8 @@ app.use(cors({
     const defaultOrigins = [
       'http://localhost:3000',
       'http://localhost:3001',
+      'https://voxanne.ai',
+      'https://www.voxanne.ai',
       'https://callwaitingai.dev',
       'https://www.callwaitingai.dev',
       'https://voxanne-frontend-h0pv6jv68-odia-backends-projects.vercel.app',
@@ -293,6 +296,7 @@ app.use('/api/appointments', appointmentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/monitoring', monitoringRouter); // System monitoring and cache statistics
+app.use('/api/monitoring', toolHealthRouter); // Tool chain health (GET /api/monitoring/tool-health)
 app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
 app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
@@ -493,6 +497,8 @@ server.on('upgrade', (request, socket, head) => {
   const allowedOrigins = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://voxanne.ai',
+    'https://www.voxanne.ai',
     'https://voxanne-frontend-7c8wg3jiv-odia-backends-projects.vercel.app',
     'https://callwaitingai.dev',
     'https://www.callwaitingai.dev',
@@ -678,6 +684,7 @@ if (process.env.NODE_ENV !== 'test') {
   
   Port: ${PORT}
   Environment: ${process.env.NODE_ENV || 'development'}
+  Backend URL: ${process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:' + PORT}
   Uptime: ${new Date().toISOString()}
   
   Endpoints:

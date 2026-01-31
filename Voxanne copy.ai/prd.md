@@ -108,49 +108,75 @@ Vapi → POST /api/vapi/webhook → vapi-webhook.ts (lines 211-293)
   └─ [4] Run analytics (fire-and-forget)
 ```
 
-### **Critical Database Column Mappings**
+### **Critical Database Column Mappings (UPDATED 2026-01-31)**
 
-The `call_logs` table uses **different column names** than Vapi webhook field names:
+The webhook handler maps Vapi fields to `call_logs` table columns as follows:
 
-| Vapi Field | ❌ WRONG Column | ✅ CORRECT Column |
-|------------|----------------|------------------|
-| `call.customer.number` | `phone_number` | `from_number` |
-| `call.customer.name` | `caller_name` | ❌ DOESN'T EXIST |
-| `message.cost` | `cost` | `total_cost` |
-| `analysis.sentiment` | `sentiment_label` | `sentiment` |
-| `message.durationSeconds` | `call.duration` | `message.durationSeconds` |
-| `artifact.recordingUrl` | `artifact.recording` | `artifact.recordingUrl` |
-| ANY Vapi call | (omitted) | `call_sid` (**REQUIRED**) |
+| Vapi Webhook Data | Correct `call_logs` Column | Notes |
+|-------------------|------------------------|-------|
+| `call.customer.number` | ✅ `phone_number` | Dashboard queries this field |
+| `call.customer.number` | ✅ `from_number` | Alternative column, same data |
+| `call.customer.name` | ✅ `caller_name` | Dashboard queries this field |
+| `message.cost` | ✅ `total_cost` | Correct database column |
+| `analysis.sentiment` | ✅ `sentiment` | Single sentiment value |
+| `analysis.sentimentScore` | ✅ `sentiment_score` | Numeric score 0-1 |
+| `analysis.sentimentSummary` | ✅ `sentiment_summary` | Text summary |
+| `analysis.sentimentUrgency` | ✅ `sentiment_urgency` | Urgency level |
+| `message.durationSeconds` | ✅ `duration_seconds` | From message level |
+| `artifact.recordingUrl` | ✅ `recording_url` | Full URL path |
+| ANY Vapi call | ✅ `call_sid` | Use `"vapi-{call_id}"` placeholder (**REQUIRED**) |
+| ANY inbound call | ✅ `call_type` | Hardcoded to `'inbound'` |
 
-**🚨 CRITICAL:** The `call_sid` field has a **NOT NULL** constraint. For Vapi calls, use placeholder: `"vapi-{call_id}"`
+**🚨 CRITICAL:**
+- **`phone_number` AND `from_number` are BOTH populated** (2026-01-31 fix)
+- **`caller_name` IS populated** (2026-01-31 fix)
+- **ALL 4 sentiment fields ARE populated** (2026-01-31 fix)
+- The `call_sid` field has a **NOT NULL** constraint
 
-### **Verified Working Code (2026-01-31)**
+### **Verified Working Code (2026-01-31 - LATEST)**
 
 ```typescript
-// File: backend/src/routes/vapi-webhook.ts (lines 244-268)
+// File: backend/src/routes/vapi-webhook.ts (lines 300-335)
+const sentimentLabel = analysis?.sentiment || null;
+const sentimentScore = (typeof analysis?.sentimentScore === 'number') ? analysis.sentimentScore : null;
+const sentimentSummary = analysis?.sentimentSummary || null;
+const sentimentUrgency = analysis?.sentimentUrgency || null;
+
 const { error: upsertError } = await supabase
   .from('call_logs')
   .upsert({
     vapi_call_id: call?.id,
     call_sid: `vapi-${call?.id}`,  // ← REQUIRED placeholder
     org_id: orgId,  // ← Resolved from agent lookup
-    from_number: call?.customer?.number || null,  // ← Correct column
+    from_number: call?.customer?.number || null,
+    phone_number: call?.customer?.number || null,  // ✅ 2026-01-31: CRITICAL for dashboard
+    caller_name: call?.customer?.name || 'Unknown Caller',  // ✅ 2026-01-31: CRITICAL for dashboard
     duration_seconds: Math.round(message.durationSeconds || 0),
     status: 'completed',
     outcome: 'completed',
-    outcome_summary: analysis?.summary || null,  // ← Populated
+    outcome_summary: analysis?.summary || null,
     transcript: artifact?.transcript || null,
     recording_url: typeof artifact?.recordingUrl === 'string'
       ? artifact.recordingUrl : null,
-    call_type: 'inbound',
-    total_cost: message.cost || 0,  // ← Correct column
+    call_type: 'inbound',  // ✅ Always 'inbound' for webhook calls
+    total_cost: message.cost || 0,
     started_at: message.startedAt || new Date().toISOString(),
     ended_at: message.endedAt || new Date().toISOString(),
-    sentiment: analysis?.sentiment || null,  // ← Correct column
+    sentiment: sentimentLabel,
+    sentiment_label: sentimentLabel,  // ✅ 2026-01-31: NEW
+    sentiment_score: sentimentScore,  // ✅ 2026-01-31: NEW
+    sentiment_summary: sentimentSummary,  // ✅ 2026-01-31: NEW
+    sentiment_urgency: sentimentUrgency,  // ✅ 2026-01-31: NEW
     metadata: {
       source: 'vapi-webhook-handler',
       endedReason: message.endedReason,
-      successEvaluation: analysis?.successEvaluation
+      successEvaluation: analysis?.successEvaluation,
+      sentimentAnalysis: {
+        label: sentimentLabel,
+        score: sentimentScore,
+        summary: sentimentSummary,
+        urgency: sentimentUrgency
+      }
     }
   }, { onConflict: 'vapi_call_id' });  // ← Idempotent upsert
 ```
@@ -171,12 +197,25 @@ const { error: upsertError } = await supabase
 - ✅ `sentiment`: null
 - ✅ `transcript`: 780 characters (PHI-redacted)
 
-### **Common Mistakes to Avoid**
+### **CRITICAL INVARIANTS - DO NOT BREAK (2026-01-31)**
 
-1. ❌ Modifying `webhooks.ts` thinking it affects production
-2. ❌ Using wrong column names (`phone_number`, `cost`, `sentiment_label`)
-3. ❌ Omitting `call_sid` field (NOT NULL constraint violation)
-4. ❌ Using wrong data paths (`call.duration` instead of `message.durationSeconds`)
+These rules MUST be followed in the webhook handler. Breaking any of them will cause dashboard data to not display:
+
+**✅ DO (Correct Implementation - 2026-01-31):**
+1. ✅ Populate `phone_number` from `call.customer.number` (dashboard queries this)
+2. ✅ Populate `caller_name` from `call.customer.name` (dashboard queries this)
+3. ✅ Populate ALL 4 sentiment fields (`sentiment`, `sentiment_label`, `sentiment_score`, `sentiment_summary`, `sentiment_urgency`)
+4. ✅ Set `call_type = 'inbound'` for webhook calls
+5. ✅ Use `call_sid` placeholder: `vapi-{call_id}`
+6. ✅ Use correct column names: `total_cost`, `from_number`, `recording_url`
+
+**❌ DO NOT (Common Mistakes):**
+1. ❌ Modify `webhooks.ts` - only `vapi-webhook.ts` is used by Vapi
+2. ❌ Omit `phone_number` or `caller_name` fields (dashboard will show "Unknown")
+3. ❌ Use wrong column names like `cost` (should be `total_cost`)
+4. ❌ Omit sentiment fields (dashboard will show NULL)
+5. ❌ Omit `call_sid` field (NOT NULL constraint violation)
+6. ❌ Use wrong data paths like `call.duration` (use `message.durationSeconds`)
 
 ### **Documentation Reference**
 

@@ -41,9 +41,9 @@ export function HeroCalendlyReplica() {
     };
 
     return (
-        <section className="relative min-h-[90vh] overflow-hidden bg-white pt-20">
+        <section className="relative min-h-[85vh] sm:min-h-[90vh] overflow-hidden bg-white pt-16 sm:pt-20 pb-8 sm:pb-0">
             {/* ✅ UPDATED: Background Blob with Approved Colors */}
-            <div className="absolute right-0 top-0 h-full w-[55%] bg-surgical-blue rounded-bl-[200px] z-0 hidden md:block overflow-hidden">
+            <div className="absolute right-0 top-0 h-full w-[55%] bg-surgical-blue rounded-bl-[200px] z-0 hidden lg:block overflow-hidden">
                 {/* Subtle gradient overlay for depth */}
                 <div className="absolute inset-0 bg-gradient-to-br from-surgical-blue to-clinical-blue opacity-100" />
 
@@ -64,31 +64,36 @@ export function HeroCalendlyReplica() {
                 />
             </div>
 
-            <div className="container mx-auto px-4 h-full relative z-10">
-                <div className="grid md:grid-cols-2 gap-16 items-center min-h-[80vh]">
+            <div className="container mx-auto px-4 sm:px-6 h-full relative z-10">
+                <div className="grid lg:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-center min-h-[75vh] sm:min-h-[80vh]">
                     
                     {/* LEFT COLUMN: Copy */}
-                    <div className="max-w-xl space-y-8">
-                        <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.1]">
-                            Deploy a digital employee that <span className="text-blue-600">never sleeps.</span>
+                    <div className="max-w-xl space-y-6 md:space-y-8">
+                        {/* Headline with better mobile line breaks */}
+                        <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.15] md:leading-[1.1]">
+                            Deploy a digital employee that{' '}
+                            <span className="text-blue-600 block sm:inline">never sleeps.</span>
                         </h1>
-                        
-                        <p className="text-xl text-slate-600 leading-relaxed">
-                            Answers every call on the first ring, never takes a sick day, and works holidays. 
+
+                        {/* Subheadline with improved mobile sizing */}
+                        <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-lg">
+                            Answers every call on the first ring, never takes a sick day, and works holidays.
                             Stop losing revenue to missed calls.
                         </p>
 
-                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                            <Button 
-                                size="lg" 
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg rounded-full font-semibold shadow-lg shadow-blue-200 transition-transform hover:scale-105"
+                        {/* CTA Buttons - optimized for mobile */}
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 md:pt-4">
+                            <Button
+                                size="lg"
+                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold shadow-lg shadow-blue-200 transition-transform hover:scale-105 active:scale-95"
                             >
                                 Get Started
+                                <ArrowRight className="ml-2 h-5 w-5" />
                             </Button>
-                            <Button 
-                                size="lg" 
-                                variant="outline" 
-                                className="bg-white hover:bg-slate-50 text-slate-900 border-slate-200 px-8 py-6 text-lg rounded-full font-semibold transition-transform hover:scale-105"
+                            <Button
+                                size="lg"
+                                variant="outline"
+                                className="w-full sm:w-auto bg-white hover:bg-slate-50 text-slate-900 border-2 border-slate-200 hover:border-slate-300 px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold transition-transform hover:scale-105 active:scale-95"
                                 onClick={handleDemoClick}
                             >
                                 <Play className="mr-2 h-5 w-5 fill-slate-900" />
@@ -96,28 +101,31 @@ export function HeroCalendlyReplica() {
                             </Button>
                         </div>
 
-                        <div className="pt-8">
-                            <p className="text-sm text-slate-500 font-medium mb-4 uppercase tracking-wider">Trusted by 500+ Clinics</p>
-                            <div className="flex gap-8 opacity-60 grayscale hover:grayscale-0 transition-all items-center">
-                                {/* Refined Logo Placeholders */}
+                        {/* Trust Badges - better mobile organization */}
+                        <div className="pt-6 md:pt-8">
+                            <p className="text-xs sm:text-sm text-slate-500 font-medium mb-3 sm:mb-4 uppercase tracking-wider">
+                                Trusted by 500+ Clinics
+                            </p>
+                            <div className="flex flex-wrap gap-4 sm:gap-6 md:gap-8 opacity-60 grayscale hover:grayscale-0 transition-all items-center">
+                                {/* Refined Logo Placeholders - mobile optimized */}
                                 <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 bg-slate-800 rounded-full" />
-                                    <span className="font-bold text-xl text-slate-800">DermCare</span>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-slate-800 rounded-full flex-shrink-0" />
+                                    <span className="font-bold text-base sm:text-lg md:text-xl text-slate-800 whitespace-nowrap">DermCare</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 bg-slate-800 rounded-sm" />
-                                    <span className="font-bold text-xl text-slate-800">EliteMed</span>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-slate-800 rounded-sm flex-shrink-0" />
+                                    <span className="font-bold text-base sm:text-lg md:text-xl text-slate-800 whitespace-nowrap">EliteMed</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 bg-slate-800 rotate-45" />
-                                    <span className="font-bold text-xl text-slate-800">AestheticPro</span>
+                                <div className="flex items-center gap-2 hidden sm:flex">
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-slate-800 rotate-45 flex-shrink-0" />
+                                    <span className="font-bold text-base sm:text-lg md:text-xl text-slate-800 whitespace-nowrap">AestheticPro</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* RIGHT COLUMN: Workflow Animation */}
-                    <div className="relative h-[600px] flex items-center justify-center">
+                    {/* RIGHT COLUMN: Workflow Animation - hidden on mobile/tablet */}
+                    <div className="relative h-[600px] hidden lg:flex items-center justify-center">
                         <div className="relative w-full max-w-lg perspective-1000">
                             {/* Base Card Container with Glass Morphism */}
                             <GlassMorphCard

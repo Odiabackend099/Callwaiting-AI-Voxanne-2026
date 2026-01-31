@@ -29,6 +29,33 @@ const webhookLimiter = rateLimit({
 });
 
 /**
+ * Extract service keywords from call transcript
+ * Used to populate lead service_interests from inbound calls
+ */
+function extractServiceKeywords(transcript: string): string[] {
+  if (!transcript) return [];
+
+  const keywords = {
+    botox: ['botox', 'botulinum', 'wrinkle reduction', 'anti-aging', 'expression lines'],
+    filler: ['filler', 'dermal filler', 'juvederm', 'restylane', 'volume loss'],
+    laser: ['laser', 'laser treatment', 'laser hair removal', 'photofacial', 'ipl'],
+    facial: ['facial', 'hydrafacial', 'chemical peel', 'microneedling', 'skin resurfacing'],
+    consultation: ['consultation', 'consult', 'appointment', 'schedule', 'book']
+  };
+
+  const found: string[] = [];
+  const lowerTranscript = transcript.toLowerCase();
+
+  for (const [service, terms] of Object.entries(keywords)) {
+    if (terms.some(term => lowerTranscript.includes(term))) {
+      found.push(service);
+    }
+  }
+
+  return found;
+}
+
+/**
  * POST /api/vapi/webhook
  * Handles:
  * 1. 'assistant-request' (RAG Context Injection)
@@ -263,42 +290,108 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         return res.json({ success: true, received: true });
       }
 
-      // 2. Upsert call_logs entry (creates if not exists, updates if exists)
+      // 2. Detect call direction (inbound vs outbound)
+      // Inbound: call.type === 'inboundPhoneCall' OR no assistant overrides
+      // Outbound: call.type === 'webCall' AND assistantOverrides present
+      const callDirection: 'inbound' | 'outbound' =
+        call?.type === 'webCall' && call?.assistantOverrides
+          ? 'outbound'
+          : 'inbound';
+
+      log.info('Vapi-Webhook', 'Call direction detected', {
+        callId: call?.id,
+        direction: callDirection,
+        callType: call?.type,
+        hasAssistantOverrides: !!call?.assistantOverrides,
+        orgId
+      });
+
+      // 3. Map sentiment fields from analysis object
+      const sentimentLabel = analysis?.sentiment || null;
+      const sentimentScore = (typeof analysis?.sentimentScore === 'number') ? analysis.sentimentScore : null;
+      const sentimentSummary = analysis?.sentimentSummary || null;
+      const sentimentUrgency = analysis?.sentimentUrgency || null;
+
+      // 4. Upsert to unified calls table (creates if not exists, updates if exists)
       const { error: upsertError } = await supabase
-        .from('call_logs')
+        .from('calls')  // ← Changed from 'call_logs' to unified 'calls' table
         .upsert({
           vapi_call_id: call?.id,
-          call_sid: `vapi-${call?.id}`, // Placeholder for Vapi calls (no Twilio SID)
           org_id: orgId,
-          from_number: call?.customer?.number || null,
+
+          // Direction & type
+          call_direction: callDirection,  // NEW: 'inbound' or 'outbound'
+          call_type: callDirection,  // For backward compatibility
+
+          // Contact linking (outbound only)
+          contact_id: callDirection === 'outbound'
+            ? (call?.customer?.contactId || null)
+            : null,
+
+          // Caller info (inbound only)
+          phone_number: callDirection === 'inbound'
+            ? (call?.customer?.number || null)
+            : null,
+          caller_name: callDirection === 'inbound'
+            ? (call?.customer?.name || 'Unknown Caller')
+            : null,
+
+          // Call metadata
+          call_sid: call?.phoneCallProviderId || `vapi-${call?.id}`,
+          created_at: call?.createdAt || message.startedAt || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
           duration_seconds: Math.round(message.durationSeconds || 0),
-          status: 'completed',
-          outcome: 'completed',
-          outcome_summary: analysis?.summary || null,
-          transcript: artifact?.transcript || null,
+          status: call?.status || 'completed',
+
+          // Recording & transcript
           recording_url: typeof artifact?.recordingUrl === 'string'
             ? artifact.recordingUrl
             : null,
-          call_type: 'inbound',
-          total_cost: message.cost || 0,
-          started_at: message.startedAt || new Date().toISOString(),
-          ended_at: message.endedAt || new Date().toISOString(),
-          sentiment: analysis?.sentiment || null,
+          recording_storage_path: null,  // Will be populated if uploaded to Supabase
+          transcript: artifact?.transcript || null,
+
+          // Analytics (all 4 sentiment fields)
+          sentiment: sentimentLabel,
+          sentiment_label: sentimentLabel,
+          sentiment_score: sentimentScore,
+          sentiment_summary: sentimentSummary,
+          sentiment_urgency: sentimentUrgency,
+
+          // Outcomes
+          outcome: analysis?.structuredData?.outcome || 'completed',
+          outcome_summary: analysis?.summary || null,
+          notes: null,
+
+          // Metadata
           metadata: {
             source: 'vapi-webhook-handler',
-            endedReason: message.endedReason,
-            successEvaluation: analysis?.successEvaluation
+            vapi_call_type: call?.type,
+            ended_reason: message.endedReason,
+            cost: message.cost || 0,
+            cost_breakdown: call?.costs || {},
+            success_evaluation: analysis?.successEvaluation,
+            has_assistant_overrides: !!call?.assistantOverrides,
+            messages: call?.messages || [],
+            sentiment_analysis: {
+              label: sentimentLabel,
+              score: sentimentScore,
+              summary: sentimentSummary,
+              urgency: sentimentUrgency
+            }
           }
         }, { onConflict: 'vapi_call_id' });
 
       if (upsertError) {
-        log.error('Vapi-Webhook', 'Failed to upsert call_logs', {
+        log.error('Vapi-Webhook', 'Failed to upsert to calls table', {
           error: upsertError.message,
-          callId: call?.id
+          callId: call?.id,
+          direction: callDirection,
+          orgId
         });
       } else {
-        log.info('Vapi-Webhook', '✅ Call logged to call_logs', {
+        log.info('Vapi-Webhook', '✅ Call logged to unified calls table', {
           callId: call?.id,
+          direction: callDirection,
           orgId
         });
 
@@ -307,6 +400,92 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           const { wsBroadcast } = await import('../services/websocket');
           wsBroadcast(orgId, { type: 'call_ended', callId: call?.id });
         } catch (e) { /* non-critical */ }
+
+        // ========== AUTOMATIC CONTACT CREATION FROM INBOUND CALL ==========
+        const phoneNumber = call?.customer?.number;
+        const callerName = call?.customer?.name;
+
+        if (phoneNumber && orgId) {
+          try {
+            // 1. Check if contact already exists
+            const { data: existingContact } = await supabase
+              .from('contacts')
+              .select('id')
+              .eq('org_id', orgId)
+              .eq('phone', phoneNumber)
+              .maybeSingle();
+
+            if (!existingContact) {
+              // 2. Import and use lead scoring service
+              const { scoreLead } = await import('../services/lead-scoring');
+              const leadScoring = await scoreLead(
+                orgId,
+                artifact?.transcript || '',
+                (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
+              );
+
+              // 3. Extract service keywords from transcript
+              const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
+
+              // 4. Create new contact
+              const { error: contactError } = await supabase
+                .from('contacts')
+                .insert({
+                  org_id: orgId,
+                  name: callerName || 'Unknown Caller',
+                  phone: phoneNumber,
+                  lead_score: leadScoring.tier,
+                  lead_status: 'new',
+                  service_interests: serviceKeywords,
+                  last_contact_at: call?.endedAt || new Date().toISOString(),
+                  notes: `Auto-created from inbound call ${call?.id}. Lead score: ${leadScoring.score}/100`
+                });
+
+              if (contactError) {
+                log.error('Vapi-Webhook', 'Failed to auto-create contact', {
+                  error: contactError.message,
+                  phone: phoneNumber,
+                  orgId
+                });
+              } else {
+                log.info('Vapi-Webhook', '✅ Contact auto-created from inbound call', {
+                  phone: phoneNumber,
+                  leadScore: leadScoring.tier,
+                  leadScoreValue: leadScoring.score,
+                  orgId
+                });
+              }
+            } else {
+              // 5. Update existing contact's last_contact_at
+              const { error: updateError } = await supabase
+                .from('contacts')
+                .update({
+                  last_contact_at: call?.endedAt || new Date().toISOString()
+                })
+                .eq('id', existingContact.id);
+
+              if (updateError) {
+                log.error('Vapi-Webhook', 'Failed to update contact last_contact_at', {
+                  error: updateError.message,
+                  contactId: existingContact.id,
+                  orgId
+                });
+              } else {
+                log.info('Vapi-Webhook', '✅ Contact last_contact_at updated', {
+                  contactId: existingContact.id,
+                  phone: phoneNumber
+                });
+              }
+            }
+          } catch (contactCreationError: any) {
+            log.error('Vapi-Webhook', 'Contact creation/update failed with exception', {
+              error: contactCreationError?.message || String(contactCreationError),
+              phone: phoneNumber,
+              orgId
+            });
+            // Don't fail webhook processing if contact creation fails
+          }
+        }
       }
 
       // Also run analytics (existing behavior)

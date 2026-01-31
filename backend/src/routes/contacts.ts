@@ -26,7 +26,7 @@ function transformContact(contact: any) {
     contact_name: contact.name,
     phone_number: contact.phone,
     email: contact.email,
-    last_contact_time: contact.last_contacted_at,
+    last_contact_time: contact.last_contact_at,  // Fixed: was last_contacted_at
     booking_source: contact.booking_source,
     notes: contact.notes,
     services_interested: contact.service_interests || [],

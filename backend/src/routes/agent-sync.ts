@@ -34,7 +34,10 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
   try {
     log.info('AgentSync', 'Starting agent sync from dashboard', { requestId });
 
-    // Get the organization
+    // @ai-invariant: DEPRECATED - This route is COMMENTED OUT in server.ts (line 284).
+    // If re-enabled, the .limit(1).single() below MUST be replaced with org_id
+    // resolution from the authenticated user's JWT. See founder-console-v2.ts:891-895
+    // for the correct pattern.
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .select('id')

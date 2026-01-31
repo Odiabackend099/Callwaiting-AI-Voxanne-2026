@@ -322,7 +322,7 @@ export class VapiClient {
 
   /**
    * CRITICAL: Sync appointment booking tools to agent
-   * Reads from vapi-tool-definitions.json and wires them into the agent's tools array
+   * Constructs tool definitions inline and wires them into the agent's tools array
    * 
    * This function:
    * 1. Loads tool definitions from config

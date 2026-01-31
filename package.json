@@ -22,7 +22,12 @@
     "test:nuclear:ui": "playwright test tests/telephony-nuclear.test.ts --ui",
     "test:nuclear:debug": "playwright test tests/telephony-nuclear.test.ts --debug",
     "test:all": "npm run test:frontend && npm run test:e2e && npm run test:nuclear",
-    "generate-icons": "node scripts/generate-pwa-icons.mjs"
+    "generate-icons": "node scripts/generate-pwa-icons.mjs",
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.js",
+    "generate:pwa-screenshots": "node scripts/generate-pwa-screenshots.js",
+    "generate:pwa-all": "npm run generate:pwa-icons && npm run generate:pwa-screenshots",
+    "validate:pwa": "./scripts/validate-pwa-assets.sh",
+    "dev:pwa": "NEXT_PUBLIC_ENABLE_PWA=true npm run dev"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

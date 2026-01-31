@@ -15,6 +15,7 @@ import { IntegrationSettingsService } from './integration-settings'; // Use Sett
 import { enhanceSystemPrompt } from './prompt-injector';
 import { ToolSyncService } from './tool-sync-service';
 import { getSuperSystemPrompt, getTemporalContext } from './super-system-prompt';
+import { resolveBackendUrl } from '../utils/resolve-backend-url';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
 
@@ -268,8 +269,8 @@ export class VapiAssistantManager {
           };
 
           // Auto-attach webhook URL if not provided
-          if (!config.serverUrl && process.env.BACKEND_URL) {
-            updatePayload.serverUrl = `${process.env.BACKEND_URL}/api/vapi/webhook`;
+          if (!config.serverUrl) {
+            updatePayload.serverUrl = `${resolveBackendUrl()}/api/vapi/webhook`;
           } else if (config.serverUrl) {
             updatePayload.serverUrl = config.serverUrl;
           }
@@ -427,8 +428,8 @@ export class VapiAssistantManager {
           };
 
           // Auto-attach webhook URL if not provided
-          if (!config.serverUrl && process.env.BACKEND_URL) {
-            createPayload.serverUrl = `${process.env.BACKEND_URL}/api/vapi/webhook`;
+          if (!config.serverUrl) {
+            createPayload.serverUrl = `${resolveBackendUrl()}/api/vapi/webhook`;
           } else if (config.serverUrl) {
             createPayload.serverUrl = config.serverUrl;
           }
@@ -598,7 +599,7 @@ export class VapiAssistantManager {
           await ToolSyncService.syncAllToolsForAssistant({
             orgId,
             assistantId,
-            backendUrl: process.env.BACKEND_URL,
+            backendUrl: resolveBackendUrl(),
             skipIfExists: false  // Always sync to pick up definition changes
           });
 

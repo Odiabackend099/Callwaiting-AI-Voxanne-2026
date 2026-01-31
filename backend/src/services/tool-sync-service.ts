@@ -24,6 +24,7 @@ import { getUnifiedBookingTool } from '../config/unified-booking-tool';
 import { getTransferCallTool, getLookupCallerTool, getEndCallTool, getCheckAvailabilityTool } from '../config/phase1-tools';
 import { supabase } from './supabase-client';
 import { log } from './logger';
+import { resolveBackendUrl } from '../utils/resolve-backend-url';
 
 export interface ToolSyncOptions {
   orgId: string;
@@ -73,7 +74,7 @@ export class ToolSyncService {
       const {
         orgId,
         assistantId,
-        backendUrl = process.env.BACKEND_URL || 'http://localhost:3001',
+        backendUrl = resolveBackendUrl(),
         skipIfExists = false
       } = options;
 
@@ -286,7 +287,7 @@ export class ToolSyncService {
       log.info('ToolSyncService', '✅ Tool registered with Vapi', {
         orgId,
         toolId,
-        toolName: 'bookClinicAppointment'
+        toolName: toolBlueprint.name
       });
     } catch (err: any) {
       log.error('ToolSyncService', '❌ Failed to register tool with Vapi', {
@@ -305,7 +306,7 @@ export class ToolSyncService {
         .from('org_tools')
         .upsert({
           org_id: orgId,
-          tool_name: 'bookClinicAppointment',
+          tool_name: toolBlueprint.name,
           vapi_tool_id: toolId,
           description: toolBlueprint.description,
           enabled: true,

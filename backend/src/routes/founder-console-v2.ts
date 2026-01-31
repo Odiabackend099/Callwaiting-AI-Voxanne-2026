@@ -18,6 +18,7 @@ import { buildOutboundSystemPrompt, getDefaultPromptConfig, buildCallContextBloc
 import { CallOutcome, CallStatus, isActiveCall } from '../types/call-outcome';
 import { createLogger } from '../services/logger';
 import { wsBroadcast } from '../services/websocket';
+import { resolveBackendUrl } from '../utils/resolve-backend-url';
 import { requireAuth, requireAuthOrDev } from '../middleware/auth';
 import { agentConfigLimiter, callCreationLimiter } from '../middleware/rate-limit';
 import { validateRequest } from '../middleware/validation';
@@ -642,7 +643,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
   // 2. Build config from DB state (using constants)
   // Set server.url to webhook endpoint for programmatic event delivery
-  const webhookUrl = `${process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || process.env.BASE_URL || 'http://localhost:3001'}/api/vapi/webhook`;
+  const webhookUrl = `${resolveBackendUrl()}/api/vapi/webhook`;
 
   const resolvedSystemPrompt = agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig());
   const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
@@ -904,7 +905,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
         await ToolSyncService.syncAllToolsForAssistant({
           orgId: agentData.org_id,
           assistantId: assistant.id,
-          backendUrl: process.env.BACKEND_URL || 'http://localhost:3001',
+          backendUrl: resolveBackendUrl(),
           skipIfExists: false  // Always sync to pick up definition changes
         });
 
