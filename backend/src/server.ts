@@ -48,6 +48,7 @@ import { initWebSocket } from './services/websocket';
 import { supabase } from './services/supabase-client';
 import inboundSetupRouter from './routes/inbound-setup'; // default export
 import phoneMappingRouter from './routes/phone-mapping-routes'; // default export
+import { resolveBackendUrl } from './utils/resolve-backend-url';
 import knowledgeBaseRouter from './routes/knowledge-base'; // default export
 import { ragRouter } from './routes/knowledge-base-rag';
 import { vapiRagRouter } from './routes/vapi-rag-integration';
@@ -95,6 +96,7 @@ import webhookHealthRouter from './routes/webhook-health'; // default export - W
 import testErrorRouter from './routes/test-error'; // Test endpoint for exception handling
 import monitoringRouter from './routes/monitoring'; // default export - System monitoring endpoints
 import toolHealthRouter from './routes/tool-health'; // default export - Tool chain health monitoring
+import smsHealthRouter from './routes/sms-health'; // default export - SMS queue health monitoring
 import complianceRouter from './routes/compliance'; // default export - GDPR/HIPAA compliance endpoints
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
@@ -297,6 +299,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/monitoring', monitoringRouter); // System monitoring and cache statistics
 app.use('/api/monitoring', toolHealthRouter); // Tool chain health (GET /api/monitoring/tool-health)
+app.use('/api/monitoring', smsHealthRouter); // SMS queue health (GET /api/monitoring/sms-queue-health)
 app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
 app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
@@ -683,15 +686,17 @@ if (process.env.NODE_ENV !== 'test') {
   });
 
   server.listen(PORT, () => {
+    // Resolve backend URL and emit warnings if misconfigured
+    const backendUrl = resolveBackendUrl();
 
     console.log(`
   ╔════════════════════════════════════════╗
   ║    Voxanne Backend Server Started      ║
   ╚════════════════════════════════════════╝
-  
+
   Port: ${PORT}
   Environment: ${process.env.NODE_ENV || 'development'}
-  Backend URL: ${process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:' + PORT}
+  Backend URL: ${backendUrl}
   Uptime: ${new Date().toISOString()}
   
   Endpoints:

@@ -58,10 +58,10 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
     // UNIFIED CALLS TABLE QUERY
     // Single query to unified 'calls' table with call_direction filter
-    // NOTE: Schema uses from_number instead of phone_number, sentiment packed as string
+    // FIXED (2026-02-01): Now includes all 4 sentiment fields (label, score, summary, urgency)
     let query = supabase
       .from('calls')  // ← Unified table for both inbound + outbound
-      .select('id, call_direction, from_number, call_type, contact_id, created_at, duration_seconds, status, recording_url, recording_storage_path, transcript, sentiment, intent', { count: 'exact' })
+      .select('id, call_direction, from_number, call_type, contact_id, created_at, duration_seconds, status, recording_url, recording_storage_path, recording_path, transcript, sentiment, sentiment_label, sentiment_score, sentiment_summary, sentiment_urgency, intent, outcome, outcome_summary', { count: 'exact' })
       .eq('org_id', orgId);  // CRITICAL: Tenant isolation
 
     // Filter by call direction if specified
@@ -121,16 +121,22 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     // Transform response (handle both inbound + outbound)
     // PERFORMANCE OPTIMIZATION: No longer generate signed URLs on list load
     // URLs generated on-demand when user clicks play (see /:callId/recording-url endpoint)
+    // FIXED (2026-02-01): Now uses individual sentiment fields instead of parsing packed string
     const finalCalls = (calls || []).map((call: any) => {
-      // Parse sentiment field (may be packed as "label:score:summary" or just "label")
-      let sentimentLabel = null;
-      let sentimentScore = null;
-      let sentimentSummary = null;
-      if (call.sentiment) {
+      // Use individual sentiment fields directly (more reliable than parsing packed strings)
+      // Fallback to parsing legacy sentiment field if individual fields not available
+      let sentimentLabel = call.sentiment_label;
+      let sentimentScore = call.sentiment_score;
+      let sentimentSummary = call.sentiment_summary;
+      let sentimentUrgency = call.sentiment_urgency;
+
+      // Legacy fallback: parse packed sentiment string if individual fields missing
+      if (!sentimentLabel && call.sentiment) {
         const parts = call.sentiment.split(':');
         sentimentLabel = parts[0] || null;
         sentimentScore = parts[1] ? parseFloat(parts[1]) : null;
         sentimentSummary = parts[2] || call.sentiment;
+        sentimentUrgency = parts[3] || null;
       }
 
       return {
@@ -141,12 +147,14 @@ callsRouter.get('/', async (req: Request, res: Response) => {
         duration_seconds: call.duration_seconds || 0,
         status: call.status || 'completed',
         call_direction: call.call_direction,  // Expose direction to frontend
-        has_recording: !!(call.recording_url || call.recording_storage_path),
+        has_recording: !!(call.recording_url || call.recording_storage_path || call.recording_path),
         has_transcript: !!call.transcript,
-        sentiment_score: sentimentScore,
-        sentiment_label: sentimentLabel,
-        sentiment_summary: sentimentSummary,
-        sentiment_urgency: null,  // Not available in current schema (will be added in proper fix)
+        sentiment_score: sentimentScore ? parseFloat(String(sentimentScore)) : null,
+        sentiment_label: sentimentLabel || null,
+        sentiment_summary: sentimentSummary || null,
+        sentiment_urgency: sentimentUrgency || null,
+        outcome: call.outcome || null,
+        outcome_summary: call.outcome_summary || null,
         call_type: call.call_direction  // For backward compatibility
       };
     });
@@ -404,6 +412,9 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
  * GET /api/calls-dashboard/:callId/recording-url
  * Generate signed URL for call recording on-demand (performance optimization)
  * IMPORTANT: Must be defined BEFORE /:callId route (more specific path)
+ *
+ * FIXED (2026-02-01): Now queries unified 'calls' table (post-Phase 6)
+ * Previously queried outdated call_logs table which no longer exists
  */
 callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) => {
   try {
@@ -412,56 +423,90 @@ callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) =>
 
     const { callId } = req.params;
 
-    // Try to fetch from call_logs first (inbound calls)
-    const { data: inboundCall } = await supabase
-      .from('call_logs')
-      .select('id, recording_storage_path, recording_url')
-      .eq('id', callId)
-      .eq('org_id', orgId)
-      .single();
-
-    if (inboundCall?.recording_storage_path) {
-      const signedUrl = await getSignedRecordingUrl(inboundCall.recording_storage_path);
-      if (signedUrl) {
-        return res.json({ recording_url: signedUrl });
-      }
-      // Fallback to legacy recording_url if signed URL generation fails
-      if (inboundCall.recording_url) {
-        return res.json({ recording_url: inboundCall.recording_url });
-      }
-    }
-
-    // If no Supabase storage path but has Vapi recording URL, return it directly
-    if (inboundCall?.recording_url) {
-      return res.json({ recording_url: inboundCall.recording_url });
-    }
-
-    // Fall back to calls table (outbound calls)
-    const { data: outboundCall } = await supabase
+    // Query unified calls table (contains both inbound and outbound calls post-Phase 6)
+    const { data: callRecord, error: callError } = await supabase
       .from('calls')
-      .select('id, recording_storage_path, recording_path, recording_url')
+      .select('id, recording_storage_path, recording_url, recording_path')
       .eq('id', callId)
       .eq('org_id', orgId)
-      .single();
+      .maybeSingle();
 
-    if (outboundCall) {
-      const path = outboundCall.recording_storage_path || outboundCall.recording_path;
-      if (path) {
-        const signedUrl = await getSignedRecordingUrl(path);
+    if (callError) {
+      log.error('Calls', 'GET /:callId/recording-url - Database error', {
+        error: callError.message,
+        callId,
+        orgId
+      });
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!callRecord) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Priority 1: Try Supabase storage path (signed URL generation)
+    if (callRecord.recording_storage_path) {
+      try {
+        const signedUrl = await getSignedRecordingUrl(callRecord.recording_storage_path);
         if (signedUrl) {
-          return res.json({ recording_url: signedUrl });
+          return res.json({
+            recording_url: signedUrl,
+            expires_in: 3600,
+            source: 'supabase'
+          });
         }
-      }
-      // Fallback to legacy recording_url
-      if (outboundCall.recording_url) {
-        return res.json({ recording_url: outboundCall.recording_url });
+      } catch (e) {
+        log.warn('Calls', 'Failed to generate signed URL for storage path', {
+          error: (e as any).message,
+          storage_path: callRecord.recording_storage_path
+        });
+        // Fall through to next option
       }
     }
 
-    return res.status(404).json({ error: 'Recording not found' });
+    // Priority 2: Try recording_path (alternative column name)
+    if (callRecord.recording_path && !callRecord.recording_storage_path) {
+      try {
+        const signedUrl = await getSignedRecordingUrl(callRecord.recording_path);
+        if (signedUrl) {
+          return res.json({
+            recording_url: signedUrl,
+            expires_in: 3600,
+            source: 'supabase'
+          });
+        }
+      } catch (e) {
+        log.warn('Calls', 'Failed to generate signed URL for recording_path', {
+          error: (e as any).message,
+          recording_path: callRecord.recording_path
+        });
+        // Fall through to next option
+      }
+    }
+
+    // Priority 3: Fallback to Vapi CDN recording URL (Vapi provides direct URLs)
+    if (callRecord.recording_url) {
+      return res.json({
+        recording_url: callRecord.recording_url,
+        expires_in: null, // Vapi URLs don't expire
+        source: 'vapi'
+      });
+    }
+
+    // No recording found
+    return res.status(404).json({
+      error: 'Recording not found for this call',
+      callId: callId
+    });
+
   } catch (e: any) {
-    log.error('Calls', 'GET /:callId/recording-url - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to generate recording URL' });
+    log.error('Calls', 'GET /:callId/recording-url - Unexpected error', {
+      error: e?.message,
+      stack: e?.stack
+    });
+    return res.status(500).json({
+      error: e?.message || 'Failed to generate recording URL'
+    });
   }
 });
 

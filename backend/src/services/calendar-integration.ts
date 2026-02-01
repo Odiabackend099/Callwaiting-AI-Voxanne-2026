@@ -78,6 +78,9 @@ export async function getAvailableSlots(
     const endOfDay = `${date}T23:59:59`;
 
     // Use safeCall for circuit breaker protection
+    // CRITICAL: Reduced timeout to fit Vapi's 15-30s webhook window
+    // Old: retries: 2, timeoutMs: 10000 = 32-33 seconds total (exceeds Vapi limit)
+    // New: retries: 1, timeoutMs: 5000 = ~6 seconds total (fits Vapi window)
     const result = await safeCall(
       'google_calendar_freebusy',
       () => calendar.freebusy.query({
@@ -88,7 +91,7 @@ export async function getAvailableSlots(
           timeZone
         }
       }),
-      { retries: 2, backoffMs: 1000, timeoutMs: 10000 }
+      { retries: 1, backoffMs: 500, timeoutMs: 5000 }
     );
 
     if (!result.success) {

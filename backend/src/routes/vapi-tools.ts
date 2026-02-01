@@ -9,6 +9,7 @@ import { getRagContext } from '../services/rag-context-provider';
 import { supabase } from '../services/supabase-client';
 import TwilioGuard from '../services/twilio-guard';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
+import { queueSms } from '../queues/sms-queue';
 
 const router = Router();
 
@@ -230,22 +231,36 @@ async function handleBookAppointment(
       });
     }
 
-    // Send SMS confirmation with TwilioGuard, using org-specific credentials if available
-    const smsResult = await TwilioGuard.sendSmsWithGuard(
-      orgId,
-      normalizedParams.customer_phone,
-      `Appointment confirmed for ${new Date(normalizedParams.scheduled_at).toLocaleString()}. Reply STOP to unsubscribe.`,
-      {}, // options: use defaults
-      twilioCredentials // CRITICAL: Pass org-specific credentials to ensure correct "from" number
-    );
+    // Queue SMS confirmation for background delivery (prevents blocking call response)
+    // CRITICAL: Do NOT await - response must return within 500ms to prevent Vapi timeout
+    const confirmationMessage = `Appointment confirmed for ${new Date(normalizedParams.scheduled_at).toLocaleString()}. Reply STOP to unsubscribe.`;
 
+    queueSms({
+      orgId,
+      recipientPhone: normalizedParams.customer_phone,
+      message: confirmationMessage,
+      twilioCredentials: twilioCredentials ? {
+        accountSid: twilioCredentials.accountSid,
+        authToken: twilioCredentials.authToken,
+        fromPhone: twilioCredentials.phoneNumber
+      } : undefined,
+      metadata: {
+        appointmentId: booking.data.eventId,
+        triggerType: 'booking'
+      }
+    }).catch(err => {
+      // Log queue error but don't block response
+      console.error('Failed to queue SMS:', err);
+    });
+
+    // Return immediately (< 500ms) - SMS will be delivered in background
     res.json({
       success: true,
       message: voiceMessage,
       eventId: booking.data.eventId,
       confirmationLink: booking.data.htmlLink,
-      smsStatus: smsResult.success ? 'sent' : 'failed',
-      nextAction: smsResult.success ? 'CONFIRMATION_SENT' : 'CONFIRMATION_PENDING'
+      smsQueued: true, // Changed from smsStatus to indicate background delivery
+      nextAction: 'CONFIRMATION_QUEUED'
     });
   } catch (error) {
     console.error('Error booking appointment:', error);

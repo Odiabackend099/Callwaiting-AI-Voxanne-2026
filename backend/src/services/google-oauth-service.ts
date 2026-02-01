@@ -296,7 +296,17 @@ export async function getCalendarClient(orgId: string): Promise<any> {
       log.info('GoogleOAuth', '[TOKEN-REFRESH] Token expired or expiring soon - refreshing', { orgId });
 
       try {
-        const { credentials: refreshedCreds } = await client.refreshAccessToken();
+        // CRITICAL: Add 5-second timeout to prevent blocking during live calls
+        // If Google Calendar API is slow, fail fast instead of making customers wait
+        const refreshPromise = client.refreshAccessToken();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Token refresh timeout (5s)')), 5000)
+        );
+
+        const { credentials: refreshedCreds } = await Promise.race([
+          refreshPromise,
+          timeoutPromise
+        ]) as any;
 
         if (!refreshedCreds.access_token) {
           throw new Error('Refresh token exchange did not return access token');
