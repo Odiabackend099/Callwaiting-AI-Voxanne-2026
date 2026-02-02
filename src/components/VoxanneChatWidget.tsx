@@ -145,24 +145,54 @@ export default function VoxanneChatWidget() {
       {/* Chat Toggle Button */}
       <AnimatePresence>
         {!isOpen && (
-          <motion.button
+          <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-50 w-20 h-20 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-surgical-600 to-surgical-500 text-white shadow-2xl shadow-surgical-600/50 ring-4 ring-white/20 hover:shadow-surgical-500/70 hover:ring-surgical-400/30 transition-all duration-300 flex items-center justify-center"
-            aria-label="Chat with Voxanne"
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3"
           >
-            <Image
-              src="/Brand/10.png"
-              alt="Chat with Voxanne"
-              width={40}
-              height={40}
-              className="w-10 h-10 sm:w-7 sm:h-7"
+            {/* Pulse Ring Animation */}
+            <motion.div
+              animate={{
+                scale: [1, 1.3, 1],
+                opacity: [0.6, 0, 0.6],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              className="absolute inset-0 w-24 h-24 sm:w-20 sm:h-20 rounded-full bg-surgical-600 blur-md"
+              style={{ left: '-2px', top: '-2px' }}
             />
-          </motion.button>
+
+            {/* Chat Button */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsOpen(true)}
+              className="relative w-24 h-24 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-surgical-600 to-surgical-500 text-white shadow-2xl shadow-surgical-600/60 ring-4 ring-white flex items-center justify-center hover:shadow-surgical-500/80 hover:ring-surgical-200 transition-all duration-300"
+              aria-label="Chat with Voxanne"
+            >
+              <Image
+                src="/Brand/10.png"
+                alt="Chat with Voxanne"
+                width={48}
+                height={48}
+                className="w-12 h-12 sm:w-10 sm:h-10"
+                priority
+              />
+
+              {/* Badge */}
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center"
+              >
+                <span className="text-white text-xs font-bold">!</span>
+              </motion.div>
+            </motion.button>
+          </motion.div>
         )}
       </AnimatePresence>
 

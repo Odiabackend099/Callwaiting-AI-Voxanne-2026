@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
                 { role: "system", content: getPrompt() },
                 ...messages,
             ],
-            model: "llama-3.3-70b-versatile",
+            model: "llama-3.1-70b-versatile",
             temperature: 0.7,
             max_tokens: 250,
             top_p: 0.9,
