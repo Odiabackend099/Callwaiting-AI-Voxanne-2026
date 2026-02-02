@@ -199,7 +199,7 @@ export default function LoginPage() {
 
                     <p className="mt-8 text-center text-sm text-slate-500">
                         Don&apos;t have an account?{" "}
-                        <Link href="https://calendly.com/voxanneai/demo" target="_blank" className="font-medium text-surgical-600 hover:text-surgical-700">
+                        <Link href="https://calendly.com/austyneguale/30min" target="_blank" className="font-medium text-surgical-600 hover:text-surgical-700">
                             Book a Demo
                         </Link>
                     </p>

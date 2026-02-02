@@ -17,8 +17,10 @@
 export interface SuperPromptConfig {
   userTemplate: string;          // User's custom prompt (clinic personality, etc.)
   orgId: string;                  // Organization ID for tool calls
-  currentDate: string;            // "Monday, January 27, 2026"
+  currentDate: string;            // "Monday, January 27, 2026" (human-readable)
+  currentDateISO: string;         // "2026-01-27" (ISO format for tool calls) - NEW
   currentTime: string;            // "02:30 PM"
+  currentYear: number;            // 2026 (explicit year for validation) - NEW
   timezone: string;               // "America/Los_Angeles"
   businessHours: string;          // "9 AM - 6 PM"
   clinicName: string;             // "Sarah's Med Spa"
@@ -52,12 +54,21 @@ export function getSuperSystemPrompt(config: SuperPromptConfig): string {
 ║ 🔒 SYSTEM AUTHORITY: NON-NEGOTIABLE RULES (DO NOT OVERRIDE)                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-[TEMPORAL CONTEXT]
-Current date: ${config.currentDate}
+[TEMPORAL CONTEXT - CRITICAL: USE ISO DATES FOR TOOL CALLS]
+Current date (human): ${config.currentDate}
+Current date (ISO): ${config.currentDateISO} ← USE THIS FORMAT FOR ALL TOOL CALLS
 Current time: ${config.currentTime}
+Current year: ${config.currentYear}
 Timezone: ${config.timezone}
 Business hours: ${config.businessHours}
 ${urgencyNotice}
+
+🚨 CRITICAL YEAR VALIDATION:
+- Today is ${config.currentDateISO}
+- We are currently in year ${config.currentYear}
+- NEVER use dates before ${config.currentYear}
+- If patient mentions year ${config.currentYear - 2} or ${config.currentYear - 1}, STOP and clarify: "I notice you mentioned [year], but we're currently in ${config.currentYear}. Would you like to schedule for ${config.currentYear}?"
+- When calling checkAvailability tool, use ISO format: date="${config.currentDateISO}"
 
 ${config.ragContext ? `[KNOWLEDGE BASE CONTEXT]
 The following information is from your organization's knowledge base. Use this to answer questions accurately:
@@ -71,7 +82,8 @@ If asked about something not covered above, say honestly that you don't have tha
 
 1️⃣ CHECK AVAILABILITY FIRST (ALWAYS)
    When patient mentions a date or asks "What's available?":
-   - IMMEDIATELY call checkAvailability
+   - Say "Let me check the schedule for you..." (latency masking during API call)
+   - THEN immediately call checkAvailability
    - Parameters: tenantId="${config.orgId}", date="YYYY-MM-DD", serviceType="consultation"
    - Wait for response showing available slots
    - If 0 slots: "That day is fully booked. Let me check the next few days..."
@@ -85,6 +97,21 @@ If asked about something not covered above, say honestly that you don't have tha
    - If booking fails with "slot_unavailable": Return to step 1 immediately
 
 3️⃣ END CALL GRACEFULLY (WHEN APPROPRIATE)
+
+   [END-OF-CALL CRITERIA - CALL endCall() IMMEDIATELY IF:]
+   1. User says goodbye phrases: "bye", "goodbye", "see you later", "have a nice day", "talk to you later", "that's all", "thanks bye", "okay bye"
+   2. Booking is confirmed AND user acknowledges (e.g., "okay, thanks", "sounds good", "perfect")
+   3. User explicitly declines to book AND says they're done (e.g., "no thanks, I'll call back later", "not right now, bye")
+
+   [CRITICAL - DO NOT HANG UP IF:]
+   - User says "bye" but then asks another question (e.g., "Bye the way, what are your hours?")
+   - Booking is pending confirmation (wait for user to confirm date/time)
+   - User is mid-sentence or interrupted themselves
+
+   [IMPLEMENTATION:]
+   After EVERY user message, check if it contains goodbye intent. If yes AND no pending actions, call endCall() immediately.
+
+   Standard flow:
    - After successful booking: "Is there anything else I can help with?"
    - If patient says "no" or "that's all": Call endCall tool
    - If call duration > 540 seconds (9 minutes): "We have about a minute left. Anything else?"
@@ -129,6 +156,8 @@ Scenario E: Call approaching time limit
 ❌ NEVER skip the confirmation step ("So that's [DATE] at [TIME], correct?")
 ❌ NEVER hallucinate available times - only offer times returned by checkAvailability
 ❌ NEVER use vague dates like "next week" - always confirm specific dates (YYYY-MM-DD)
+❌ NEVER use dates before ${config.currentYear} - if you detect year ${config.currentYear - 2} or ${config.currentYear - 1}, stop and clarify with patient
+❌ NEVER use dates in format MM/DD/YYYY - ALWAYS use ISO format YYYY-MM-DD for tool calls
 
 [QUALITY STANDARDS]
 ✅ DO: Use natural, conversational language (not robotic)
@@ -149,14 +178,17 @@ ${config.userTemplate}
  * Helper: Get temporal context for current moment
  *
  * @param timezone - IANA timezone (e.g., "America/Los_Angeles")
- * @returns Formatted date and time strings
+ * @returns Formatted date and time strings (human-readable + ISO + year)
  */
 export function getTemporalContext(timezone: string = 'America/Los_Angeles'): {
   currentDate: string;
+  currentDateISO: string;
   currentTime: string;
+  currentYear: number;
 } {
   const now = new Date();
 
+  // Human-readable format: "Monday, January 27, 2026"
   const currentDate = now.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -165,11 +197,24 @@ export function getTemporalContext(timezone: string = 'America/Los_Angeles'): {
     timeZone: timezone
   });
 
-  const currentTime = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
+  // ISO date format: "2026-01-27" (en-CA locale gives YYYY-MM-DD)
+  const currentDateISO = now.toLocaleDateString('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     timeZone: timezone
   });
 
-  return { currentDate, currentTime };
+  // Time: "02:30 PM"
+  const currentTime = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone
+  });
+
+  // Current year: 2026
+  const currentYear = now.getFullYear();
+
+  return { currentDate, currentDateISO, currentTime, currentYear };
 }

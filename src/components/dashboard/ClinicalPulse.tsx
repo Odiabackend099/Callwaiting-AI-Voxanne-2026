@@ -1,6 +1,6 @@
 import React from 'react';
 import useSWR from 'swr';
-import { Phone, Clock } from 'lucide-react';
+import { Phone, Clock, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -24,7 +24,7 @@ export default function ClinicalPulse() {
     const { user } = useAuth();
 
     // SECURITY FIX: Removed orgId extraction - backend auth middleware extracts from JWT
-    const { data: stats, isLoading } = useSWR(
+    const { data: stats, isLoading, error, mutate } = useSWR(
         '/api/analytics/dashboard-pulse',
         (url) => authedBackendFetch<DashboardPulse>(url),
         {
@@ -35,6 +35,24 @@ export default function ClinicalPulse() {
             revalidateIfStale: true,       // Only refetch if data is stale
         }
     );
+
+    // Error state display
+    if (error) {
+        return (
+            <div className="glass-card rounded-2xl p-6 mb-4">
+                <div className="flex items-center gap-2 text-red-700 mb-4">
+                    <AlertCircle className="w-5 h-5" />
+                    <p className="font-medium">Error loading dashboard stats: {error.message || 'Unknown error'}</p>
+                </div>
+                <button
+                    onClick={() => mutate()}
+                    className="px-4 py-2 text-surgical-600 hover:text-surgical-700 font-medium bg-surgical-50 hover:bg-surgical-100 rounded-lg transition-colors"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
 
     const safeStats = stats || {
         total_calls: 0,

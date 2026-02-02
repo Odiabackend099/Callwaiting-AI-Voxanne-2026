@@ -77,6 +77,9 @@ const LeadsDashboardContent = () => {
     const [showSMSModal, setShowSMSModal] = useState(false);
     const [smsMessage, setSMSMessage] = useState('');
     const [smsSendingLeadId, setSmsSendingLeadId] = useState<string | null>(null);
+    const [callingLeadId, setCallingLeadId] = useState<string | null>(null);
+    const [showConfigGuide, setShowConfigGuide] = useState(false);
+    const [configGuideType, setConfigGuideType] = useState<'outbound_agent' | 'phone_number' | 'phone_format' | null>(null);
     const { success, error: showError } = useToast();
 
     const leadsPerPage = 20;
@@ -167,14 +170,31 @@ const LeadsDashboardContent = () => {
     };
 
     const handleCallBack = async (leadId: string) => {
+        setCallingLeadId(leadId);
         try {
             const response = await authedBackendFetch<any>(`/api/contacts/${leadId}/call-back`, {
                 method: 'POST'
             });
             success('Call initiated. Connecting now...');
         } catch (err: any) {
-            showError(err?.message || 'Failed to initiate call');
-            setError(err?.message || 'Failed to initiate call');
+            const errorMsg = err?.message || 'Failed to initiate call';
+
+            // Show actionable error guidance based on error type
+            if (errorMsg.toLowerCase().includes('outbound agent not configured')) {
+                setConfigGuideType('outbound_agent');
+                setShowConfigGuide(true);
+            } else if (errorMsg.toLowerCase().includes('no phone number available') || errorMsg.toLowerCase().includes('phone number not found')) {
+                setConfigGuideType('phone_number');
+                setShowConfigGuide(true);
+            } else if (errorMsg.toLowerCase().includes('invalid phone format') || errorMsg.toLowerCase().includes('e.164')) {
+                setConfigGuideType('phone_format');
+                setShowConfigGuide(true);
+            } else {
+                showError(errorMsg);
+                setError(errorMsg);
+            }
+        } finally {
+            setCallingLeadId(null);
         }
     };
 
@@ -407,10 +427,24 @@ const LeadsDashboardContent = () => {
                                                 e.stopPropagation();
                                                 handleCallBack(lead.id);
                                             }}
-                                            className="flex items-center gap-2 px-3 py-2 bg-white border border-surgical-200 text-obsidian rounded-lg hover:bg-surgical-50 transition-colors text-xs font-medium"
+                                            disabled={callingLeadId === lead.id}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-xs font-medium ${
+                                                callingLeadId === lead.id
+                                                    ? 'bg-surgical-100 border border-surgical-200 text-obsidian/50 cursor-not-allowed'
+                                                    : 'bg-white border border-surgical-200 text-obsidian hover:bg-surgical-50'
+                                            }`}
                                         >
-                                            <Phone className="w-3.5 h-3.5" />
-                                            Call Back
+                                            {callingLeadId === lead.id ? (
+                                                <>
+                                                    <div className="w-3.5 h-3.5 border-2 border-obsidian/30 border-t-surgical-600 rounded-full animate-spin" />
+                                                    Calling...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Phone className="w-3.5 h-3.5" />
+                                                    Call Back
+                                                </>
+                                            )}
                                         </button>
                                         <button
                                             onClick={(e) => {
@@ -649,10 +683,24 @@ const LeadsDashboardContent = () => {
                                         setShowDetailModal(false);
                                         handleCallBack(selectedLead.id);
                                     }}
-                                    className="flex items-center gap-2 px-4 py-2 bg-surgical-600 hover:bg-surgical-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                    disabled={callingLeadId === selectedLead.id}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                        callingLeadId === selectedLead.id
+                                            ? 'bg-surgical-300 cursor-not-allowed text-white'
+                                            : 'bg-surgical-600 hover:bg-surgical-700 text-white'
+                                    }`}
                                 >
-                                    <Phone className="w-4 h-4" />
-                                    Call Now
+                                    {callingLeadId === selectedLead.id ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Calling...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Phone className="w-4 h-4" />
+                                            Call Now
+                                        </>
+                                    )}
                                 </button>
                                 <button
                                     onClick={() => setShowDetailModal(false)}
@@ -707,6 +755,174 @@ const LeadsDashboardContent = () => {
                                 className="px-4 py-2 bg-surgical-600 hover:bg-surgical-700 disabled:bg-obsidian/30 text-white rounded-lg transition-colors text-sm font-medium"
                             >
                                 Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Configuration Guide Modal */}
+            {showConfigGuide && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white border-b border-surgical-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="w-6 h-6 text-amber-600" />
+                                <h2 className="text-xl font-bold text-obsidian">Configuration Required</h2>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setShowConfigGuide(false);
+                                    setConfigGuideType(null);
+                                }}
+                                className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-obsidian/60" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {configGuideType === 'outbound_agent' && (
+                                <>
+                                    <p className="text-obsidian/80 text-sm leading-relaxed">
+                                        To make outbound calls, you need to set up an outbound agent first. Follow these steps:
+                                    </p>
+                                    <div className="bg-surgical-50 rounded-lg p-4 space-y-3">
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">1</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Go to Agent Configuration</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Find it in the sidebar navigation</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">2</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Click &quot;Outbound&quot; tab</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Configure your outbound calling agent</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">3</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Configure agent settings</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Set name, voice, system prompt, and tools</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">4</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Click &quot;Save Agent&quot;</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Wait for confirmation message</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {configGuideType === 'phone_number' && (
+                                <>
+                                    <p className="text-obsidian/80 text-sm leading-relaxed">
+                                        To make outbound calls, you need to import your Twilio phone number:
+                                    </p>
+                                    <div className="bg-surgical-50 rounded-lg p-4 space-y-3">
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">1</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Go to Settings → Telephony</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Navigate to telephony settings</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">2</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Click &quot;Import Twilio Number&quot;</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Or &quot;Connect Twilio&quot; if available</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">3</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Enter Twilio credentials</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Account SID, Auth Token, and Phone Number from Twilio console</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-surgical-600 text-white flex items-center justify-center text-xs font-bold">4</div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-obsidian">Re-save your outbound agent</p>
+                                                <p className="text-xs text-obsidian/60 mt-1">Go back to Agent Configuration and save the outbound agent again</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {configGuideType === 'phone_format' && (
+                                <>
+                                    <p className="text-obsidian/80 text-sm leading-relaxed">
+                                        This contact&apos;s phone number must be in E.164 format for outbound calls to work:
+                                    </p>
+                                    <div className="bg-surgical-50 rounded-lg p-4 space-y-3">
+                                        <div>
+                                            <p className="text-sm font-semibold text-obsidian mb-2">Required Format (E.164):</p>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                                <code className="text-xs bg-white px-2 py-1 rounded border border-surgical-200 text-green-700">+12125551234</code>
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                                <code className="text-xs bg-white px-2 py-1 rounded border border-surgical-200 text-green-700">+442071234567</code>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                                <code className="text-xs bg-white px-2 py-1 rounded border border-surgical-200 text-green-700">+2348141995397</code>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-obsidian mb-2">Invalid Formats:</p>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <XCircle className="w-4 h-4 text-red-600" />
+                                                <code className="text-xs bg-white px-2 py-1 rounded border border-surgical-200 text-red-700">(212) 555-1234</code>
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <XCircle className="w-4 h-4 text-red-600" />
+                                                <code className="text-xs bg-white px-2 py-1 rounded border border-surgical-200 text-red-700">2125551234</code>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <XCircle className="w-4 h-4 text-red-600" />
+                                                <code className="text-xs bg-white px-2 py-1 rounded border border-surgical-200 text-red-700">212-555-1234</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-obsidian/60 mt-3">
+                                        💡 Tip: Edit the contact&apos;s phone number to add the country code (e.g., +1 for US) at the beginning.
+                                    </p>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="border-t border-surgical-200 px-6 py-4 flex gap-3 justify-end">
+                            {(configGuideType === 'outbound_agent' || configGuideType === 'phone_number') && (
+                                <button
+                                    onClick={() => {
+                                        setShowConfigGuide(false);
+                                        setConfigGuideType(null);
+                                        router.push('/dashboard/agent-configuration');
+                                    }}
+                                    className="px-4 py-2 bg-surgical-600 hover:bg-surgical-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                >
+                                    Go to Agent Configuration
+                                </button>
+                            )}
+                            <button
+                                onClick={() => {
+                                    setShowConfigGuide(false);
+                                    setConfigGuideType(null);
+                                }}
+                                className="px-4 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/70 hover:bg-surgical-50 transition-colors"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>

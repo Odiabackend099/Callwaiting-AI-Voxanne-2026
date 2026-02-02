@@ -246,13 +246,13 @@ Then provide custom response with:
 
 After helpful answer, include one:
 
-For Interested: "Want to see a quick 5-minute demo? Book here: https://calendly.com/callwaitingai/demo"
+For Interested: "Want to see a quick 5-minute demo? Book here: https://calendly.com/austyneguale/30min"
 
 For Ready: "Start free 14-day trial (no credit card): https://app.callwaitingai.dev/signup"
 
 For Skeptical: "Watch 2-min video: https://www.youtube.com/watch?v=callwaitingai"
 
-For Support: "Chat with founder: https://calendly.com/callwaitingai/founder-call"
+For Support: "Chat with founder: https://calendly.com/austyneguale/30min"
 
 For General: "Any other questions? Reply here or email support@callwaitingai.dev"
 

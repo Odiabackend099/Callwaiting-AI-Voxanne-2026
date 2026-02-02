@@ -70,7 +70,7 @@ export default function NavbarRedesigned({ onBookDemo }: NavbarRedesignedProps) 
                     >
                         Sign In
                     </Link>
-                    <a href="https://calendly.com/voxanneai/demo" target="_blank" rel="noopener noreferrer" className="inline-block">
+                    <a href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" className="inline-block">
                         <button
                             className="px-6 py-2 bg-surgical-blue text-pure-white font-semibold rounded-lg hover:bg-surgical-blue/90 transition-all duration-300 hover:shadow-card-hover"
                         >
@@ -122,7 +122,7 @@ export default function NavbarRedesigned({ onBookDemo }: NavbarRedesignedProps) 
                                 >
                                     Sign In
                                 </Link>
-                                <a href="https://calendly.com/voxanneai/demo" target="_blank" rel="noopener noreferrer" className="block w-full" onClick={() => setIsOpen(false)}>
+                                <a href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" className="block w-full" onClick={() => setIsOpen(false)}>
                                     <button
                                         className="px-6 py-2 bg-surgical-blue text-pure-white font-semibold rounded-lg hover:bg-surgical-blue/90 transition-all duration-300 w-full"
                                     >

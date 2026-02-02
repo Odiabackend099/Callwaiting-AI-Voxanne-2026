@@ -107,7 +107,7 @@ export default function Pricing() {
                             </div>
 
                             <a
-                                href={plan.name === "Enterprise" ? "mailto:sales@voxanne.ai" : "https://calendly.com/callwaitingai/demo"}
+                                href={plan.name === "Enterprise" ? "mailto:sales@voxanne.ai" : "https://calendly.com/austyneguale/30min"}
                                 target={plan.name === "Enterprise" ? undefined : "_blank"}
                                 rel={plan.name === "Enterprise" ? undefined : "noopener noreferrer"}
                                 className="block w-full"

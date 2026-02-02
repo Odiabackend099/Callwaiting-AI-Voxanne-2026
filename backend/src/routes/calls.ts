@@ -230,7 +230,7 @@ callsRouter.post('/create', async (req: Request, res: Response): Promise<void> =
     });
 
     // Create call log entry in Supabase
-    const { error: insertError } = await supabase.from('call_logs').insert({
+    const { error: insertError } = await supabase.from('calls').insert({
       vapi_call_id: call.id,
       lead_id: leadId,
       to_number: phoneNumber,

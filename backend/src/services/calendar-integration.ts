@@ -288,6 +288,56 @@ export async function createCalendarEvent(
 }
 
 /**
+ * Delete a calendar event (compensating transaction for failed bookings)
+ * 
+ * @param orgId - Organization ID
+ * @param eventId - Google Calendar event ID to delete
+ * @returns void - throws error if deletion fails
+ * @throws Error if calendar not configured or deletion fails
+ */
+export async function deleteCalendarEvent(
+  orgId: string,
+  eventId: string
+): Promise<void> {
+  try {
+    log.info('CalendarIntegration', '[START] deleteCalendarEvent (rollback)', { orgId, eventId });
+
+    // Get authenticated calendar client
+    const calendar = await getCalendarClient(orgId);
+
+    // Delete event using circuit breaker protection
+    const deleteResult = await safeCall(
+      'google_calendar_delete',
+      () => calendar.events.delete({
+        calendarId: 'primary',
+        eventId: eventId
+      }),
+      { retries: 1, backoffMs: 500, timeoutMs: 5000 }
+    );
+
+    if (!deleteResult.success) {
+      log.error('CalendarIntegration', '[CIRCUIT BREAKER] Calendar event deletion failed', {
+        orgId,
+        eventId,
+        circuitOpen: deleteResult.circuitOpen,
+        error: deleteResult.error?.message || deleteResult.userMessage
+      });
+      throw new Error(deleteResult.userMessage || 'Failed to delete calendar event');
+    }
+
+    log.info('CalendarIntegration', '[SUCCESS] Calendar event deleted (rollback complete)', { orgId, eventId });
+  } catch (error: any) {
+    log.error('CalendarIntegration', '[CRITICAL ERROR] deleteCalendarEvent FAILED', {
+      orgId,
+      eventId,
+      errorMessage: error?.message,
+      stack: error?.stack?.substring(0, 500)
+    });
+    throw error;
+  }
+}
+
+/**
  * Check if a specific time slot is available
  * 
  * @param orgId - Organization ID

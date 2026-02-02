@@ -45,7 +45,8 @@
     "test:contract": "npx tsx src/scripts/vapi-integration-contract-test.ts",
     "phoenix": "npx tsx src/scripts/sync-vapi-tools.ts",
     "phoenix:dry-run": "npx tsx src/scripts/sync-vapi-tools.ts --dry-run",
-    "test:priority6": "npx tsx src/scripts/test-priority6-performance.ts"
+    "test:priority6": "npx tsx src/scripts/test-priority6-performance.ts",
+    "test:email-v2": "npx tsx src/scripts/test-email-service-v2.ts"
   },
   "keywords": [],
   "author": "",
@@ -90,7 +91,9 @@
     "openai": "^6.16.0",
     "opossum": "^9.0.0",
     "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
     "resend": "^6.6.0",
+    "speakeasy": "^2.0.0",
     "stripe": "^20.2.0",
     "twilio": "^5.12.0",
     "typescript": "^5.2.2",
@@ -101,6 +104,8 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.6",
+    "@types/qrcode": "^1.5.6",
+    "@types/speakeasy": "^2.0.10",
     "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^4.0.17",
     "@vitest/ui": "^4.0.17",

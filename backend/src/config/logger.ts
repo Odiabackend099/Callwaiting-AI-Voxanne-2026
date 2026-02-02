@@ -1,0 +1,18 @@
+/**
+ * Simple Logger Configuration
+ * Provides consistent logging interface across the application
+ */
+
+export const log = {
+  info: (message: string, meta?: any) => {
+    console.log('[INFO]', message, meta ? JSON.stringify(meta) : '');
+  },
+
+  warn: (message: string, meta?: any) => {
+    console.warn('[WARN]', message, meta ? JSON.stringify(meta) : '');
+  },
+
+  error: (message: string, meta?: any) => {
+    console.error('[ERROR]', message, meta ? JSON.stringify(meta) : '');
+  }
+};

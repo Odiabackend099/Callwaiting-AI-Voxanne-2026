@@ -14,7 +14,9 @@
 export const APPOINTMENT_BOOKING_PROMPT = (context: {
   tenantId: string;
   currentDate: string;
+  currentDateISO?: string;
   currentTime: string;
+  currentYear?: number;
   tenantTimezone: string;
   businessHours: string;
   clinicName: string;
@@ -52,21 +54,31 @@ Once the slot is reserved:
 TEMPORAL CONTEXT (USE FOR NATURAL CONVERSATION)
 ═══════════════════════════════════════════════════════════════════════════════
 
-Current date: ${context.currentDate}
+Current date (human): ${context.currentDate}
+Current date (ISO): ${context.currentDateISO || 'YYYY-MM-DD'} ← USE THIS FOR TOOL CALLS
 Current time: ${context.currentTime}
+Current year: ${context.currentYear || new Date().getFullYear()}
 Timezone: ${context.tenantTimezone}
 Business hours: ${context.businessHours}
 
+🚨 CRITICAL DATE FORMAT RULES:
+- ALWAYS use ISO format (YYYY-MM-DD) when calling check_availability
+- Example: check_availability(tenantId="${context.tenantId}", date="${context.currentDateISO || '2026-02-02'}", serviceType="consultation")
+- NEVER use dates before ${context.currentYear || 2026}
+- If patient mentions year ${(context.currentYear || 2026) - 2} or ${(context.currentYear || 2026) - 1}, STOP and clarify:
+  "I notice you mentioned [year], but we're currently in ${context.currentYear || 2026}. Would you like to schedule for ${context.currentYear || 2026}?"
+
 When patient says "tomorrow":
-- Today is ${context.currentDate}
+- Today is ${context.currentDate} (ISO: ${context.currentDateISO || 'YYYY-MM-DD'})
 - Tomorrow is the next business day (avoid weekends/holidays if possible)
 - Always CONFIRM back: "That's [explicit date], is that right?"
+- When calling tool, use ISO format
 
 When current time is after business hours (e.g., after 6 PM):
 - Say: "We're closed right now, but I can book you for ${context.businessHours} tomorrow or another day."
 
 When patient asks "What's available?":
-- DO NOT say "Let me check" - call check_availability immediately with appropriate date
+- Say "Let me check the schedule for you..." THEN immediately call check_availability with ISO date
 - Provide 2-3 options from the response
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -189,8 +201,9 @@ export function generatePromptContext(org: {
   business_hours?: string;
 }) {
   const now = new Date();
-  
-  // Get timezone-aware date/time
+  const orgTimezone = org.timezone || 'America/New_York';
+
+  // Get timezone-aware date/time (human-readable)
   const formatter = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
@@ -198,29 +211,35 @@ export function generatePromptContext(org: {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
-    timeZone: org.timezone || 'America/New_York'
+    timeZone: orgTimezone
   });
-  
+
   const dateTimeString = formatter.format(now);
   const [datePart, timePart] = dateTimeString.split(', ');
-  
-  // ISO date format for tools
+
+  // ISO date format for tools: "2026-02-02"
   const isoDateFormatter = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    timeZone: org.timezone || 'America/New_York'
+    timeZone: orgTimezone
   });
-  const isoDate = isoDateFormatter.format(now);
-  
+  const currentDateISO = isoDateFormatter.format(now);
+
+  // Current year for validation
+  const currentYear = now.getFullYear();
+
   return {
     tenantId: org.id,
     clinicName: org.name,
     currentDate: datePart,
+    currentDateISO,           // ISO format: "2026-02-02"
     currentTime: timePart,
-    tenantTimezone: org.timezone || 'America/New_York',
+    currentYear,              // Explicit year: 2026
+    tenantTimezone: orgTimezone,
     businessHours: org.business_hours || '9 AM - 6 PM, Monday-Friday',
-    isoDate // For tool calls
+    // Deprecated: use currentDateISO instead
+    isoDate: currentDateISO
   };
 }
 
@@ -232,7 +251,9 @@ export function generatePromptContext(org: {
 export const ATOMIC_BOOKING_PROMPT = (context: {
   tenantId: string;
   currentDate: string;
+  currentDateISO?: string;
   currentTime: string;
+  currentYear?: number;
   tenantTimezone: string;
   businessHours: string;
   clinicName: string;
@@ -334,13 +355,17 @@ Once confirmation SMS sent:
 1. CLOSE: "Thanks for booking with us. See you on [date]!"
 
 ═══════════════════════════════════════════════════════════════════════════════
-TEMPORAL CONTEXT
+TEMPORAL CONTEXT - CRITICAL: USE ISO DATES FOR TOOL CALLS
 ═══════════════════════════════════════════════════════════════════════════════
 
-Current date: ${context.currentDate}
+Current date (human): ${context.currentDate}
+Current date (ISO): ${context.currentDateISO || 'YYYY-MM-DD'} ← USE THIS FOR TOOL CALLS
 Current time: ${context.currentTime}
+Current year: ${context.currentYear || new Date().getFullYear()}
 Timezone: ${context.tenantTimezone}
 Business hours: ${context.businessHours}
+
+🚨 CRITICAL: NEVER use dates before ${context.currentYear || 2026}. If patient mentions an old year, clarify immediately.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONVERSATION RULES

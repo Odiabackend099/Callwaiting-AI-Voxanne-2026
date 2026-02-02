@@ -4,7 +4,15 @@
  */
 
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
+
+// Try to import profiling, but don't fail if not available
+let nodeProfilingIntegration: any;
+try {
+    const profilingModule = require('@sentry/profiling-node');
+    nodeProfilingIntegration = profilingModule.nodeProfilingIntegration;
+} catch (err) {
+    console.warn('⚠️  Sentry profiling not available (native module missing) - profiling disabled');
+}
 
 export function initializeSentry() {
     const dsn = process.env.SENTRY_DSN;
@@ -15,16 +23,19 @@ export function initializeSentry() {
         return;
     }
 
+    const integrations = [];
+    if (nodeProfilingIntegration) {
+        integrations.push(nodeProfilingIntegration());
+    }
+
     Sentry.init({
         dsn,
         environment,
-        integrations: [
-            nodeProfilingIntegration(),
-        ],
+        integrations,
         // Performance Monitoring
         tracesSampleRate: environment === 'production' ? 0.1 : 1.0,
-        // Profiling
-        profilesSampleRate: environment === 'production' ? 0.1 : 1.0,
+        // Profiling (only if profiling integration is available)
+        profilesSampleRate: nodeProfilingIntegration && environment === 'production' ? 0.1 : 1.0,
         beforeSend(event, hint) {
             // Add custom context
             event.contexts = {

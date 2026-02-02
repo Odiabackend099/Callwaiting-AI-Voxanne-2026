@@ -116,6 +116,9 @@ import {
 import { processBillingJob } from './services/billing-manager';
 import stripeWebhooksRouter from './routes/stripe-webhooks';
 import billingApiRouter from './routes/billing-api';
+import calendlyWebhookRouter from './routes/calendly-webhook';
+import contactFormRouter from './routes/contact-form';
+import chatWidgetRouter from './routes/chat-widget';
 
 // Initialize logger
 initLogger();
@@ -305,7 +308,10 @@ app.use('/api/debug', circuitBreakerDebugRouter); // Circuit breaker diagnostics
 app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
 app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
+app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
+app.use('/api/contact-form', contactFormRouter); // Contact form submissions
+app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
 app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/internal', internalApiRoutes); // Internal API routes (webhook configuration, etc.)
 app.use('/api/integrations', integrationsApiRouter); // Fetch decrypted credentials

@@ -411,9 +411,9 @@ const deleteAgentRateLimiter = rateLimit({
   keyGenerator: (req) => {
     const orgId = req.user?.app_metadata?.org_id;
     if (orgId) return orgId;
-    // Use IP address with IPv6 support
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    return ip;
+    // Fallback to fixed IP to avoid IPv6 validation error
+    // In production, users should be authenticated (orgId available)
+    return '127.0.0.1';
   },
   message: { error: 'Too many agent deletions. Please try again later.' },
   standardHeaders: true,

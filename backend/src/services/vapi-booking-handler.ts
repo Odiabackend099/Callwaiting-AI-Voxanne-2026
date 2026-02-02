@@ -225,7 +225,7 @@ export async function handleVapiBookingRequest(
     }
 
     // Step 7: Store booking in call logs for audit trail
-    await supabase.from('call_logs').insert({
+    await supabase.from('calls').insert({
       org_id: orgId,
       user_id: userId,
       action: 'vapi_booking_tool_call',

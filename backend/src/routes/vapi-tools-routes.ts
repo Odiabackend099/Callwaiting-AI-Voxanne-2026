@@ -11,6 +11,7 @@ import { normalizeDate, normalizeTime } from '../services/date-normalizer';
 import { bookingDeduplicator } from '../services/booking-deduplicator';
 import { normalizeBookingData, formatAlternativeSlots } from '../utils/normalizeBookingData';
 import { getRagContext } from '../services/rag-context-provider';
+import { validateBookingDate, getDateCorrectionStats } from '../utils/date-validation';
 
 const router = Router();
 
@@ -475,6 +476,31 @@ router.post('/tools/booking/reserve-atomic', async (req, res) => {
             });
         }
 
+        // Validate slot year (anti time-travel protection)
+        const slotYear = slotTime.getFullYear();
+        const currentYear = new Date().getFullYear();
+
+        if (slotYear < currentYear) {
+            log.warn('VapiTools', '⚠️ Rejecting slot with past year', {
+                slotId,
+                slotYear,
+                currentYear,
+                orgId: resolvedTenantId,
+                yearDifference: currentYear - slotYear
+            });
+
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({
+                        success: false,
+                        error: `Slot year ${slotYear} is in the past. Current year is ${currentYear}.`,
+                        action: 'OFFER_ALTERNATIVES'
+                    })
+                },
+                speech: `I notice that slot is from ${slotYear}, but we're currently in ${currentYear}. Let me show you available times for this year.`
+            });
+        }
+
         // Call atomic booking function
         const result = await AtomicBookingService.claimSlotAtomic(
             resolvedTenantId,
@@ -873,6 +899,53 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
         const { email, name, phone, scheduledAt } = normalizedData;
 
         // ========================================
+        // STEP 3.5: VALIDATE DATE (Anti Time-Travel Protection)
+        // Prevents booking in 2024 when it's 2026
+        // Auto-corrects past years to current year
+        // ========================================
+        const appointmentDateISO = normalizedData.appointmentDate || scheduledAt.split('T')[0];
+        const dateValidation = validateBookingDate(
+            appointmentDateISO,
+            org.timezone || 'UTC',
+            orgId
+        );
+
+        if (!dateValidation.valid) {
+            log.error('VapiTools', '❌ Date validation failed', {
+                originalDate: appointmentDateISO,
+                error: dateValidation.error,
+                orgId,
+                orgTimezone: org.timezone
+            });
+            return res.status(400).json({
+                toolCallId,
+                result: {
+                    success: false,
+                    error: 'INVALID_DATE',
+                    message: dateValidation.error || 'Date validation failed'
+                }
+            });
+        }
+
+        // If date was auto-corrected, update normalizedData
+        if (dateValidation.wasAutoCorrected && dateValidation.correctedDate) {
+            const originalDate = appointmentDateISO;
+            const correctedDate = dateValidation.correctedDate;
+
+            log.warn('VapiTools', '🔧 Date auto-corrected', {
+                originalDate,
+                correctedDate,
+                orgId,
+                yearChange: `${originalDate.substring(0, 4)} → ${correctedDate.substring(0, 4)}`
+            });
+
+            // Reconstruct scheduledAt with corrected date
+            const timePart = scheduledAt.split('T')[1] || '00:00:00';
+            normalizedData.scheduledAt = `${correctedDate}T${timePart}`;
+            normalizedData.appointmentDate = correctedDate;
+        }
+
+        // ========================================
         // ========================================
         // STEP 4: Call PROVEN book_appointment_atomic RPC
         // Use the working v1 function that has no cache issues
@@ -973,32 +1046,70 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
                 smsStatus = 'error_but_booked';
             }
 
-            // ⚡ GOOGLE CALENDAR BRIDGE: Create event
-            // WRAPPED IN ROBUST ERROR HANDLING (Graceful Degradation)
+            // ⚡ GOOGLE CALENDAR BRIDGE: Create event with rollback capability
+            // IMPLEMENTS 2-PHASE COMMIT: If calendar succeeds but DB update fails, delete calendar event
+            let calendarEventId: string | null = null;
             try {
                 const { createCalendarEvent } = await import('../services/calendar-integration');
-
-                // TIMEZONE AWARENESS: Parse scheduledAt relative to org timezone
-                // If scheduledAt is ISO, it's already absolute. 
-                // But if we need to display it or if it came as "YYYY-MM-DD HH:mm", we need context.
-                // The RPC returns an ISO string, so we are good for the Date object.
-                // However, for the description/title, we might want to format it in the org's timezone.
 
                 const eventDate = new Date(scheduledAt);
                 const endTime = new Date(eventDate.getTime() + 60 * 60 * 1000); // 1 hour duration
 
-                await createCalendarEvent(orgId, {
+                const calendarResult = await createCalendarEvent(orgId, {
                     title: `Botox Consultation: ${name}`,
                     description: `Patient: ${name}\nPhone: ${phone}\nEmail: ${email}\nService: ${rpcParams.p_service_type}`,
                     startTime: eventDate.toISOString(),
                     endTime: endTime.toISOString(),
                     attendeeEmail: email
                 });
-                log.info('VapiTools', '📅 Google Calendar Event Created', { appointmentId: bookingResult.appointment_id });
+                
+                calendarEventId = calendarResult.eventId;
+                log.info('VapiTools', '📅 Google Calendar Event Created', { 
+                    appointmentId: bookingResult.appointment_id, 
+                    calendarEventId 
+                });
+
+                // Persist calendar event ID to appointment record
+                try {
+                    const { error: updateError } = await supabaseService
+                        .from('appointments')
+                        .update({ google_calendar_event_id: calendarEventId })
+                        .eq('id', bookingResult.appointment_id);
+
+                    if (updateError) {
+                        throw new Error(`Failed to persist calendar event ID: ${updateError.message}`);
+                    }
+
+                    log.info('VapiTools', '✅ Calendar event ID persisted to appointment', { 
+                        appointmentId: bookingResult.appointment_id,
+                        calendarEventId 
+                    });
+                } catch (persistError: any) {
+                    // ROLLBACK: Delete the calendar event we just created
+                    log.error('VapiTools', '🔄 ROLLBACK: DB persist failed, deleting calendar event', {
+                        appointmentId: bookingResult.appointment_id,
+                        calendarEventId,
+                        error: persistError.message
+                    });
+
+                    try {
+                        const { deleteCalendarEvent } = await import('../services/calendar-integration');
+                        await deleteCalendarEvent(orgId, calendarEventId);
+                        log.info('VapiTools', '✅ ROLLBACK COMPLETE: Orphaned calendar event deleted', { calendarEventId });
+                    } catch (rollbackError: any) {
+                        log.error('VapiTools', '❌ ROLLBACK FAILED: Manual cleanup required', {
+                            calendarEventId,
+                            orgId,
+                            error: rollbackError.message
+                        });
+                    }
+
+                    throw persistError; // Re-throw to trigger outer catch
+                }
             } catch (calError: any) {
                 // GRACEFUL DEGRADATION: Log error but DO NOT fail the request
+                // If rollback was attempted, it's already logged above
                 log.error('VapiTools', '⚠️ Calendar Event Failed', { error: calError.message });
-                // We could append a warning to the user message if desired, but usually we keep it clean.
             }
 
             // Construct success message with Timezone awareness if possible

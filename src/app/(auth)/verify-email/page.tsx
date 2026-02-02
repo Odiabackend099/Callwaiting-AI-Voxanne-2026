@@ -278,7 +278,7 @@ function VerifyEmailContent() {
                         </Link>
                         <div className="mt-3">
                             <a
-                                href="https://calendly.com/callwaitingai/demo"
+                                href="https://calendly.com/austyneguale/30min"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-white hover:text-cyan-200 text-sm font-semibold transition-colors"

@@ -7,6 +7,7 @@ import { ToastContainer } from "@/components/ToastContainer";
 import DevSwCleanup from "@/components/DevSwCleanup";
 import { CookieConsentBanner } from "@/components/cookie-consent/CookieConsentBanner";
 import { GoogleAnalyticsLoader } from "@/components/GoogleAnalyticsLoader";
+import VoxanneChatWidget from "@/components/VoxanneChatWidget";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -117,6 +118,7 @@ export default function RootLayout({
           {children}
           <ToastContainer />
           <CookieConsentBanner />
+          <VoxanneChatWidget />
         </AuthProvider>
       </body>
     </html>

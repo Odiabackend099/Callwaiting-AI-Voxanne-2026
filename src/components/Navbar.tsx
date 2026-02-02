@@ -59,7 +59,7 @@ export default function Navbar() {
                             Log in
                         </Button>
                     </Link>
-                    <Link href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer">
+                    <Link href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer">
                         <Button className="bg-surgical-600 hover:bg-surgical-700 text-white shadow-lg shadow-surgical-500/20">
                             Start Free Trial
                         </Button>
@@ -103,7 +103,7 @@ export default function Navbar() {
                                         Log in
                                     </Button>
                                 </Link>
-                                <Link href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)}>
+                                <Link href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)}>
                                     <Button className="w-full text-lg bg-surgical-600 hover:bg-surgical-700">
                                         Start Free Trial
                                     </Button>

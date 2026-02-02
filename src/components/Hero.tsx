@@ -61,7 +61,7 @@ export default function Hero() {
                     </FadeIn>
 
                     <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                        <Link href="https://calendly.com/callwaitingai/demo" target="_blank" rel="noopener noreferrer">
+                        <Link href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer">
                             <Button size="lg" className="w-full sm:w-auto bg-surgical-600 hover:bg-surgical-700 text-white text-lg h-14 px-8 shadow-xl shadow-surgical-500/20 rounded-full transition-all hover:scale-105 active:scale-95">
                                 <Calendar className="mr-2 h-5 w-5" />
                                 Get Started

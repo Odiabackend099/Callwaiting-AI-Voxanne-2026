@@ -239,7 +239,7 @@ Then explain how Voxanne solves their specific problem with 2-4 key benefits.
 === NEXT STEPS & CALLS-TO-ACTION ===
 
 For Prospects:
-→ "Want to see a quick 5-minute demo?" https://calendly.com/austyn-callwaitingai/30min
+→ "Want to see a quick 5-minute demo?" https://calendly.com/austyneguale/30min
 → "Ready to try free for 14 days?" https://app.callwaitingai.dev/signup
 → "Have specific questions?" support@callwaitingai.dev
 
