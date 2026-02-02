@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Send, Phone, Calendar, FileText, Mail } from 'lucide-react';
+import Image from 'next/image';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -151,10 +152,16 @@ export default function VoxanneChatWidget() {
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full bg-gradient-to-r from-surgical-600 to-surgical-500 text-white shadow-2xl hover:shadow-surgical-500/50 transition-shadow duration-300 flex items-center justify-center"
-            aria-label="Open chat"
+            className="fixed bottom-6 right-6 z-50 w-20 h-20 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-surgical-600 to-surgical-500 text-white shadow-2xl shadow-surgical-600/50 ring-4 ring-white/20 hover:shadow-surgical-500/70 hover:ring-surgical-400/30 transition-all duration-300 flex items-center justify-center"
+            aria-label="Chat with Voxanne"
           >
-            <MessageCircle className="w-7 h-7" />
+            <Image
+              src="/Brand/10.png"
+              alt="Chat with Voxanne"
+              width={40}
+              height={40}
+              className="w-10 h-10 sm:w-7 sm:h-7"
+            />
           </motion.button>
         )}
       </AnimatePresence>
@@ -167,16 +174,20 @@ export default function VoxanneChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 right-6 z-50 w-[400px] h-[600px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-clinical-border flex flex-col overflow-hidden"
+            className="fixed bottom-6 right-6 z-50 w-[95vw] max-w-[400px] h-[90dvh] max-h-[600px] sm:w-[400px] sm:h-[600px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-clinical-border flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-surgical-600 to-surgical-500 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <MessageCircle className="w-6 h-6" />
-                </div>
+                <Image
+                  src="/Brand/10.png"
+                  alt="Voxanne AI"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8"
+                />
                 <div>
-                  <h3 className="font-semibold text-base">Voxanne AI</h3>
+                  <h3 className="font-semibold text-base">Voxanne</h3>
                   <p className="text-xs text-white/80">Always here to help</p>
                 </div>
               </div>
@@ -190,7 +201,7 @@ export default function VoxanneChatWidget() {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-surgical-50/30">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-surgical-50/30 overflow-x-hidden">
               {messages.map((message, index) => (
                 <motion.div
                   key={index}
@@ -273,7 +284,7 @@ export default function VoxanneChatWidget() {
             )}
 
             {/* Input Area */}
-            <form onSubmit={handleSubmit} className="p-4 border-t border-clinical-border bg-white">
+            <form onSubmit={handleSubmit} className="p-3 sm:p-4 border-t border-clinical-border bg-white">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -281,12 +292,15 @@ export default function VoxanneChatWidget() {
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="Type your message..."
                   disabled={isLoading}
-                  className="flex-1 px-4 py-3 rounded-xl border border-surgical-200 focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="sentences"
+                  className="flex-1 px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-sm rounded-xl border border-surgical-200 focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   type="submit"
                   disabled={!inputValue.trim() || isLoading}
-                  className="px-4 py-3 bg-surgical-600 hover:bg-surgical-700 disabled:bg-surgical-300 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center justify-center"
+                  className="px-3 py-2 sm:px-4 sm:py-3 bg-surgical-600 hover:bg-surgical-700 disabled:bg-surgical-300 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center justify-center"
                   aria-label="Send message"
                 >
                   <Send className="w-5 h-5" />
