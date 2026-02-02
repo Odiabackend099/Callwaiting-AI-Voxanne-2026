@@ -404,9 +404,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           from_number: callDirection === 'inbound'
             ? (call?.customer?.number || null)
             : null,
-          caller_name: callDirection === 'inbound'
-            ? finalCallerName
-            : null,
+          caller_name: finalCallerName, // Use enriched name for BOTH inbound and outbound
 
           // Call metadata
           call_sid: call?.phoneCallProviderId || `vapi-${call?.id}`,
@@ -558,61 +556,6 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
                 });
               }
             }
-
-            // ========== CREATE HOT LEAD ALERT IF LEAD SCORE IS HIGH ==========
-            // This populates the hot_lead_alerts table for dashboard "Recent Activity"
-            if (!existingContact) {
-              // Get lead scoring data (already calculated above during contact creation)
-              const { scoreLead } = await import('../services/lead-scoring');
-              const leadScoring = await scoreLead(
-                orgId,
-                artifact?.transcript || '',
-                (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
-              );
-              const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
-
-              if (leadScoring.tier === 'hot' && leadScoring.score >= 70) {
-                try {
-                  const { error: alertError } = await supabase
-                    .from('hot_lead_alerts')
-                    .insert({
-                      org_id: orgId,
-                      call_id: call?.id,
-                      lead_name: callerName || 'Unknown Caller',
-                      lead_phone: phoneNumber,
-                      service_interest: serviceKeywords.length > 0 ? serviceKeywords.join(', ') : null,
-                      urgency_level: leadScoring.score >= 85 ? 'high' : 'medium',
-                      summary: `Lead scored ${leadScoring.score}/100 from call. Interests: ${serviceKeywords.join(', ') || 'General inquiry'}`,
-                      lead_score: leadScoring.score,
-                      created_at: call?.endedAt || new Date().toISOString()
-                    });
-
-                  if (alertError) {
-                    // Log error but don't fail webhook processing
-                    log.error('Vapi-Webhook', 'Failed to create hot lead alert', {
-                      error: alertError.message,
-                      phone: phoneNumber,
-                      leadScore: leadScoring.score,
-                      orgId
-                    });
-                  } else {
-                    log.info('Vapi-Webhook', '🔥 Hot lead alert created', {
-                      phone: phoneNumber,
-                      leadScore: leadScoring.score,
-                      urgency: leadScoring.score >= 85 ? 'high' : 'medium',
-                      orgId
-                    });
-                  }
-                } catch (alertCreationError: any) {
-                  log.error('Vapi-Webhook', 'Hot lead alert creation failed with exception', {
-                    error: alertCreationError?.message || String(alertCreationError),
-                    phone: phoneNumber,
-                    orgId
-                  });
-                  // Don't fail webhook processing if alert creation fails
-                }
-              }
-            }
           } catch (contactCreationError: any) {
             log.error('Vapi-Webhook', 'Contact creation/update failed with exception', {
               error: contactCreationError?.message || String(contactCreationError),
@@ -621,6 +564,60 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             });
             // Don't fail webhook processing if contact creation fails
           }
+        }
+
+        // ========== CREATE HOT LEAD ALERT IF LEAD SCORE IS HIGH ==========
+        // FIXED: Create alerts for ALL calls (not just new contacts)
+        // This populates the hot_lead_alerts table for dashboard "Recent Activity"
+        try {
+          // Calculate lead scoring for this call
+          const { scoreLead } = await import('../services/lead-scoring');
+          const leadScoring = await scoreLead(
+            orgId,
+            artifact?.transcript || '',
+            (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
+          );
+          const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
+
+          // FIXED: Lowered threshold from 70 to 60, added 3-tier urgency
+          if (leadScoring.score >= 60) {
+            const { error: alertError } = await supabase
+              .from('hot_lead_alerts')
+              .insert({
+                org_id: orgId,
+                call_id: call?.id,
+                lead_name: callerName || 'Unknown Caller',
+                lead_phone: phoneNumber,
+                service_interest: serviceKeywords.length > 0 ? serviceKeywords.join(', ') : null,
+                urgency_level: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),
+                summary: `Lead scored ${leadScoring.score}/100 from call. Interests: ${serviceKeywords.join(', ') || 'General inquiry'}`,
+                lead_score: leadScoring.score,
+                created_at: call?.endedAt || new Date().toISOString()
+              });
+
+            if (alertError) {
+              log.error('Vapi-Webhook', 'Failed to create hot lead alert', {
+                error: alertError.message,
+                phone: phoneNumber,
+                leadScore: leadScoring.score,
+                orgId
+              });
+            } else {
+              log.info('Vapi-Webhook', '🔥 Hot lead alert created', {
+                phone: phoneNumber,
+                leadScore: leadScoring.score,
+                urgency: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),
+                orgId
+              });
+            }
+          }
+        } catch (alertCreationError: any) {
+          log.error('Vapi-Webhook', 'Hot lead alert creation failed with exception', {
+            error: alertCreationError?.message || String(alertCreationError),
+            phone: phoneNumber,
+            orgId
+          });
+          // Don't fail webhook processing if alert creation fails
         }
       }
 
