@@ -98,6 +98,7 @@ import monitoringRouter from './routes/monitoring'; // default export - System m
 import toolHealthRouter from './routes/tool-health'; // default export - Tool chain health monitoring
 import smsHealthRouter from './routes/sms-health'; // default export - SMS queue health monitoring
 import complianceRouter from './routes/compliance'; // default export - GDPR/HIPAA compliance endpoints
+import circuitBreakerDebugRouter from './routes/circuit-breaker-debug'; // default export - Circuit breaker diagnostics and SMS troubleshooting
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
   initializeWebhookQueue,
@@ -300,6 +301,7 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/monitoring', monitoringRouter); // System monitoring and cache statistics
 app.use('/api/monitoring', toolHealthRouter); // Tool chain health (GET /api/monitoring/tool-health)
 app.use('/api/monitoring', smsHealthRouter); // SMS queue health (GET /api/monitoring/sms-queue-health)
+app.use('/api/debug', circuitBreakerDebugRouter); // Circuit breaker diagnostics and SMS troubleshooting
 app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
 app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks

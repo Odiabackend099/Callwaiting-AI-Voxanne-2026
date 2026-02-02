@@ -340,6 +340,49 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         // Continue with default outcome if summary generation fails
       }
 
+      // 3.75. Enrich caller name from contacts table (for inbound calls)
+      let enrichedCallerName: string | null = null;
+
+      if (callDirection === 'inbound' && call?.customer?.number) {
+        try {
+          const { data: existingContact } = await supabase
+            .from('contacts')
+            .select('name, first_name, last_name')
+            .eq('org_id', orgId)
+            .eq('phone', call.customer.number)
+            .maybeSingle();
+
+          if (existingContact) {
+            // Prefer full name field, fall back to first_name + last_name
+            if (existingContact.name && existingContact.name !== 'Unknown Caller') {
+              enrichedCallerName = existingContact.name;
+            } else if (existingContact.first_name || existingContact.last_name) {
+              enrichedCallerName = [existingContact.first_name, existingContact.last_name]
+                .filter(Boolean)
+                .join(' ');
+            }
+
+            log.info('Vapi-Webhook', '📞 Caller name enriched from contacts', {
+              phone: call.customer.number,
+              originalName: call?.customer?.name || 'Unknown',
+              enrichedName: enrichedCallerName,
+              orgId
+            });
+          }
+        } catch (enrichmentError: any) {
+          log.warn('Vapi-Webhook', 'Caller name enrichment failed', {
+            error: enrichmentError.message,
+            phone: call.customer.number
+          });
+          // Continue without enrichment
+        }
+      }
+
+      // Fallback to Vapi caller ID if enrichment failed
+      const finalCallerName = enrichedCallerName
+        || call?.customer?.name
+        || 'Unknown Caller';
+
       // 4. Upsert to unified calls table (creates if not exists, updates if exists)
       // NOTE: Mapping to actual schema columns (from_number, call_type, sentiment packed as string)
       const { error: upsertError } = await supabase
@@ -357,13 +400,12 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             ? (call?.customer?.contactId || null)
             : null,
 
-          // Caller info (inbound only) - Map to actual schema columns
+          // Caller info (inbound only) - Enriched from contacts table
           from_number: callDirection === 'inbound'
             ? (call?.customer?.number || null)
             : null,
-          // NOTE: caller_name doesn't exist in current schema, store in metadata or intent field
-          intent: callDirection === 'inbound'
-            ? (call?.customer?.name || 'Unknown Caller')
+          caller_name: callDirection === 'inbound'
+            ? finalCallerName
             : null,
 
           // Call metadata
@@ -380,13 +422,16 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           recording_storage_path: null,  // Will be populated if uploaded to Supabase
           transcript: artifact?.transcript || null,
 
-          // Analytics - Pack sentiment fields into single sentiment field (temporary until schema fixed)
-          // Format: "label:score:summary"
+          // Analytics - Populate individual sentiment columns (schema migration already applied)
+          sentiment_label: sentimentLabel,
+          sentiment_score: sentimentScore,
+          sentiment_summary: sentimentSummary,
+          sentiment_urgency: sentimentUrgency,
+
+          // Keep legacy sentiment field for backward compatibility
           sentiment: sentimentLabel
             ? `${sentimentLabel}${sentimentScore ? ':' + sentimentScore : ''}${sentimentSummary ? ':' + sentimentSummary : ''}`
-            : null,
-          // NOTE: sentiment_label, sentiment_score, sentiment_summary, sentiment_urgency don't exist in current schema
-          // They will be added in proper schema fix migration
+            : null
 
           // Outcomes - Use generated summaries
           outcome: outcomeShort,
@@ -511,6 +556,61 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
                   contactId: existingContact.id,
                   phone: phoneNumber
                 });
+              }
+            }
+
+            // ========== CREATE HOT LEAD ALERT IF LEAD SCORE IS HIGH ==========
+            // This populates the hot_lead_alerts table for dashboard "Recent Activity"
+            if (!existingContact) {
+              // Get lead scoring data (already calculated above during contact creation)
+              const { scoreLead } = await import('../services/lead-scoring');
+              const leadScoring = await scoreLead(
+                orgId,
+                artifact?.transcript || '',
+                (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
+              );
+              const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
+
+              if (leadScoring.tier === 'hot' && leadScoring.score >= 70) {
+                try {
+                  const { error: alertError } = await supabase
+                    .from('hot_lead_alerts')
+                    .insert({
+                      org_id: orgId,
+                      call_id: call?.id,
+                      lead_name: callerName || 'Unknown Caller',
+                      lead_phone: phoneNumber,
+                      service_interest: serviceKeywords.length > 0 ? serviceKeywords.join(', ') : null,
+                      urgency_level: leadScoring.score >= 85 ? 'high' : 'medium',
+                      summary: `Lead scored ${leadScoring.score}/100 from call. Interests: ${serviceKeywords.join(', ') || 'General inquiry'}`,
+                      lead_score: leadScoring.score,
+                      created_at: call?.endedAt || new Date().toISOString()
+                    });
+
+                  if (alertError) {
+                    // Log error but don't fail webhook processing
+                    log.error('Vapi-Webhook', 'Failed to create hot lead alert', {
+                      error: alertError.message,
+                      phone: phoneNumber,
+                      leadScore: leadScoring.score,
+                      orgId
+                    });
+                  } else {
+                    log.info('Vapi-Webhook', '🔥 Hot lead alert created', {
+                      phone: phoneNumber,
+                      leadScore: leadScoring.score,
+                      urgency: leadScoring.score >= 85 ? 'high' : 'medium',
+                      orgId
+                    });
+                  }
+                } catch (alertCreationError: any) {
+                  log.error('Vapi-Webhook', 'Hot lead alert creation failed with exception', {
+                    error: alertCreationError?.message || String(alertCreationError),
+                    phone: phoneNumber,
+                    orgId
+                  });
+                  // Don't fail webhook processing if alert creation fails
+                }
               }
             }
           } catch (contactCreationError: any) {

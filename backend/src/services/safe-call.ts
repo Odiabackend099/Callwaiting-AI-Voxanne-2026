@@ -342,3 +342,22 @@ export function getCircuitBreakerStatus() {
 
   return status;
 }
+
+/**
+ * Manually reset a circuit breaker (for emergencies)
+ * Use with caution - only reset if you've fixed the underlying issue
+ */
+export function resetCircuitBreaker(serviceName: string): void {
+  const state = circuitBreakers.get(serviceName);
+  if (state) {
+    state.failures = 0;
+    state.isOpen = false;
+    log.info('SafeCall', `Circuit breaker manually reset for ${serviceName}`, {
+      service: serviceName
+    });
+  } else {
+    log.warn('SafeCall', `Attempted to reset non-existent circuit breaker: ${serviceName}`, {
+      service: serviceName
+    });
+  }
+}
