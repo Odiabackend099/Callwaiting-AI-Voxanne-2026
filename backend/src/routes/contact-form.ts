@@ -7,7 +7,22 @@ import { supabase } from '../services/supabase-client';
 import { config } from '../config';
 
 const router = Router();
-const resend = new Resend(config.RESEND_API_KEY);
+
+// Lazy-load Resend client (only initialize when needed)
+let resend: Resend | null = null;
+
+function getResendClient(): Resend | null {
+  if (!config.RESEND_API_KEY) {
+    log.warn('RESEND_API_KEY not configured. Contact form emails disabled.');
+    return null;
+  }
+
+  if (!resend) {
+    resend = new Resend(config.RESEND_API_KEY);
+  }
+
+  return resend;
+}
 
 // Zod schema for contact form validation
 const ContactFormSchema = z.object({
@@ -142,8 +157,17 @@ async function sendSupportEmail(data: ContactFormData): Promise<void> {
     </html>
   `;
 
+  const resendClient = getResendClient();
+  if (!resendClient) {
+    log.warn('ContactForm', 'Skipping support email - Resend not configured', {
+      from: data.email,
+      subject: data.subject,
+    });
+    return; // Don't throw error, just skip email
+  }
+
   try {
-    await resend.emails.send({
+    await resendClient.emails.send({
       from: fromEmail,
       to: supportEmail,
       replyTo: data.email, // Enable direct reply to user
@@ -158,7 +182,7 @@ async function sendSupportEmail(data: ContactFormData): Promise<void> {
     log.error('ContactForm', 'Failed to send support email', {
       error: error instanceof Error ? error.message : String(error),
     });
-    throw error;
+    // Don't throw - email failure shouldn't block form submission
   }
 }
 
@@ -225,8 +249,16 @@ async function sendConfirmationEmail(data: ContactFormData): Promise<void> {
     </html>
   `;
 
+  const resendClient = getResendClient();
+  if (!resendClient) {
+    log.warn('ContactForm', 'Skipping confirmation email - Resend not configured', {
+      email: data.email,
+    });
+    return; // Don't throw error, just skip email
+  }
+
   try {
-    await resend.emails.send({
+    await resendClient.emails.send({
       from: fromEmail,
       to: data.email,
       subject: 'We received your message - Voxanne AI',

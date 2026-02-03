@@ -7,10 +7,23 @@ import { supabase } from '../services/supabase-client';
 
 const router = Router();
 
-// Initialize Groq client
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Lazy-load Groq client (only initialize when needed)
+let groq: Groq | null = null;
+
+function getGroqClient(): Groq | null {
+  if (!process.env.GROQ_API_KEY) {
+    log.warn('GROQ_API_KEY not configured. Chat widget will return error responses.');
+    return null;
+  }
+
+  if (!groq) {
+    groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+
+  return groq;
+}
 
 // Zod schema for chat message validation
 const ChatMessageSchema = z.object({
@@ -210,6 +223,15 @@ router.post('/', async (req: Request, res: Response) => {
       messageCount: messages.length,
     });
 
+    // Check if Groq is configured
+    const groqClient = getGroqClient();
+    if (!groqClient) {
+      return res.status(503).json({
+        success: false,
+        error: 'Chat service temporarily unavailable. Please contact support@voxanne.ai',
+      });
+    }
+
     // Prepare messages with system prompt
     const conversationMessages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -217,7 +239,7 @@ router.post('/', async (req: Request, res: Response) => {
     ];
 
     // Call Groq API
-    const completion = await groq.chat.completions.create({
+    const completion = await groqClient.chat.completions.create({
       model: 'llama-3.3-70b-versatile', // Fast, high-quality model
       messages: conversationMessages.map((m) => ({
         role: m.role,
@@ -299,8 +321,19 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.get('/health', async (req: Request, res: Response) => {
   try {
+    // Check if Groq is configured
+    const groqClient = getGroqClient();
+    if (!groqClient) {
+      return res.status(503).json({
+        success: false,
+        groq: 'not_configured',
+        error: 'GROQ_API_KEY not set',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     // Test Groq API connectivity
-    const testCompletion = await groq.chat.completions.create({
+    const testCompletion = await groqClient.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: 'ping' }],
       max_tokens: 10,

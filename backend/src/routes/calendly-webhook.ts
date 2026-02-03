@@ -8,7 +8,22 @@ import { supabase } from '../services/supabase-client';
 import { config } from '../config';
 
 const router = Router();
-const resend = new Resend(config.RESEND_API_KEY);
+
+// Lazy-load Resend client (only initialize when needed)
+let resend: Resend | null = null;
+
+function getResendClient(): Resend | null {
+  if (!config.RESEND_API_KEY) {
+    log.warn('RESEND_API_KEY not configured. Email notifications disabled.');
+    return null;
+  }
+
+  if (!resend) {
+    resend = new Resend(config.RESEND_API_KEY);
+  }
+
+  return resend;
+}
 
 // Zod schema for Calendly webhook events
 const CalendlyEventSchema = z.object({
@@ -149,8 +164,16 @@ async function sendConfirmationEmail(
     </html>
   `;
 
+  const resendClient = getResendClient();
+  if (!resendClient) {
+    log.warn('Calendly', 'Skipping confirmation email - Resend not configured', {
+      email: inviteeEmail,
+    });
+    return; // Don't throw error, just skip email
+  }
+
   try {
-    await resend.emails.send({
+    await resendClient.emails.send({
       from: fromEmail,
       to: inviteeEmail,
       subject: '✅ Your Appointment with Voxanne AI is Confirmed',
@@ -162,7 +185,7 @@ async function sendConfirmationEmail(
       email: inviteeEmail,
       error: error instanceof Error ? error.message : String(error),
     });
-    throw error;
+    // Don't throw - email failure shouldn't block webhook processing
   }
 }
 
@@ -236,8 +259,16 @@ async function sendSupportNotification(
     </html>
   `;
 
+  const resendClient = getResendClient();
+  if (!resendClient) {
+    log.warn('Calendly', 'Skipping support notification - Resend not configured', {
+      event: eventType,
+    });
+    return; // Don't throw error, just skip email
+  }
+
   try {
-    await resend.emails.send({
+    await resendClient.emails.send({
       from: fromEmail,
       to: supportEmail,
       subject: `${eventType === 'invitee.created' ? '📅 New' : '❌ Cancelled'} Calendly Booking - ${inviteeName}`,
