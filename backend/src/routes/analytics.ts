@@ -147,10 +147,11 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
             return res.status(401).json({ error: 'Authentication required' });
         }
 
+        // FIX 2.2: Removed runtime contacts lookup - Trust database SSOT
         // Fetch recent calls from unified calls table (both inbound and outbound)
         const { data: calls, error: callsError } = await supabase
             .from('calls')
-            .select('id, created_at, caller_name, duration_seconds, sentiment_label, sentiment_summary, sentiment_urgency, call_direction')
+            .select('id, created_at, caller_name, phone_number, duration_seconds, sentiment_label, sentiment_summary, sentiment_urgency, call_direction')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false })
             .limit(10);
@@ -176,19 +177,23 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
         const events: any[] = [];
 
         // Add call events (both inbound and outbound)
+        // FIXED: Use enriched contact name from contacts table if available
         if (calls && !callsError) {
             calls.forEach((call: any) => {
                 const durationMinutes = Math.floor((call.duration_seconds || 0) / 60);
                 const callTypeIcon = call.call_direction === 'outbound' ? '📞' : '📲';
                 const callTypeLabel = call.call_direction === 'outbound' ? 'to' : 'from';
 
+                // FIX 2.2: SIMPLIFIED - Trust database SSOT (calls.caller_name)
+                const enrichedName = call.caller_name || 'Unknown Caller';
+
                 events.push({
                     id: `call_${call.id}`,
                     type: 'call_completed',
                     timestamp: call.created_at,
-                    summary: `${callTypeIcon} Call ${callTypeLabel} ${call.caller_name || 'Unknown'} - ${durationMinutes}m`,
+                    summary: `${callTypeIcon} Call ${callTypeLabel} ${enrichedName} - ${durationMinutes}m`,
                     metadata: {
-                        caller_name: call.caller_name || 'Unknown Caller',
+                        caller_name: enrichedName,
                         call_direction: call.call_direction || 'inbound',
                         sentiment_label: call.sentiment_label || 'neutral',
                         sentiment_summary: call.sentiment_summary || 'Call completed',
@@ -243,6 +248,60 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
         log.error('AnalyticsAPI', 'Failed to fetch recent activity', { error: err.message });
         return res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+/**
+ * GET /api/analytics/dashboard-stats
+ * Alias for /api/calls-dashboard/stats for backward compatibility
+ */
+analyticsRouter.get('/dashboard-stats', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const timeWindow = (req.query.timeWindow as string) || '7d';
+
+    // Use same RPC as calls-dashboard
+    const { data: statsData, error: statsError } = await supabase.rpc('get_dashboard_stats_optimized', {
+      p_org_id: orgId,
+      p_time_window: timeWindow
+    });
+
+    if (statsError) {
+      log.error('Analytics', 'GET /dashboard-stats - Database error', { orgId, error: statsError.message });
+      return res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+    }
+
+    const { data: recentCallsData } = await supabase
+      .from('calls')
+      .select('id, from_number, call_type, created_at, duration_seconds, status, call_direction')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    return res.json({
+      totalCalls: Number(statsData?.total_calls || 0),
+      inboundCalls: Number(statsData?.inbound_calls || 0),
+      outboundCalls: Number(statsData?.outbound_calls || 0),
+      completedCalls: Number(statsData?.completed_calls || 0),
+      callsToday: Number(statsData?.calls_today || 0),
+      avgDuration: Number(statsData?.avg_duration || 0),
+      pipelineValue: Number(statsData?.pipeline_value || 0),
+      recentCalls: (recentCallsData || []).map((c: any) => ({
+        id: c.id,
+        phone_number: c.from_number || 'Unknown',
+        caller_name: c.call_type || 'Unknown',
+        call_date: c.created_at,
+        duration_seconds: c.duration_seconds || 0,
+        status: c.status || 'completed'
+      }))
+    });
+  } catch (err: any) {
+    log.error('Analytics', 'GET /dashboard-stats - Error', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default analyticsRouter;

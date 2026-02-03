@@ -1,126 +1,52 @@
 import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
+import RedisStore from 'rate-limit-redis';
 import { getRedisClient } from '../config/redis';
 import { log } from '../services/logger';
 
 // Rate limit tiers
-// Note: Increased limits for dashboard compatibility
-// Dashboard polls analytics endpoints frequently, needs higher limit
 const DEFAULT_LIMITS = {
-  free: { windowMs: 3600000, max: 10000 },      // 10,000 req/hour (increased from 100)
-  paid: { windowMs: 3600000, max: 50000 },     // 50,000 req/hour (increased from 1000)
-  enterprise: { windowMs: 3600000, max: 100000 } // 100,000 req/hour (increased from 10000)
+  free: { windowMs: 3600000, max: 1000 },
+  paid: { windowMs: 3600000, max: 5000 },
+  enterprise: { windowMs: 3600000, max: 10000 }
 };
 
-export function orgRateLimit(customConfig?: Partial<RateLimitConfig>): Middleware {
+export function orgRateLimit(customConfig?: any) {
   const redisClient = getRedisClient();
-  
-  // Fallback to in-memory store if Redis is unavailable
+
   const store = redisClient
-    ? new RedisStore(redisClient)
-    : new MemoryStore(customConfig?.windowMs || 3600000);
-  
+    ? new RedisStore({
+        // @ts-expect-error - rate-limit-redis uses different Redis type
+        client: redisClient,
+        prefix: 'rl:org:',
+        sendCommand: (...args: string[]) => redisClient.call(...args),
+      })
+    : undefined;
+
   return rateLimit({
-    windowMs: 3600000, // 1 hour
-    max: (req) => {
-      // Get organization tier from request (set by auth middleware)
+    windowMs: 3600000,
+    max: (req: Request) => {
       const tier = req.user?.tier || 'free';
       return DEFAULT_LIMITS[tier]?.max || DEFAULT_LIMITS.free.max;
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => {
-      // Skip rate limiting for internal routes
+    skip: (req: Request) => {
       return req.path.startsWith('/health') || req.path.startsWith('/internal');
+    },
+    handler: (req: Request, res: Response) => {
+      log.warn('RateLimit', 'Rate limit exceeded', {
+        ip: req.ip,
+        path: req.path,
+        user: req.user?.id
+      });
+      res.status(429).json({
+        error: 'Too many requests',
+        message: 'Rate limit exceeded. Please try again later.',
+        retryAfter: res.getHeader('Retry-After')
+      });
     },
     ...customConfig,
     store
   });
-}
-
-// Redis store for rate limiting
-class RedisStore implements rateLimit.Store {
-  constructor(private client: Redis) {}
-
-  async increment(key: string): Promise<rateLimit.IncrementResponse> {
-    const results = await this.client
-      .multi()
-      .incr(key)
-      .ttl(key)
-      .exec();
-    
-    if (!results) {
-      throw new Error('Redis multi command failed');
-    }
-
-    const [[, total], [, ttl]] = results;
-    
-    if (total === 1) {
-      // Set TTL if this is the first increment
-      await this.client.expire(key, 3600);
-    }
-
-    return {
-      totalHits: total as number,
-      resetTime: new Date(Date.now() + (ttl as number) * 1000)
-    };
-  }
-
-  async decrement(key: string): Promise<void> {
-    await this.client.decr(key);
-  }
-
-  async resetKey(key: string): Promise<void> {
-    await this.client.del(key);
-  }
-}
-
-// In-memory store fallback
-class MemoryStore implements rateLimit.Store {
-  private hits: Record<string, number> = {};
-  private resetTimes: Record<string, number> = {};
-  private interval: NodeJS.Timeout;
-
-  constructor(windowMs: number) {
-    this.interval = setInterval(() => {
-      const now = Date.now();
-      Object.keys(this.resetTimes).forEach(key => {
-        if (this.resetTimes[key] <= now) {
-          delete this.hits[key];
-          delete this.resetTimes[key];
-        }
-      });
-    }, 300000); // Clean up every 5 minutes
-
-    if (this.interval.unref) {
-      this.interval.unref();
-    }
-  }
-
-  async increment(key: string): Promise<rateLimit.IncrementResponse> {
-    if (!this.hits[key]) {
-      this.hits[key] = 0;
-    }
-    this.hits[key]++;
-
-    if (!this.resetTimes[key]) {
-      this.resetTimes[key] = Date.now() + 3600000;
-    }
-
-    return {
-      totalHits: this.hits[key],
-      resetTime: new Date(this.resetTimes[key])
-    };
-  }
-
-  async decrement(key: string): Promise<void> {
-    if (this.hits[key]) {
-      this.hits[key]--;
-    }
-  }
-
-  async resetKey(key: string): Promise<void> {
-    delete this.hits[key];
-    delete this.resetTimes[key];
-  }
 }

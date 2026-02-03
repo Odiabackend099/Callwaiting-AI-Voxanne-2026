@@ -172,7 +172,7 @@ async function qualifyLead(messages: ChatMessage[], sessionId?: string): Promise
     const { error } = await supabase.from('chat_widget_leads').insert({
       session_id: sessionId || `chat_${Date.now()}`,
       lead_score: score,
-      lead_status: leadStatus,
+      status: leadStatus,
       tags,
       conversation_summary: userMessages.substring(0, 500),
       created_at: new Date().toISOString(),
@@ -238,22 +238,45 @@ router.post('/', async (req: Request, res: Response) => {
       ...messages,
     ];
 
-    // Call Groq API
-    const completion = await groqClient.chat.completions.create({
-      model: 'llama-3.3-70b-versatile', // Fast, high-quality model
-      messages: conversationMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-      temperature: 0.7,
-      max_tokens: 500, // Keep responses concise
-      top_p: 0.9,
-    });
+    // Call Groq API with error handling
+    let completion;
+    try {
+      completion = await groqClient.chat.completions.create({
+        model: 'llama-3.3-70b-versatile', // Fast, high-quality model
+        messages: conversationMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: 0.7,
+        max_tokens: 500, // Keep responses concise
+        top_p: 0.9,
+      });
+    } catch (groqError: any) {
+      log.error('ChatWidget', 'Groq API error', {
+        error: groqError.message,
+        statusCode: groqError.status,
+        sessionId,
+      });
+
+      // Return fallback response instead of 500
+      return res.status(200).json({
+        success: true,
+        message: "I'm temporarily unavailable. Please book a demo at https://calendly.com/austyneguale/30min or call us at +44 7424 038250.",
+        sessionId: sessionId || `chat_${Date.now()}`,
+        fallback: true,
+      });
+    }
 
     const assistantMessage = completion.choices[0]?.message?.content;
 
     if (!assistantMessage) {
-      throw new Error('No response from Groq API');
+      log.warn('ChatWidget', 'Empty response from Groq', { sessionId });
+      return res.status(200).json({
+        success: true,
+        message: "I'm having trouble responding. Please try again or contact us directly.",
+        sessionId: sessionId || `chat_${Date.now()}`,
+        fallback: true,
+      });
     }
 
     log.info('ChatWidget', 'Response generated', {
