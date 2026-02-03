@@ -7,19 +7,62 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
 export default function Contact() {
     const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
+    const [formRef, setFormRef] = useState<HTMLFormElement | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setStatus("loading");
-        
-        // Simulate API call
-        setTimeout(() => {
+
+        const formElement = e.target as HTMLFormElement;
+
+        try {
+            // Collect form data
+            const formData = new FormData(formElement);
+
+            const payload = {
+                name: formData.get('name') as string,
+                email: formData.get('email') as string,
+                phone: (formData.get('phone') as string) || '',
+                subject: 'Website Contact Form',
+                message: formData.get('message') as string,
+            };
+
+            // Validate required fields
+            if (!payload.name || !payload.email || !payload.message) {
+                setStatus("idle");
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            // Call backend API
+            const response = await fetch(`${BACKEND_URL}/api/contact-form`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+
+            // Success - show confirmation
             setStatus("success");
-            // Reset after 3 seconds
+            formElement.reset();
+
+            // Reset form after 3 seconds
             setTimeout(() => setStatus("idle"), 3000);
-        }, 1500);
+
+        } catch (error) {
+            console.error('Contact form submission error:', error);
+            setStatus("idle");
+            alert('Failed to send message. Please try again or email support@voxanne.ai directly.');
+        }
     };
 
     return (
@@ -79,22 +122,22 @@ export default function Contact() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
                                         <label htmlFor="name" className="text-sm font-medium text-navy-900">Name</label>
-                                        <Input id="name" placeholder="Dr. Jane Doe" required disabled={status === "loading" || status === "success"} />
+                                        <Input id="name" name="name" placeholder="Dr. Jane Doe" required disabled={status === "loading" || status === "success"} />
                                     </div>
                                     <div className="space-y-2">
                                         <label htmlFor="email" className="text-sm font-medium text-navy-900">Email</label>
-                                        <Input id="email" type="email" placeholder="jane@clinic.com" required disabled={status === "loading" || status === "success"} />
+                                        <Input id="email" name="email" type="email" placeholder="jane@clinic.com" required disabled={status === "loading" || status === "success"} />
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
                                     <label htmlFor="phone" className="text-sm font-medium text-navy-900">Phone (Optional)</label>
-                                    <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" disabled={status === "loading" || status === "success"} />
+                                    <Input id="phone" name="phone" type="tel" placeholder="+1 (555) 000-0000" disabled={status === "loading" || status === "success"} />
                                 </div>
 
                                 <div className="space-y-2">
                                     <label htmlFor="message" className="text-sm font-medium text-navy-900">Message</label>
-                                    <Textarea id="message" placeholder="Tell us about your practice..." className="min-h-[120px]" required disabled={status === "loading" || status === "success"} />
+                                    <Textarea id="message" name="message" placeholder="Tell us about your practice..." className="min-h-[120px]" required disabled={status === "loading" || status === "success"} />
                                 </div>
 
                                 <Button 
