@@ -45,7 +45,7 @@ BEGIN
   
   -- Check for conflicting appointments
   -- Look for appointments that overlap with the requested time slot
-  SELECT a.id, a.scheduled_at, c.first_name || ' ' || c.last_name
+  SELECT a.id, a.scheduled_at, c.name
   INTO v_conflict_id, v_conflict_scheduled_at, v_conflict_contact_name
   FROM appointments a
   LEFT JOIN contacts c ON c.id = a.contact_id

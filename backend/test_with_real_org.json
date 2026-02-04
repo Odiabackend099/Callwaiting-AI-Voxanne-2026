@@ -1,0 +1,13 @@
+{
+  "message": {
+    "type": "tool-call",
+    "toolCall": {
+      "id": "test-with-real-org-001",
+      "type": "function",
+      "function": {
+        "name": "checkAvailability",
+        "arguments": "{\"tenantId\":\"46cf2995-2bee-44e3-838b-24151486fe4e\",\"date\":\"2026-02-05\"}"
+      }
+    }
+  }
+}

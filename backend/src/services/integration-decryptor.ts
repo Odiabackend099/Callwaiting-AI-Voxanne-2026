@@ -186,21 +186,112 @@ export class IntegrationDecryptor {
       }
     );
 
-    // Check if token is expired
+    // Check if token is expired (with 5-minute buffer for proactive refresh)
     const expiresAt = new Date(credentials.expiresAt);
-    if (expiresAt < new Date() && !allowExpired) {
-      log.info('IntegrationDecryptor', 'Google token expired, needs refresh', {
+    const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+
+    if (expiresAt < fiveMinutesFromNow && !allowExpired) {
+      log.info('IntegrationDecryptor', 'Google token expired or expiring soon, attempting refresh', {
         orgId,
         expiresAt: credentials.expiresAt,
+        bufferMinutes: 5,
       });
 
-      // Invalidate cache to force refresh on next call
-      this.invalidateCache(orgId, 'google_calendar');
+      try {
+        // ===== SELF-HEALING: REFRESH TOKEN PROTOCOL =====
+        const { google } = require('googleapis');
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET
+        );
 
-      throw new Error(
-        'Google Calendar token expired. Please reconnect your Google account.'
-      );
+        oauth2Client.setCredentials({
+          refresh_token: credentials.refreshToken,
+        });
+
+        // Request new access token
+        log.debug('IntegrationDecryptor', 'Requesting new access token from Google', {
+          orgId,
+        });
+
+        const { credentials: newCreds } = await oauth2Client.refreshAccessToken();
+
+        if (!newCreds.access_token) {
+          throw new Error('Failed to refresh token: No access_token returned');
+        }
+
+        // Calculate expiration (default 1 hour if not provided)
+        const expiryMs = newCreds.expiry_date || (Date.now() + 3600000);
+        const newExpiresAt = new Date(expiryMs).toISOString();
+
+        // Build updated credentials object
+        const updatedCreds = {
+          accessToken: newCreds.access_token,
+          access_token: newCreds.access_token, // Support both field names
+          refreshToken: credentials.refreshToken, // Keep same refresh token
+          refresh_token: credentials.refreshToken,
+          expiresAt: newExpiresAt,
+          expires_at: newExpiresAt,
+        };
+
+        log.info('IntegrationDecryptor', '🔄 Google token refreshed successfully', {
+          orgId,
+          newExpiresAt,
+        });
+
+        // ===== PERSIST: Update database with new token =====
+        await this.storeCredentials(orgId, 'google_calendar', updatedCreds);
+
+        // Update connected status to true
+        await supabase
+          .from('integrations')
+          .update({
+            connected: true,
+            last_checked_at: new Date().toISOString(),
+          })
+          .eq('org_id', orgId)
+          .eq('provider', 'google_calendar');
+
+        log.info('IntegrationDecryptor', '✅ Google Calendar credentials persisted and marked connected', {
+          orgId,
+        });
+
+        // Return refreshed credentials
+        return {
+          accessToken: updatedCreds.accessToken,
+          refreshToken: updatedCreds.refreshToken,
+          expiresAt: updatedCreds.expiresAt,
+        };
+      } catch (error: any) {
+        log.error('IntegrationDecryptor', '❌ Failed to refresh Google token', {
+          orgId,
+          error: error?.message,
+          code: error?.code,
+        });
+
+        // Invalidate cache on refresh failure
+        this.invalidateCache(orgId, 'google_calendar');
+
+        // Update connected status to false
+        await supabase
+          .from('integrations')
+          .update({
+            connected: false,
+            last_checked_at: new Date().toISOString(),
+          })
+          .eq('org_id', orgId)
+          .eq('provider', 'google_calendar');
+
+        throw new Error(
+          `Google Calendar token refresh failed: ${error?.message || 'Unknown error'}. Please reconnect your Google account in settings.`
+        );
+      }
     }
+
+    log.debug('IntegrationDecryptor', '✅ Google token valid (no refresh needed)', {
+      orgId,
+      expiresAt: credentials.expiresAt,
+    });
 
     return credentials;
   }

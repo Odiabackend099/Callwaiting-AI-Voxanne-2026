@@ -1,0 +1,13 @@
+{
+  "message": {
+    "type": "tool-call",
+    "toolCall": {
+      "id": "test-booking-001",
+      "type": "function",
+      "function": {
+        "name": "bookClinicAppointment",
+        "arguments": "{\"tenantId\":\"46cf2995-2bee-44e3-838b-24151486fe4e\",\"customerName\":\"Austyn\",\"customerPhone\":\"+2348141995397\",\"customerEmail\":\"austyn@demo.com\",\"appointmentDate\":\"2026-02-05\",\"appointmentTime\":\"15:00\",\"serviceType\":\"consultation\"}"
+      }
+    }
+  }
+}
