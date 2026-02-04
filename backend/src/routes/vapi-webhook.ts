@@ -307,13 +307,13 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         orgId
       });
 
-      // 3. Map sentiment fields from analysis object
-      const sentimentLabel = analysis?.sentiment || null;
-      const sentimentScore = (typeof analysis?.sentimentScore === 'number') ? analysis.sentimentScore : null;
-      const sentimentSummary = analysis?.sentimentSummary || null;
-      const sentimentUrgency = analysis?.sentimentUrgency || null;
-
-      // 3.5 Generate meaningful outcome summary using GPT-4o
+      // 3. Generate outcome + sentiment via GPT-4o (single API call)
+      // Vapi does NOT provide sentiment fields in standard end-of-call-report.
+      // We generate both outcome and sentiment from the transcript using OutcomeSummaryService.
+      let sentimentLabel: string | null = analysis?.structuredData?.sentiment || null;
+      let sentimentScore: number | null = null;
+      let sentimentSummary: string | null = null;
+      let sentimentUrgency: string | null = null;
       let outcomeShort = analysis?.structuredData?.outcome || 'Call Completed';
       let outcomeDetailed = analysis?.summary || 'Call completed successfully.';
 
@@ -321,58 +321,75 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         if (artifact?.transcript) {
           const outcomeSummary = await OutcomeSummaryService.generateOutcomeSummary(
             artifact.transcript,
-            sentimentLabel
+            sentimentLabel || undefined
           );
           outcomeShort = outcomeSummary.shortOutcome;
           outcomeDetailed = outcomeSummary.detailedSummary;
+          sentimentLabel = outcomeSummary.sentimentLabel;
+          sentimentScore = outcomeSummary.sentimentScore;
+          sentimentSummary = outcomeSummary.sentimentSummary;
+          sentimentUrgency = outcomeSummary.sentimentUrgency;
 
-          log.info('Vapi-Webhook', 'Outcome summary generated', {
+          log.info('Vapi-Webhook', 'Outcome + sentiment generated', {
             callId: call?.id,
             shortOutcome: outcomeShort,
+            sentimentLabel,
+            sentimentScore,
             summaryLength: outcomeDetailed.length
           });
         }
       } catch (summaryError: any) {
-        log.error('Vapi-Webhook', 'Failed to generate outcome summary', {
+        log.error('Vapi-Webhook', 'Failed to generate outcome/sentiment', {
           error: summaryError.message,
           callId: call?.id
         });
-        // Continue with default outcome if summary generation fails
       }
 
-      // 3.75. Enrich caller name from contacts table (for inbound calls)
+      // 3.75. Enrich caller name from contacts table (for ALL calls - both inbound and outbound)
       let enrichedCallerName: string | null = null;
 
-      if (callDirection === 'inbound' && call?.customer?.number) {
+      // FIX 1.1 & 1.2: Removed inbound-only condition, fixed schema bug (first_name/last_name don't exist)
+      if (call?.customer?.number) {
         try {
-          const { data: existingContact } = await supabase
+          const { data: existingContact, error: contactError } = await supabase
             .from('contacts')
-            .select('name, first_name, last_name')
+            .select('name')  // ← FIXED: Only query existing column (contacts table has no first_name/last_name)
             .eq('org_id', orgId)
             .eq('phone', call.customer.number)
             .maybeSingle();
 
-          if (existingContact) {
-            // Prefer full name field, fall back to first_name + last_name
-            if (existingContact.name && existingContact.name !== 'Unknown Caller') {
-              enrichedCallerName = existingContact.name;
-            } else if (existingContact.first_name || existingContact.last_name) {
-              enrichedCallerName = [existingContact.first_name, existingContact.last_name]
-                .filter(Boolean)
-                .join(' ');
-            }
+          if (contactError) {
+            log.error('Vapi-Webhook', 'Contact lookup failed during enrichment', {
+              orgId,
+              phoneNumber: call.customer.number,
+              error: contactError.message
+            });
+          }
 
-            log.info('Vapi-Webhook', '📞 Caller name enriched from contacts', {
+          // Use contact name if available and not "Unknown Caller"
+          if (existingContact?.name && existingContact.name !== 'Unknown Caller') {
+            enrichedCallerName = existingContact.name;
+
+            log.info('Vapi-Webhook', '✅ Caller name enriched from contacts', {
               phone: call.customer.number,
               originalName: call?.customer?.name || 'Unknown',
               enrichedName: enrichedCallerName,
-              orgId
+              orgId,
+              callDirection
+            });
+          } else {
+            log.warn('Vapi-Webhook', '⚠️ No contact match for enrichment', {
+              orgId,
+              phoneNumber: call.customer.number,
+              vapiCallerName: call?.customer?.name || 'not provided',
+              callDirection
             });
           }
         } catch (enrichmentError: any) {
-          log.warn('Vapi-Webhook', 'Caller name enrichment failed', {
+          log.error('Vapi-Webhook', 'Caller name enrichment exception', {
             error: enrichmentError.message,
-            phone: call.customer.number
+            phone: call.customer.number,
+            orgId
           });
           // Continue without enrichment
         }
@@ -400,10 +417,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             ? (call?.customer?.contactId || null)
             : null,
 
-          // Caller info (inbound only) - Enriched from contacts table
-          from_number: callDirection === 'inbound'
-            ? (call?.customer?.number || null)
-            : null,
+          // Caller info - Enriched from contacts table (SSOT: phone_number column only)
+          // FIX 1.3: Removed duplicate from_number column, keeping phone_number as SSOT
+          phone_number: call?.customer?.number || null, // SSOT for caller phone
           caller_name: finalCallerName, // Use enriched name for BOTH inbound and outbound
 
           // Call metadata
@@ -411,12 +427,12 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           created_at: call?.createdAt || message.startedAt || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           duration_seconds: Math.round(message.durationSeconds || 0),
-          status: call?.status || 'completed',
+          status: 'completed', // Force 'completed' - this IS an end-of-call-report
 
-          // Recording & transcript
-          recording_url: typeof artifact?.recordingUrl === 'string'
-            ? artifact.recordingUrl
-            : null,
+          // Recording & transcript - check multiple Vapi payload locations
+          recording_url: (typeof artifact?.recordingUrl === 'string' ? artifact.recordingUrl : null)
+            || (typeof artifact?.recording === 'string' ? artifact.recording : null)
+            || (typeof message?.recordingUrl === 'string' ? message.recordingUrl : null),
           recording_storage_path: null,  // Will be populated if uploaded to Supabase
           transcript: artifact?.transcript || null,
 
@@ -429,7 +445,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           // Keep legacy sentiment field for backward compatibility
           sentiment: sentimentLabel
             ? `${sentimentLabel}${sentimentScore ? ':' + sentimentScore : ''}${sentimentSummary ? ':' + sentimentSummary : ''}`
-            : null
+            : null,
 
           // Outcomes - Use generated summaries
           outcome: outcomeShort,
@@ -453,10 +469,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
               summary: sentimentSummary,
               urgency: sentimentUrgency
             },
-            // Store caller_name in metadata since column doesn't exist
-            caller_name: callDirection === 'inbound'
-              ? (call?.customer?.name || 'Unknown Caller')
-              : null
+            caller_name: finalCallerName
           }
         }, { onConflict: 'vapi_call_id' });
 
@@ -473,6 +486,48 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           direction: callDirection,
           orgId
         });
+
+        // FIX 1.5: Queue recording for upload to Supabase Storage (enables playback)
+        const recordingUrl = (typeof artifact?.recordingUrl === 'string' ? artifact.recordingUrl : null)
+          || (typeof artifact?.recording === 'string' ? artifact.recording : null)
+          || (typeof message?.recordingUrl === 'string' ? message.recordingUrl : null);
+
+        if (recordingUrl && call?.id) {
+          try {
+            const { error: queueError } = await supabase
+              .from('recording_upload_queue')
+              .insert({
+                call_id: call.id,
+                vapi_call_id: call.id,
+                org_id: orgId,
+                recording_url: recordingUrl,
+                call_type: callDirection || 'inbound',
+                priority: 'normal',
+                status: 'pending',
+                attempt_count: 0,
+                max_attempts: 3
+              });
+
+            if (queueError) {
+              log.error('Vapi-Webhook', 'Failed to queue recording upload', {
+                callId: call.id,
+                orgId,
+                error: queueError.message
+              });
+            } else {
+              log.info('Vapi-Webhook', '🎵 Recording upload queued', {
+                callId: call.id,
+                orgId,
+                url: recordingUrl
+              });
+            }
+          } catch (recordingQueueError: any) {
+            log.error('Vapi-Webhook', 'Recording queue insertion exception', {
+              error: recordingQueueError.message,
+              callId: call?.id
+            });
+          }
+        }
 
         // Broadcast to dashboard via WebSocket
         try {
@@ -506,32 +561,44 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
               // 3. Extract service keywords from transcript
               const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
 
-              // 4. Create new contact
-              const { error: contactError } = await supabase
-                .from('contacts')
-                .insert({
-                  org_id: orgId,
-                  name: callerName || 'Unknown Caller',
-                  phone: phoneNumber,
-                  lead_score: leadScoring.tier,
-                  lead_status: 'new',
-                  service_interests: serviceKeywords,
-                  last_contact_at: call?.endedAt || new Date().toISOString(),
-                  notes: `Auto-created from inbound call ${call?.id}. Lead score: ${leadScoring.score}/100`
-                });
+              // FIX 1.4: Only create contact if we have a real name (prevent "Unknown Caller" pollution)
+              if (finalCallerName && finalCallerName !== 'Unknown Caller') {
+                // 4. Create new contact
+                // FIXED (2026-02-03): Use leadScoring.score (number 0-100) instead of tier (string)
+                const { error: contactError } = await supabase
+                  .from('contacts')
+                  .insert({
+                    org_id: orgId,
+                    name: finalCallerName,
+                    phone: phoneNumber,
+                    lead_score: leadScoring.score,  // FIXED: Was leadScoring.tier (string), now leadScoring.score (number)
+                    lead_status: leadScoring.tier,   // ADDED: Store tier in lead_status for filtering
+                    service_interests: serviceKeywords,
+                    last_contact_at: call?.endedAt || new Date().toISOString(),
+                    notes: `Auto-created from inbound call ${call?.id}. Lead score: ${leadScoring.score}/100 (${leadScoring.tier})`
+                  });
 
-              if (contactError) {
-                log.error('Vapi-Webhook', 'Failed to auto-create contact', {
-                  error: contactError.message,
-                  phone: phoneNumber,
-                  orgId
-                });
+                if (contactError) {
+                  log.error('Vapi-Webhook', 'Failed to auto-create contact', {
+                    error: contactError.message,
+                    phone: phoneNumber,
+                    orgId
+                  });
+                } else {
+                  log.info('Vapi-Webhook', '✅ Contact auto-created from inbound call', {
+                    phone: phoneNumber,
+                    name: finalCallerName,
+                    leadScore: leadScoring.tier,
+                    leadScoreValue: leadScoring.score,
+                    orgId
+                  });
+                }
               } else {
-                log.info('Vapi-Webhook', '✅ Contact auto-created from inbound call', {
+                log.info('Vapi-Webhook', 'Skipped auto-contact creation (no name available)', {
+                  orgId,
                   phone: phoneNumber,
-                  leadScore: leadScoring.tier,
-                  leadScoreValue: leadScoring.score,
-                  orgId
+                  callId: call?.id,
+                  reason: 'finalCallerName is Unknown Caller or null'
                 });
               }
             } else {
@@ -586,7 +653,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
               .insert({
                 org_id: orgId,
                 call_id: call?.id,
-                lead_name: callerName || 'Unknown Caller',
+                lead_name: finalCallerName,
                 lead_phone: phoneNumber,
                 service_interest: serviceKeywords.length > 0 ? serviceKeywords.join(', ') : null,
                 urgency_level: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),

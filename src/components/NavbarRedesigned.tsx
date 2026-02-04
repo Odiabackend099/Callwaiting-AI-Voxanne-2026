@@ -41,7 +41,7 @@ export default function NavbarRedesigned({ onBookDemo }: NavbarRedesignedProps) 
                 {/* ✅ UPDATED: Use icon-only logo variant (Netflix-style) - Brand/3.png */}
                 <Logo
                     variant="icon-blue"
-                    size="lg"
+                    size="xl"
                     href="/"
                     priority
                     showText={true}

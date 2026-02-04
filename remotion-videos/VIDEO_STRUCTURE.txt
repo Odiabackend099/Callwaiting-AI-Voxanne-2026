@@ -1,0 +1,255 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                    VOXANNE AI 90-SECOND DEMO VIDEO STRUCTURE                    ║
+║                           All Scenes & Animations                               ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+VIDEO TIMELINE (90 seconds = 2700 frames @ 30fps)
+
+0s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 1: THE PROBLEM (0-6s, 180 frames)
+│  ├─ Animation: Shaking phone icon + counter increments
+│  ├─ Duration: 6 seconds
+│  ├─ Key Effect: Spring physics for bounce
+│  └─ Purpose: Establish pain point
+6s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 2: DASHBOARD OVERVIEW (6-12s, 180 frames)
+│  ├─ Screenshot: 01_dashboard_home.png
+│  ├─ Animation: Fade-in + scale spring (0.95 → 1.0)
+│  ├─ Duration: 6 seconds
+│  ├─ Key Effect: Spring damping=10
+│  └─ Purpose: Introduce the solution
+12s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 3: CONFIGURE AGENT (12-20s, 240 frames) ⭐
+│  ├─ Screenshot: 02_agent_config_inbound.png
+│  ├─ Animations:
+│  │  ├─ Cursor: (1800,600) → (400,250) [frames 0-20]
+│  │  ├─ Typewriter: "You are a friendly medical receptionist..." [frames 30-90]
+│  │  └─ Cursor: (400,250) → (600,550) [frames 100-120]
+│  ├─ Duration: 8 seconds
+│  ├─ Key Effects: Bezier easing (ease-out cubic), character-by-character text
+│  └─ Purpose: Show configuration simplicity
+20s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 4: UPLOAD KNOWLEDGE (20-25s, 150 frames) ⭐
+│  ├─ Screenshot: 03_knowledge_base.png
+│  ├─ Animation: Zoom out (1.0 → 1.2 scale)
+│  ├─ Duration: 5 seconds
+│  ├─ Key Effect: Spring physics for smooth zoom
+│  ├─ Success Badge: Appears at frame 30
+│  └─ Purpose: Show knowledge base training
+25s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 5: CONNECT TELEPHONY (25-32s, 210 frames) ⭐⭐
+│  ├─ Screenshot: 04_telephony_credentials.png
+│  ├─ Animations:
+│  │  ├─ Cursor: (1800,600) → (500,200) [frames 0-15]
+│  │  ├─ Typewriter Input: "AC1234567890abcdef" [frames 20-60]
+│  │  └─ Cursor: (500,200) → (700,550) [frames 80-100]
+│  ├─ Duration: 7 seconds
+│  ├─ Key Effect: Masked credentials (no real data exposed)
+│  ├─ Success: Indicator after frame 100
+│  └─ Purpose: Show credential setup
+32s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 6: AI FORWARDING (32-40s, 240 frames) ⭐⭐⭐
+│  ├─ Screenshots: 05_ai_forwarding_wizard_step1.png → 06_ai_forwarding_code_display.png
+│  ├─ Animations:
+│  │  ├─ SLIDE TRANSITION [frames 0-60]:
+│  │  │  ├─ Screenshot 1: X: 0 → -100 (cubic easing)
+│  │  │  └─ Screenshot 2: X: 100 → 0 (cubic easing, fade-in)
+│  │  └─ CODE PULSE [frames 0-240]:
+│  │     └─ Sine wave: 1 + 0.1*sin((frame/fps)*PI*2) = continuous glow
+│  ├─ Duration: 8 seconds
+│  ├─ Key Effects: MOST COMPLEX! Slide + glow + cross-fade
+│  └─ Purpose: Highlight AI forwarding feature
+40s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 7: BROWSER TEST (40-48s, 240 frames) ⭐
+│  ├─ Screenshots: 07_test_browser_idle.png → 08_test_browser_active.png
+│  ├─ Animations:
+│  │  ├─ Cursor: Moves to "Start Call" button [frames 0-15]
+│  │  ├─ Transition: Idle → Active state [cubic easing, frames 0-30]
+│  │  ├─ Chat Bubble 1: User message fades in
+│  │  └─ Chat Bubble 2: AI response fades in
+│  ├─ Duration: 8 seconds
+│  ├─ Key Effect: Chat bubble overlays
+│  └─ Purpose: Show live testing capability
+48s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 8: LIVE PHONE TEST (48-56s, 240 frames) ⭐
+│  ├─ Screenshots: 09_test_live_call_form.png → 10_test_live_call_active.png
+│  ├─ Animations:
+│  │  ├─ Phone Input: Typewriter "+1 (555) 123-4567" [frames 0-60]
+│  │  ├─ Transition: Form → Active call [cubic easing]
+│  │  └─ Call Timer: Increments from 0:00 → 0:30
+│  ├─ Duration: 8 seconds
+│  ├─ Key Effect: Live timer counter
+│  └─ Purpose: Show phone call testing
+56s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 9: CALL LOGS (56-62s, 180 frames)
+│  ├─ Screenshot: 11_call_logs_dashboard.png
+│  ├─ Animation: Highlight box overlay appears
+│  ├─ Highlight Box:
+│  │  ├─ Border: 2px solid #1D4ED8
+│  │  ├─ Background: rgba(29, 78, 216, 0.2)
+│  │  ├─ Text: "High Sentiment Score: 92%"
+│  │  └─ Appears: After frame 40
+│  ├─ Duration: 6 seconds
+│  ├─ Key Effect: Attention-drawing highlight
+│  └─ Purpose: Show call tracking + sentiment
+62s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 10: HOT LEADS (62-68s, 180 frames) ⭐⭐⭐
+│  ├─ Screenshot: 12_leads_dashboard_hot.png
+│  ├─ Animation: STAGGERED CARD SLIDE-IN
+│  │  ├─ Card 1 (Sarah J.):
+│  │  │  ├─ Start: X = +200px (off-screen right)
+│  │  │  ├─ Frames: 0-30
+│  │  │  ├─ End: X = 0 (on-screen)
+│  │  │  └─ Easing: Cubic ease-out (1-(1-t)³)
+│  │  ├─ Card 2 (Michael C.):
+│  │  │  ├─ Start: X = +200px
+│  │  │  ├─ Frames: 15-45 (delayed 15 frames)
+│  │  │  └─ End: X = 0
+│  │  └─ Card 3 (Emily R.):
+│  │     ├─ Start: X = +200px
+│  │     ├─ Frames: 30-60 (delayed 30 frames)
+│  │     └─ End: X = 0
+│  ├─ Duration: 6 seconds
+│  ├─ Key Effect: STAGGERED TIMING for visual rhythm
+│  └─ Purpose: Show AI lead qualification
+68s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 11: APPOINTMENTS BOOKED (68-74s, 180 frames) ⭐⭐⭐
+│  ├─ Screenshot: 13_appointments_calendar.png
+│  ├─ Animation: STAGGERED FADE-IN + SCALE
+│  │  ├─ Card 1 (Sarah J. - Botox):
+│  │  │  ├─ Opacity: 0 → 1 [frames 15-35]
+│  │  │  ├─ Scale: 0.8 → 1.0 [frames 15-35]
+│  │  │  └─ Duration: 20 frames
+│  │  ├─ Card 2 (Michael C. - Filler):
+│  │  │  ├─ Opacity: 0 → 1 [frames 30-50]
+│  │  │  ├─ Scale: 0.8 → 1.0 [frames 30-50]
+│  │  │  └─ Delayed: 15 frames
+│  │  └─ Card 3 (Emily R. - Peel):
+│  │     ├─ Opacity: 0 → 1 [frames 45-65]
+│  │     ├─ Scale: 0.8 → 1.0 [frames 45-65]
+│  │     └─ Delayed: 30 frames
+│  ├─ Duration: 6 seconds
+│  ├─ Success Badge: "✓ 3 Appointments Booked This Week" [frame 60]
+│  ├─ Key Effect: STAGGERED FADE-IN with zoom
+│  └─ Purpose: Show booking results
+74s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─ SCENE 12: RESULTS & CTA (74-90s, 480 frames)
+│  ├─ Screenshot: Scene4_Result (final scene)
+│  ├─ Duration: 16 seconds
+│  ├─ Audio Slot: Frames 300-600 (74-84s) reserved for PHONE CALL AUDIO
+│  │  └─ User will add separately via iMovie/Final Cut Pro
+│  ├─ Animation: Spring fade-in + button
+│  ├─ Final CTA: "Never miss a patient again. Get Started at voxanne.ai"
+│  └─ Purpose: Conversion + call-to-action
+90s ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF VIDEO
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+ANIMATION COMPLEXITY LEVELS:
+
+⭐⭐⭐ MOST COMPLEX
+├─ Scene 6: Slide Transition (most demanding rendering)
+│  └─ Two screenshots sliding with cross-fade + pulsing glow
+│
+⭐⭐ ADVANCED
+├─ Scene 10: Staggered Cards (visual rhythm)
+│  └─ Three cards sliding in from right with 15-frame delays
+├─ Scene 11: Staggered Fade-In + Scale (professional polish)
+│  └─ Three cards fading in with combined opacity + scale animation
+
+⭐ INTERMEDIATE
+├─ Scene 3: Cursor + Typewriter (two simultaneous animations)
+├─ Scene 5: Cursor + Masked Input (practical demo)
+├─ Scene 7: Chat Bubbles (overlay graphics)
+├─ Scene 8: Call Timer (real-time counter)
+└─ Scene 4: Zoom Out (smooth scale animation)
+
+BASIC
+├─ Scene 1: Shaking Icon (spring physics)
+├─ Scene 2: Fade-in + Scale (smooth entry)
+└─ Scene 9: Highlight Box (attention-drawing)
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+FRAME TIMING (Total: 2700 frames)
+
+Scene 1:  0-180     (180 frames)  ✓
+Scene 2:  180-360   (180 frames)  ✓
+Scene 3:  360-600   (240 frames)  ✓
+Scene 4:  600-750   (150 frames)  ✓
+Scene 5:  750-960   (210 frames)  ✓
+Scene 6:  960-1200  (240 frames)  ✓
+Scene 7:  1200-1440 (240 frames)  ✓
+Scene 8:  1440-1680 (240 frames)  ✓
+Scene 9:  1680-1860 (180 frames)  ✓
+Scene 10: 1860-2040 (180 frames)  ✓
+Scene 11: 2040-2220 (180 frames)  ✓
+Scene 12: 2220-2700 (480 frames)  ✓
+
+Total:    2700 frames = 90 seconds @ 30fps ✓
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+KEY ANIMATION TECHNIQUES USED:
+
+1. BEZIER EASING (Cursor Movement)
+   ├─ Formula: (t) => 1 - (1 - t)³
+   ├─ Effect: Smooth cubic ease-out
+   └─ Used in: Scene 3, 5, 7 (cursor movements)
+
+2. SPRING PHYSICS (Smooth Transitions)
+   ├─ Config: { damping: 10 }
+   ├─ Effect: Natural acceleration/deceleration
+   └─ Used in: Scene 1, 2, 4, 12 (fade-ins and zooms)
+
+3. TYPEWRITER EFFECT (Text Reveal)
+   ├─ Formula: Math.floor(interpolate(frame, [start, end], [0, textLength]))
+   ├─ Effect: Character-by-character reveal
+   └─ Used in: Scene 3, 5, 8 (text input animations)
+
+4. SLIDE TRANSITION (Scene Change)
+   ├─ Formula: interpolate(frame, [0, 60], [0, -100]) for exit
+   ├─ Effect: Smooth wipe between scenes
+   └─ Used in: Scene 6 (most visible, most complex)
+
+5. STAGGERED ANIMATIONS (Visual Rhythm)
+   ├─ Pattern: Card N uses frames [15*N, 15*N + 30]
+   ├─ Effect: Sequential reveals for visual interest
+   └─ Used in: Scene 10 (slides), Scene 11 (fades)
+
+6. PULSING ANIMATION (Attention)
+   ├─ Formula: 1 + 0.1*sin((frame/fps)*PI*2)
+   ├─ Effect: Continuous oscillation using sine wave
+   └─ Used in: Scene 6 (code highlight)
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+SCREENSHOTS USED:
+
+Scene 1 (imported): Problem animation (no screenshot)
+Scene 2: 01_dashboard_home.png (161K)
+Scene 3: 02_agent_config_inbound.png (187K)
+Scene 4: 03_knowledge_base.png (186K)
+Scene 5: 04_telephony_credentials.png (84K)
+Scene 6: 05_ai_forwarding_wizard_step1.png (200K)
+         06_ai_forwarding_code_display.png (200K) [transition]
+Scene 7: 07_test_browser_idle.png (90K)
+         08_test_browser_active.png (90K) [transition]
+Scene 8: 09_test_live_call_form.png (130K)
+         10_test_live_call_active.png (131K) [transition]
+Scene 9: 11_call_logs_dashboard.png (194K)
+Scene 10: 12_leads_dashboard_hot.png (145K)
+Scene 11: 13_appointments_calendar.png (186K)
+Scene 12: Scene4_Result (final CTA)
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+READY TO RENDER! ✅
+
+Command: npm run build
+Output: out/voxanne-demo.mp4
+Wait: 5-7 minutes
+Result: Professional 90-second demo video
+
+═══════════════════════════════════════════════════════════════════════════════════

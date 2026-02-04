@@ -90,8 +90,8 @@ export default function LeftSidebar() {
                 <div className="flex items-center gap-3 mb-6">
                     <div className="w-8 h-8 rounded-xl bg-surgical-50 flex items-center justify-center border border-surgical-200 shadow-inner overflow-hidden">
                         <Image
-                            src="/callwaiting-ai-logo.png"
-                            alt="CallWaiting AI"
+                            src="/Brand/3.png"
+                            alt="Voxanne"
                             width={32}
                             height={32}
                             className="object-contain w-full h-full"

@@ -37,26 +37,26 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
 
-  webServer: [
-    {
-      command: 'npm run dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120000,
-    },
-    // Mock Telephony Server (only for nuclear tests)
-    {
-      command: 'npx ts-node tests/mocks/mock-server.ts',
-      url: 'http://localhost:3001/health',
-      reuseExistingServer: !process.env.CI,
-      timeout: 30000,
-      env: {
-        MOCK_SERVER_PORT: '3001',
-        MOCK_LATENCY: '50',
-        NODE_ENV: 'test',
-      },
-    },
-  ],
+  //   webServer: [
+  //     {
+  //       command: 'npm run dev',
+  //       url: 'http://localhost:3000',
+  //       reuseExistingServer: !process.env.CI,
+  //       timeout: 120000,
+  //     },
+  // Mock Telephony Server (only for nuclear tests)
+  // {
+  //   command: 'npx ts-node tests/mocks/mock-server.ts',
+  //   url: 'http://localhost:3001/health',
+  //   reuseExistingServer: !process.env.CI,
+  //   timeout: 30000,
+  //   env: {
+  //     MOCK_SERVER_PORT: '3001',
+  //     MOCK_LATENCY: '50',
+  //     NODE_ENV: 'test',
+  //   },
+  // },
+  //   ],
 
   projects: [
     {

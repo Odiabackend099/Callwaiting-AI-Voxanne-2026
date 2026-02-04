@@ -1,0 +1,58 @@
+
+Running 1 test using 1 worker
+
+[WebServer] Error: listen EADDRINUSE: address already in use :::3001
+[WebServer]     at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+[WebServer]     at listenInCluster (node:net:1997:12)
+[WebServer]     at Server.listen (node:net:2102:7)
+[WebServer]     at app.listen (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/node_modules/express/lib/application.js:635:24)
+[WebServer]     at Object.<anonymous> (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/mocks/mock-server.ts:502:5)
+[WebServer]     at Module._compile (node:internal/modules/cjs/loader:1803:14)
+[WebServer]     at Module.m._compile (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/node_modules/ts-node/src/index.ts:1618:23)
+[WebServer]     at Module._extensions..js (node:internal/modules/cjs/loader:1934:10)
+[WebServer]     at Object.require.extensions.<computed> [as .ts] (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/node_modules/ts-node/src/index.ts:1621:12)
+[WebServer]     at Module.load (node:internal/modules/cjs/loader:1524:32) {
+[WebServer]   code: 'EADDRINUSE',
+[WebServer]   errno: -48,
+[WebServer]   syscall: 'listen',
+[WebServer]   address: '::',
+[WebServer]   port: 3001
+[WebServer] }
+  ✘  1 [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission (9.1s)
+
+
+  1) [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#contact')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('#contact')[22m
+
+
+      22 |     await expect(page).toHaveURL('http://localhost:3000/');
+      23 |     const contactSection = page.locator('#contact');
+    > 24 |     await expect(contactSection).toBeVisible();
+         |                                  ^
+      25 |     await page.screenshot({ path: path.join(screenshotsDir, '01-homepage-loaded.png'), fullPage: true });
+      26 |
+      27 |     // 2. Scroll to contact
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/contact-booking-flow.spec.ts:24:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/e2e-contact-booking-flow-V-25e2d-t-1-Contact-form-submission-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/e2e-contact-booking-flow-V-25e2d-t-1-Contact-form-submission-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/e2e-contact-booking-flow-V-25e2d-t-1-Contact-form-submission-chromium/error-context.md
+
+  1 failed
+    [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission 

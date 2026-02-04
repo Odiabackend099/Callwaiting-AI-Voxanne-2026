@@ -337,7 +337,6 @@ const LeadsDashboardContent = () => {
                     <option value="">All Scores</option>
                     <option value="hot">Hot (80+)</option>
                     <option value="warm">Warm (50-79)</option>
-                    <option value="cold">Cold (&lt;50)</option>
                 </select>
 
                 <button

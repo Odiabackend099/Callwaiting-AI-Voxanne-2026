@@ -3,16 +3,18 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Trash2, X, Volume2, Share2, UserPlus, Mail, Loader } from 'lucide-react';
+import { Phone, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Download, ChevronLeft, ChevronRight, Play, Pause, Trash2, X, Volume2, Share2, UserPlus, Mail, Loader } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 // LeftSidebar removed (now in layout)
 import { RecordingPlayer } from '@/components/RecordingPlayer';
+import { AudioPlayerModal } from '@/components/AudioPlayerModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useTranscript } from '@/hooks/useTranscript';
 import { useToast } from '@/hooks/useToast';
 import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { useDashboardWebSocket } from '@/contexts/DashboardWebSocketContext';
+import { useAudioPlayerStore } from '@/store/audioPlayerStore';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
@@ -29,6 +31,8 @@ interface Call {
     sentiment_label?: string;
     sentiment_summary?: string;
     sentiment_urgency?: string;
+    outcome?: string;
+    outcome_summary?: string;
     call_type?: 'inbound' | 'outbound';
     recording_status?: 'pending' | 'processing' | 'completed' | 'failed';
     recording_url?: string;
@@ -54,6 +58,7 @@ const CallsPageContent = () => {
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
     const { success, error: showError, info, warning } = useToast();
+    const audioPlayerStore = useAudioPlayerStore();
     // ... rest of state and logic unchanged
     // const [calls, setCalls] = useState<Call[]>([]); // Removed in favor of SWR
     // const [isLoading, setIsLoading] = useState(true); // Removed in favor of SWR
@@ -69,6 +74,10 @@ const CallsPageContent = () => {
     const [filterDate, setFilterDate] = useState<string>(''); // 'today', 'week', 'month', or ''
     const [showFollowupModal, setShowFollowupModal] = useState(false);
     const [followupMessage, setFollowupMessage] = useState('');
+
+    // Audio player modal state
+    const [playerModalOpen, setPlayerModalOpen] = useState(false);
+    const [selectedCallForPlayer, setSelectedCallForPlayer] = useState<Call | null>(null);
 
     // Loading states for action buttons
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -291,24 +300,12 @@ const CallsPageContent = () => {
     };
 
     const handlePlayRecordingFromList = async (call: Call) => {
-        try {
-            setError(null);
+        // Stop any currently playing audio
+        audioPlayerStore.stop();
 
-            // Fetch signed URL from dedicated endpoint
-            const response = await authedBackendFetch<any>(`/api/calls-dashboard/${call.id}/recording-url`);
-
-            if (!response.recording_url) {
-                setError('No recording available for this call');
-                return;
-            }
-
-            const audio = new Audio(response.recording_url);
-            audio.play().catch((err) => {
-                setError('Failed to play recording: ' + err.message);
-            });
-        } catch (err: any) {
-            setError('Failed to load recording: ' + (err.message || 'Unknown error'));
-        }
+        // Open modal with call data
+        setSelectedCallForPlayer(call);
+        setPlayerModalOpen(true);
     };
 
     const handleDownloadRecordingFromList = async (call: Call) => {
@@ -755,17 +752,17 @@ const CallsPageContent = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">
-                                                {call.sentiment_summary ? (
+                                                {call.outcome_summary || call.sentiment_summary ? (
                                                     <div className="max-w-xs">
                                                         <p className="text-xs text-obsidian/70 line-clamp-2 leading-relaxed">
-                                                            {call.sentiment_summary}
+                                                            {call.outcome_summary || call.sentiment_summary}
                                                         </p>
                                                         {call.sentiment_urgency && (
-                                                            <span className={`text-xs font-medium inline-block mt-1 ${call.sentiment_urgency === 'High' ? 'text-red-600' :
-                                                                call.sentiment_urgency === 'Medium' ? 'text-obsidian/70' :
+                                                            <span className={`text-xs font-medium inline-block mt-1 ${call.sentiment_urgency === 'High' || call.sentiment_urgency === 'high' ? 'text-red-600' :
+                                                                call.sentiment_urgency === 'Medium' || call.sentiment_urgency === 'medium' ? 'text-obsidian/70' :
                                                                     'text-surgical-600'
                                                                 }`}>
-                                                                {call.sentiment_urgency} urgency
+                                                                {call.sentiment_urgency.charAt(0).toUpperCase() + call.sentiment_urgency.slice(1)} urgency
                                                             </span>
                                                         )}
                                                     </div>
@@ -780,18 +777,19 @@ const CallsPageContent = () => {
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    if (call.recording_status === 'completed') {
-                                                                        handlePlayRecordingFromList(call);
-                                                                    } else {
-                                                                        warning(`Recording is ${call.recording_status}, please wait`);
-                                                                    }
+                                                                    handlePlayRecordingFromList(call);
                                                                 }}
-                                                                disabled={call.recording_status !== 'completed'}
-                                                                className="p-2 hover:bg-surgical-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                title={call.recording_status === 'completed' ? 'Play recording' : `Recording is ${call.recording_status}`}
+                                                                className={`p-2 hover:bg-surgical-50 rounded-lg transition-colors ${
+                                                                    audioPlayerStore.currentCallId === call.id ? 'bg-surgical-100 ring-2 ring-surgical-600' : ''
+                                                                }`}
+                                                                title="Play recording"
                                                                 aria-label="Play recording"
                                                             >
-                                                                <Play className="w-4 h-4 text-surgical-600" />
+                                                                {audioPlayerStore.currentCallId === call.id && audioPlayerStore.isPlaying ? (
+                                                                    <Pause className="w-4 h-4 text-surgical-600" />
+                                                                ) : (
+                                                                    <Play className="w-4 h-4 text-surgical-600" />
+                                                                )}
                                                             </button>
                                                             <button
                                                                 onClick={(e) => {
@@ -808,39 +806,6 @@ const CallsPageContent = () => {
                                                                 aria-label="Download recording"
                                                             >
                                                                 <Download className="w-4 h-4 text-surgical-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    if (call.recording_status !== 'completed') {
-                                                                        warning(`Recording is ${call.recording_status}, please wait until it's ready`);
-                                                                        return;
-                                                                    }
-                                                                    const email = prompt('Enter email address to share recording:');
-                                                                    if (!email) return;
-                                                                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                                                                        warning('Invalid email address');
-                                                                        return;
-                                                                    }
-                                                                    try {
-                                                                        setLoadingAction(`share-${call.id}`);
-                                                                        await authedBackendFetch(`/api/calls-dashboard/${call.id}/share`, {
-                                                                            method: 'POST',
-                                                                            body: JSON.stringify({ email })
-                                                                        });
-                                                                        success(`Recording shared with ${email}`);
-                                                                    } catch (err: any) {
-                                                                        showError(err?.message || 'Failed to share recording');
-                                                                    } finally {
-                                                                        setLoadingAction(null);
-                                                                    }
-                                                                }}
-                                                                disabled={call.recording_status !== 'completed'}
-                                                                className="p-2 hover:bg-surgical-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                title={call.recording_status === 'completed' ? 'Share recording via email' : `Recording is ${call.recording_status}`}
-                                                                aria-label="Share recording via email"
-                                                            >
-                                                                <Share2 className="w-4 h-4 text-surgical-600" />
                                                             </button>
                                                         </>
                                                     ) : call.recording_status === 'processing' ? (
@@ -859,54 +824,6 @@ const CallsPageContent = () => {
                                                         </div>
                                                     ) : (
                                                         <span className="text-xs text-obsidian/40">—</span>
-                                                    )}
-                                                    {call.has_transcript ? (
-                                                        <button
-                                                            onClick={async (e) => {
-                                                                e.stopPropagation();
-                                                                try {
-                                                                    setLoadingAction(`export-${call.id}`);
-                                                                    const response = await fetch(`/api/calls-dashboard/${call.id}/transcript/export`, {
-                                                                        method: 'POST',
-                                                                        headers: {
-                                                                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                                                        }
-                                                                    });
-                                                                    if (response.ok) {
-                                                                        const blob = await response.blob();
-                                                                        const url = window.URL.createObjectURL(blob);
-                                                                        const a = document.createElement('a');
-                                                                        a.href = url;
-                                                                        a.download = `transcript-${call.id}.txt`;
-                                                                        document.body.appendChild(a);
-                                                                        a.click();
-                                                                        window.URL.revokeObjectURL(url);
-                                                                        document.body.removeChild(a);
-                                                                        success('Transcript downloaded');
-                                                                    } else {
-                                                                        showError('Failed to export transcript');
-                                                                    }
-                                                                } catch (err: any) {
-                                                                    showError('Failed to export transcript');
-                                                                } finally {
-                                                                    setLoadingAction(null);
-                                                                }
-                                                            }}
-                                                            className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
-                                                            title="Export transcript"
-                                                            aria-label="Export transcript to file"
-                                                        >
-                                                            <Download className="w-4 h-4 text-surgical-600" />
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            disabled
-                                                            className="p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                                            title="Transcript not available for this call"
-                                                            aria-label="Export transcript (not available)"
-                                                        >
-                                                            <Download className="w-4 h-4 text-obsidian/30" />
-                                                        </button>
                                                     )}
                                                     {call.phone_number ? (
                                                         <button
@@ -1393,6 +1310,23 @@ const CallsPageContent = () => {
                     </div>
                 )
             }
+
+            {/* Audio Player Modal */}
+            {playerModalOpen && selectedCallForPlayer && (
+                <AudioPlayerModal
+                    call={{
+                        id: selectedCallForPlayer.id,
+                        caller_name: selectedCallForPlayer.caller_name,
+                        phone_number: selectedCallForPlayer.phone_number,
+                        duration_seconds: selectedCallForPlayer.duration_seconds,
+                        created_at: selectedCallForPlayer.call_date
+                    }}
+                    onClose={() => {
+                        setPlayerModalOpen(false);
+                        audioPlayerStore.stop();
+                    }}
+                />
+            )}
 
             {/* Confirm Dialog */}
             <ConfirmDialog

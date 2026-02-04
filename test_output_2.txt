@@ -1,0 +1,23 @@
+
+Running 1 test using 1 worker
+
+  ✘  1 [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission (1.0m)
+
+
+  1) [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission 
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      10 |   });
+      11 |
+    > 12 |   test.beforeEach(async ({ page }) => {
+         |        ^
+      13 |     // Go to home page before each test
+      14 |     await page.goto('http://localhost:3000');
+      15 |   });
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/contact-booking-flow.spec.ts:12:8
+
+    [31mTearing down "context" exceeded the test timeout of 30000ms.[39m
+
+  1 failed
+    [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission 

@@ -1,0 +1,13 @@
+{
+  "message": {
+    "type": "tool-call",
+    "toolCall": {
+      "id": "test-real-org",
+      "type": "function",
+      "function": {
+        "name": "checkAvailability",
+        "arguments": "{\"date\":\"2026-02-05\",\"tenantId\":\"voxanne@demo.com\"}"
+      }
+    }
+  }
+}

@@ -60,6 +60,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     // Single query to unified 'calls' table with call_direction filter
     // FIXED (2026-02-01): Now includes all 4 sentiment fields (label, score, summary, urgency)
     // FIXED (2026-02-02): Added LEFT JOIN with contacts table to resolve caller names
+    // FIXED (2026-02-03): Now selects phone_number to JOIN contacts for inbound calls
     // FIXED (2026-02-02): Removed non-existent recording_path column (only recording_url and recording_storage_path exist)
     let query = supabase
       .from('calls')  // ← Unified table for both inbound + outbound
@@ -120,6 +121,10 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
+    // FIX 2.1: REMOVED runtime contacts lookup - Trust database SSOT (calls.caller_name)
+    // Webhook enrichment is now the single source of truth
+    // No need to query contacts on every page load
+
     // Transform response (handle both inbound + outbound)
     // PERFORMANCE OPTIMIZATION: No longer generate signed URLs on list load
     // URLs generated on-demand when user clicks play (see /:callId/recording-url endpoint)
@@ -141,19 +146,9 @@ callsRouter.get('/', async (req: Request, res: Response) => {
         sentimentUrgency = parts[3] || null;
       }
 
-      // FIXED (2026-02-02): Resolve caller_name from contacts table JOIN instead of hardcoded values
-      let resolvedCallerName = 'Unknown';
-
-      if (call.call_direction === 'outbound' && call.contacts?.name) {
-        // For outbound calls, use contact name from JOIN
-        resolvedCallerName = call.contacts.name;
-      } else if (call.caller_name) {
-        // For inbound calls, use existing caller_name from database
-        resolvedCallerName = call.caller_name;
-      } else {
-        // Fallback for missing data
-        resolvedCallerName = call.call_direction === 'outbound' ? 'Unknown Contact' : 'Unknown Caller';
-      }
+      // FIX 2.1: SIMPLIFIED caller name resolution - Trust database SSOT
+      // Webhook enrichment already populated calls.caller_name (single source of truth)
+      const resolvedCallerName = call.caller_name || 'Unknown Caller';
 
       return {
         id: call.id,
@@ -471,12 +466,24 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
 
     if (inboundCall) {
       // Format transcript with sentiment
-      const transcript = (inboundCall.transcript || []).map((segment: any) => ({
-        speaker: segment.speaker,
-        text: segment.text,
-        timestamp: segment.timestamp || 0,
-        sentiment: segment.sentiment || 'neutral'
-      }));
+      // FIXED (2026-02-03): Handle transcript as string or array
+      let transcript: any[] = [];
+      if (Array.isArray(inboundCall.transcript)) {
+        transcript = inboundCall.transcript.map((segment: any) => ({
+          speaker: segment.speaker,
+          text: segment.text,
+          timestamp: segment.timestamp || 0,
+          sentiment: segment.sentiment || 'neutral'
+        }));
+      } else if (typeof inboundCall.transcript === 'string' && inboundCall.transcript) {
+        // If transcript is a plain string, convert to single segment
+        transcript = [{
+          speaker: 'caller',
+          text: inboundCall.transcript,
+          timestamp: 0,
+          sentiment: 'neutral'
+        }];
+      }
 
       // FIXED (2026-02-02): Resolve caller_name from database or contacts JOIN
       let resolvedCallerName = 'Unknown Caller';
@@ -522,12 +529,24 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
 
     if (outboundCall) {
       // Format transcript with sentiment
-      const transcript = (outboundCall.transcript || []).map((segment: any) => ({
-        speaker: segment.speaker,
-        text: segment.text,
-        timestamp: segment.timestamp || 0,
-        sentiment: segment.sentiment || 'neutral'
-      }));
+      // FIXED (2026-02-03): Handle transcript as string or array
+      let transcript: any[] = [];
+      if (Array.isArray(outboundCall.transcript)) {
+        transcript = outboundCall.transcript.map((segment: any) => ({
+          speaker: segment.speaker,
+          text: segment.text,
+          timestamp: segment.timestamp || 0,
+          sentiment: segment.sentiment || 'neutral'
+        }));
+      } else if (typeof outboundCall.transcript === 'string' && outboundCall.transcript) {
+        // If transcript is a plain string, convert to single segment
+        transcript = [{
+          speaker: 'caller',
+          text: outboundCall.transcript,
+          timestamp: 0,
+          sentiment: 'neutral'
+        }];
+      }
 
       // Generate signed URL if storage path exists
       let recordingUrl = outboundCall.recording_url;

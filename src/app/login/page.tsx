@@ -74,8 +74,8 @@ export default function LoginPage() {
                         <div className="mb-6 flex items-center justify-between">
                             <Logo
                                 variant="icon-blue"
-                                size="lg"
-                                className="h-12 w-auto"
+                                size="xl"
+                                className="h-16 w-auto"
                             />
                             <Link
                                 href="/"

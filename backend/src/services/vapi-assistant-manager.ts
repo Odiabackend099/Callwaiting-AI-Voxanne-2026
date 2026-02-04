@@ -233,8 +233,36 @@ export class VapiAssistantManager {
             assistantId,
           });
 
-          // Get temporal context for system prompt
-          const { currentDate, currentTime } = getTemporalContext('America/Los_Angeles');
+          // Fetch org settings for timezone, business hours, and clinic name
+          const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('timezone, name, business_hours')
+            .eq('id', orgId)
+            .single();
+
+          if (orgError) {
+            log.error('VapiAssistantManager', '❌ Failed to fetch org settings', {
+              operationId,
+              orgId,
+              error: orgError.message,
+            });
+            throw new Error(`Failed to fetch org settings: ${orgError.message}`);
+          }
+
+          const orgTimezone = org.timezone || 'America/Los_Angeles'; // Fallback to PST if not set
+          const orgBusinessHours = org.business_hours || '9 AM - 6 PM'; // Fallback to default hours
+          const orgName = org.name || 'our clinic'; // Fallback to generic name
+
+          log.info('VapiAssistantManager', '✅ Org settings fetched', {
+            operationId,
+            orgId,
+            timezone: orgTimezone,
+            businessHours: orgBusinessHours,
+            clinicName: orgName,
+          });
+
+          // Get temporal context for system prompt (now with dynamic timezone)
+          const { currentDate, currentTime } = getTemporalContext(orgTimezone);
 
           // Generate super system prompt with user template embedded
           const systemPromptContent = getSuperSystemPrompt({
@@ -242,9 +270,9 @@ export class VapiAssistantManager {
             orgId,
             currentDate,
             currentTime,
-            timezone: 'America/Los_Angeles', // TODO: Get from org settings
-            businessHours: '9 AM - 6 PM',     // TODO: Get from org settings
-            clinicName: 'our clinic',         // TODO: Get from org settings
+            timezone: orgTimezone, // ✅ DYNAMIC from org settings
+            businessHours: orgBusinessHours, // ✅ DYNAMIC from org settings
+            clinicName: orgName, // ✅ DYNAMIC from org settings
             maxDuration: config.maxDurationSeconds || 600,
           });
 
@@ -395,8 +423,36 @@ export class VapiAssistantManager {
             role,
           });
 
-          // Get temporal context for system prompt (same as UPDATE path)
-          const { currentDate, currentTime } = getTemporalContext('America/Los_Angeles');
+          // Fetch org settings for timezone, business hours, and clinic name (same as UPDATE path)
+          const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('timezone, name, business_hours')
+            .eq('id', orgId)
+            .single();
+
+          if (orgError) {
+            log.error('VapiAssistantManager', '❌ Failed to fetch org settings', {
+              operationId,
+              orgId,
+              error: orgError.message,
+            });
+            throw new Error(`Failed to fetch org settings: ${orgError.message}`);
+          }
+
+          const orgTimezone = org.timezone || 'America/Los_Angeles'; // Fallback to PST if not set
+          const orgBusinessHours = org.business_hours || '9 AM - 6 PM'; // Fallback to default hours
+          const orgName = org.name || 'our clinic'; // Fallback to generic name
+
+          log.info('VapiAssistantManager', '✅ Org settings fetched for new assistant', {
+            operationId,
+            orgId,
+            timezone: orgTimezone,
+            businessHours: orgBusinessHours,
+            clinicName: orgName,
+          });
+
+          // Get temporal context for system prompt (same as UPDATE path, now with dynamic timezone)
+          const { currentDate, currentTime } = getTemporalContext(orgTimezone);
 
           // Generate super system prompt with user template embedded (consistent with UPDATE path)
           const systemPromptContent = getSuperSystemPrompt({
@@ -404,9 +460,9 @@ export class VapiAssistantManager {
             orgId,
             currentDate,
             currentTime,
-            timezone: 'America/Los_Angeles', // TODO: Get from org settings
-            businessHours: '9 AM - 6 PM',     // TODO: Get from org settings
-            clinicName: 'our clinic',         // TODO: Get from org settings
+            timezone: orgTimezone, // ✅ DYNAMIC from org settings
+            businessHours: orgBusinessHours, // ✅ DYNAMIC from org settings
+            clinicName: orgName, // ✅ DYNAMIC from org settings
             maxDuration: config.maxDurationSeconds || 600,
           });
 

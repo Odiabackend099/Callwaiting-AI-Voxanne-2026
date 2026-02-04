@@ -8,6 +8,7 @@ import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 import Pricing from "@/components/Pricing";
 import FAQ from "@/components/FAQ";
 import FooterRedesigned from "@/components/FooterRedesigned";
+import Contact from "@/components/Contact";
 
 export default function Home() {
   return (
@@ -21,6 +22,7 @@ export default function Home() {
       <TestimonialsCarousel />
       <Pricing />
       <FAQ />
+      <Contact />
       <FooterRedesigned />
     </main>
   );

@@ -946,30 +946,91 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
         }
 
         // ========================================
+        // STEP 4: Find or create contact for booking
+        // Required by book_appointment_with_lock RPC
         // ========================================
-        // STEP 4: Call PROVEN book_appointment_atomic RPC
-        // Use the working v1 function that has no cache issues
+        let contactId: string | null = null;
+
+        // Try to find existing contact by phone
+        const { data: existingContact, error: contactLookupError } = await supabase
+            .from('contacts')
+            .select('id')
+            .eq('org_id', orgId)
+            .eq('phone', phone)
+            .maybeSingle();
+
+        if (contactLookupError) {
+            log.error('VapiTools', 'Contact lookup error', { error: contactLookupError.message });
+        }
+
+        if (existingContact) {
+            contactId = existingContact.id;
+            log.info('VapiTools', '✅ Found existing contact', { contactId });
+        } else {
+            // Create new contact
+            const { data: newContact, error: contactCreateError } = await supabase
+                .from('contacts')
+                .insert({
+                    org_id: orgId,
+                    first_name: name.split(' ')[0] || name,
+                    last_name: name.split(' ').slice(1).join(' ') || '',
+                    email: email,
+                    phone: phone,
+                    lead_source: 'vapi_ai_booking',
+                })
+                .select('id')
+                .single();
+
+            if (contactCreateError || !newContact) {
+                log.error('VapiTools', 'Contact creation failed', {
+                    error: contactCreateError?.message
+                });
+                return res.status(500).json({
+                    toolCallId,
+                    result: {
+                        success: false,
+                        error: 'CONTACT_CREATION_FAILED',
+                        message: 'Failed to create customer record'
+                    }
+                });
+            }
+
+            contactId = newContact.id;
+            log.info('VapiTools', '✅ Created new contact', { contactId });
+        }
+
+        // ========================================
+        // STEP 5: Call SAFE book_appointment_with_lock RPC
+        // Uses advisory locks to prevent race conditions
         // ========================================
         const rpcParams = {
             p_org_id: orgId,
-            p_patient_name: name,
-            p_patient_email: email,
-            p_patient_phone: phone,
-            p_service_type: rawArgs.serviceType || 'consultation',
+            p_contact_id: contactId,
             p_scheduled_at: scheduledAt,
-            p_duration_minutes: 60  // Default 60-minute slot
+            p_duration_minutes: 60,
+            p_service_id: null, // Optional - can link to service if available
+            p_notes: `Booked via AI - Service: ${rawArgs.serviceType || 'consultation'}`,
+            p_metadata: {
+                booked_by: 'vapi_ai',
+                service_type: rawArgs.serviceType || 'consultation',
+                patient_name: name,
+                patient_email: email,
+                patient_phone: phone,
+            },
+            p_lock_key: null, // Let RPC generate lock key automatically
         };
 
-        log.info('VapiTools', '🔍 RPC CALL PARAMS', {
+        log.info('VapiTools', '🔍 RPC CALL PARAMS (with lock)', {
             orgId: orgId,
+            contactId: contactId,
             name: name,
             email: email,
             phone: phone,
             scheduledAt: scheduledAt,
-            serviceType: rpcParams.p_service_type
+            serviceType: rawArgs.serviceType || 'consultation'
         });
 
-        const { data, error } = await supabase.rpc('book_appointment_atomic', rpcParams);
+        const { data, error } = await supabase.rpc('book_appointment_with_lock', rpcParams);
 
         if (error) {
             log.error('VapiTools', 'Booking RPC FAILED', {
@@ -1005,10 +1066,40 @@ router.post('/tools/bookClinicAppointment', async (req, res) => {
         });
 
         // ========================================
-        // STEP 5: Handle response (success or conflict)
-        // v1 function returns: appointment_id, lead_id
+        // STEP 6: Handle response (success or conflict)
+        // book_appointment_with_lock returns: { success, appointment_id } or { success: false, error, conflicting_appointment }
         // ========================================
         if (!bookingResult.success) {
+            // Check for specific conflict errors
+            if (bookingResult.error === 'Time slot is already booked') {
+                log.warn('VapiTools', '⚠️ Booking conflict - slot already taken', {
+                    error: bookingResult.error,
+                    conflictingAppointment: bookingResult.conflicting_appointment
+                });
+                return res.status(200).json({
+                    toolCallId,
+                    result: {
+                        success: false,
+                        error: 'SLOT_UNAVAILABLE',
+                        message: 'That time was just booked by another caller',
+                        conflicting_appointment: bookingResult.conflicting_appointment
+                    }
+                });
+            } else if (bookingResult.error === 'Slot is currently being booked by another request') {
+                log.warn('VapiTools', '⚠️ Booking conflict - slot being locked', {
+                    error: bookingResult.error
+                });
+                return res.status(200).json({
+                    toolCallId,
+                    result: {
+                        success: false,
+                        error: 'SLOT_UNAVAILABLE',
+                        message: 'That time is currently being booked by another caller. Please try again in a moment.'
+                    }
+                });
+            }
+
+            // Generic booking failure
             log.error('VapiTools', 'Booking failed', { error: bookingResult.error });
             return res.status(200).json({
                 toolCallId,

@@ -1,0 +1,32 @@
+
+Running 1 test using 1 worker
+
+  ✘  1 [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission (1.0m)
+
+
+  1) [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.screenshot: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - taking page screenshot[22m
+    [2m  - waiting for fonts to load...[22m
+    [2m  - fonts loaded[22m
+
+
+      23 |     const contactSection = page.locator('#contact');
+      24 |     await expect(contactSection).toBeVisible();
+    > 25 |     await page.screenshot({ path: path.join(screenshotsDir, '01-homepage-loaded.png'), fullPage: true });
+         |                ^
+      26 |
+      27 |     // 2. Scroll to contact
+      28 |     await contactSection.scrollIntoViewIfNeeded();
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/contact-booking-flow.spec.ts:25:16
+
+    [31mTearing down "context" exceeded the test timeout of 30000ms.[39m
+
+    Error Context: test-results/e2e-contact-booking-flow-V-25e2d-t-1-Contact-form-submission-chromium/error-context.md
+
+  1 failed
+    [chromium] › tests/e2e/contact-booking-flow.spec.ts:20:7 › Voxanne AI Contact & Booking Flow › Test 1: Contact form submission 

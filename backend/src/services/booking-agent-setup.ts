@@ -11,7 +11,7 @@
 
 import { VapiClient, AssistantConfig } from './vapi-client';
 import { config } from '../config/index';
-import { APPOINTMENT_BOOKING_PROMPT, generatePromptContext } from '../config/system-prompts';
+import { getSuperSystemPrompt, getTemporalContext } from './super-system-prompt';
 import { log } from './logger';
 import { supabase } from './supabase-client';
 
@@ -58,15 +58,22 @@ export class BookingAgentSetup {
         };
       }
 
-      // Step 2: Generate system prompt with temporal context
-      const promptContext = generatePromptContext({
-        id: org.id,
-        name: org.name,
-        timezone: org.timezone || 'America/New_York', // Default timezone if not in DB
-        business_hours: org.business_hours
-      });
+      // Step 2: Generate system prompt with temporal context using super-system-prompt
+      const orgTimezone = org.timezone || 'America/Los_Angeles';
+      const { currentDate, currentTime, currentDateISO, currentYear } = getTemporalContext(orgTimezone);
 
-      const systemPrompt = APPOINTMENT_BOOKING_PROMPT(promptContext);
+      const systemPrompt = getSuperSystemPrompt({
+        userTemplate: '', // Empty template for now - can be customized per org
+        orgId: org.id,
+        currentDate,
+        currentDateISO,
+        currentTime,
+        currentYear,
+        timezone: orgTimezone,
+        businessHours: org.business_hours || '9 AM - 6 PM',
+        clinicName: org.name,
+        maxDuration: 600,
+      });
 
       // Step 3: Get appointment booking tools (for reference, but note: tools cannot be added via PATCH)
       // Tools would need to be set at creation time. For now, we update the system prompt.
@@ -207,12 +214,21 @@ export class BookingAgentSetup {
         timezone: 'America/New_York'
       };
 
-      const promptContext = generatePromptContext({
-        id: organization.id,
-        name: organization.name,
-        timezone: organization.timezone || 'America/New_York',
-        business_hours: organization.business_hours
-      });      const systemPrompt = APPOINTMENT_BOOKING_PROMPT(promptContext);
+      const orgTimezone = organization.timezone || 'America/Los_Angeles';
+      const { currentDate, currentTime, currentDateISO, currentYear } = getTemporalContext(orgTimezone);
+
+      const systemPrompt = getSuperSystemPrompt({
+        userTemplate: '', // Empty template for now - can be customized per org
+        orgId: organization.id,
+        currentDate,
+        currentDateISO,
+        currentTime,
+        currentYear,
+        timezone: orgTimezone,
+        businessHours: organization.business_hours || '9 AM - 6 PM',
+        clinicName: organization.name,
+        maxDuration: 600,
+      });
 
       const updatedAssistant = await this.vapiClient.updateAssistant(assistantId, {
         model: {
