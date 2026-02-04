@@ -18,7 +18,7 @@ export function ConfirmationStep({ onClose }: ConfirmationStepProps) {
       {/* Success message */}
       <div>
         <h2 className="text-2xl font-semibold tracking-tight text-obsidian mb-2">
-          Hybrid Telephony Activated!
+          AI Forwarding Activated!
         </h2>
         <p className="text-sm text-obsidian/60 max-w-md mx-auto">
           Your phone number is now connected to Voxanne AI. Incoming calls will be handled according to your forwarding mode.

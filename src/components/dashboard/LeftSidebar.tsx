@@ -39,7 +39,7 @@ export default function LeftSidebar() {
             items: [
                 { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
                 { label: 'Telephony', href: '/dashboard/inbound-config', icon: Phone },
-                { label: 'Hybrid Telephony', href: '/dashboard/telephony', icon: Smartphone },
+                { label: 'AI Forwarding', href: '/dashboard/telephony', icon: Smartphone },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ],
         },

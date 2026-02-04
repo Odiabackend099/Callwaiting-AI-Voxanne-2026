@@ -26,7 +26,7 @@ export default function TelephonyPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-obsidian">
-            Hybrid Telephony Setup
+            AI Forwarding Setup
           </h1>
           <p className="text-obsidian/60">
             Connect your personal phone number to AI without porting
