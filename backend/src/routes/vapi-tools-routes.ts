@@ -12,6 +12,7 @@ import { bookingDeduplicator } from '../services/booking-deduplicator';
 import { normalizeBookingData, formatAlternativeSlots } from '../utils/normalizeBookingData';
 import { getRagContext } from '../services/rag-context-provider';
 import { validateBookingDate, getDateCorrectionStats } from '../utils/date-validation';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
 
 const router = Router();
 
