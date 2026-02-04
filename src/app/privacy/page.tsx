@@ -529,7 +529,7 @@ export default function PrivacyPage() {
                                 <a href="mailto:privacy@voxanne.ai" className="text-clinical-blue hover:text-surgical-blue underline">
                                     privacy@voxanne.ai
                                 </a>{' '}
-                                or call +1 (234) 567-890.
+                                or call +44 7424 038250.
                             </p>
                         </section>
 

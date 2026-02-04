@@ -78,7 +78,7 @@ export default function FooterRedesigned() {
                                 </div>
                                 <div className="flex items-center gap-3 text-pure-white/70 hover:text-pure-white transition-colors">
                                     <Phone className="w-5 h-5" />
-                                    <a href="tel:+1234567890">+1 (234) 567-890</a>
+                                    <a href="tel:+447424038250">+44 7424 038250</a>
                                 </div>
                                 <div className="flex items-start gap-3 text-pure-white/70">
                                     <MapPin className="w-5 h-5 mt-0.5 flex-shrink-0" />
