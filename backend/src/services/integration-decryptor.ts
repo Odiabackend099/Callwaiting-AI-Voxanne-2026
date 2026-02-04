@@ -895,8 +895,8 @@ export class IntegrationDecryptor {
       );
 
       oauth2Client.setCredentials({
-        access_token: creds.access_token,
-        refresh_token: creds.refresh_token,
+        access_token: creds.accessToken,
+        refresh_token: creds.refreshToken,
       });
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
