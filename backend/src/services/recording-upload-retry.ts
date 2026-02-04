@@ -26,15 +26,15 @@ export async function logFailedUpload(params: {
   errorMessage: string;
 }): Promise<void> {
   try {
-    // Get call_logs to find org_id
+    // Get calls to find org_id
     const { data: callLog, error: callError } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('id, org_id')
       .eq('vapi_call_id', params.callId)
       .maybeSingle();
 
     if (callError || !callLog) {
-      logger.error('RecordingUploadRetry', `Failed to find call log: ${callError?.message || 'Not found'}`);
+      logger.error('RecordingUploadRetry', `Failed to find call: ${callError?.message || 'Not found'}`);
       return;
     }
 
@@ -68,14 +68,14 @@ export async function logFailedUpload(params: {
  */
 async function getFailedUploadsForRetryForOrg(orgId: string): Promise<FailedUpload[]> {
   try {
-    // Get call_ids for this org from call_logs
+    // Get call_ids for this org from calls
     const { data: callLogs, error: callLogsError } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('id')
       .eq('org_id', orgId);
 
     if (callLogsError) {
-      logger.error('RecordingUploadRetry', `Failed to fetch call logs for org ${orgId}: ${callLogsError.message}`);
+      logger.error('RecordingUploadRetry', `Failed to fetch calls for org ${orgId}: ${callLogsError.message}`);
       return [];
     }
 
