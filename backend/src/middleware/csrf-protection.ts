@@ -65,6 +65,7 @@ export function validateCsrfToken(req: Request, res: Response, next: NextFunctio
     '/api/webhooks', // Vapi webhooks have their own signature verification
     '/api/vapi/tools', // Vapi tool endpoints (called by Vapi servers, not browsers)
     '/api/assistants/sync', // Tool sync endpoint (administrative, called by scripts)
+    '/api/chat-widget', // Public chat widget endpoint (has rate limiting + input validation)
   ];
 
   if (skipPaths.some(path => req.path.startsWith(path))) {
