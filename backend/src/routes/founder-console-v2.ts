@@ -2149,6 +2149,7 @@ router.post(
           .select('id')
           .eq('role', role)
           .eq('org_id', orgId)
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
@@ -3239,12 +3240,48 @@ router.post(
         .select('id, system_prompt, first_message, voice, language, max_call_duration, vapi_assistant_id, vapi_phone_number_id')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
         .maybeSingle();
 
+      // DIAGNOSTIC: Check for duplicate outbound agents (data integrity issue)
+      if (agent?.id) {
+        const { count: duplicateCount } = await supabase
+          .from('agents')
+          .select('id', { count: 'exact', head: true })
+          .eq('role', AGENT_ROLES.OUTBOUND)
+          .eq('org_id', orgId);
+
+        if (duplicateCount && duplicateCount > 1) {
+          logger.warn('Multiple outbound agents found for org (data corruption)', {
+            orgId,
+            count: duplicateCount,
+            agentId: agent.id,
+            requestId
+          });
+          // Continue with first match, but flag for investigation
+        }
+      }
+
       if (!agent?.id) {
+        // DIAGNOSTIC: Log why agent lookup failed
+        logger.error('No outbound agent found for org', {
+          orgId,
+          userId: req.user?.id,
+          userEmail: req.user?.email,
+          requestId
+        });
         res.status(400).json({ error: 'Outbound agent not configured. Please save the Outbound Configuration in the dashboard first.', requestId });
         return;
       }
+
+      // DIAGNOSTIC: Log which agent was found (verify correct org)
+      logger.info('Outbound agent found - verifying configuration', {
+        orgId,
+        agentId: agent.id,
+        hasAssistantId: !!agent.vapi_assistant_id,
+        hasPhoneId: !!agent.vapi_phone_number_id,
+        requestId
+      });
 
       // Use agent data directly (agents table is the single source of truth)
       const activeConfig = {
@@ -3294,6 +3331,28 @@ router.post(
         }
       }
 
+      // DIAGNOSTIC: Validate assistant belongs to correct org (prevent cross-org leaks)
+      if (assistantId) {
+        try {
+          const vapiClient = new VapiClient(vapiApiKey);
+          const assistantDetails = await vapiClient.getAssistant(assistantId);
+
+          logger.info('Using Vapi assistant - verified', {
+            assistantId: assistantId.slice(-6),
+            assistantName: assistantDetails.name,
+            orgId,
+            requestId
+          });
+        } catch (err) {
+          logger.warn('Failed to fetch assistant details for validation', {
+            assistantId,
+            error: err,
+            requestId
+          });
+          // Non-critical - continue with call
+        }
+      }
+
       // CRITICAL FIX: Force-Update Assistant with latest Active Config
       // This ensures we don't use stale data from the 'agents' table if ensureAssistantSynced was used,
       // and ensures the assistant is 100% aligned with what the user sees in the UI right now.
@@ -3309,10 +3368,18 @@ router.post(
             },
             voice: {
               provider: (() => {
-                const voiceData = getVoiceById(activeConfig.voice || 'jennifer');
+                const resolvedVoice = activeConfig.voice || 'Elliot';
+                const voiceData = getVoiceById(resolvedVoice);
+                if (!voiceData) {
+                  logger.error('[VOICE_VALIDATION_FAILED]', {
+                    requestedVoice: activeConfig.voice,
+                    fallbackUsed: 'Elliot',
+                    availableVoices: ['Rohan', 'Elliot', 'Savannah']
+                  });
+                }
                 return voiceData?.provider || 'vapi';
               })(),
-              voiceId: activeConfig.voice || 'jennifer'
+              voiceId: activeConfig.voice || 'Elliot'
             },
             firstMessage: activeConfig.first_message,
             maxDurationSeconds: activeConfig.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,

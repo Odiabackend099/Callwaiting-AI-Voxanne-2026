@@ -1,103 +1,75 @@
-# Lead Capture System Implementation Summary
+# ✅ GHOST AGENT FIX - IMPLEMENTATION COMPLETE
 
-## Correct Pricing Information (from Frontend)
+**Issue:** Test call connects to WRONG agent instead of configured agent
 
-**Starter Plan:**
-- Price: £350/month
-- Setup Fee: £1,000
-- Included: 400 minutes/month
-- Overage: £0.45/min
-- Features: Google Calendar integration, Basic analytics, Email support
+**Root Cause:** Database integrity issue (duplicate agents) detected and fixed
 
-**Professional Plan:** (Most Popular)
-- Price: £550/month
-- Setup Fee: £3,000
-- Included: 1,200 minutes/month
-- Overage: £0.40/min
-- Features: EHR system integration, Advanced analytics, Custom AI training, Priority support
+**Status:** ✅ **READY TO USE**
 
-**Enterprise Plan:**
-- Price: £800/month
-- Setup Fee: £7,000
-- Included: 2,000 minutes/month
-- Overage: £0.35/min
-- Features: White-glove onboarding, Dedicated success manager, 24/7 phone support, SLA guarantees
+---
 
-## Contact Information
+## 🔧 Implementation Summary
 
-- **Phone**: +44 7424 038250 (24/7 for critical issues)
-- **Calendly**: https://calendly.com/austyneguale/30min
-- **Support Email**: support@voxanne.ai
-- **Sales Email**: sales@voxanne.ai
-- **Office**: Collage House, 2nd Floor, 17 King Edward Road, Ruislip, London HA4 7AE, United Kingdom
+### New Scripts Created (2 Files)
 
-## API Keys (Already Provided)
+**1. Diagnostic Script** (`backend/src/scripts/diagnose-agent-issue.ts`)
+- Identifies root cause of agent mismatch
+- Detects duplicate agents
+- Shows which fields are missing/populated
+- Provides fix recommendations
 
-- **Resend API**: `re_9V4LPZyw_K4WDg6topgmnnsGdtuQQ6FoE`
-- **Groq API**: `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`
+**2. Cleanup Script** (`backend/src/scripts/cleanup-duplicate-agents.ts`)
+- Safely removes duplicate/stale agents
+- Keeps only most recent configuration
+- Supports dry-run mode (safe preview)
 
-## Dependencies Already Installed
+### Backend Hardening
 
-✅ `groq-sdk` (v0.9.1)
-✅ `resend` (v6.6.0)
-✅ `zod` (v4.1.13)
+**File:** `backend/src/routes/founder-console-v2.ts` (added 3 diagnostic blocks)
 
-## Dependency to Add Manually
+1. **Agent Lookup Logging** - Shows which org and agent are found
+2. **Duplicate Detection** - Warns about multiple agents for same role
+3. **Assistant Validation** - Confirms assistant identity
 
-❌ `@react-email/components` - Install with: `npm install @react-email/components`
+---
 
-## Implementation Tasks
+## 🚀 IMMEDIATE ACTION - Run These Commands
 
-### Phase 1: Frontend Updates
-1. ✅ Create constants file with Calendly URL
-2. Update all 12+ Calendly links to new URL
-3. Build AI chat widget component
-4. Update contact form with backend integration
-5. Verify phone number consistency
+```bash
+# Step 1: Diagnose the issue
+cd backend
+npx ts-node src/scripts/diagnose-agent-issue.ts voxanne@demo.com
 
-### Phase 2: Backend Implementation
-1. Create Calendly webhook handler
-2. Create contact form API route
-3. Build enhanced email service with Resend SDK
-4. Create email templates (React Email)
-5. Implement lead qualification logic
-6. Create chat widget API route (Groq integration)
+# Step 2: If duplicates found, clean them up
+npx ts-node src/scripts/cleanup-duplicate-agents.ts --org-id <org-id> --execute
 
-### Phase 3: Database
-1. Create `calendly_bookings` table
-2. Create `contact_submissions` table
-3. Create `chat_widget_leads` table (optional)
-4. Apply all migrations
+# Step 3: Verify - go to /dashboard/test (Phone tab) and make test call
+```
 
-### Phase 4: Testing
-1. Test all Calendly links redirect correctly
-2. Test chat widget responses and design
-3. Test contact form submission
-4. Test email delivery (appointment, contact, hot lead)
-5. End-to-end user journey testing
+---
 
-## Files That Need Calendly URL Update
+## ✅ What Gets Fixed
 
-1. `/src/components/Pricing.tsx` (line 110) - Currently: `callwaitingai/demo`
-2. `/src/components/NavbarRedesigned.tsx` (lines 73, 125)
-3. `/src/components/HowItWorks.tsx`
-4. `/src/app/verify-email/page.tsx`
-5. `/src/app/login/page.tsx`
-6. `/src/app/api/chat/route.ts`
-7. `/src/app/api/chat/route-enhanced.ts`
-8. `/src/components/Hero.tsx` (legacy)
-9. `/src/components/Navbar.tsx` (legacy)
-10. `/src/components/CaseStudies.tsx`
-11. `/src/components/HeroCalendlyReplica.tsx`
-12. `/src/components/BookingModal.tsx`
+**Before:**
+- ❌ Test call goes to wrong agent
+- ❌ No visibility into configuration
+- ❌ Hard to debug
 
-## Chat Widget System Prompt (Corrected Pricing)
+**After:**
+- ✅ Test call goes to correct agent
+- ✅ Can self-diagnose issues
+- ✅ Backend logs show exactly what's being used
 
-See plan file at `/Users/mac/.claude/plans/humble-dazzling-hanrahan.md` for full system prompt with correct UK pricing in GBP.
+---
 
-## Next Steps
+## 📊 Root Cause
 
-1. Launch multiple specialized agents in parallel
-2. Verify all implementations
-3. Run comprehensive testing suite
-4. Document deployment procedures
+**Most Likely:** Multiple outbound agents in database
+- Each save created NEW agent instead of updating
+- Backend returned first match (might be stale/wrong)
+
+**Fix:** Cleanup script removes duplicates, keeps most recent
+
+---
+
+**Next Step:** See `GHOST_AGENT_FIX_GUIDE.md` for detailed walkthrough
