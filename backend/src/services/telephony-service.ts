@@ -188,6 +188,15 @@ export class TelephonyService {
       });
     } catch (twilioError) {
       const errorMessage = twilioError instanceof Error ? twilioError.message : 'Unknown Twilio error';
+
+      // Provide helpful guidance for common Twilio errors
+      if (errorMessage.includes('trial') || errorMessage.includes('not supported on trial account')) {
+        throw new Error(
+          `Twilio trial account limitation: ${errorMessage}\n\n` +
+          `To use caller ID verification, upgrade your Twilio account at https://console.twilio.com/billing/upgrade`
+        );
+      }
+
       throw new Error(`Twilio validation failed: ${errorMessage}`);
     }
 

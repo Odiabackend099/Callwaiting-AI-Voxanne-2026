@@ -44,8 +44,7 @@ export default function TelephonySetupWizard() {
 
   // Step 1: Country Selection
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [selectedCountryName, setSelectedCountryName] = useState<string | null>(null);
-  const [availableCarriers, setAvailableCarriers] = useState<string[]>([]);
+  const [isLoadingCountry, setIsLoadingCountry] = useState(false);
 
   // Step 2: Phone Input
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -87,15 +86,6 @@ export default function TelephonySetupWizard() {
   // ============================================
   // STEP HANDLERS
   // ============================================
-
-  const handleCountrySelected = (countryCode: string, countryName: string, carriers: string[]) => {
-    setSelectedCountry(countryCode);
-    setSelectedCountryName(countryName);
-    setAvailableCarriers(carriers);
-    setError(null);
-    // Move to phone input step
-    setStep('phone_input');
-  };
 
   const handleInitiateVerification = async () => {
     setError(null);
@@ -266,14 +256,30 @@ export default function TelephonySetupWizard() {
         {step === 'country_selection' && (
           <CountrySelectionStep
             selectedCountry={selectedCountry}
-            onCountrySelect={(code) => {
-              // Country selection API call happens in the component
+            onCountrySelect={async (code) => {
+              setSelectedCountry(code);
+              setError(null);
+              setIsLoadingCountry(true);
+
+              try {
+                // Persist country selection to backend
+                await authedBackendFetch('/api/telephony/select-country', {
+                  method: 'POST',
+                  body: JSON.stringify({ countryCode: code }),
+                });
+              } catch (err: any) {
+                setError(err.message || 'Failed to save country selection');
+                setSelectedCountry(null);
+              } finally {
+                setIsLoadingCountry(false);
+              }
             }}
             onNext={() => {
               // onNext will be called after country is confirmed
               setStep('phone_input');
             }}
             isLoading={isLoading}
+            isLoadingCountry={isLoadingCountry}
             error={error}
           />
         )}

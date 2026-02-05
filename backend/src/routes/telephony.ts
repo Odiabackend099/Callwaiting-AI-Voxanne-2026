@@ -379,9 +379,20 @@ router.post('/verify-caller-id/initiate', requireAuthOrDev, async (req: Request,
     res.status(200).json({ ...result, requestId });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+
+    // Determine appropriate status code based on error type
     const statusCode = errorMessage.includes('already verified') ? 400 :
                        errorMessage.includes('not configured') ? 400 :
+                       errorMessage.includes('trial account') ? 400 : // Twilio trial limitation
+                       errorMessage.includes('not supported on trial') ? 400 : // Twilio trial limitation
                        500;
+
+    logger.error('Verification initiation failed', {
+      error: errorMessage,
+      requestId,
+      orgId: req.user?.orgId
+    });
+
     res.status(statusCode).json({ error: errorMessage, requestId });
   }
 });

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Globe, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 // Country data with flag emojis
 const COUNTRIES = [
@@ -37,9 +38,10 @@ const COUNTRIES = [
 
 interface CountrySelectionStepProps {
   selectedCountry: string | null;
-  onCountrySelect: (countryCode: string) => void;
+  onCountrySelect: (countryCode: string) => Promise<void>;
   onNext: () => void;
   isLoading?: boolean;
+  isLoadingCountry?: boolean;
   error?: string | null;
 }
 
@@ -48,10 +50,10 @@ export function CountrySelectionStep({
   onCountrySelect,
   onNext,
   isLoading = false,
+  isLoadingCountry = false,
   error = null,
 }: CountrySelectionStepProps) {
   const [countryWarning, setCountryWarning] = useState<string | null>(null);
-  const [isLoadingCarriers, setIsLoadingCarriers] = useState(false);
 
   // Fetch country warning when country is selected
   useEffect(() => {
@@ -60,49 +62,38 @@ export function CountrySelectionStep({
       return;
     }
 
-    // Create AbortController to cancel in-flight requests on unmount/re-render
-    const abortController = new AbortController();
+    // Track if component is still mounted to prevent state updates after unmount
+    let isMounted = true;
 
     const fetchCountryWarning = async () => {
-      setIsLoadingCarriers(true);
       try {
-        const response = await fetch(`/api/telephony/select-country`, {
+        const data = await authedBackendFetch<{ warning?: string }>('/api/telephony/select-country', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ countryCode: selectedCountry }),
-          signal: abortController.signal, // Pass abort signal
         });
 
-        // Only update state if request wasn't aborted
-        if (!abortController.signal.aborted && response.ok) {
-          const data = await response.json();
+        // Only update state if component is still mounted
+        if (isMounted && data) {
           setCountryWarning(data.warning || null);
         }
       } catch (error: any) {
-        // Ignore AbortError (expected when component unmounts or country changes)
-        if (error.name === 'AbortError') {
-          console.log('Country fetch cancelled:', selectedCountry);
-          return;
-        }
-        console.error('Failed to fetch country details:', error);
-      } finally {
-        // Only update loading state if request wasn't aborted
-        if (!abortController.signal.aborted) {
-          setIsLoadingCarriers(false);
+        // Silent fail - warning is optional, doesn't affect core functionality
+        if (isMounted) {
+          console.error('Failed to fetch country warning:', error);
         }
       }
     };
 
     fetchCountryWarning();
 
-    // Cleanup: abort fetch if component unmounts or selectedCountry changes
+    // Cleanup: mark component as unmounted
     return () => {
-      abortController.abort();
+      isMounted = false;
     };
   }, [selectedCountry]);
 
-  const handleCountryClick = (countryCode: string) => {
-    onCountrySelect(countryCode);
+  const handleCountryClick = async (countryCode: string) => {
+    await onCountrySelect(countryCode);
   };
 
   const handleContinue = () => {
@@ -144,9 +135,10 @@ export function CountrySelectionStep({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {COUNTRIES.map((country) => (
           <button
+            type="button"
             key={country.code}
             onClick={() => handleCountryClick(country.code)}
-            disabled={isLoading || isLoadingCarriers}
+            disabled={isLoading || isLoadingCountry}
             className={`relative p-6 rounded-xl border transition-all duration-200 text-left focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
               selectedCountry === country.code
                 ? 'border-surgical-600 bg-surgical-50 shadow-lg scale-[1.02]'
@@ -167,7 +159,7 @@ export function CountrySelectionStep({
             </div>
 
             {/* Cost Info Badge */}
-            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surgical-50 text-surgical-600 border border-surgical-200">
               {country.costInfo}
             </div>
 
@@ -211,7 +203,7 @@ export function CountrySelectionStep({
       )}
 
       {/* Loading State - Skeleton Loader */}
-      {isLoadingCarriers && (
+      {isLoadingCountry && (
         <div className="space-y-3 py-4">
           <div className="h-4 bg-surgical-100 rounded animate-pulse"></div>
           <div className="h-4 bg-surgical-100 rounded w-3/4 animate-pulse"></div>
@@ -224,15 +216,16 @@ export function CountrySelectionStep({
       {/* Continue Button */}
       <div className="pt-4">
         <button
+          type="button"
           onClick={handleContinue}
-          disabled={!selectedCountry || isLoading || isLoadingCarriers}
+          disabled={!selectedCountry || isLoading || isLoadingCountry}
           className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:ring-offset-2 ${
-            !selectedCountry || isLoading || isLoadingCarriers
+            !selectedCountry || isLoading || isLoadingCountry
               ? 'bg-surgical-100 text-obsidian/40 cursor-not-allowed'
               : 'bg-surgical-600 hover:bg-surgical-700 text-white shadow-md hover:shadow-xl hover:scale-[1.02]'
           }`}
         >
-          {isLoading || isLoadingCarriers ? (
+          {isLoading || isLoadingCountry ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>Processing...</span>
