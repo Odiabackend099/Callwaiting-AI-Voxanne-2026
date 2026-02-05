@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle, PlayCircle, MicOff } from 'lucide-react';
+import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle, PlayCircle, MicOff, ArrowDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 // LeftSidebar removed (now in layout)
@@ -98,7 +98,9 @@ const TestAgentPageContent = () => {
     const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
     const [callInitiating, setCallInitiating] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
+    const [showScrollButton, setShowScrollButton] = useState(false);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
     // --- Phone Test State ---
     const [phoneNumber, setPhoneNumber] = useState('');
@@ -146,16 +148,42 @@ const TestAgentPageContent = () => {
 
     useEffect(() => {
         if (activeTab === 'web' && displayTranscripts.length > 0) {
-            // Use immediate scroll for better UX during rapid updates
+            const scrollContainer = transcriptContainerRef.current;
             const scrollElement = transcriptEndRef.current;
-            if (scrollElement) {
-                // Small delay to ensure DOM is updated
-                requestAnimationFrame(() => {
-                    scrollElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                });
+
+            if (scrollContainer && scrollElement) {
+                // Check if user scrolled up manually (100px threshold)
+                const { scrollHeight, scrollTop, clientHeight } = scrollContainer;
+                const isNearBottom = scrollHeight - scrollTop <= clientHeight + 100;
+
+                // Only auto-scroll if user is already near bottom (AI industry standard)
+                if (isNearBottom) {
+                    requestAnimationFrame(() => {
+                        scrollElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'end',
+                            inline: 'nearest'
+                        });
+                    });
+                }
             }
         }
     }, [displayTranscripts, activeTab]);
+
+    // Scroll listener to show/hide scroll-to-bottom button
+    useEffect(() => {
+        const container = transcriptContainerRef.current;
+        if (!container || activeTab !== 'web') return;
+
+        const handleScroll = () => {
+            const { scrollHeight, scrollTop, clientHeight } = container;
+            const isNearBottom = scrollHeight - scrollTop <= clientHeight + 100;
+            setShowScrollButton(!isNearBottom);
+        };
+
+        container.addEventListener('scroll', handleScroll, { passive: true });
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, [activeTab]);
 
     const handleToggleWebCall = async () => {
         if (isConnected) {
@@ -476,10 +504,11 @@ const TestAgentPageContent = () => {
 
                 {/* --- Web Test Interface --- */}
                 {activeTab === 'web' && (
-                    <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-1 flex flex-col h-full relative">
                         {/* Transcript Area - Paper Style */}
                         <div
-                            className="flex-1 p-6 overflow-y-auto space-y-4 bg-white"
+                            ref={transcriptContainerRef}
+                            className="flex-1 p-6 overflow-y-auto space-y-4 bg-white overscroll-contain relative"
                             role="log"
                             aria-live="polite"
                             aria-label="Conversation transcript"
@@ -511,10 +540,35 @@ const TestAgentPageContent = () => {
                                     <div ref={transcriptEndRef} />
                                 </div>
                             )}
+
+                            {/* Gradient fade overlay at bottom */}
+                            {displayTranscripts.length > 0 && (
+                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none z-5" />
+                            )}
                         </div>
 
+                        {/* Scroll to bottom button (ChatGPT-style) */}
+                        <AnimatePresence>
+                            {showScrollButton && displayTranscripts.length > 0 && (
+                                <motion.button
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    transition={{ duration: 0.2 }}
+                                    onClick={() => {
+                                        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="absolute bottom-24 right-6 z-20 bg-surgical-600 text-white px-4 py-2 rounded-full shadow-lg hover:bg-surgical-700 transition-colors flex items-center gap-2"
+                                    aria-label="Scroll to latest message"
+                                >
+                                    <ArrowDown className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Latest</span>
+                                </motion.button>
+                            )}
+                        </AnimatePresence>
+
                         {/* Fixed Control Bar */}
-                        <div className="flex-none px-4 sm:px-6 py-4 sm:py-5 border-t border-surgical-200 bg-white flex items-center justify-center gap-4 sm:gap-6">
+                        <div className="sticky bottom-0 z-10 px-4 sm:px-6 py-4 sm:py-5 border-t border-surgical-200 bg-white/95 backdrop-blur-sm shadow-lg flex items-center justify-center gap-4 sm:gap-6">
                             {/* Subtle accent line at top */}
                             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-surgical-500/30 to-transparent" />
 
