@@ -1087,6 +1087,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
         .select('id, name, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
         .eq('role', AGENT_ROLES.INBOUND)
         .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
         .limit(1)
         .single(),
       // Get the outbound agent (select only needed columns for performance)
@@ -1820,6 +1821,7 @@ router.post(
           .select('id, vapi_assistant_id, system_prompt, first_message, voice, language, max_call_duration')
           .eq('role', AGENT_ROLES.INBOUND)
           .eq('org_id', orgId)
+          .order('created_at', { ascending: false })
           .maybeSingle();
 
         const { data: outboundAgent } = await supabase
@@ -2949,6 +2951,7 @@ router.post(
         .select('id, system_prompt, first_message, voice, language, max_call_duration')
         .eq('role', AGENT_ROLES.INBOUND)
         .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
         .maybeSingle();
 
       if (!agent?.id) {
