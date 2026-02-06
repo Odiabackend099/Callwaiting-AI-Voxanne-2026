@@ -7,8 +7,23 @@ import { FadeInOnScroll } from "./ParallaxSection";
 import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook, Lock, Settings } from "lucide-react";
 import Logo from "./Logo";
 
-export default function FooterRedesigned() {
+interface FooterRedesignedProps {
+    disableAnimations?: boolean;
+}
+
+export default function FooterRedesigned({ disableAnimations = false }: FooterRedesignedProps) {
     const currentYear = new Date().getFullYear();
+
+    // Wrapper component that conditionally applies animation
+    const AnimationWrapper = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => {
+        if (disableAnimations) {
+            return <div>{children}</div>;
+        }
+        return <FadeInOnScroll delay={delay}>{children}</FadeInOnScroll>;
+    };
+
+    // Motion div that's conditional
+    const MotionDiv = disableAnimations ? 'div' : motion.div;
 
     const footerLinks = {
         Product: [
@@ -52,12 +67,14 @@ export default function FooterRedesigned() {
                 {/* Main Footer Content */}
                 <div className="py-16 md:py-20 grid md:grid-cols-5 gap-12">
                     {/* Brand Section */}
-                    <FadeInOnScroll>
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.6 }}
-                            viewport={{ once: true }}
+                    <AnimationWrapper>
+                        <MotionDiv
+                            {...(!disableAnimations && {
+                                initial: { opacity: 0, y: 20 },
+                                whileInView: { opacity: 1, y: 0 },
+                                transition: { duration: 0.6 },
+                                viewport: { once: true }
+                            })}
                         >
                             <div className="mb-6">
                                 <Logo
@@ -91,17 +108,19 @@ export default function FooterRedesigned() {
                                     </div>
                                 </div>
                             </div>
-                        </motion.div>
-                    </FadeInOnScroll>
+                        </MotionDiv>
+                    </AnimationWrapper>
 
                     {/* Link Sections */}
                     {Object.entries(footerLinks).map(([category, links], index) => (
-                        <FadeInOnScroll key={category} delay={index * 0.1}>
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.6, delay: index * 0.1 }}
-                                viewport={{ once: true }}
+                        <AnimationWrapper key={category} delay={index * 0.1}>
+                            <MotionDiv
+                                {...(!disableAnimations && {
+                                    initial: { opacity: 0, y: 20 },
+                                    whileInView: { opacity: 1, y: 0 },
+                                    transition: { duration: 0.6, delay: index * 0.1 },
+                                    viewport: { once: true }
+                                })}
                             >
                                 <h3 className="font-bold text-pure-white mb-4">{category}</h3>
                                 <ul className="space-y-3">
@@ -126,18 +145,20 @@ export default function FooterRedesigned() {
                                         </li>
                                     ))}
                                 </ul>
-                            </motion.div>
-                        </FadeInOnScroll>
+                            </MotionDiv>
+                        </AnimationWrapper>
                     ))}
                 </div>
 
                 {/* Compliance Badges Strip */}
-                <FadeInOnScroll>
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6 }}
-                        viewport={{ once: true }}
+                <AnimationWrapper>
+                    <MotionDiv
+                        {...(!disableAnimations && {
+                            initial: { opacity: 0, y: 20 },
+                            whileInView: { opacity: 1, y: 0 },
+                            transition: { duration: 0.6 },
+                            viewport: { once: true }
+                        })}
                         className="py-12 border-t border-cream/10"
                     >
                         <div className="flex items-center justify-center gap-8 flex-wrap">
@@ -170,20 +191,22 @@ export default function FooterRedesigned() {
                                 </div>
                             </div>
                         </div>
-                    </motion.div>
-                </FadeInOnScroll>
+                    </MotionDiv>
+                </AnimationWrapper>
 
                 {/* Divider */}
                 <div className="border-t border-cream/10" />
 
                 {/* Bottom Section */}
                 <div className="py-8 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <FadeInOnScroll>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            whileInView={{ opacity: 1 }}
-                            transition={{ duration: 0.6 }}
-                            viewport={{ once: true }}
+                    <AnimationWrapper>
+                        <MotionDiv
+                            {...(!disableAnimations && {
+                                initial: { opacity: 0 },
+                                whileInView: { opacity: 1 },
+                                transition: { duration: 0.6 },
+                                viewport: { once: true }
+                            })}
                             className="text-pure-white/60 text-sm space-y-2"
                         >
                             <p>{currentYear} Voxanne AI. All rights reserved. UK GDPR & HIPAA Compliant.</p>
@@ -193,16 +216,18 @@ export default function FooterRedesigned() {
                                     Call Waiting AI
                                 </a>
                             </div>
-                        </motion.div>
-                    </FadeInOnScroll>
+                        </MotionDiv>
+                    </AnimationWrapper>
 
                     {/* Social Links */}
-                    <FadeInOnScroll>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            whileInView={{ opacity: 1 }}
-                            transition={{ duration: 0.6, delay: 0.1 }}
-                            viewport={{ once: true }}
+                    <AnimationWrapper>
+                        <MotionDiv
+                            {...(!disableAnimations && {
+                                initial: { opacity: 0 },
+                                whileInView: { opacity: 1 },
+                                transition: { duration: 0.6, delay: 0.1 },
+                                viewport: { once: true }
+                            })}
                             className="flex gap-4"
                         >
                             <a
@@ -223,8 +248,8 @@ export default function FooterRedesigned() {
                             >
                                 <Facebook className="w-5 h-5" />
                             </a>
-                        </motion.div>
-                    </FadeInOnScroll>
+                        </MotionDiv>
+                    </AnimationWrapper>
                 </div>
             </div>
         </footer>
