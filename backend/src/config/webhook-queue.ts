@@ -1,5 +1,5 @@
-import { Queue, QueueEvents, Worker, Job } from 'bullmq';
-import { getRedisClient } from './redis';
+import { Queue, Worker, Job } from 'bullmq';
+import { createRedisConnection } from './redis';
 import { log } from '../services/logger';
 import { sendSlackAlert } from '../services/slack-alerts';
 
@@ -12,37 +12,40 @@ type WebhookJobData = {
 };
 
 let webhookQueue: Queue<WebhookJobData> | null = null;
-let queueEvents: QueueEvents | null = null;
 let worker: Worker<WebhookJobData> | null = null;
 
 export function initializeWebhookQueue(): void {
-  const redisClient = getRedisClient();
-  if (!redisClient) {
+  const connection = createRedisConnection();
+  if (!connection) {
     log.error('WebhookQueue', 'Redis not available, cannot initialize queue');
     return;
   }
 
   webhookQueue = new Queue('webhook-processing', {
-    connection: redisClient,
+    connection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
         type: 'exponential',
         delay: 2000
+      },
+      removeOnComplete: {
+        age: 3600,  // Keep completed jobs 1 hour
+        count: 100
+      },
+      removeOnFail: {
+        age: 86400, // Keep failed jobs 1 day
+        count: 50
       }
     }
-  });
-
-  queueEvents = new QueueEvents('webhook-processing', {
-    connection: redisClient
   });
 
   log.info('WebhookQueue', 'Webhook queue initialized');
 }
 
 export function initializeWebhookWorker(processor: (job: any) => Promise<any>): void {
-  const redisClient = getRedisClient();
-  if (!redisClient || !webhookQueue) {
+  const connection = createRedisConnection();
+  if (!connection || !webhookQueue) {
     log.error('WebhookQueue', 'Redis or queue not available, cannot initialize worker');
     return;
   }
@@ -51,8 +54,9 @@ export function initializeWebhookWorker(processor: (job: any) => Promise<any>): 
     'webhook-processing',
     processor,
     {
-      connection: redisClient,
-      concurrency: 5
+      connection,
+      concurrency: 5,
+      drainDelay: 5, // Wait 5 seconds between polls when queue is empty (saves Redis commands)
     }
   );
 
@@ -68,7 +72,7 @@ export function initializeWebhookWorker(processor: (job: any) => Promise<any>): 
 
   worker.on('failed', (job, err) => {
     const isLastAttempt = job?.attemptsMade === job?.opts?.attempts;
-    
+
     log.error('WebhookQueue', `Job ${job?.id} failed`, {
       error: err.message,
       eventType: job?.data.eventType,
@@ -77,7 +81,7 @@ export function initializeWebhookWorker(processor: (job: any) => Promise<any>): 
       isLastAttempt,
       stack: err.stack,
     });
-    
+
     if (isLastAttempt) {
       // Final failure - send alert and move to dead letter queue
       log.error('WebhookQueue', `Job ${job?.id} moved to dead letter queue`, {
@@ -85,7 +89,7 @@ export function initializeWebhookWorker(processor: (job: any) => Promise<any>): 
         orgId: job?.data.orgId,
         totalAttempts: job?.attemptsMade,
       });
-      
+
       sendSlackAlert('🔴 Webhook Job Failed Permanently', {
         jobId: job?.id,
         eventType: job?.data.eventType,
@@ -98,7 +102,7 @@ export function initializeWebhookWorker(processor: (job: any) => Promise<any>): 
   });
 
   worker.on('error', (err) => {
-    log.error('WebhookQueue', 'Worker error', { 
+    log.error('WebhookQueue', 'Worker error', {
       error: err.message,
       stack: err.stack,
     });
@@ -146,9 +150,6 @@ export async function getQueueMetrics() {
 export async function closeWebhookQueue(): Promise<void> {
   if (worker) {
     await worker.close();
-  }
-  if (queueEvents) {
-    await queueEvents.close();
   }
   if (webhookQueue) {
     await webhookQueue.close();

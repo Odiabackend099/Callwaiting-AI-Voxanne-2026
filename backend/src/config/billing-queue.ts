@@ -1,5 +1,5 @@
-import { Queue, QueueEvents, Worker, Job } from 'bullmq';
-import { getRedisClient } from './redis';
+import { Queue, Worker, Job } from 'bullmq';
+import { createRedisConnection } from './redis';
 import { log } from '../services/logger';
 import { sendSlackAlert } from '../services/slack-alerts';
 
@@ -12,37 +12,40 @@ export type BillingJobData = {
 };
 
 let billingQueue: Queue<BillingJobData> | null = null;
-let billingQueueEvents: QueueEvents | null = null;
 let billingWorker: Worker<BillingJobData> | null = null;
 
 export function initializeBillingQueue(): void {
-  const redisClient = getRedisClient();
-  if (!redisClient) {
+  const connection = createRedisConnection();
+  if (!connection) {
     log.warn('BillingQueue', 'Redis not available, billing queue disabled');
     return;
   }
 
   billingQueue = new Queue('billing-stripe-reporting', {
-    connection: redisClient,
+    connection,
     defaultJobOptions: {
       attempts: 5,
       backoff: {
         type: 'exponential',
         delay: 2000,
       },
+      removeOnComplete: {
+        age: 3600,  // Keep completed jobs 1 hour
+        count: 100
+      },
+      removeOnFail: {
+        age: 86400, // Keep failed jobs 1 day
+        count: 50
+      }
     },
-  });
-
-  billingQueueEvents = new QueueEvents('billing-stripe-reporting', {
-    connection: redisClient,
   });
 
   log.info('BillingQueue', 'Billing queue initialized');
 }
 
 export function initializeBillingWorker(processor: (job: Job<BillingJobData>) => Promise<any>): void {
-  const redisClient = getRedisClient();
-  if (!redisClient || !billingQueue) {
+  const connection = createRedisConnection();
+  if (!connection || !billingQueue) {
     log.warn('BillingQueue', 'Redis or queue not available, billing worker disabled');
     return;
   }
@@ -51,8 +54,9 @@ export function initializeBillingWorker(processor: (job: Job<BillingJobData>) =>
     'billing-stripe-reporting',
     processor,
     {
-      connection: redisClient,
+      connection,
       concurrency: 2,
+      drainDelay: 5, // Wait 5 seconds between polls when queue is empty (saves Redis commands)
     }
   );
 
@@ -140,9 +144,6 @@ export async function enqueueBillingJob(data: BillingJobData): Promise<Job<Billi
 export async function closeBillingQueue(): Promise<void> {
   if (billingWorker) {
     await billingWorker.close();
-  }
-  if (billingQueueEvents) {
-    await billingQueueEvents.close();
   }
   if (billingQueue) {
     await billingQueue.close();

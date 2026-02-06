@@ -98,6 +98,7 @@ import monitoringRouter from './routes/monitoring'; // default export - System m
 import toolHealthRouter from './routes/tool-health'; // default export - Tool chain health monitoring
 import smsHealthRouter from './routes/sms-health'; // default export - SMS queue health monitoring
 import complianceRouter from './routes/compliance'; // default export - GDPR/HIPAA compliance endpoints
+import agentDiagnosticsRouter from './routes/agent-diagnostics'; // default export - Agent configuration diagnostics
 import circuitBreakerDebugRouter from './routes/circuit-breaker-debug'; // default export - Circuit breaker diagnostics and SMS troubleshooting
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
@@ -120,6 +121,7 @@ import calendlyWebhookRouter from './routes/calendly-webhook';
 import contactFormRouter from './routes/contact-form';
 import chatWidgetRouter from './routes/chat-widget';
 import onboardingIntakeRouter from './routes/onboarding-intake';
+import { initializeSmsQueue, shutdownSmsQueue } from './queues/sms-queue';
 
 // Initialize logger
 initLogger();
@@ -135,6 +137,7 @@ initializeWebhookWorker(processWebhookJob);
 initializeStripe(); // Initialize Stripe billing client
 initializeBillingQueue();
 initializeBillingWorker(processBillingJob);
+initializeSmsQueue(); // Initialize SMS queue after Redis is ready
 
 declare global {
   namespace Express {
@@ -297,6 +300,7 @@ app.use('/api/book-demo', bookDemoRouter);
 app.use('/api/escalation-rules', escalationRulesRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/agents', agentsRouter);
+app.use('/api/agent-diagnostics', agentDiagnosticsRouter); // Agent configuration debugging
 app.use('/api/contacts', contactsRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/appointments', appointmentsRouter);
@@ -834,6 +838,10 @@ process.on('SIGTERM', () => {
     console.log('Billing queue closed');
   });
 
+  shutdownSmsQueue().then(() => {
+    console.log('SMS queue closed');
+  });
+
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);
@@ -853,6 +861,10 @@ process.on('SIGINT', () => {
 
   closeBillingQueue().then(() => {
     console.log('Billing queue closed');
+  });
+
+  shutdownSmsQueue().then(() => {
+    console.log('SMS queue closed');
   });
 
   server.close(() => {
