@@ -139,21 +139,19 @@ export const Scene2_DashboardOverview: React.FC = () => {
       />
 
       {/* Highlight box: Hot Leads */}
+      {/* TODO: Add 'hot-leads-card' to 01_dashboard_home.json manifest */}
       <HighlightBox
-        x={100}
-        y={200}
-        width={350}
-        height={180}
+        elementName="hot-leads-card"
+        screenshotName="01_dashboard_home.png"
         startFrame={60}
         label="Hot Leads"
       />
 
       {/* Highlight box: Recent Calls */}
+      {/* TODO: Add 'recent-calls-card' to 01_dashboard_home.json manifest */}
       <HighlightBox
-        x={500}
-        y={200}
-        width={350}
-        height={180}
+        elementName="recent-calls-card"
+        screenshotName="01_dashboard_home.png"
         startFrame={90}
         label="Recent Calls"
       />

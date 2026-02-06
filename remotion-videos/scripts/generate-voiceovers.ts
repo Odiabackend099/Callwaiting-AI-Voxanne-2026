@@ -39,7 +39,7 @@ async function main() {
 ${colors.reset}\n`);
 
   // 1. Validate API key
-  const apiKey = process.env.ELEVENLABS_API_KEY || 'sk_d82a6528a55b45e25112c107fcbecf0bcafd70f9c325a09e';
+  const apiKey = process.env.ELEVENLABS_API_KEY || 'sk_2df91aaff9dc85ddd1ae83be3f53fad8fc4ac9bc9fdab8ae';
 
   if (!apiKey) {
     console.error(`${colors.red}❌ Error: ELEVENLABS_API_KEY environment variable not set${colors.reset}`);

@@ -74,21 +74,33 @@ export const Scene9_CallLogs: React.FC = () => {
       </div>
 
       {/* Highlight boxes appearing sequentially */}
+      {/* TODO: Add 'sentiment-score-cell' to 11_call_logs_dashboard.json manifest */}
       <HighlightBox
-        x={780} y={310} width={180} height={45}
-        startFrame={40} duration={100}
-        label="AI Sentiment Score" labelPosition="top"
+        elementName="sentiment-score-cell"
+        screenshotName="11_call_logs_dashboard.png"
+        startFrame={40}
+        duration={100}
+        label="AI Sentiment Score"
+        labelPosition="top"
       />
+      {/* TODO: Add 'view-transcript-button' to 11_call_logs_dashboard.json manifest */}
       <HighlightBox
-        x={1050} y={310} width={150} height={45}
-        startFrame={70} duration={80}
-        label="View Transcript" labelPosition="top"
+        elementName="view-transcript-button"
+        screenshotName="11_call_logs_dashboard.png"
+        startFrame={70}
+        duration={80}
+        label="View Transcript"
+        labelPosition="top"
         color="#22c55e"
       />
+      {/* TODO: Add 'call-duration-cell' to 11_call_logs_dashboard.json manifest */}
       <HighlightBox
-        x={620} y={310} width={130} height={45}
-        startFrame={100} duration={60}
-        label="Call Duration" labelPosition="top"
+        elementName="call-duration-cell"
+        screenshotName="11_call_logs_dashboard.png"
+        startFrame={100}
+        duration={60}
+        label="Call Duration"
+        labelPosition="top"
         color="#f59e0b"
       />
 

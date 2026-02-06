@@ -128,22 +128,22 @@ export const Scene3_ConfigureAgent: React.FC = () => {
       />
 
       {/* Cursor moves from center to system prompt field */}
+      {/* TODO: Add 'system-prompt-textarea' to 02_agent_config_inbound.json manifest */}
       <ClickSimulation
         startFrame={30}
         fromX={960}
         fromY={400}
-        toX={700}
-        toY={450}
+        toElementName="system-prompt-textarea"
+        screenshotName="02_agent_config_inbound.png"
       />
 
       {/* Form fill: typing the system prompt */}
+      {/* TODO: Add 'system-prompt-textarea' to 02_agent_config_inbound.json manifest */}
       <FormFillSimulation
         text="You are a friendly receptionist for Valley Dermatology. Help callers schedule appointments."
         startFrame={60}
-        x={460}
-        y={430}
-        width={550}
-        height={36}
+        elementName="system-prompt-textarea"
+        screenshotName="02_agent_config_inbound.png"
         charRate={2}
       />
 

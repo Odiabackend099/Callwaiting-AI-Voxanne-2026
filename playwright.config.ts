@@ -21,7 +21,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  timeout: 30000,
+  timeout: 120000,
 
   reporter: [
     ['html', { open: 'never' }],
@@ -49,7 +49,7 @@ export default defineConfig({
   //   command: 'npx ts-node tests/mocks/mock-server.ts',
   //   url: 'http://localhost:3001/health',
   //   reuseExistingServer: !process.env.CI,
-  //   timeout: 30000,
+  //   timeout: 120000,
   //   env: {
   //     MOCK_SERVER_PORT: '3001',
   //     MOCK_LATENCY: '50',

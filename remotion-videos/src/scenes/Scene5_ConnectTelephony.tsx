@@ -143,14 +143,14 @@ export const Scene5_ConnectTelephony: React.FC = () => {
       />
 
       {/* Sequential FormFillSimulations */}
+      {/* TODO: Add manifest entries for all elements in 04_telephony_credentials.png */}
 
       {/* 1. Account SID */}
       <FormFillSimulation
         text="AC7f8e2d1a9b3c..."
         startFrame={30}
-        x={460}
-        y={340}
-        width={400}
+        elementName="twilio-account-sid-input"
+        screenshotName="04_telephony_credentials.png"
         label="Account SID"
       />
 
@@ -158,9 +158,8 @@ export const Scene5_ConnectTelephony: React.FC = () => {
       <FormFillSimulation
         text="sk_live_x9y8z7..."
         startFrame={75}
-        x={460}
-        y={410}
-        width={400}
+        elementName="twilio-auth-token-input"
+        screenshotName="04_telephony_credentials.png"
         masked={true}
         label="Auth Token"
       />
@@ -169,9 +168,8 @@ export const Scene5_ConnectTelephony: React.FC = () => {
       <FormFillSimulation
         text="+1 (555) 234-5678"
         startFrame={120}
-        x={460}
-        y={480}
-        width={400}
+        elementName="twilio-phone-number-input"
+        screenshotName="04_telephony_credentials.png"
         label="Phone Number"
       />
 
@@ -180,8 +178,8 @@ export const Scene5_ConnectTelephony: React.FC = () => {
         startFrame={160}
         fromX={660}
         fromY={480}
-        toX={660}
-        toY={550}
+        toElementName="save-telephony-button"
+        screenshotName="04_telephony_credentials.png"
       />
 
       {/* Green "Connected!" badge (appears after click at frame 185+) */}

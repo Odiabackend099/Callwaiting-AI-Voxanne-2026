@@ -1,0 +1,227 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e5]:
+        - img "Voxanne" [ref=e7]
+        - generic [ref=e8]: Voxanne
+      - navigation [ref=e9]:
+        - generic [ref=e10]:
+          - heading "OPERATIONS" [level=3] [ref=e11]
+          - generic [ref=e12]:
+            - link "Dashboard" [ref=e13] [cursor=pointer]:
+              - /url: /dashboard
+              - img [ref=e15]
+              - generic [ref=e17]: Dashboard
+            - link "Call Logs" [ref=e18] [cursor=pointer]:
+              - /url: /dashboard/calls
+              - img [ref=e19]
+              - generic [ref=e21]: Call Logs
+            - link "Leads" [ref=e22] [cursor=pointer]:
+              - /url: /dashboard/leads
+              - img [ref=e23]
+              - generic [ref=e27]: Leads
+        - generic [ref=e28]:
+          - heading "VOICE AGENT" [level=3] [ref=e29]
+          - generic [ref=e30]:
+            - link "Agent Configuration" [ref=e31] [cursor=pointer]:
+              - /url: /dashboard/agent-config
+              - img [ref=e32]
+              - generic [ref=e35]: Agent Configuration
+            - link "Escalation Rules" [ref=e36] [cursor=pointer]:
+              - /url: /dashboard/escalation-rules
+              - img [ref=e37]
+              - generic [ref=e39]: Escalation Rules
+            - link "Knowledge Base" [ref=e40] [cursor=pointer]:
+              - /url: /dashboard/knowledge-base
+              - img [ref=e41]
+              - generic [ref=e43]: Knowledge Base
+            - link "Test Agents" [ref=e44] [cursor=pointer]:
+              - /url: /dashboard/test
+              - img [ref=e45]
+              - generic [ref=e47]: Test Agents
+        - generic [ref=e48]:
+          - heading "INTEGRATIONS" [level=3] [ref=e49]
+          - generic [ref=e50]:
+            - link "API Keys" [ref=e51] [cursor=pointer]:
+              - /url: /dashboard/api-keys
+              - img [ref=e52]
+              - generic [ref=e56]: API Keys
+            - link "Telephony" [ref=e57] [cursor=pointer]:
+              - /url: /dashboard/inbound-config
+              - img [ref=e58]
+              - generic [ref=e60]: Telephony
+            - link "AI Forwarding" [ref=e61] [cursor=pointer]:
+              - /url: /dashboard/telephony
+              - img [ref=e62]
+              - generic [ref=e64]: AI Forwarding
+            - link "Settings" [ref=e65] [cursor=pointer]:
+              - /url: /dashboard/settings
+              - img [ref=e66]
+              - generic [ref=e69]: Settings
+        - generic [ref=e70]:
+          - heading "QUICK ACCESS" [level=3] [ref=e71]
+          - link "Notifications" [ref=e73] [cursor=pointer]:
+            - /url: /dashboard/notifications
+            - img [ref=e74]
+            - generic [ref=e77]: Notifications
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - paragraph [ref=e80]: voxanne@demo.com
+          - paragraph [ref=e81]: Pro Plan
+        - button "Logout" [ref=e82] [cursor=pointer]:
+          - img [ref=e83]
+          - text: Logout
+    - generic [ref=e86]:
+      - generic [ref=e87] [cursor=pointer]:
+        - img [ref=e88]
+        - generic [ref=e91]: Command Palette
+        - generic [ref=e92]: ⌘K
+      - main [ref=e93]:
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - heading "Dashboard" [level=1] [ref=e97]
+            - paragraph [ref=e98]: Welcome back. Here's your clinical system overview.
+          - generic [ref=e99]:
+            - generic [ref=e100]:
+              - img [ref=e102]
+              - generic [ref=e104]:
+                - generic [ref=e105]:
+                  - img [ref=e107]
+                  - generic [ref=e109]: Total Volume
+                - heading "10" [level=3] [ref=e110]
+                - generic [ref=e112]: 100% Inbound
+            - generic [ref=e113]:
+              - img [ref=e115]
+              - generic [ref=e118]:
+                - generic [ref=e119]:
+                  - img [ref=e121]
+                  - generic [ref=e124]: Avg Duration
+                - heading "1:34" [level=3] [ref=e125]
+                - generic [ref=e127]: Handle Time
+          - generic [ref=e129]:
+            - img [ref=e131]
+            - generic [ref=e134]:
+              - heading "All Caught Up" [level=3] [ref=e135]
+              - paragraph [ref=e136]: No urgent leads requiring attention right now.
+          - generic [ref=e137]:
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - heading "Recent Activity" [level=3] [ref=e140]
+                - paragraph [ref=e141]: Real-time call logs
+              - button "View All Activity" [ref=e142] [cursor=pointer]
+            - generic [ref=e144]:
+              - generic [ref=e146]:
+                - generic [ref=e147]:
+                  - generic [ref=e148]: 📞
+                  - generic [ref=e149]:
+                    - paragraph [ref=e150]: 📲 Call from Samson - 2m
+                    - generic [ref=e151]:
+                      - generic [ref=e152]: "Sentiment: positive • medium urgency"
+                      - paragraph [ref=e153]: The caller was polite and satisfied with the service, as the appointment was scheduled promptly and efficiently.
+                - paragraph [ref=e155]: 1 day ago
+              - generic [ref=e157]:
+                - generic [ref=e158]:
+                  - generic [ref=e159]: 🔥
+                  - generic [ref=e160]:
+                    - paragraph [ref=e161]: "🔥 Hot lead: Unknown Caller"
+                    - generic [ref=e162]:
+                      - generic [ref=e163]: "Score: 100/100"
+                      - generic [ref=e164]: "Interested in: botox, consultation"
+                - paragraph [ref=e166]: 1 day ago
+              - generic [ref=e168]:
+                - generic [ref=e169]:
+                  - generic [ref=e170]: 📞
+                  - generic [ref=e171]:
+                    - paragraph [ref=e172]: 📲 Call from Unknown Caller - 2m
+                    - generic [ref=e173]:
+                      - generic [ref=e174]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e175]: Call completed
+                - paragraph [ref=e177]: 1 day ago
+              - generic [ref=e179]:
+                - generic [ref=e180]:
+                  - generic [ref=e181]: 📞
+                  - generic [ref=e182]:
+                    - paragraph [ref=e183]: 📲 Call from Unknown Caller - 1m
+                    - generic [ref=e184]:
+                      - generic [ref=e185]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e186]: Call completed
+                - paragraph [ref=e188]: 2 days ago
+              - generic [ref=e190]:
+                - generic [ref=e191]:
+                  - generic [ref=e192]: 📞
+                  - generic [ref=e193]:
+                    - paragraph [ref=e194]: 📲 Call from Unknown Caller - 1m
+                    - generic [ref=e195]:
+                      - generic [ref=e196]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e197]: Call completed
+                - paragraph [ref=e199]: 3 days ago
+              - generic [ref=e201]:
+                - generic [ref=e202]:
+                  - generic [ref=e203]: 📞
+                  - generic [ref=e204]:
+                    - paragraph [ref=e205]: 📲 Call from Unknown Caller - 0m
+                    - generic [ref=e206]:
+                      - generic [ref=e207]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e208]: Call completed
+                - paragraph [ref=e210]: 3 days ago
+              - generic [ref=e212]:
+                - generic [ref=e213]:
+                  - generic [ref=e214]: 📞
+                  - generic [ref=e215]:
+                    - paragraph [ref=e216]: 📲 Call from Samson - 1m
+                    - generic [ref=e217]:
+                      - generic [ref=e218]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e219]: Call completed
+                - paragraph [ref=e221]: 4 days ago
+              - generic [ref=e223]:
+                - generic [ref=e224]:
+                  - generic [ref=e225]: 📞
+                  - generic [ref=e226]:
+                    - paragraph [ref=e227]: 📲 Call from John Smith - 2m
+                    - generic [ref=e228]:
+                      - generic [ref=e229]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e230]: Call completed
+                - paragraph [ref=e232]: 6 days ago
+              - generic [ref=e234]:
+                - generic [ref=e235]:
+                  - generic [ref=e236]: 📞
+                  - generic [ref=e237]:
+                    - paragraph [ref=e238]: 📲 Call from John Smith - 2m
+                    - generic [ref=e239]:
+                      - generic [ref=e240]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e241]: Call completed
+                - paragraph [ref=e243]: 6 days ago
+              - generic [ref=e245]:
+                - generic [ref=e246]:
+                  - generic [ref=e247]: 📞
+                  - generic [ref=e248]:
+                    - paragraph [ref=e249]: 📲 Call from John Smith - 2m
+                    - generic [ref=e250]:
+                      - generic [ref=e251]: "Sentiment: neutral • low urgency"
+                      - paragraph [ref=e252]: Call completed
+                - paragraph [ref=e254]: 6 days ago
+  - region "Notifications"
+  - generic [ref=e256]:
+    - generic [ref=e257]:
+      - generic [ref=e258]:
+        - generic [ref=e259]:
+          - generic [ref=e260]: 🍪
+          - heading "We Use Cookies" [level=3] [ref=e261]
+        - paragraph [ref=e262]: We use essential cookies for security and functionality, and optional cookies for analytics. You can customize your preferences.
+        - generic [ref=e263]:
+          - link "Privacy Policy" [ref=e264] [cursor=pointer]:
+            - /url: /privacy
+          - link "Cookie Policy" [ref=e265] [cursor=pointer]:
+            - /url: /cookie-policy
+      - generic [ref=e266]:
+        - button "Reject Non-Essential" [ref=e267] [cursor=pointer]
+        - button "Customize" [ref=e268] [cursor=pointer]
+        - button "Accept All" [ref=e269] [cursor=pointer]
+    - paragraph [ref=e270]: We respect your privacy. Consent expires after 12 months.
+  - button "Chat with Voxanne" [ref=e273] [cursor=pointer]:
+    - img "Chat with Voxanne" [ref=e274]
+  - alert [ref=e275]: Voxanne AI - Voice Agent Dashboard
+```

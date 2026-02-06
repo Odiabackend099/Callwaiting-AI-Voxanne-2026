@@ -1,0 +1,60 @@
+{
+  "screenshotName": "00_homepage_top.png",
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "capturedAt": "2026-02-04T20:18:34.622Z",
+  "elements": [
+    {
+      "name": "hero-heading",
+      "selector": "h1",
+      "x": 216,
+      "y": 242,
+      "width": 576,
+      "height": 216,
+      "centerX": 504,
+      "centerY": 350
+    },
+    {
+      "name": "hero-subheading",
+      "selector": "h1 + p",
+      "x": 216,
+      "y": 490,
+      "width": 512,
+      "height": 56,
+      "centerX": 472,
+      "centerY": 518
+    },
+    {
+      "name": "cta-button-primary",
+      "selector": "button:has-text(\"Get Started\")",
+      "x": 216,
+      "y": 594,
+      "width": 189,
+      "height": 56,
+      "centerX": 311,
+      "centerY": 622
+    },
+    {
+      "name": "cta-button-secondary",
+      "selector": "button:has-text(\"Watch Demo\")",
+      "x": 421,
+      "y": 594,
+      "width": 203,
+      "height": 60,
+      "centerX": 523,
+      "centerY": 624
+    },
+    {
+      "name": "navigation-bar",
+      "selector": "nav",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 103,
+      "centerX": 960,
+      "centerY": 51
+    }
+  ]
+}

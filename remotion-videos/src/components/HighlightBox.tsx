@@ -1,11 +1,19 @@
 import React from 'react';
 import { useCurrentFrame, spring, useVideoConfig, interpolate } from 'remotion';
+import { getCoordinates } from '../utils/manifest-loader';
 
 interface HighlightBoxProps {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  // Semantic name support (NEW)
+  elementName?: string;
+  screenshotName?: string;
+
+  // Legacy explicit coordinates (backward compatible)
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+
+  // Animation props
   startFrame: number;
   duration?: number;
   label?: string;
@@ -14,10 +22,12 @@ interface HighlightBoxProps {
 }
 
 export const HighlightBox: React.FC<HighlightBoxProps> = ({
-  x,
-  y,
-  width,
-  height,
+  elementName,
+  screenshotName,
+  x: explicitX,
+  y: explicitY,
+  width: explicitWidth,
+  height: explicitHeight,
   startFrame,
   duration = 90,
   label,
@@ -26,6 +36,30 @@ export const HighlightBox: React.FC<HighlightBoxProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  // Load coordinates from manifest if semantic name provided
+  let x = explicitX;
+  let y = explicitY;
+  let width = explicitWidth;
+  let height = explicitHeight;
+
+  if (elementName && screenshotName) {
+    const coords = getCoordinates(screenshotName, elementName);
+    if (coords) {
+      x = coords.x;
+      y = coords.y;
+      width = coords.width;
+      height = coords.height;
+    } else {
+      console.warn(`⚠️ HighlightBox: Element "${elementName}" not found in manifest "${screenshotName}"`);
+    }
+  }
+
+  // Validate coordinates are available
+  if (x === undefined || y === undefined || width === undefined || height === undefined) {
+    console.error('HighlightBox: Missing coordinates. Provide either (elementName + screenshotName) OR (x, y, width, height)');
+    return null;
+  }
 
   if (frame < startFrame || frame > startFrame + duration) {
     return null;

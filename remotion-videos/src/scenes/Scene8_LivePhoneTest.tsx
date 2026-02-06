@@ -346,12 +346,12 @@ export const Scene8_LivePhoneTest: React.FC = () => {
       />
 
       {/* Phone number form fill */}
+      {/* TODO: Add manifest entries for both elements in 09_test_live_call_form.png */}
       <FormFillSimulation
         text="+1 (555) 867-5309"
         startFrame={20}
-        x={500}
-        y={400}
-        width={350}
+        elementName="test-phone-input"
+        screenshotName="09_test_live_call_form.png"
       />
 
       {/* Cursor moves to "Call Me" button and clicks */}
@@ -359,8 +359,8 @@ export const Scene8_LivePhoneTest: React.FC = () => {
         startFrame={80}
         fromX={675}
         fromY={400}
-        toX={660}
-        toY={480}
+        toElementName="call-now-button"
+        screenshotName="09_test_live_call_form.png"
       />
 
       {/* Final TextOverlay at bottom */}

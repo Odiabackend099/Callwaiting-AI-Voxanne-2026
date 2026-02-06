@@ -1,13 +1,21 @@
 import React from 'react';
 import { useCurrentFrame, interpolate, spring, useVideoConfig } from 'remotion';
+import { getCoordinates } from '../utils/manifest-loader';
 
 interface FormFillSimulationProps {
+  // Semantic name support (NEW)
+  elementName?: string;
+  screenshotName?: string;
+
+  // Legacy explicit coordinates (backward compatible)
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+
+  // Animation and content props
   text: string;
   startFrame: number;
-  x: number;
-  y: number;
-  width: number;
-  height?: number;
   fontSize?: number;
   charRate?: number;
   masked?: boolean;
@@ -15,12 +23,14 @@ interface FormFillSimulationProps {
 }
 
 export const FormFillSimulation: React.FC<FormFillSimulationProps> = ({
+  elementName,
+  screenshotName,
+  x: explicitX,
+  y: explicitY,
+  width: explicitWidth,
+  height: explicitHeight,
   text,
   startFrame,
-  x,
-  y,
-  width,
-  height = 40,
   fontSize = 15,
   charRate = 2,
   masked = false,
@@ -28,6 +38,30 @@ export const FormFillSimulation: React.FC<FormFillSimulationProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  // Load coordinates from manifest if semantic name provided
+  let x = explicitX;
+  let y = explicitY;
+  let width = explicitWidth;
+  let height = explicitHeight ?? 40;
+
+  if (elementName && screenshotName) {
+    const coords = getCoordinates(screenshotName, elementName);
+    if (coords) {
+      x = coords.x;
+      y = coords.y;
+      width = coords.width;
+      height = coords.height;
+    } else {
+      console.warn(`⚠️ FormFillSimulation: Element "${elementName}" not found in manifest "${screenshotName}"`);
+    }
+  }
+
+  // Validate coordinates are available
+  if (x === undefined || y === undefined || width === undefined) {
+    console.error('FormFillSimulation: Missing coordinates. Provide either (elementName + screenshotName) OR (x, y, width)');
+    return null;
+  }
 
   const typingDuration = text.length * charRate + 10;
   if (frame < startFrame - 5 || frame > startFrame + typingDuration + 20) {

@@ -248,12 +248,13 @@ export const Scene7_BrowserTest: React.FC = () => {
       />
 
       {/* Cursor clicks the Start Call button area */}
+      {/* TODO: Add manifest entry for start-test-button in 07_test_browser_idle.png */}
       <ClickSimulation
         startFrame={20}
         fromX={960}
         fromY={300}
-        toX={700}
-        toY={450}
+        toElementName="start-test-button"
+        screenshotName="07_test_browser_idle.png"
       />
 
       {/* Chat bubbles appear sequentially after screenshot transition */}

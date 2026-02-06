@@ -1,27 +1,71 @@
 import React from 'react';
 import { useCurrentFrame, interpolate, spring, useVideoConfig, Easing } from 'remotion';
+import { getCoordinates } from '../utils/manifest-loader';
 
 interface ClickSimulationProps {
+  // Semantic name support (NEW)
+  fromElementName?: string;
+  toElementName?: string;
+  screenshotName?: string;
+
+  // Legacy explicit coordinates (backward compatible)
+  fromX?: number;
+  fromY?: number;
+  toX?: number;
+  toY?: number;
+
+  // Animation props
   startFrame: number;
-  fromX: number;
-  fromY: number;
-  toX: number;
-  toY: number;
   moveDuration?: number;
   showRipple?: boolean;
 }
 
 export const ClickSimulation: React.FC<ClickSimulationProps> = ({
+  fromElementName,
+  toElementName,
+  screenshotName,
+  fromX: explicitFromX,
+  fromY: explicitFromY,
+  toX: explicitToX,
+  toY: explicitToY,
   startFrame,
-  fromX,
-  fromY,
-  toX,
-  toY,
   moveDuration = 25,
   showRipple = true,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  // Load coordinates from manifest if semantic names provided
+  let fromX = explicitFromX;
+  let fromY = explicitFromY;
+  let toX = explicitToX;
+  let toY = explicitToY;
+
+  if (fromElementName && screenshotName) {
+    const coords = getCoordinates(screenshotName, fromElementName);
+    if (coords) {
+      fromX = coords.centerX;
+      fromY = coords.centerY;
+    } else {
+      console.warn(`⚠️ ClickSimulation: Element "${fromElementName}" not found in manifest "${screenshotName}"`);
+    }
+  }
+
+  if (toElementName && screenshotName) {
+    const coords = getCoordinates(screenshotName, toElementName);
+    if (coords) {
+      toX = coords.centerX;
+      toY = coords.centerY;
+    } else {
+      console.warn(`⚠️ ClickSimulation: Element "${toElementName}" not found in manifest "${screenshotName}"`);
+    }
+  }
+
+  // Validate coordinates are available
+  if (fromX === undefined || fromY === undefined || toX === undefined || toY === undefined) {
+    console.error('ClickSimulation: Missing coordinates. Provide either (fromElementName + toElementName + screenshotName) OR (fromX, fromY, toX, toY)');
+    return null;
+  }
 
   const totalDuration = moveDuration + 30;
   if (frame < startFrame || frame > startFrame + totalDuration) {

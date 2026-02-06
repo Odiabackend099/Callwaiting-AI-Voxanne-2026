@@ -148,12 +148,13 @@ export const Scene4_UploadKnowledge: React.FC = () => {
       />
 
       {/* ClickSimulation: cursor moves to upload area */}
+      {/* TODO: Add manifest entry for upload-file-button in 03_knowledge_base.png */}
       <ClickSimulation
         startFrame={25}
         fromX={960}
         fromY={200}
-        toX={700}
-        toY={400}
+        toElementName="upload-file-button"
+        screenshotName="03_knowledge_base.png"
       />
 
       {/* Upload progress overlay (appears after cursor click at frame 55+) */}

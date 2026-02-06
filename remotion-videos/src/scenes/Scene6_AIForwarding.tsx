@@ -105,8 +105,16 @@ export const Scene6_AIForwarding: React.FC = () => {
       </div>
 
       {/* Click cursor */}
+      {/* TODO: Add manifest entry for forwarding-wizard-next in 05_ai_forwarding_wizard_step1.png */}
       {frame < 85 && (
-        <ClickSimulation startFrame={35} fromX={960} fromY={400} toX={750} toY={520} moveDuration={20} />
+        <ClickSimulation
+          startFrame={35}
+          fromX={960}
+          fromY={400}
+          toElementName="forwarding-wizard-next"
+          screenshotName="05_ai_forwarding_wizard_step1.png"
+          moveDuration={20}
+        />
       )}
 
       {/* Forwarding Code Overlay */}

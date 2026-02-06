@@ -1,0 +1,47 @@
+<testsuites id="" name="" tests="2" failures="1" skipped="0" errors="0" time="79.36400599999999">
+<testsuite name="e2e/capture-dashboard-fully-loaded.spec.ts" timestamp="2026-02-05T01:24:33.247Z" hostname="chromium" tests="2" failures="1" skipped="0" time="89.705" errors="0">
+<testcase name="Capture Dashboard Screenshots with Full Data Load › Capture homepage screenshot" classname="e2e/capture-dashboard-fully-loaded.spec.ts" time="13.012">
+<system-out>
+<![CDATA[✅ Homepage screenshot saved: /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/public/screenshots/01_homepage.png
+]]>
+</system-out>
+</testcase>
+<testcase name="Capture Dashboard Screenshots with Full Data Load › Capture fully loaded dashboard with manifest extraction" classname="e2e/capture-dashboard-fully-loaded.spec.ts" time="76.693">
+<failure message="capture-dashboard-fully-loaded.spec.ts:22:7 Capture fully loaded dashboard with manifest extraction" type="FAILURE">
+<![CDATA[  [chromium] › e2e/capture-dashboard-fully-loaded.spec.ts:22:7 › Capture Dashboard Screenshots with Full Data Load › Capture fully loaded dashboard with manifest extraction 
+
+    Error: page.evaluate: SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text("Create Assistant"), button:has-text("Create Agent"), a[href*="agent-config"]' is not a valid selector.
+        at eval (eval at evaluate (:290:30), <anonymous>:13:34)
+        at UtilityScript.evaluate (<anonymous>:292:16)
+        at UtilityScript.<anonymous> (<anonymous>:1:44)
+        at eval (eval at evaluate (:290:30), <anonymous>:13:34)
+        at UtilityScript.evaluate (<anonymous>:292:16)
+        at UtilityScript.<anonymous> (<anonymous>:1:44)
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/capture-dashboard-fully-loaded.spec.ts:59:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[⏳ Waiting for dashboard data to fully load...
+✅ Dashboard fully loaded
+✅ Dashboard screenshot saved: /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/public/screenshots/02_dashboard.png
+
+[[ATTACHMENT|e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/video.webm]]
+
+[[ATTACHMENT|e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

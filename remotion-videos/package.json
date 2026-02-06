@@ -5,11 +5,18 @@
   "scripts": {
     "start": "remotion studio",
     "build": "remotion render src/index.ts VoxanneDemo out/voxanne-demo.mp4",
-    "upgrade": "remotion upgrade"
+    "upgrade": "remotion upgrade",
+    "render:scene": "ts-node scripts/render-scene-by-scene.ts",
+    "merge:scenes": "bash scripts/merge-scenes.sh",
+    "workflow": "npm run render:scene && npm run merge:scenes",
+    "generate:voiceovers": "ts-node scripts/generate-voiceovers.ts",
+    "clean": "rm -rf out/*.mp4 public/audio/voiceovers/*.mp3 public/audio/cache/*"
   },
   "dependencies": {
-    "@remotion/motion-blur": "^4.0.417",
-    "@remotion/transitions": "^4.0.417",
+    "@remotion/motion-blur": "4.0.414",
+    "@remotion/paths": "4.0.414",
+    "@remotion/shapes": "4.0.414",
+    "@remotion/transitions": "4.0.414",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "remotion": "^4.0.284"

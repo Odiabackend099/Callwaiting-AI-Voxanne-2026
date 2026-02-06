@@ -119,6 +119,7 @@ import billingApiRouter from './routes/billing-api';
 import calendlyWebhookRouter from './routes/calendly-webhook';
 import contactFormRouter from './routes/contact-form';
 import chatWidgetRouter from './routes/chat-widget';
+import onboardingIntakeRouter from './routes/onboarding-intake';
 
 // Initialize logger
 initLogger();
@@ -312,6 +313,7 @@ app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
 app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
+app.use('/api/onboarding-intake', onboardingIntakeRouter); // Onboarding intake form
 app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/internal', internalApiRoutes); // Internal API routes (webhook configuration, etc.)
 app.use('/api/integrations', integrationsApiRouter); // Fetch decrypted credentials
