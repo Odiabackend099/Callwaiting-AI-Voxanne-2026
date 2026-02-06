@@ -39,3 +39,7 @@ voxanne-dashboard/
 _ARCHIVE_2026/
 Archived/
 .archive/
+
+# Render deployment files with credentials
+RENDER_ENV_VARIABLES.txt
+backend/.env.render
