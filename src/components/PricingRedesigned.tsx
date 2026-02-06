@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { FadeInOnScroll, SlideInOnScroll } from "./ParallaxSection";
 import { Check } from "lucide-react";
+import Link from "next/link";
 
 const plans = [
     {
@@ -56,7 +57,7 @@ const plans = [
     },
 ];
 
-export default function PricingRedesigned({ onBookDemo }: { onBookDemo?: () => void }) {
+export default function PricingRedesigned() {
     return (
         <section id="pricing" className="relative py-20 md:py-32 bg-gradient-to-b from-cream to-sage overflow-hidden">
             {/* Background Elements */}
@@ -133,16 +134,17 @@ export default function PricingRedesigned({ onBookDemo }: { onBookDemo?: () => v
                                     </div>
 
                                     {/* CTA Button */}
-                                    <button
-                                        onClick={onBookDemo}
-                                        className={`w-full py-3 rounded-lg font-semibold mb-8 transition-all duration-300 ${
-                                            plan.highlighted
-                                                ? "bg-blue-deep text-cream hover:bg-blue-deep/90"
-                                                : "bg-sage text-charcoal hover:bg-sage-dark"
-                                        }`}
-                                    >
-                                        {plan.cta}
-                                    </button>
+                                    <Link href="/start">
+                                        <button
+                                            className={`w-full py-3 rounded-lg font-semibold mb-8 transition-all duration-300 ${
+                                                plan.highlighted
+                                                    ? "bg-blue-deep text-cream hover:bg-blue-deep/90"
+                                                    : "bg-sage text-charcoal hover:bg-sage-dark"
+                                            }`}
+                                        >
+                                            Start Free Trial
+                                        </button>
+                                    </Link>
 
                                     {/* Features List */}
                                     <div className="space-y-4">

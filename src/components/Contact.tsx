@@ -86,7 +86,7 @@ export default function Contact() {
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-navy-900">Email us</h3>
-                                    <p className="text-slate-600">hello@voxanne.ai</p>
+                                    <p className="text-slate-600">support@voxanne.ai</p>
                                 </div>
                             </div>
 
@@ -96,7 +96,7 @@ export default function Contact() {
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-navy-900">Call us</h3>
-                                    <p className="text-slate-600">+44 20 1234 5678</p>
+                                    <p className="text-slate-600">+44 7424 038250</p>
                                 </div>
                             </div>
 
@@ -107,8 +107,10 @@ export default function Contact() {
                                 <div>
                                     <h3 className="font-semibold text-navy-900">Visit us</h3>
                                     <p className="text-slate-600">
-                                        20 AI Innovation Way<br />
-                                        London, UK
+                                        Collage House, 2nd Floor<br />
+                                        17 King Edward Road<br />
+                                        Ruislip, London HA4 7AE<br />
+                                        United Kingdom
                                     </p>
                                 </div>
                             </div>

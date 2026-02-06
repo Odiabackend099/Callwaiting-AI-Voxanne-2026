@@ -3,6 +3,7 @@
 import FadeIn from "@/components/ui/FadeIn";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
+import Link from "next/link";
 
 const plans = [
     {
@@ -106,19 +107,14 @@ export default function Pricing() {
                                 <p className="text-xs text-slate-400 mt-1">Overage: {plan.overage}</p>
                             </div>
 
-                            <a
-                                href={plan.name === "Enterprise" ? "mailto:sales@voxanne.ai" : "https://calendly.com/austyneguale/30min"}
-                                target={plan.name === "Enterprise" ? undefined : "_blank"}
-                                rel={plan.name === "Enterprise" ? undefined : "noopener noreferrer"}
-                                className="block w-full"
-                            >
+                            <Link href="/start" className="block w-full">
                                 <Button
                                     variant={plan.variant}
                                     className={`w-full mb-6 ${plan.popular ? 'bg-surgical-600 hover:bg-surgical-700 text-white' : ''}`}
                                 >
-                                    {plan.cta}
+                                    Start Free Trial
                                 </Button>
-                            </a>
+                            </Link>
 
                             <ul className="space-y-3">
                                 {plan.features.map((feature) => (
