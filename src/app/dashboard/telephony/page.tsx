@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Smartphone, Loader2, Phone, CheckCircle, AlertCircle, ShoppingCart, Trash2 } from 'lucide-react';
 import TelephonySetupWizard from './components/TelephonySetupWizard';
 import { BuyNumberModal } from '@/components/dashboard/BuyNumberModal';
-import { authedBackendFetch } from '@/lib/authedFetch';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface ManagedNumber {
   phoneNumber: string;

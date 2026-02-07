@@ -102,10 +102,10 @@ export const config = {
   // ========================================================================
   // TWILIO SMS SERVICE - APPROVED PRODUCTION CREDENTIALS
   // ========================================================================
-  // NOW OPTIONAL: Fetched per-tenant from DB in multi-tenant mode
-  TWILIO_ACCOUNT_SID: getOptional('TWILIO_ACCOUNT_SID'),
-  TWILIO_AUTH_TOKEN: getOptional('TWILIO_AUTH_TOKEN'),
-  TWILIO_PHONE_NUMBER: getOptional('TWILIO_PHONE_NUMBER'),
+  // REQUIRED: Critical for managed telephony (provisioning Vapi numbers for clients)
+  TWILIO_ACCOUNT_SID: getRequired('TWILIO_ACCOUNT_SID'),
+  TWILIO_AUTH_TOKEN: getRequired('TWILIO_AUTH_TOKEN'),
+  TWILIO_PHONE_NUMBER: getRequired('TWILIO_PHONE_NUMBER'),
   TWILIO_WHATSAPP_NUMBER: getOptional('TWILIO_WHATSAPP_NUMBER'),
 
   // ========================================================================
@@ -264,9 +264,9 @@ export const config = {
     const critical = [
       'SUPABASE_URL',
       'SUPABASE_SERVICE_ROLE_KEY',
-      // 'TWILIO_ACCOUNT_SID',    // No longer required globally
-      // 'TWILIO_AUTH_TOKEN',     // No longer required globally
-      // 'TWILIO_PHONE_NUMBER',   // No longer required globally
+      'TWILIO_ACCOUNT_SID',      // REQUIRED for managed telephony (provisioning Vapi numbers)
+      'TWILIO_AUTH_TOKEN',       // REQUIRED for managed telephony (provisioning Vapi numbers)
+      'TWILIO_PHONE_NUMBER',     // REQUIRED for managed telephony (provisioning Vapi numbers)
       'VAPI_PRIVATE_KEY',
       // 'GOOGLE_CLIENT_ID',      // No longer required globally
       // 'GOOGLE_CLIENT_SECRET',  // No longer required globally
@@ -277,9 +277,35 @@ export const config = {
     const missing = critical.filter(key => !process.env[key] && key !== 'SUPABASE_SERVICE_KEY');
 
     if (missing.length > 0) {
+      console.error('\n' + '='.repeat(80));
+      console.error('❌ CRITICAL CONFIGURATION ERROR');
+      console.error('='.repeat(80));
+      console.error('\nMissing required environment variables:\n');
+      missing.forEach(key => {
+        console.error(`  ❌ ${key}`);
+      });
+
+      // Special message if Twilio is missing
+      if (missing.some(key => key.startsWith('TWILIO_'))) {
+        console.error('\n' + '='.repeat(80));
+        console.error('WHY TWILIO IS REQUIRED:');
+        console.error('='.repeat(80));
+        console.error('\nVoxanne AI provisions phone numbers for clients.');
+        console.error('Twilio credentials are needed to buy/manage numbers via Vapi.');
+        console.error('Without Twilio, clients cannot get phone numbers.\n');
+      }
+
+      console.error('='.repeat(80));
+      console.error('HOW TO FIX:');
+      console.error('='.repeat(80));
+      console.error('\n1. Go to Render.com → Your Backend Service → Environment');
+      console.error('2. Add missing variables from backend/.env file');
+      console.error('3. Redeploy the service\n');
+      console.error('Reference: See backend/.env.example for configuration guide.\n');
+      console.error('='.repeat(80) + '\n');
+
       throw new Error(
-        `Missing critical environment variables:\n${missing.join('\n')}\n\n` +
-        `Reference: /.env.template for complete configuration guide.`
+        `Missing critical environment variables: ${missing.join(', ')}`
       );
     }
   }
