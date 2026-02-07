@@ -10,6 +10,7 @@ import { VapiClient } from '../services/vapi-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import twilio from 'twilio';
 import { EncryptionService } from '../services/encryption';
+import { IntegrationDecryptor } from '../services/integration-decryptor';
 
 const router = Router();
 
@@ -295,67 +296,17 @@ router.post('/setup', requireAuthOrDev, async (req: Request, res: Response): Pro
       return;
     }
 
-    // Store Twilio credentials in org_credentials (SSOT)
-    console.log('[InboundSetup] Storing Twilio credentials to org_credentials', { requestId, orgId });
+    // Store Twilio credentials via single-slot gate (UPSERT + mutual exclusion + Vapi sync)
+    console.log('[InboundSetup] Saving Twilio credentials via saveTwilioCredential', { requestId, orgId });
 
-    // Encrypt credentials before storage
-    const credentialsToEncrypt = {
+    await IntegrationDecryptor.saveTwilioCredential(orgId, {
       accountSid: twilioAccountSid,
       authToken: twilioAuthToken,
       phoneNumber: twilioPhoneNumber,
-      vapiPhoneNumberId,
-      vapiAssistantId,
-      vapiApiKeyLast4Used: currentVapiKeyLast4
-    };
+      source: 'byoc',
+    });
 
-    const encryptedConfig = EncryptionService.encryptObject(credentialsToEncrypt);
-
-    // 1. Save to org_credentials (SSOT)
-    const { error: orgCredsError } = await supabase
-      .from('org_credentials')
-      .upsert({
-        org_id: orgId,
-        provider: 'twilio',
-        is_active: true,
-        encrypted_config: encryptedConfig,
-        metadata: {
-          accountSid: twilioAccountSid,
-          phoneNumber: twilioPhoneNumber
-        },
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'org_id,provider' });
-
-    if (orgCredsError) {
-      console.error('[InboundSetup] Failed to save to org_credentials', { requestId, error: orgCredsError });
-      throw new Error('Database save failed');
-    }
-
-    // 2. Also update 'integrations' table for backward compatibility/status tracking (optional but good for now)
-    const { error: integrationError } = await supabase
-      .from('integrations')
-      .upsert(
-        {
-          org_id: orgId,
-          provider: 'twilio_inbound', // Keep this provider for inbound-specific config
-          encrypted_config: encryptedConfig,
-          config: {
-            phoneNumber: twilioPhoneNumber,
-            status: 'active',
-            activatedAt: new Date().toISOString(),
-            last_error: null,
-            last_attempted_at: new Date().toISOString()
-          },
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'org_id,provider' }
-      );
-
-    if (integrationError) {
-      console.error('[InboundSetup] Failed to store integration config', { requestId, error: integrationError });
-      // Non-fatal if org_credentials succeeded
-    }
-
-    console.log('[InboundSetup] ✅ Twilio credentials stored', { requestId });
+    console.log('[InboundSetup] Twilio credentials stored via single-slot gate', { requestId });
 
     // Link phone number to Vapi assistant (NOT the local DB agent id)
     console.log('[InboundSetup] Linking phone number to Vapi assistant', { requestId, vapiAssistantId, vapiPhoneNumberId });

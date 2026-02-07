@@ -24,7 +24,7 @@ export function requireFeature(flagKey: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       // Extract org_id from authenticated user
-      const orgId = req.user?.org_id;
+      const orgId = req.user?.orgId;
 
       if (!orgId) {
         return res.status(401).json({
@@ -71,7 +71,7 @@ export function requireFeature(flagKey: string) {
 export function requireAllFeatures(flagKeys: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const orgId = req.user?.org_id;
+      const orgId = req.user?.orgId;
 
       if (!orgId) {
         return res.status(401).json({
@@ -121,7 +121,7 @@ export function requireAllFeatures(flagKeys: string[]) {
 export function requireAnyFeature(flagKeys: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const orgId = req.user?.org_id;
+      const orgId = req.user?.orgId;
 
       if (!orgId) {
         return res.status(401).json({
@@ -178,7 +178,7 @@ export async function attachEnabledFeatures(
   next: NextFunction
 ) {
   try {
-    const orgId = req.user?.org_id;
+    const orgId = req.user?.orgId;
 
     if (!orgId) {
       req.enabledFeatures = [];

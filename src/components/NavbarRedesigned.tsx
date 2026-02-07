@@ -6,11 +6,7 @@ import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Logo from "@/components/Logo"; // ✅ ADDED: Use centralized Logo component
 
-interface NavbarRedesignedProps {
-    onBookDemo?: () => void;
-}
-
-export default function NavbarRedesigned({ onBookDemo }: NavbarRedesignedProps) {
+export default function NavbarRedesigned() {
     const [isOpen, setIsOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
 
@@ -70,13 +66,13 @@ export default function NavbarRedesigned({ onBookDemo }: NavbarRedesignedProps) 
                     >
                         Sign In
                     </Link>
-                    <a href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" className="inline-block">
+                    <Link href="/start" className="inline-block">
                         <button
                             className="px-6 py-2 bg-surgical-blue text-pure-white font-semibold rounded-lg hover:bg-surgical-blue/90 transition-all duration-300 hover:shadow-card-hover"
                         >
                             Book Demo
                         </button>
-                    </a>
+                    </Link>
                 </div>
 
                 {/* Mobile Menu Button */}
@@ -122,13 +118,13 @@ export default function NavbarRedesigned({ onBookDemo }: NavbarRedesignedProps) 
                                 >
                                     Sign In
                                 </Link>
-                                <a href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" className="block w-full" onClick={() => setIsOpen(false)}>
+                                <Link href="/start" className="block w-full" onClick={() => setIsOpen(false)}>
                                     <button
                                         className="px-6 py-2 bg-surgical-blue text-pure-white font-semibold rounded-lg hover:bg-surgical-blue/90 transition-all duration-300 w-full"
                                     >
                                         Book Demo
                                     </button>
-                                </a>
+                                </Link>
                             </div>
                         </div>
                     </motion.div>

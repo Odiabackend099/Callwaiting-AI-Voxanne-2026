@@ -11,6 +11,8 @@ import { Router, Request, Response } from 'express';
 import { verifyStripeSignature } from '../middleware/verify-stripe-signature';
 import { supabase } from '../services/supabase-client';
 import { log } from '../services/logger';
+import { addCredits } from '../services/wallet-service';
+import { sendSlackAlert } from '../services/slack-alerts';
 
 const router = Router();
 
@@ -50,6 +52,19 @@ router.post('/stripe',
 
         case 'customer.subscription.updated':
           await handleSubscriptionUpdated(event.data.object);
+          break;
+
+        // ===== WALLET TOP-UP EVENTS =====
+        case 'checkout.session.completed':
+          await handleCheckoutSessionCompleted(event.data.object);
+          break;
+
+        case 'payment_intent.succeeded':
+          await handlePaymentIntentSucceeded(event.data.object);
+          break;
+
+        case 'payment_intent.payment_failed':
+          await handlePaymentIntentFailed(event.data.object);
           break;
 
         default:
@@ -284,6 +299,183 @@ async function handleSubscriptionUpdated(subscription: any): Promise<void> {
     includedMinutes: config.included_minutes,
     overageRatePence: config.overage_rate_pence,
   });
+}
+
+// ============================================
+// Wallet Top-Up Handlers
+// ============================================
+
+/**
+ * Handle checkout.session.completed for wallet top-ups.
+ * Fired when a customer completes a Stripe Checkout session
+ * (one-time payment for credit purchase).
+ */
+async function handleCheckoutSessionCompleted(session: any): Promise<void> {
+  // Only process wallet top-up sessions
+  if (session.metadata?.type !== 'wallet_topup') {
+    return;
+  }
+
+  const orgId = session.metadata?.org_id;
+  const amountPence = parseInt(session.metadata?.amount_pence || '0', 10);
+  const paymentIntentId = session.payment_intent;
+
+  if (!orgId || !amountPence || amountPence <= 0) {
+    log.error('StripeWebhook', 'checkout.session.completed missing required metadata', {
+      sessionId: session.id,
+      metadata: session.metadata,
+    });
+    return;
+  }
+
+  log.info('StripeWebhook', 'Processing wallet top-up from checkout', {
+    orgId,
+    amountPence,
+    sessionId: session.id,
+    paymentIntentId,
+  });
+
+  // Credit the wallet (idempotent via stripe_payment_intent_id unique index)
+  const result = await addCredits(
+    orgId,
+    amountPence,
+    'topup',
+    paymentIntentId,
+    undefined,
+    `Checkout top-up: ${amountPence}p`,
+    'stripe:checkout'
+  );
+
+  if (!result.success) {
+    log.error('StripeWebhook', 'Failed to credit wallet from checkout', {
+      orgId,
+      amountPence,
+      error: result.error,
+      paymentIntentId,
+    });
+    return;
+  }
+
+  // Save payment method for future auto-recharge
+  if (session.setup_intent || session.payment_method_collection === 'always') {
+    try {
+      const customerId = session.customer;
+      if (customerId) {
+        // The payment method is attached to the customer via setup_future_usage
+        // Save the customer's default PM for auto-recharge
+        const { getStripeClient: getStripe } = await import('../config/stripe');
+        const stripe = getStripe();
+        if (stripe) {
+          const paymentMethods = await stripe.paymentMethods.list({
+            customer: customerId as string,
+            type: 'card',
+            limit: 1,
+          });
+
+          if (paymentMethods?.data?.length > 0) {
+            await supabase
+              .from('organizations')
+              .update({
+                stripe_default_pm_id: paymentMethods.data[0].id,
+                stripe_customer_id: customerId,
+              })
+              .eq('id', orgId);
+
+            log.info('StripeWebhook', 'Saved payment method for auto-recharge', {
+              orgId,
+              pmId: paymentMethods.data[0].id,
+            });
+          }
+        }
+      }
+    } catch (pmError: any) {
+      // Non-fatal: top-up succeeded, PM save failed
+      log.warn('StripeWebhook', 'Failed to save payment method (non-blocking)', {
+        orgId,
+        error: pmError?.message,
+      });
+    }
+  }
+
+  log.info('StripeWebhook', 'Wallet top-up completed via checkout', {
+    orgId,
+    amountPence,
+    balanceBefore: result.balanceBefore,
+    balanceAfter: result.balanceAfter,
+  });
+}
+
+/**
+ * Handle payment_intent.succeeded for auto-recharge payments.
+ * This is a safety net — the recharge processor already credits the wallet.
+ * This handler ensures credits are applied even if the processor crashes
+ * between Stripe charge and wallet credit.
+ */
+async function handlePaymentIntentSucceeded(paymentIntent: any): Promise<void> {
+  // Only process wallet-related payment intents
+  if (paymentIntent.metadata?.type !== 'wallet_auto_recharge' &&
+      paymentIntent.metadata?.type !== 'wallet_topup') {
+    return;
+  }
+
+  const orgId = paymentIntent.metadata?.org_id;
+  const amountPence = parseInt(paymentIntent.metadata?.amount_pence || '0', 10);
+
+  if (!orgId || !amountPence || amountPence <= 0) {
+    return;
+  }
+
+  // Attempt to credit (idempotent — will return success+duplicate if already credited)
+  const result = await addCredits(
+    orgId,
+    amountPence,
+    'topup',
+    paymentIntent.id,
+    paymentIntent.latest_charge,
+    `Payment confirmed: ${amountPence}p (${paymentIntent.metadata.type})`,
+    'stripe:webhook-safety-net'
+  );
+
+  if (result.success) {
+    log.info('StripeWebhook', 'payment_intent.succeeded processed', {
+      orgId,
+      amountPence,
+      paymentIntentId: paymentIntent.id,
+      balanceAfter: result.balanceAfter,
+    });
+  }
+}
+
+/**
+ * Handle payment_intent.payment_failed.
+ * Logs the failure and sends a Slack alert.
+ */
+async function handlePaymentIntentFailed(paymentIntent: any): Promise<void> {
+  // Only alert on wallet-related failures
+  if (paymentIntent.metadata?.type !== 'wallet_auto_recharge' &&
+      paymentIntent.metadata?.type !== 'wallet_topup') {
+    return;
+  }
+
+  const orgId = paymentIntent.metadata?.org_id;
+  const failureMessage = paymentIntent.last_payment_error?.message || 'Unknown error';
+  const failureCode = paymentIntent.last_payment_error?.code || 'unknown';
+
+  log.error('StripeWebhook', 'Wallet payment failed', {
+    orgId,
+    paymentIntentId: paymentIntent.id,
+    type: paymentIntent.metadata?.type,
+    failureMessage,
+    failureCode,
+  });
+
+  await sendSlackAlert('🔴 Wallet Payment Failed', {
+    orgId: orgId || 'unknown',
+    paymentIntentId: paymentIntent.id,
+    type: paymentIntent.metadata?.type || 'unknown',
+    error: failureMessage,
+    code: failureCode,
+  }).catch(() => {});
 }
 
 export default router;

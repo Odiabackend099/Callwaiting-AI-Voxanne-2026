@@ -1,0 +1,340 @@
+/**
+ * Wallet Service
+ *
+ * Core logic for the Pre-Paid Credit Ledger billing model.
+ * Handles balance checks, credit deductions, top-ups, and summaries.
+ *
+ * Financial Integrity Rules:
+ * - All amounts in integer pence (GBP, no floating point)
+ * - Vapi costs (USD) converted to GBP pence via USD_TO_GBP_RATE
+ * - 100% markup applied (providerPence × 2 = clientPence)
+ * - Atomic writes via Postgres FOR UPDATE lock in RPC functions
+ * - Idempotency via UNIQUE(call_id) in credit_transactions
+ */
+
+import { supabase } from './supabase-client';
+import { log } from './logger';
+import { enqueueAutoRechargeJob } from '../config/wallet-queue';
+
+// ============================================
+// Types
+// ============================================
+
+export interface WalletBalance {
+  balancePence: number;
+  lowBalancePence: number;
+  isLowBalance: boolean;
+  autoRechargeEnabled: boolean;
+  hasPaymentMethod: boolean;
+}
+
+export interface DeductionResult {
+  success: boolean;
+  duplicate?: boolean;
+  transactionId?: string;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  clientChargedPence?: number;
+  providerCostPence?: number;
+  grossProfitPence?: number;
+  needsRecharge?: boolean;
+  error?: string;
+}
+
+export interface TopUpResult {
+  success: boolean;
+  transactionId?: string;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  amountAdded?: number;
+  error?: string;
+}
+
+// ============================================
+// Constants
+// ============================================
+
+/** USD to GBP exchange rate. Override via USD_TO_GBP_RATE env var. */
+const USD_TO_GBP_RATE = parseFloat(process.env.USD_TO_GBP_RATE || '0.79');
+
+/** Minimum wallet balance (pence) required to start a call. */
+const MIN_BALANCE_FOR_CALL = parseInt(process.env.WALLET_MIN_BALANCE_FOR_CALL || '50', 10);
+
+// ============================================
+// Pure Functions
+// ============================================
+
+/**
+ * Convert Vapi cost (USD dollars) to GBP pence.
+ * Always rounds UP to avoid undercharging.
+ */
+export function usdToPence(usdDollars: number): number {
+  if (usdDollars <= 0) return 0;
+  return Math.ceil(usdDollars * USD_TO_GBP_RATE * 100);
+}
+
+/**
+ * Apply markup percentage to provider cost.
+ * 100% markup = cost × 2.
+ */
+export function applyMarkup(providerPence: number, markupPercent: number): number {
+  if (providerPence <= 0) return 0;
+  return Math.ceil(providerPence * (1 + markupPercent / 100));
+}
+
+// ============================================
+// Balance Check (for call authorization gate)
+// ============================================
+
+/**
+ * Check wallet balance for an organization.
+ * Single indexed query, <50ms. Used before starting calls.
+ */
+export async function checkBalance(orgId: string): Promise<WalletBalance | null> {
+  const { data: org, error } = await supabase
+    .from('organizations')
+    .select(
+      'wallet_balance_pence, wallet_low_balance_pence, ' +
+      'wallet_auto_recharge, stripe_default_pm_id'
+    )
+    .eq('id', orgId)
+    .single();
+
+  if (error || !org) {
+    log.error('WalletService', 'Failed to check balance', {
+      orgId,
+      error: error?.message,
+    });
+    return null;
+  }
+
+  const o = org as any;
+  return {
+    balancePence: o.wallet_balance_pence ?? 0,
+    lowBalancePence: o.wallet_low_balance_pence ?? 500,
+    isLowBalance: (o.wallet_balance_pence ?? 0) <= (o.wallet_low_balance_pence ?? 500),
+    autoRechargeEnabled: o.wallet_auto_recharge ?? false,
+    hasPaymentMethod: !!o.stripe_default_pm_id,
+  };
+}
+
+/**
+ * Check if an org has enough balance to start a call.
+ * Returns true if balance >= MIN_BALANCE_FOR_CALL (default 50p).
+ */
+export async function hasEnoughBalance(orgId: string): Promise<boolean> {
+  const balance = await checkBalance(orgId);
+  if (!balance) return false;
+  return balance.balancePence >= MIN_BALANCE_FOR_CALL;
+}
+
+// ============================================
+// Credit Deduction (after call ends)
+// ============================================
+
+/**
+ * Deduct credits from wallet after a call ends.
+ *
+ * 1. Converts Vapi USD cost to GBP pence
+ * 2. Applies markup (default 100% = cost × 2)
+ * 3. Atomic deduction via deduct_call_credits() RPC
+ * 4. Enqueues auto-recharge if balance drops below threshold
+ */
+export async function deductCallCredits(
+  orgId: string,
+  callId: string,
+  vapiCallId: string,
+  vapiCostDollars: number,
+  costBreakdown: Record<string, any> | null
+): Promise<DeductionResult> {
+  // Skip zero-cost calls
+  if (!vapiCostDollars || vapiCostDollars <= 0) {
+    log.debug('WalletService', 'Zero-cost call, skipping deduction', { orgId, callId });
+    return { success: true };
+  }
+
+  // Fetch org markup config
+  const { data: org, error: orgError } = await supabase
+    .from('organizations')
+    .select('wallet_markup_percent')
+    .eq('id', orgId)
+    .single();
+
+  if (orgError || !org) {
+    log.error('WalletService', 'Failed to fetch org markup config', {
+      orgId,
+      error: orgError?.message,
+    });
+    return { success: false, error: 'Organization not found' };
+  }
+
+  const markupPercent = (org as any).wallet_markup_percent ?? 100;
+
+  // Convert and calculate
+  const providerCostPence = usdToPence(vapiCostDollars);
+  const clientChargedPence = applyMarkup(providerCostPence, markupPercent);
+
+  if (clientChargedPence <= 0) {
+    log.debug('WalletService', 'Calculated charge is zero, skipping', { orgId, callId });
+    return { success: true };
+  }
+
+  // Atomic deduction via RPC
+  const { data: result, error: rpcError } = await supabase.rpc('deduct_call_credits', {
+    p_org_id: orgId,
+    p_call_id: callId,
+    p_vapi_call_id: vapiCallId,
+    p_provider_cost_pence: providerCostPence,
+    p_markup_percent: markupPercent,
+    p_client_charged_pence: clientChargedPence,
+    p_cost_breakdown: costBreakdown || {},
+    p_description: `Call ${callId} | Provider: ${providerCostPence}p | Charged: ${clientChargedPence}p`,
+  });
+
+  if (rpcError) {
+    log.error('WalletService', 'deduct_call_credits RPC failed', {
+      orgId,
+      callId,
+      error: rpcError.message,
+    });
+    return { success: false, error: rpcError.message };
+  }
+
+  const rpcResult = result as any;
+
+  // Handle idempotent duplicate
+  if (rpcResult?.duplicate) {
+    log.info('WalletService', 'Call already billed (idempotent)', { orgId, callId });
+    return { success: true, duplicate: true };
+  }
+
+  if (!rpcResult?.success) {
+    log.error('WalletService', 'deduct_call_credits returned failure', {
+      orgId,
+      callId,
+      error: rpcResult?.error,
+    });
+    return { success: false, error: rpcResult?.error };
+  }
+
+  log.info('WalletService', 'Credits deducted', {
+    orgId,
+    callId,
+    providerCostPence,
+    clientChargedPence,
+    grossProfitPence: rpcResult.gross_profit_pence,
+    balanceBefore: rpcResult.balance_before,
+    balanceAfter: rpcResult.balance_after,
+    needsRecharge: rpcResult.needs_recharge,
+  });
+
+  // Trigger auto-recharge if needed
+  if (rpcResult.needs_recharge) {
+    try {
+      await enqueueAutoRechargeJob({ orgId });
+    } catch (err) {
+      log.warn('WalletService', 'Failed to enqueue auto-recharge (non-blocking)', {
+        orgId,
+        error: (err as Error).message,
+      });
+    }
+  }
+
+  return {
+    success: true,
+    transactionId: rpcResult.transaction_id,
+    balanceBefore: rpcResult.balance_before,
+    balanceAfter: rpcResult.balance_after,
+    clientChargedPence: rpcResult.client_charged_pence,
+    providerCostPence: rpcResult.provider_cost_pence,
+    grossProfitPence: rpcResult.gross_profit_pence,
+    needsRecharge: rpcResult.needs_recharge,
+  };
+}
+
+// ============================================
+// Add Credits (top-up / refund / bonus)
+// ============================================
+
+/**
+ * Add credits to an organization's wallet.
+ */
+export async function addCredits(
+  orgId: string,
+  amountPence: number,
+  type: 'topup' | 'refund' | 'adjustment' | 'bonus',
+  stripePaymentIntentId?: string,
+  stripeChargeId?: string,
+  description?: string,
+  createdBy?: string
+): Promise<TopUpResult> {
+  if (amountPence <= 0) {
+    return { success: false, error: 'Amount must be positive' };
+  }
+
+  const { data: result, error } = await supabase.rpc('add_wallet_credits', {
+    p_org_id: orgId,
+    p_amount_pence: amountPence,
+    p_type: type,
+    p_stripe_payment_intent_id: stripePaymentIntentId || null,
+    p_stripe_charge_id: stripeChargeId || null,
+    p_description: description || `${type}: ${amountPence}p`,
+    p_created_by: createdBy || 'system',
+  });
+
+  if (error) {
+    log.error('WalletService', 'add_wallet_credits RPC failed', {
+      orgId,
+      amountPence,
+      type,
+      error: error.message,
+    });
+    return { success: false, error: error.message };
+  }
+
+  const rpcResult = result as any;
+
+  if (!rpcResult?.success) {
+    return { success: false, error: rpcResult?.error };
+  }
+
+  log.info('WalletService', 'Credits added', {
+    orgId,
+    amountPence,
+    type,
+    balanceBefore: rpcResult.balance_before,
+    balanceAfter: rpcResult.balance_after,
+    stripePaymentIntentId,
+  });
+
+  return {
+    success: true,
+    transactionId: rpcResult.transaction_id,
+    balanceBefore: rpcResult.balance_before,
+    balanceAfter: rpcResult.balance_after,
+    amountAdded: rpcResult.amount_added,
+  };
+}
+
+// ============================================
+// Wallet Summary (for dashboard)
+// ============================================
+
+/**
+ * Get full wallet summary for an organization.
+ */
+export async function getWalletSummary(orgId: string): Promise<any> {
+  const { data: result, error } = await supabase.rpc('get_wallet_summary', {
+    p_org_id: orgId,
+  });
+
+  if (error) {
+    log.error('WalletService', 'get_wallet_summary RPC failed', {
+      orgId,
+      error: error.message,
+    });
+    return null;
+  }
+
+  return result;
+}

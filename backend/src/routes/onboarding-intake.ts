@@ -48,7 +48,10 @@ const handleMulterError = (err: any, req: any, res: any, next: any) => {
 // POST /api/onboarding-intake
 router.post('/', upload.single('pricing_pdf'), handleMulterError, async (req, res) => {
   try {
-    const { company, email, phone, greeting_script } = req.body;
+    const {
+      company, website, email, phone, greeting_script, voice_preference,
+      utm_source, utm_medium, utm_campaign, plan, time_to_complete_seconds,
+    } = req.body;
     const file = req.file;
 
     // Validate required fields
@@ -85,11 +88,18 @@ router.post('/', upload.single('pricing_pdf'), handleMulterError, async (req, re
       .from('onboarding_submissions')
       .insert({
         company_name: company,
+        website: website || null,
         user_email: email,
         phone_number: phone,
         greeting_script: greeting_script,
+        voice_preference: voice_preference || 'AI (Neutral)',
         pdf_url: pdfUrl,
         status: 'pending',
+        utm_source: utm_source || null,
+        utm_medium: utm_medium || null,
+        utm_campaign: utm_campaign || null,
+        plan: plan || null,
+        time_to_complete_seconds: time_to_complete_seconds ? parseInt(time_to_complete_seconds, 10) : null,
       })
       .select('id')
       .single();
@@ -158,11 +168,24 @@ router.post('/', upload.single('pricing_pdf'), handleMulterError, async (req, re
           <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h2 style="color: #2c3e50; margin-top: 0;">Company Information</h2>
             <p><strong>Company:</strong> ${company}</p>
+            ${website ? `<p><strong>Website:</strong> <a href="${website.startsWith('http') ? website : `https://${website}`}" target="_blank">${website}</a></p>` : ''}
             <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
             <p><strong>Phone:</strong> <a href="tel:${phone}">${phone}</a></p>
+            <p><strong>Voice Preference:</strong> ${voice_preference || 'AI (Neutral)'}</p>
             <p><strong>Submission ID:</strong> ${submission.id}</p>
             <p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
           </div>
+
+          ${(utm_source || plan || time_to_complete_seconds) ? `
+          <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #0c5460; margin-top: 0;">📊 Attribution & Conversion</h3>
+            ${utm_source ? `<p><strong>UTM Source:</strong> ${utm_source}</p>` : ''}
+            ${utm_medium ? `<p><strong>UTM Medium:</strong> ${utm_medium}</p>` : ''}
+            ${utm_campaign ? `<p><strong>UTM Campaign:</strong> ${utm_campaign}</p>` : ''}
+            ${plan ? `<p><strong>Selected Plan:</strong> ${plan}</p>` : ''}
+            ${time_to_complete_seconds ? `<p><strong>Time to Complete:</strong> ${time_to_complete_seconds}s</p>` : ''}
+          </div>
+          ` : ''}
 
           <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="color: #856404; margin-top: 0;">📄 Pricing PDF</h3>
@@ -200,9 +223,13 @@ router.post('/', upload.single('pricing_pdf'), handleMulterError, async (req, re
     try {
       await sendSlackAlert('🔔 New Onboarding Submission', {
         company,
+        website: website || 'Not provided',
         phone,
         email,
+        voice_preference: voice_preference || 'AI (Neutral)',
         has_pdf: file ? 'Yes' : 'No',
+        utm_source: utm_source || 'direct',
+        plan: plan || 'not selected',
       });
     } catch (slackError) {
       log.warn('OnboardingIntake', 'Slack alert failed (non-critical)', {

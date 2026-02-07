@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
             {
                 userAgent: '*',
                 allow: '/',
-                disallow: '/private/',
+                disallow: ['/private/', '/dashboard/', '/api/', '/login'],
             },
             {
                 userAgent: 'GPTBot',
@@ -19,8 +19,24 @@ export default function robots(): MetadataRoute.Robots {
             {
                 userAgent: 'Google-Extended',
                 allow: '/',
-            }
+            },
+            {
+                userAgent: 'ClaudeBot',
+                allow: '/',
+            },
+            {
+                userAgent: 'anthropic-ai',
+                allow: '/',
+            },
+            {
+                userAgent: 'PerplexityBot',
+                allow: '/',
+            },
+            {
+                userAgent: 'Twitterbot',
+                allow: '/',
+            },
         ],
-        sitemap: 'https://callwaitingai.dev/sitemap.xml',
+        sitemap: 'https://voxanne.ai/sitemap.xml',
     }
 }

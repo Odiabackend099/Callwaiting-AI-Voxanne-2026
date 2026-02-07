@@ -2,69 +2,43 @@
 
 import FadeIn from "@/components/ui/FadeIn";
 import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
+import { Check, Wallet, Phone, Zap } from "lucide-react";
 import Link from "next/link";
 
-const plans = [
+const TOP_UP_OPTIONS = [
+    { label: "£25", pence: 2500 },
+    { label: "£50", pence: 5000 },
+    { label: "£100", pence: 10000 },
+    { label: "£250", pence: 25000 },
+];
+
+const FEATURES = [
+    "AI voice receptionist — answers 24/7",
+    "Appointment booking with calendar sync",
+    "SMS confirmations & reminders",
+    "Call recording & transcripts",
+    "Knowledge base & FAQ answering",
+    "Lead scoring & analytics dashboard",
+    "Google Calendar integration",
+    "HIPAA & GDPR compliant",
+    "No setup fees, no contracts",
+];
+
+const STEPS = [
     {
-        name: "Starter",
-        price: "£350",
-        period: "/month",
-        setupFee: "£1,000 setup fee",
-        description: "Perfect for solo practitioners or small clinics",
-        usage: "400",
-        usageLabel: "minutes/month",
-        overage: "£0.45/min",
-        features: [
-            "400 included minutes/month",
-            "Overage billing at £0.45/min",
-            "Google Calendar integration",
-            "Basic analytics dashboard",
-            "Email support",
-        ],
-        cta: "Start Free Trial",
-        variant: "outline" as const,
+        icon: Wallet,
+        title: "Top Up",
+        description: "Add credits to your wallet from £25",
     },
     {
-        name: "Professional",
-        price: "£550",
-        period: "/month",
-        setupFee: "£3,000 setup fee",
-        description: "For growing practices with moderate to high call volume",
-        usage: "1,200",
-        usageLabel: "minutes/month",
-        overage: "£0.40/min",
-        features: [
-            "1,200 included minutes/month",
-            "Overage billing at £0.40/min",
-            "EHR system integration",
-            "Advanced analytics",
-            "Custom AI training",
-            "Priority support",
-        ],
-        cta: "Start Free Trial",
-        variant: "default" as const,
-        popular: true,
+        icon: Phone,
+        title: "AI Handles Calls",
+        description: "Your agent answers every call, 24/7",
     },
     {
-        name: "Enterprise",
-        price: "£800",
-        period: "/month",
-        setupFee: "£7,000 setup fee",
-        description: "For multi-location practices and medical groups",
-        usage: "2,000",
-        usageLabel: "minutes/month",
-        overage: "£0.35/min",
-        features: [
-            "2,000 included minutes/month",
-            "Overage billing at £0.35/min",
-            "White-glove onboarding",
-            "Dedicated success manager",
-            "24/7 phone support",
-            "SLA guarantees",
-        ],
-        cta: "Contact Sales",
-        variant: "secondary" as const,
+        icon: Zap,
+        title: "Pay Per Use",
+        description: "Credits deducted per minute of call time",
     },
 ];
 
@@ -78,55 +52,92 @@ export default function Pricing() {
                             Simple, Transparent Pricing
                         </h2>
                         <p className="text-lg text-slate-600">
-                            Choose the plan that fits your practice. Cancel anytime.
+                            Pay only for what you use. No subscriptions, no setup fees, no lock-in.
                         </p>
                     </div>
                 </FadeIn>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {plans.map((plan, index) => (
-                        <FadeIn key={plan.name} delay={index * 0.1} className={`relative bg-white rounded-3xl p-8 shadow-sm border ${plan.popular ? 'border-surgical-600 ring-1 ring-surgical-600' : 'border-slate-200'}`}>
-                            {plan.popular && (
-                                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-surgical-600 text-white px-4 py-1 rounded-full text-sm font-medium uppercase tracking-wide">
-                                    Most Popular
-                                </div>
-                            )}
+                {/* Central Pricing Card */}
+                <FadeIn delay={0.1}>
+                    <div className="max-w-2xl mx-auto bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-surgical-600 ring-1 ring-surgical-600 mb-16">
+                        <div className="text-center mb-8">
+                            <h3 className="text-2xl font-bold text-deep-obsidian mb-2">Pay As You Go</h3>
+                            <p className="text-slate-600 text-sm">
+                                Top up your wallet. AI handles calls. Credits deducted per minute.
+                            </p>
+                        </div>
 
-                            <h3 className="text-xl font-bold text-deep-obsidian mb-2">{plan.name}</h3>
-                            <p className="text-slate-600 mb-4 text-sm">{plan.description}</p>
-
-                            <div className="mb-1">
-                                <span className="text-4xl font-bold text-surgical-600">{plan.price}</span>
-                                <span className="text-slate-500 ml-1">{plan.period}</span>
+                        <div className="text-center mb-8">
+                            <div className="flex items-baseline justify-center gap-2">
+                                <span className="text-5xl font-bold text-surgical-600">From £25</span>
                             </div>
-                            <p className="text-sm text-slate-400 mb-6">{plan.setupFee}</p>
+                            <p className="text-sm text-slate-400 mt-2">Minimum top-up. Calls billed per minute based on actual usage.</p>
+                        </div>
 
-                            <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
-                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Included Usage</p>
-                                <p className="text-2xl font-bold text-surgical-600">{plan.usage} <span className="text-sm font-normal text-slate-500">{plan.usageLabel}</span></p>
-                                <p className="text-xs text-slate-400 mt-1">Overage: {plan.overage}</p>
-                            </div>
-
-                            <Link href="/start" className="block w-full">
-                                <Button
-                                    variant={plan.variant}
-                                    className={`w-full mb-6 ${plan.popular ? 'bg-surgical-600 hover:bg-surgical-700 text-white' : ''}`}
+                        {/* Top-up pills */}
+                        <div className="flex flex-wrap justify-center gap-3 mb-8">
+                            {TOP_UP_OPTIONS.map((option) => (
+                                <span
+                                    key={option.pence}
+                                    className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50"
                                 >
-                                    Start Free Trial
-                                </Button>
-                            </Link>
+                                    {option.label}
+                                </span>
+                            ))}
+                            <span className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-400 bg-slate-50">
+                                Custom
+                            </span>
+                        </div>
 
-                            <ul className="space-y-3">
-                                {plan.features.map((feature) => (
-                                    <li key={feature} className="flex items-start gap-3 text-sm text-slate-600">
-                                        <Check className="h-5 w-5 text-green-500 shrink-0" />
-                                        {feature}
-                                    </li>
-                                ))}
-                            </ul>
-                        </FadeIn>
-                    ))}
-                </div>
+                        <Link href="/start" className="block w-full">
+                            <Button className="w-full bg-surgical-600 hover:bg-surgical-700 text-white py-3 text-base">
+                                Get Started
+                            </Button>
+                        </Link>
+
+                        <p className="text-center text-xs text-slate-400 mt-4">
+                            Set up auto-recharge to never run out of credits.
+                        </p>
+                    </div>
+                </FadeIn>
+
+                {/* How It Works Steps */}
+                <FadeIn delay={0.2}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-16">
+                        {STEPS.map((step, index) => {
+                            const Icon = step.icon;
+                            return (
+                                <div key={step.title} className="text-center p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-surgical-600/10 mb-4">
+                                        <Icon className="w-6 h-6 text-surgical-600" />
+                                    </div>
+                                    <div className="text-xs font-bold text-surgical-600 uppercase tracking-wide mb-2">
+                                        Step {index + 1}
+                                    </div>
+                                    <h4 className="text-lg font-bold text-deep-obsidian mb-1">{step.title}</h4>
+                                    <p className="text-sm text-slate-500">{step.description}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </FadeIn>
+
+                {/* All Features Included */}
+                <FadeIn delay={0.3}>
+                    <div className="max-w-3xl mx-auto">
+                        <h3 className="text-xl font-bold text-deep-obsidian text-center mb-8">
+                            All features included for every customer
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {FEATURES.map((feature) => (
+                                <div key={feature} className="flex items-start gap-3 text-sm text-slate-600">
+                                    <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+                                    {feature}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </FadeIn>
             </div>
         </section>
     );

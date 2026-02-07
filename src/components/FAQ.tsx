@@ -30,6 +30,14 @@ const faqs = [
         answer: "While we specialize in healthcare (clinics, med spas, dental practices), Voxanne can be customized for any appointment-based business.",
     },
     {
+        question: "How much does Voxanne AI cost?",
+        answer: "Voxanne AI uses simple pay-as-you-go pricing. Top up your wallet from £25 and calls are billed per minute based on actual usage. There are no monthly subscriptions, no setup fees, and no lock-in. Every customer gets access to every feature.",
+    },
+    {
+        question: "How does billing work?",
+        answer: "Add credit to your wallet via card payment. When your AI agent handles calls, credits are deducted automatically based on call duration. You can enable auto-recharge so your wallet tops up automatically when the balance gets low. View all transactions in your dashboard.",
+    },
+    {
         question: "How long does setup take?",
         answer: "Most clinics are up and running in less than 15 minutes. Simply connect your calendar, customize your greeting, and forward your calls.",
     },

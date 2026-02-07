@@ -8,13 +8,12 @@ import { VideoModal } from '@/components/VideoModal';
 import { GlassMorphCard } from '@/components/ui/GlassMorphCard';
 import { AmbientOrbs, GradientOrb } from '@/components/ui/AmbientOrbs';
 import { getInboundAgentConfig } from '@/lib/supabaseHelpers';
-import BookingModal from '@/components/booking/BookingModal';
+import Link from 'next/link';
 
 export function HeroCalendlyReplica() {
     const [agentId, setAgentId] = useState<string | null>(null);
     const [activeStep, setActiveStep] = useState(0);
     const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
-    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
     // Animation sequence
     useEffect(() => {
@@ -85,14 +84,15 @@ export function HeroCalendlyReplica() {
 
                         {/* CTA Buttons - optimized for mobile */}
                         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 md:pt-4">
-                            <Button
-                                size="lg"
-                                onClick={() => setIsBookingModalOpen(true)}
-                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold shadow-lg shadow-blue-200 transition-transform hover:scale-105 active:scale-95"
-                            >
-                                Get Started
-                                <ArrowRight className="ml-2 h-5 w-5" />
-                            </Button>
+                            <Link href="/start">
+                                <Button
+                                    size="lg"
+                                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold shadow-lg shadow-blue-200 transition-transform hover:scale-105 active:scale-95"
+                                >
+                                    Get Started
+                                    <ArrowRight className="ml-2 h-5 w-5" />
+                                </Button>
+                            </Link>
                             <Button
                                 size="lg"
                                 variant="outline"
@@ -307,11 +307,11 @@ export function HeroCalendlyReplica() {
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                                        <span className="text-green-600 font-bold text-xl">$</span>
+                                        <span className="text-green-600 font-bold text-xl">£</span>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Revenue Saved</p>
-                                        <p className="font-bold text-slate-900 text-lg">$150.00</p>
+                                        <p className="font-bold text-slate-900 text-lg">£120.00</p>
                                     </div>
                                 </div>
                             </motion.div>
@@ -339,12 +339,6 @@ export function HeroCalendlyReplica() {
                 onClose={() => setIsDemoModalOpen(false)}
                 videoSrc="/videos/voxanne-demo.mp4"
                 title="Voxanne AI Platform Demo"
-            />
-
-            {/* Booking Modal */}
-            <BookingModal
-                isOpen={isBookingModalOpen}
-                onClose={() => setIsBookingModalOpen(false)}
             />
         </section>
     );

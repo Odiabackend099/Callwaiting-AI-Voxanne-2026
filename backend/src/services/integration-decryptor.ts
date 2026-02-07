@@ -15,6 +15,7 @@
 
 import { EncryptionService } from './encryption';
 import { CredentialService } from './credential-service';
+import { VapiClient } from './vapi-client';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
 import type { ProviderType } from '../types/supabase-db';
@@ -983,6 +984,258 @@ export class IntegrationDecryptor {
         error: error?.message || 'Unknown error checking Twilio health',
       };
     }
+  }
+
+  // ============================================
+  // Single-Slot Telephony: saveTwilioCredential + syncVapiCredential
+  // ============================================
+
+  /**
+   * Save Twilio credentials with strict UPSERT + mutual exclusion + Vapi sync.
+   *
+   * This is the SINGLE GATE for all Twilio credential writes.
+   * 1 Organization = 1 Twilio Connection. New saves overwrite the old.
+   *
+   * @param orgId - Organization ID
+   * @param creds - Twilio credentials to save
+   * @param creds.accountSid - Twilio Account SID
+   * @param creds.authToken - Twilio Auth Token
+   * @param creds.phoneNumber - Phone number in E.164 format
+   * @param creds.source - 'byoc' or 'managed'
+   */
+  static async saveTwilioCredential(
+    orgId: string,
+    creds: {
+      accountSid: string;
+      authToken: string;
+      phoneNumber: string;
+      source: 'byoc' | 'managed';
+    }
+  ): Promise<{ vapiCredentialId: string | null }> {
+    const { accountSid, authToken, phoneNumber, source } = creds;
+
+    log.info('IntegrationDecryptor', 'saveTwilioCredential: starting', {
+      orgId,
+      source,
+      sidLast4: accountSid.slice(-4),
+      phoneLast4: phoneNumber.slice(-4),
+    });
+
+    // 1. Encrypt credentials
+    const encryptedConfig = EncryptionService.encryptObject({
+      accountSid,
+      authToken,
+      phoneNumber,
+    });
+
+    // 2. UPSERT into org_credentials (single-slot — UNIQUE on org_id,provider)
+    const { error: upsertError } = await supabase
+      .from('org_credentials')
+      .upsert(
+        {
+          org_id: orgId,
+          provider: 'twilio' as const,
+          is_active: true,
+          encrypted_config: encryptedConfig,
+          metadata: { accountSid, phoneNumber },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'org_id,provider' }
+      );
+
+    if (upsertError) {
+      log.error('IntegrationDecryptor', 'saveTwilioCredential: DB upsert failed', {
+        orgId,
+        error: upsertError.message,
+      });
+      throw new Error(`Failed to save Twilio credentials: ${upsertError.message}`);
+    }
+
+    // 3. Mutual exclusion: deactivate the opposite mode
+    if (source === 'managed') {
+      // Deactivate BYOC integrations entry
+      await supabase
+        .from('integrations')
+        .update({ config: { status: 'replaced_by_managed' }, updated_at: new Date().toISOString() })
+        .eq('org_id', orgId)
+        .eq('provider', 'twilio');
+    } else {
+      // Deactivate managed phone numbers + subaccounts
+      await supabase
+        .from('managed_phone_numbers')
+        .update({ status: 'released', released_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('org_id', orgId)
+        .eq('status', 'active');
+
+      await supabase
+        .from('twilio_subaccounts')
+        .update({ status: 'closed', closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('org_id', orgId)
+        .eq('status', 'active');
+    }
+
+    // 4. Update organizations.telephony_mode
+    await supabase
+      .from('organizations')
+      .update({ telephony_mode: source })
+      .eq('id', orgId);
+
+    // 5. Sync credential to Vapi
+    const vapiCredentialId = await this.syncVapiCredential(orgId, accountSid, authToken);
+
+    // 6. Store vapi_credential_id on organizations
+    if (vapiCredentialId) {
+      await supabase
+        .from('organizations')
+        .update({ vapi_credential_id: vapiCredentialId })
+        .eq('id', orgId);
+    }
+
+    log.info('IntegrationDecryptor', 'saveTwilioCredential: complete', {
+      orgId,
+      source,
+      vapiCredentialId,
+    });
+
+    return { vapiCredentialId };
+  }
+
+  /**
+   * Sync Twilio credentials to Vapi (create or update).
+   *
+   * - If org already has a vapi_credential_id → update it
+   * - If not (or if stale 404) → create a new one
+   *
+   * Returns the Vapi credential ID or null on failure.
+   */
+  private static async syncVapiCredential(
+    orgId: string,
+    accountSid: string,
+    authToken: string
+  ): Promise<string | null> {
+    const vapiKey = process.env.VAPI_PRIVATE_KEY;
+    if (!vapiKey) {
+      log.warn('IntegrationDecryptor', 'syncVapiCredential: no VAPI_PRIVATE_KEY, skipping', { orgId });
+      return null;
+    }
+
+    try {
+      const vapiClient = new VapiClient(vapiKey);
+
+      // Check if org already has a credential ID
+      const { data: orgRow } = await supabase
+        .from('organizations')
+        .select('vapi_credential_id')
+        .eq('id', orgId)
+        .single();
+
+      const existingCredId = orgRow?.vapi_credential_id;
+
+      if (existingCredId) {
+        // Try to update existing credential
+        try {
+          await vapiClient.updateCredential(existingCredId, accountSid, authToken);
+          log.info('IntegrationDecryptor', 'syncVapiCredential: updated existing', {
+            orgId,
+            credentialId: existingCredId,
+          });
+          return existingCredId;
+        } catch (updateErr: any) {
+          // If 404, the credential was deleted externally — create a new one
+          const is404 = updateErr?.response?.status === 404 || updateErr?.message?.includes('404');
+          if (!is404) throw updateErr;
+
+          log.warn('IntegrationDecryptor', 'syncVapiCredential: stale credential (404), creating new', {
+            orgId,
+            staleCredentialId: existingCredId,
+          });
+        }
+      }
+
+      // Create new credential
+      const result = await vapiClient.createCredential(accountSid, authToken, `org-${orgId}`);
+      const newCredId = result?.id;
+
+      if (!newCredId) {
+        log.error('IntegrationDecryptor', 'syncVapiCredential: Vapi returned no ID', { orgId });
+        return null;
+      }
+
+      log.info('IntegrationDecryptor', 'syncVapiCredential: created new', {
+        orgId,
+        credentialId: newCredId,
+      });
+      return newCredId;
+    } catch (err: any) {
+      log.error('IntegrationDecryptor', 'syncVapiCredential: failed', {
+        orgId,
+        error: err?.message,
+      });
+      // Non-fatal: DB save already succeeded, caller can retry later
+      return null;
+    }
+  }
+
+  /**
+   * Get effective Twilio credentials for an organization,
+   * checking telephony_mode to decide between BYOC and managed.
+   *
+   * - If mode is 'byoc' (or unset): delegates to existing getTwilioCredentials()
+   * - If mode is 'managed': decrypts subaccount credentials from twilio_subaccounts
+   *   and returns the primary managed phone number
+   *
+   * Returns the same TwilioCredentials interface so callers don't need to change.
+   *
+   * @ai-invariant Existing getTwilioCredentials() is NOT modified.
+   */
+  static async getEffectiveTwilioCredentials(orgId: string): Promise<TwilioCredentials> {
+    // Step 1: Check telephony_mode
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('telephony_mode')
+      .eq('id', orgId)
+      .single();
+
+    const mode = org?.telephony_mode || 'byoc';
+
+    // Step 2: If BYOC, delegate to existing method (unchanged)
+    if (mode !== 'managed') {
+      return this.getTwilioCredentials(orgId);
+    }
+
+    // Step 3: Managed mode — get subaccount credentials
+    const { data: subData, error: subError } = await supabase
+      .from('twilio_subaccounts')
+      .select('twilio_account_sid, twilio_auth_token_encrypted')
+      .eq('org_id', orgId)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (subError || !subData) {
+      throw new Error(`No active managed subaccount for org ${orgId}`);
+    }
+
+    // Step 4: Get primary managed phone number
+    const { data: numberData } = await supabase
+      .from('managed_phone_numbers')
+      .select('phone_number')
+      .eq('org_id', orgId)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+
+    if (!numberData) {
+      throw new Error(`No active managed phone number for org ${orgId}`);
+    }
+
+    // Step 5: Decrypt and return
+    const authToken = EncryptionService.decrypt(subData.twilio_auth_token_encrypted);
+
+    return {
+      accountSid: subData.twilio_account_sid,
+      authToken,
+      phoneNumber: numberData.phone_number,
+    };
   }
 }
 

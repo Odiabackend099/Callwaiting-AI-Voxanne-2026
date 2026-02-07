@@ -485,11 +485,11 @@ export default function HIPAACompliancePage() {
                                 <div className="flex items-start gap-3">
                                     <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-1" />
                                     <div>
-                                        <p className="font-semibold text-slate-900 mb-2">Important: Free Trial Limitations</p>
+                                        <p className="font-semibold text-slate-900 mb-2">Important: Wallet Funding Requirement</p>
                                         <p className="text-slate-700 text-sm">
-                                            BAAs are not available for free trial accounts. If you are a healthcare provider subject to HIPAA,
-                                            you must upgrade to a paid plan before processing PHI. Contact sales@voxanne.ai to discuss
-                                            enterprise pricing and BAA execution.
+                                            BAAs require an active, funded account. If you are a healthcare provider subject to HIPAA,
+                                            ensure your wallet is funded before processing PHI. Contact sales@voxanne.ai to discuss
+                                            BAA execution and compliance requirements.
                                         </p>
                                     </div>
                                 </div>

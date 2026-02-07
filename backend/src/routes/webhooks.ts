@@ -1776,24 +1776,26 @@ async function handleEndOfCallReport(event: VapiEvent) {
     }
     // ===== END CONTACT STATUS UPDATE =====
 
-    // ===== BILLING: Report call usage =====
-    if (callLog?.org_id && call.id && call.duration) {
+    // ===== PREPAID BILLING: Deduct credits after call =====
+    if (callLog?.org_id && call.id) {
       try {
-        const { processCallUsage } = await import('../services/billing-manager');
-        await processCallUsage(
+        const { processCallBilling } = await import('../services/billing-manager');
+        await processCallBilling(
           callLog.org_id,
           call.id,
           call.id,
-          Math.round(call.duration)
+          Math.round(call.duration || 0),
+          call.cost || null,
+          (call as any).costs || null
         );
-        logger.info('webhooks', 'Call usage billed', {
+        logger.info('webhooks', 'Prepaid credits deducted', {
           callId: call.id,
           orgId: callLog.org_id,
-          durationSeconds: Math.round(call.duration),
+          cost: call.cost,
         });
       } catch (billingError: any) {
         // CRITICAL: Billing failure must NOT block webhook processing
-        logger.error('webhooks', 'Billing failed (non-blocking)', {
+        logger.error('webhooks', 'Prepaid billing failed (non-blocking)', {
           error: billingError?.message,
           callId: call.id,
           orgId: callLog.org_id,

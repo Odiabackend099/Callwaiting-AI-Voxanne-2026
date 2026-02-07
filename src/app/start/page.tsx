@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,10 +14,19 @@ import FooterRedesigned from '@/components/FooterRedesigned';
 import { haptics } from '@/lib/haptics';
 import { NetworkStatus, useNetworkStatus } from '@/components/pwa/NetworkStatus';
 import { queueSubmission, processQueue, getQueuedCount } from '@/lib/offline-queue';
+import { trackEvent } from '@/lib/analytics';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingForm />
+    </Suspense>
+  );
+}
+
+function OnboardingForm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
   const [phoneError, setPhoneError] = useState<string>('');
   const [fileError, setFileError] = useState<string>('');
@@ -24,6 +34,8 @@ export default function OnboardingPage() {
   const [queuedCount, setQueuedCount] = useState(0);
   const { error: showError, warning, success: showSuccess } = useToast();
   const isOnline = useNetworkStatus();
+  const searchParams = useSearchParams();
+  const [startTime] = useState(() => Date.now());
 
   // Check offline queue on mount and when coming back online
   useEffect(() => {
@@ -70,6 +82,34 @@ export default function OnboardingPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, queuedCount]);
+
+  // Track form view and UTM attribution
+  useEffect(() => {
+    trackEvent('form_view', { page: 'start' });
+
+    const source = searchParams.get('utm_source');
+    if (source) {
+      trackEvent('utm_landing', {
+        utm_source: source,
+        utm_medium: searchParams.get('utm_medium') || '',
+        utm_campaign: searchParams.get('utm_campaign') || '',
+      });
+    }
+  }, [searchParams]);
+
+  // Track drop-off if user leaves before submitting
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (status !== 'success') {
+        trackEvent('form_abandon', {
+          page: 'start',
+          time_on_page: Math.round((Date.now() - startTime) / 1000),
+        });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [status, startTime]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     haptics.light(); // Haptic feedback on file selection
@@ -134,6 +174,17 @@ export default function OnboardingPage() {
       console.warn('Phone formatting failed, using original value:', error);
     }
 
+    // Append UTM attribution and conversion timing
+    const utmSource = searchParams.get('utm_source');
+    if (utmSource) formData.set('utm_source', utmSource);
+    const utmMedium = searchParams.get('utm_medium');
+    if (utmMedium) formData.set('utm_medium', utmMedium);
+    const utmCampaign = searchParams.get('utm_campaign');
+    if (utmCampaign) formData.set('utm_campaign', utmCampaign);
+    const planParam = searchParams.get('plan');
+    if (planParam) formData.set('plan', planParam);
+    formData.set('time_to_complete_seconds', String(Math.round((Date.now() - startTime) / 1000)));
+
     // If offline, queue submission for later
     if (!isOnline) {
       try {
@@ -175,6 +226,12 @@ export default function OnboardingPage() {
       console.log('Success result:', result);
 
       haptics.success(); // Success haptic
+      trackEvent('form_submit_success', {
+        page: 'start',
+        time_to_complete: Math.round((Date.now() - startTime) / 1000),
+        utm_source: searchParams.get('utm_source') || 'direct',
+        plan: searchParams.get('plan') || 'payg',
+      });
       setStatus('success');
       // Don't reset form - keep success message visible
       // User can refresh page to submit again if needed

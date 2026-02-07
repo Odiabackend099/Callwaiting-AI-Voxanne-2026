@@ -272,10 +272,10 @@ export default function TermsOfService() {
                             when the charges were incurred.
                         </p>
                         <ul className="list-disc ml-6 mb-6 space-y-2">
-                            <li><strong>Billing Cycle:</strong> Fees are billed monthly in advance unless otherwise agreed in writing</li>
-                            <li><strong>Payment Method:</strong> Payments are processed via Stripe. You authorize us to charge your designated payment method</li>
-                            <li><strong>Automatic Renewal:</strong> Your subscription automatically renews each billing period unless you cancel</li>
-                            <li><strong>Usage-Based Fees:</strong> Additional charges may apply for calls exceeding your plan limits, SMS messages, and premium features</li>
+                            <li><strong>Billing Model:</strong> Voxanne AI operates on a prepaid credit (pay-as-you-go) basis. You purchase credits which are deducted based on actual call usage</li>
+                            <li><strong>Payment Method:</strong> Payments are processed via Stripe. You may purchase credits via one-time card payments</li>
+                            <li><strong>Auto-Recharge:</strong> You may optionally enable automatic top-ups when your balance falls below a configured threshold</li>
+                            <li><strong>Minimum Top-Up:</strong> The minimum credit purchase is £25</li>
                         </ul>
 
                         <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">6.2 Price Changes</h3>
@@ -307,35 +307,27 @@ export default function TermsOfService() {
                     <section id="cancellation" className="mb-12">
                         <h2 className="text-3xl font-bold text-deep-obsidian mb-6">7. Cancellation and Refunds</h2>
 
-                        <h3 className="text-xl font-semibold text-deep-obsidian mb-4">7.1 Cancellation Process</h3>
+                        <h3 className="text-xl font-semibold text-deep-obsidian mb-4">7.1 Account Closure</h3>
                         <p className="mb-4">
-                            You may cancel your subscription at any time by:
+                            You may stop using the Service at any time. Since there is no recurring subscription, no cancellation is required. To close your account:
                         </p>
                         <ul className="list-disc ml-6 mb-6 space-y-2">
-                            <li>Navigating to Account Settings → Billing → Cancel Subscription in your dashboard</li>
-                            <li>Contacting our support team at support@voxanne.ai</li>
+                            <li>Navigate to Account Settings → Close Account in your dashboard</li>
+                            <li>Or contact our support team at support@voxanne.ai</li>
                         </ul>
                         <p className="mb-4">
-                            Cancellation will take effect at the end of your current billing period. You will retain access
-                            to the Service until the end of the paid period.
+                            Unused credits remain in your wallet for 12 months from the date of your last top-up.
                         </p>
 
                         <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">7.2 Refund Policy</h3>
                         <p className="mb-4">
-                            <strong>No refunds:</strong> All fees are non-refundable except:
+                            Credits are non-refundable except:
                         </p>
                         <ul className="list-disc ml-6 mb-6 space-y-2">
                             <li>Service uptime falls below our SLA commitments (see Section 10)</li>
-                            <li>Billing errors (we will issue a credit or refund within 30 days)</li>
+                            <li>Billing errors (we will issue a credit within 30 days)</li>
                             <li>As required by applicable law</li>
                         </ul>
-                        <div className="bg-blue-50 border-l-4 border-clinical-blue p-4 my-6">
-                            <p className="text-sm text-blue-800">
-                                <strong>Free Trial:</strong> If you are on a free trial, you may cancel at any time during
-                                the trial period without charge. If you do not cancel before the trial ends, your payment
-                                method will be charged for the first billing period.
-                            </p>
-                        </div>
 
                         <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">7.3 Data Export Upon Cancellation</h3>
                         <p className="mb-4">

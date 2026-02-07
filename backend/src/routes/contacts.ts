@@ -11,6 +11,7 @@ import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
 import { sendHotLeadSMS } from '../services/sms-notifications';
 import { scoreLead } from '../services/lead-scoring';
+import { hasEnoughBalance } from '../services/wallet-service';
 
 const contactsRouter = Router();
 
@@ -415,6 +416,15 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
     if (!isValidE164Phone(contact.phone)) {
       return res.status(400).json({
         error: `Invalid phone format: ${contact.phone}. Must be E.164 format (e.g., +12125551234)`
+      });
+    }
+
+    // ===== PREPAID BALANCE GATE: Block outbound calls if insufficient credits =====
+    const hasFunds = await hasEnoughBalance(orgId);
+    if (!hasFunds) {
+      log.warn('Contacts', 'POST /:id/call-back - Insufficient credits', { orgId });
+      return res.status(402).json({
+        error: 'Insufficient credits. Please top up your wallet to make outbound calls.',
       });
     }
 

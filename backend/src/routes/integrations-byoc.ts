@@ -154,68 +154,20 @@ integrationsRouter.post('/twilio', async (req: express.Request, res: express.Res
       } as IntegrationResponse);
     }
 
-    // 2. Encrypt Credentials
-    const { EncryptionService } = require('../services/encryption');
-    const encryptedConfig = EncryptionService.encryptObject({
+    // 2. Save via single-slot gate (UPSERT + mutual exclusion + Vapi sync)
+    const { vapiCredentialId } = await IntegrationDecryptor.saveTwilioCredential(orgId, {
       accountSid,
       authToken,
-      phoneNumber
+      phoneNumber: phoneNumber || '',
+      source: 'byoc',
     });
 
-    // 3. Save to Single Source of Truth (org_credentials)
-    const { error: dbError } = await supabase
-      .from('org_credentials')
-      .upsert({
-        org_id: orgId,
-        provider: 'twilio',
-        is_active: true,
-        encrypted_config: encryptedConfig,
-        metadata: {
-          accountSid, // Safe to store non-sensitive ID for display
-          phoneNumber
-        },
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'org_id,provider' });
+    log.info('integrations', 'Twilio credentials saved via single-slot gate', {
+      orgId,
+      vapiCredentialId,
+    });
 
-    if (dbError) {
-      log.error('integrations', 'Failed to save to org_credentials', { error: dbError.message });
-      throw new Error('Database save failed');
-    }
-
-    // 4. Sync to Vapi Platform (Dual-Sync)
-    // We must ensure Vapi has these credentials so the AI can make calls.
-    const VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
-    if (VAPI_PRIVATE_KEY) {
-      try {
-        const vapiRes = await fetch('https://api.vapi.ai/credential', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            provider: 'twilio',
-            accountSid: accountSid,
-            authToken: authToken
-          })
-        });
-
-        if (!vapiRes.ok) {
-          const errorText = await vapiRes.text();
-          log.error('integrations', 'Vapi Sync Failed', { error: errorText });
-          // We warn but don't fail the request, as DB save succeeded.
-          // Ideally we should alert the user.
-        } else {
-          log.info('integrations', 'Vapi Sync Successful', { orgId });
-        }
-      } catch (vapiError: any) {
-        log.error('integrations', 'Vapi Sync Error', { error: vapiError.message });
-      }
-    } else {
-      log.warn('integrations', 'Skipping Vapi Sync - No Private Key', { orgId });
-    }
-
-    // 5. Cleanup Legacy Table (Optional but good for hygiene)
+    // 3. Cleanup Legacy Table (Optional but good for hygiene)
     await supabase.from('customer_twilio_keys').delete().eq('org_id', orgId);
 
     res.json({
@@ -593,6 +545,51 @@ integrationsRouter.delete('/:provider', async (req: express.Request, res: expres
       success: false,
       error: 'Failed to disconnect provider'
     } as IntegrationResponse);
+  }
+});
+
+// ============================================
+// GET /api/integrations/telephony-mode
+// Returns the org's current telephony mode + whether credentials exist
+// Used by frontend to show mode-conflict warnings
+// ============================================
+
+integrationsRouter.get('/telephony-mode', async (req: express.Request, res: express.Response) => {
+  try {
+    const orgId = (req as any).user?.orgId;
+    if (!orgId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Get telephony mode
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('telephony_mode, vapi_credential_id')
+      .eq('id', orgId)
+      .single();
+
+    const mode = org?.telephony_mode || 'none';
+
+    // Check if credentials exist
+    const { data: cred } = await supabase
+      .from('org_credentials')
+      .select('id, metadata')
+      .eq('org_id', orgId)
+      .eq('provider', 'twilio')
+      .eq('is_active', true)
+      .maybeSingle();
+
+    const phoneNumber = (cred?.metadata as any)?.phoneNumber || undefined;
+
+    res.json({
+      mode,
+      hasExistingCredential: !!cred,
+      phoneNumber,
+      vapiCredentialId: org?.vapi_credential_id || null,
+    });
+  } catch (error: any) {
+    log.error('integrations', 'Failed to get telephony mode', { error: error?.message });
+    res.status(500).json({ error: 'Failed to get telephony mode' });
   }
 });
 

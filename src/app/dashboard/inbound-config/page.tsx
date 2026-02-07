@@ -25,6 +25,18 @@ export default function InboundConfigPage() {
         phoneNumber: '',
     });
 
+    // Check telephony mode for conflict warning
+    const [telephonyMode, setTelephonyMode] = useState<string | null>(null);
+    const [managedPhone, setManagedPhone] = useState<string | null>(null);
+    useEffect(() => {
+        authedBackendFetch<{ mode: string; phoneNumber?: string }>('/api/integrations/telephony-mode')
+            .then(data => {
+                setTelephonyMode(data.mode);
+                setManagedPhone(data.phoneNumber || null);
+            })
+            .catch(() => {});
+    }, []);
+
     const handleSave = async () => {
         setError(null);
         setSuccess(null);
@@ -94,6 +106,17 @@ export default function InboundConfigPage() {
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
+            {/* Mode conflict warning */}
+            {telephonyMode === 'managed' && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <p className="text-sm font-medium text-amber-800">Managed number active{managedPhone ? `: ${managedPhone}` : ''}</p>
+                        <p className="text-sm text-amber-700 mt-1">You currently have a managed phone number. Saving BYOC credentials will replace it.</p>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-start">
                 <div>

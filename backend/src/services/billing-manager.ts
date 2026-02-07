@@ -16,6 +16,7 @@ import { supabase } from './supabase-client';
 import { getStripeClient } from '../config/stripe';
 import { enqueueBillingJob, BillingJobData } from '../config/billing-queue';
 import { log } from './logger';
+import { deductCallCredits } from './wallet-service';
 
 // ============================================
 // Types
@@ -234,6 +235,57 @@ export async function processCallUsage(
       orgId,
       callId,
       overageMinutes: billing.overageMinutes,
+    });
+  }
+}
+
+// ============================================
+// Prepaid Credit Ledger Billing
+// ============================================
+
+/**
+ * Process call billing using the prepaid credit ledger.
+ * Routes to deductCallCredits() from wallet-service.
+ * Called from webhook handlers as a non-blocking side-effect.
+ *
+ * @param orgId - Organization ID
+ * @param callId - Internal call ID
+ * @param vapiCallId - Vapi call ID
+ * @param durationSeconds - Call duration in seconds
+ * @param vapiCostDollars - Vapi's reported cost in USD (from message.cost)
+ * @param costBreakdown - Vapi's cost breakdown (from call.costs)
+ */
+export async function processCallBilling(
+  orgId: string,
+  callId: string,
+  vapiCallId: string,
+  durationSeconds: number,
+  vapiCostDollars: number | null,
+  costBreakdown: Record<string, any> | null
+): Promise<void> {
+  // Skip zero-cost or null-cost calls
+  if (!vapiCostDollars || vapiCostDollars <= 0) {
+    log.debug('BillingManager', 'Zero/null cost call, skipping prepaid billing', {
+      orgId,
+      callId,
+      durationSeconds,
+    });
+    return;
+  }
+
+  const result = await deductCallCredits(
+    orgId,
+    callId,
+    vapiCallId,
+    vapiCostDollars,
+    costBreakdown
+  );
+
+  if (!result.success && !result.duplicate) {
+    log.error('BillingManager', 'Prepaid billing deduction failed', {
+      orgId,
+      callId,
+      error: result.error,
     });
   }
 }

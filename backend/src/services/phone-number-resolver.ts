@@ -6,6 +6,8 @@
  * Raw phone strings like "+12125551234" are NOT valid Vapi phoneNumberIds — only UUIDs are.
  *
  * Resolution strategy:
+ *   0. (NEW) Check managed_phone_numbers for an active number with vapi_phone_id set
+ *      → If found, return immediately (short-circuit — no credential lookup, no Vapi API call)
  *   1. Get org's Twilio phone number from org_credentials (SSOT for credentials)
  *   2. List all Vapi phone numbers and find a match
  *   3. Fall back to first available Vapi phone number
@@ -19,6 +21,7 @@ import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { createLogger } from './logger';
 import { withTimeout } from '../utils/timeout-helper';
+import { supabaseAdmin } from '../config/supabase';
 
 const logger = createLogger('PhoneNumberResolver');
 
@@ -40,6 +43,30 @@ async function resolveOrgPhoneNumberIdInner(
   vapiApiKey: string
 ): Promise<{ phoneNumberId: string | null; callerNumber?: string }> {
   try {
+    // Step 0: Check managed_phone_numbers for an active number with vapi_phone_id
+    // Short-circuits the entire BYOC resolution chain for managed orgs
+    try {
+      const { data: managedNumber } = await supabaseAdmin
+        .from('managed_phone_numbers')
+        .select('vapi_phone_id, phone_number')
+        .eq('org_id', orgId)
+        .eq('status', 'active')
+        .not('vapi_phone_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+
+      if (managedNumber?.vapi_phone_id) {
+        logger.info('Resolved managed phone number (Step 0 short-circuit)', {
+          orgId,
+          vapiPhoneNumberId: managedNumber.vapi_phone_id,
+          phoneLast4: managedNumber.phone_number?.slice(-4),
+        });
+        return { phoneNumberId: managedNumber.vapi_phone_id, callerNumber: managedNumber.phone_number };
+      }
+    } catch {
+      // Step 0 is best-effort; fall through to BYOC chain
+    }
+
     // Step 1: Get org's Twilio phone number from org_credentials (SSOT for credentials)
     let twilioPhoneNumber: string | undefined;
     try {

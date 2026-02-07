@@ -10,6 +10,7 @@ import { requireAuth } from '../middleware/auth';
 import { getStripeClient } from '../config/stripe';
 import { supabase } from '../services/supabase-client';
 import { log } from '../services/logger';
+import { checkBalance, getWalletSummary } from '../services/wallet-service';
 
 interface OrgUsageRow {
   billing_plan: string;
@@ -338,6 +339,317 @@ router.post('/create-portal-session', requireAuth, async (req: Request, res: Res
   } catch (error: any) {
     log.error('BillingAPI', 'Error creating portal session', { error: error.message });
     res.status(500).json({ error: 'Failed to create portal session' });
+  }
+});
+
+// ============================================
+// Wallet (Prepaid Credit) Endpoints
+// ============================================
+
+/**
+ * GET /api/billing/wallet
+ * Returns wallet balance, config, and spend summary.
+ */
+router.get('/wallet', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const balance = await checkBalance(orgId);
+    if (!balance) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const summary = await getWalletSummary(orgId);
+
+    res.json({
+      balance_pence: balance.balancePence,
+      balance_formatted: `£${(balance.balancePence / 100).toFixed(2)}`,
+      low_balance_pence: balance.lowBalancePence,
+      is_low_balance: balance.isLowBalance,
+      auto_recharge_enabled: balance.autoRechargeEnabled,
+      has_payment_method: balance.hasPaymentMethod,
+      summary: summary || null,
+    });
+  } catch (error: any) {
+    log.error('BillingAPI', 'Error fetching wallet', { error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/billing/wallet/transactions
+ * Returns paginated credit_transactions for the authenticated org.
+ * Query params: page (default 1), limit (default 50, max 100), type (optional filter)
+ */
+router.get('/wallet/transactions', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+    const typeFilter = req.query.type as string | undefined;
+
+    let query = supabase
+      .from('credit_transactions')
+      .select('*', { count: 'exact' })
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (typeFilter) {
+      query = query.eq('type', typeFilter);
+    }
+
+    const { data: entries, error, count } = await query;
+
+    if (error) {
+      log.error('BillingAPI', 'Error fetching wallet transactions', { error: error.message });
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+
+    res.json({
+      transactions: entries || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        total_pages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (error: any) {
+    log.error('BillingAPI', 'Error fetching wallet transactions', { error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/billing/wallet/topup
+ * Creates a Stripe Checkout session for a one-time credit purchase.
+ * Body: { amount_pence: number } — minimum 2500 (£25)
+ */
+router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const stripe = getStripeClient();
+    if (!stripe) {
+      return res.status(503).json({ error: 'Billing not configured' });
+    }
+
+    const minTopUp = parseInt(process.env.WALLET_MIN_TOPUP_PENCE || '2500', 10);
+    const { amount_pence } = req.body;
+
+    if (!amount_pence || typeof amount_pence !== 'number' || amount_pence < minTopUp) {
+      return res.status(400).json({
+        error: `Minimum top-up is £${(minTopUp / 100).toFixed(2)} (${minTopUp}p)`,
+      });
+    }
+
+    // Look up or create Stripe customer
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('stripe_customer_id, name')
+      .eq('id', orgId)
+      .single();
+
+    let customerId = orgData?.stripe_customer_id;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        metadata: { org_id: orgId },
+        name: orgData?.name || undefined,
+      });
+      customerId = customer.id;
+
+      await supabase
+        .from('organizations')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', orgId);
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: 'Voxanne AI Credits',
+              description: `Top-up: £${(amount_pence / 100).toFixed(2)}`,
+            },
+            unit_amount: amount_pence,
+          },
+          quantity: 1,
+        },
+      ],
+      payment_intent_data: {
+        setup_future_usage: 'off_session', // Save card for auto-recharge
+        metadata: {
+          type: 'wallet_topup',
+          org_id: orgId,
+          amount_pence: String(amount_pence),
+        },
+      },
+      success_url: `${frontendUrl}/dashboard/wallet?topup=success`,
+      cancel_url: `${frontendUrl}/dashboard/wallet?topup=canceled`,
+      metadata: {
+        type: 'wallet_topup',
+        org_id: orgId,
+        amount_pence: String(amount_pence),
+      },
+    });
+
+    log.info('BillingAPI', 'Wallet top-up checkout session created', {
+      orgId,
+      amountPence: amount_pence,
+      sessionId: session.id,
+    });
+
+    res.json({ url: session.url });
+  } catch (error: any) {
+    log.error('BillingAPI', 'Error creating wallet top-up session', { error: error.message });
+    res.status(500).json({ error: 'Failed to create top-up session' });
+  }
+});
+
+/**
+ * POST /api/billing/wallet/auto-recharge
+ * Configure auto-recharge settings.
+ * Body: { enabled: boolean, amount_pence?: number, threshold_pence?: number }
+ */
+router.post('/wallet/auto-recharge', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { enabled, amount_pence, threshold_pence } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+
+    const updateData: Record<string, any> = {
+      wallet_auto_recharge: enabled,
+    };
+
+    if (amount_pence !== undefined) {
+      if (typeof amount_pence !== 'number' || amount_pence < 1000) {
+        return res.status(400).json({ error: 'amount_pence must be at least 1000 (£10)' });
+      }
+      updateData.wallet_recharge_amount_pence = amount_pence;
+    }
+
+    if (threshold_pence !== undefined) {
+      if (typeof threshold_pence !== 'number' || threshold_pence < 100) {
+        return res.status(400).json({ error: 'threshold_pence must be at least 100 (£1)' });
+      }
+      updateData.wallet_low_balance_pence = threshold_pence;
+    }
+
+    const { error } = await supabase
+      .from('organizations')
+      .update(updateData)
+      .eq('id', orgId);
+
+    if (error) {
+      log.error('BillingAPI', 'Failed to update auto-recharge config', {
+        orgId,
+        error: error.message,
+      });
+      return res.status(500).json({ error: 'Failed to update settings' });
+    }
+
+    log.info('BillingAPI', 'Auto-recharge config updated', {
+      orgId,
+      enabled,
+      amountPence: amount_pence,
+      thresholdPence: threshold_pence,
+    });
+
+    res.json({
+      success: true,
+      auto_recharge_enabled: enabled,
+      recharge_amount_pence: updateData.wallet_recharge_amount_pence,
+      threshold_pence: updateData.wallet_low_balance_pence,
+    });
+  } catch (error: any) {
+    log.error('BillingAPI', 'Error updating auto-recharge', { error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/billing/wallet/profit
+ * Returns profit analytics: total provider cost, total charged, gross profit.
+ * Query params: days (default 30)
+ */
+router.get('/wallet/profit', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days as string) || 30));
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - days);
+
+    const { data: transactions, error } = await supabase
+      .from('credit_transactions')
+      .select('type, direction, amount_pence, provider_cost_pence, client_charged_pence, gross_profit_pence, created_at')
+      .eq('org_id', orgId)
+      .eq('type', 'call_deduction')
+      .gte('created_at', sinceDate.toISOString())
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      log.error('BillingAPI', 'Error fetching profit data', { error: error.message });
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+
+    let totalProviderCost = 0;
+    let totalClientCharged = 0;
+    let totalGrossProfit = 0;
+    const dailyBreakdown: Record<string, { provider: number; charged: number; profit: number; calls: number }> = {};
+
+    for (const tx of (transactions || [])) {
+      totalProviderCost += tx.provider_cost_pence || 0;
+      totalClientCharged += tx.client_charged_pence || 0;
+      totalGrossProfit += tx.gross_profit_pence || 0;
+
+      const day = tx.created_at.split('T')[0];
+      if (!dailyBreakdown[day]) {
+        dailyBreakdown[day] = { provider: 0, charged: 0, profit: 0, calls: 0 };
+      }
+      dailyBreakdown[day].provider += tx.provider_cost_pence || 0;
+      dailyBreakdown[day].charged += tx.client_charged_pence || 0;
+      dailyBreakdown[day].profit += tx.gross_profit_pence || 0;
+      dailyBreakdown[day].calls += 1;
+    }
+
+    res.json({
+      period_days: days,
+      total_calls: (transactions || []).length,
+      total_provider_cost_pence: totalProviderCost,
+      total_client_charged_pence: totalClientCharged,
+      total_gross_profit_pence: totalGrossProfit,
+      total_provider_cost_formatted: `£${(totalProviderCost / 100).toFixed(2)}`,
+      total_client_charged_formatted: `£${(totalClientCharged / 100).toFixed(2)}`,
+      total_gross_profit_formatted: `£${(totalGrossProfit / 100).toFixed(2)}`,
+      margin_percent: totalClientCharged > 0
+        ? Math.round((totalGrossProfit / totalClientCharged) * 100)
+        : 0,
+      daily_breakdown: dailyBreakdown,
+    });
+  } catch (error: any) {
+    log.error('BillingAPI', 'Error fetching profit data', { error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

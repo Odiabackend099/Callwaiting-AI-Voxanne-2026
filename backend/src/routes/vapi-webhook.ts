@@ -12,6 +12,8 @@ import { verifyVapiSignature } from '../utils/vapi-webhook-signature';
 import { AnalyticsService } from '../services/analytics-service';
 import { OutcomeSummaryService } from '../services/outcome-summary';
 import { RAG_CONFIG } from '../config/rag-config';
+import { hasEnoughBalance } from '../services/wallet-service';
+import { processCallBilling } from '../services/billing-manager';
 
 const vapiWebhookRouter = Router();
 
@@ -691,12 +693,67 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       // Also run analytics (existing behavior)
       AnalyticsService.processEndOfCall(message);
 
+      // ===== PREPAID BILLING: Deduct credits after call =====
+      if (orgId && call?.id) {
+        try {
+          await processCallBilling(
+            orgId,
+            call.id,
+            call.id,
+            Math.round(message.durationSeconds || call?.duration || 0),
+            message.cost || null,
+            call?.costs || null
+          );
+        } catch (billingErr: any) {
+          // CRITICAL: Billing failure must NOT block webhook processing
+          log.error('Vapi-Webhook', 'Prepaid billing failed (non-blocking)', {
+            error: billingErr?.message,
+            callId: call.id,
+            orgId,
+          });
+        }
+      }
+
       return res.json({ success: true, received: true });
     }
 
     // 3. Handle Assistant Request (RAG)
     // Legacy support: if message is a string, it's the user query
     // Modern support: if message is object with type 'assistant-request' OR no type but has 'role'
+
+    // ===== PREPAID BALANCE GATE: Block calls if insufficient credits =====
+    if (message && message.type === 'assistant-request') {
+      const gateAssistantId = body.assistantId || message.call?.assistantId;
+      if (gateAssistantId) {
+        try {
+          const { data: gateAgent } = await supabase
+            .from('agents')
+            .select('org_id')
+            .eq('vapi_assistant_id', gateAssistantId)
+            .maybeSingle();
+
+          if (gateAgent?.org_id) {
+            const hasFunds = await hasEnoughBalance(gateAgent.org_id);
+            if (!hasFunds) {
+              log.warn('Vapi-Webhook', 'Call blocked - insufficient credits', {
+                orgId: gateAgent.org_id,
+                assistantId: gateAssistantId,
+              });
+              return res.json({
+                error: 'Insufficient credits. Please top up your account at your Voxanne dashboard.',
+              });
+            }
+          }
+        } catch (gateErr: any) {
+          // Don't block calls if balance check fails - fail open
+          log.error('Vapi-Webhook', 'Balance gate error (failing open)', {
+            error: gateErr?.message,
+            assistantId: gateAssistantId,
+          });
+        }
+      }
+    }
+
     let userQuery = '';
 
     if (typeof message === 'string') {

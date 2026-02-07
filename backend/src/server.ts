@@ -92,6 +92,7 @@ import oauthTestRouter from './routes/oauth-test';
 import internalApiRoutes from './routes/internal-api-routes'; // default export
 import integrationsApiRouter from './routes/integrations-api'; // default export
 import telephonyRouter from './routes/telephony'; // default export - Hybrid Telephony
+import managedTelephonyRouter from './routes/managed-telephony'; // default export - Managed Telephony (Reseller)
 import webhookHealthRouter from './routes/webhook-health'; // default export - Webhook Health Check
 import testErrorRouter from './routes/test-error'; // Test endpoint for exception handling
 import monitoringRouter from './routes/monitoring'; // default export - System monitoring endpoints
@@ -115,6 +116,12 @@ import {
   closeBillingQueue
 } from './config/billing-queue';
 import { processBillingJob } from './services/billing-manager';
+import {
+  initializeWalletQueue,
+  initializeWalletWorker,
+  closeWalletQueue
+} from './config/wallet-queue';
+import { processAutoRecharge } from './services/wallet-recharge-processor';
 import stripeWebhooksRouter from './routes/stripe-webhooks';
 import billingApiRouter from './routes/billing-api';
 import calendlyWebhookRouter from './routes/calendly-webhook';
@@ -137,6 +144,8 @@ initializeWebhookWorker(processWebhookJob);
 initializeStripe(); // Initialize Stripe billing client
 initializeBillingQueue();
 initializeBillingWorker(processBillingJob);
+initializeWalletQueue(); // Initialize wallet auto-recharge queue
+initializeWalletWorker(processAutoRecharge); // Start wallet worker
 initializeSmsQueue(); // Initialize SMS queue after Redis is ready
 
 declare global {
@@ -326,8 +335,10 @@ app.use('/api/vapi', vapiCalendarToolsRouter);
 app.use('/api/google-oauth', googleOAuthRouter);
 app.use('/api/health', healthIntegrationsRouter);
 app.use('/api/telephony', telephonyRouter); // Hybrid Telephony BYOC routes
+app.use('/api/managed-telephony', managedTelephonyRouter); // Managed Telephony (Reseller) routes
 log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
 log.info('Server', 'Hybrid Telephony routes registered at /api/telephony');
+log.info('Server', 'Managed Telephony routes registered at /api/managed-telephony');
 log.info('Server', 'Health integrations diagnostic endpoint registered at /api/health/integrations');
 log.info('Server', 'Contacts, appointments, notifications, calendar, and org validation routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);
@@ -838,6 +849,10 @@ process.on('SIGTERM', () => {
     console.log('Billing queue closed');
   });
 
+  closeWalletQueue().then(() => {
+    console.log('Wallet queue closed');
+  });
+
   shutdownSmsQueue().then(() => {
     console.log('SMS queue closed');
   });
@@ -861,6 +876,10 @@ process.on('SIGINT', () => {
 
   closeBillingQueue().then(() => {
     console.log('Billing queue closed');
+  });
+
+  closeWalletQueue().then(() => {
+    console.log('Wallet queue closed');
   });
 
   shutdownSmsQueue().then(() => {

@@ -82,10 +82,10 @@ export default function AgentConfigPage() {
     // Global Store State
     const { inboundConfig, outboundConfig, setInboundConfig, setOutboundConfig } = useAgentStore();
 
-    // Server state for draft comparison
+    // Draft state removed — DB is the single source of truth (PRD rule).
+    // These are kept as no-ops so delete handler references don't break.
     const [serverInbound, setServerInbound] = useState<AgentConfig | null>(null);
     const [serverOutbound, setServerOutbound] = useState<AgentConfig | null>(null);
-    const [hasDraft, setHasDraft] = useState(false);
 
     // Helper to check equality
     const areConfigsEqual = (a: AgentConfig, b: AgentConfig) => {
@@ -143,7 +143,8 @@ export default function AgentConfigPage() {
         }
     }, [numbersRaw]);
 
-    // Sync agent config from SWR — handles draft detection
+    // Sync agent config from SWR — DB is the single source of truth.
+    // Always overwrite the in-memory Zustand store with what the DB returns.
     const configSyncedRef = useRef(false);
     useEffect(() => {
         if (!agentData?.agents || configSyncedRef.current) return;
@@ -153,60 +154,39 @@ export default function AgentConfigPage() {
         const outboundAgent = agentData.agents.find((a: any) => a.role === 'outbound');
 
         if (inboundAgent) {
-            const loadedConfig = {
+            const loadedConfig: AgentConfig = {
                 name: inboundAgent.name || 'Inbound Agent',
-                systemPrompt: inboundAgent.system_prompt || '',
-                firstMessage: inboundAgent.first_message || '',
+                systemPrompt: inboundAgent.systemPrompt || inboundAgent.system_prompt || '',
+                firstMessage: inboundAgent.firstMessage || inboundAgent.first_message || '',
                 voice: inboundAgent.voice || '',
+                voiceProvider: inboundAgent.voiceProvider || inboundAgent.voice_provider || undefined,
                 language: inboundAgent.language || 'en-US',
-                maxDuration: inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                maxDuration: inboundAgent.maxCallDuration || inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
             };
 
-            const currentStore = useAgentStore.getState().inboundConfig;
-            if (!areConfigsEqual(currentStore, loadedConfig)) {
-                if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
-                    setInboundConfig(loadedConfig);
-                    setOriginalInboundConfig(loadedConfig);
-                } else {
-                    setHasDraft(true);
-                    setServerInbound(loadedConfig);
-                    setOriginalInboundConfig(loadedConfig);
-                }
-            } else {
-                setInboundConfig(loadedConfig);
-                setOriginalInboundConfig(loadedConfig);
-            }
+            setInboundConfig(loadedConfig);
+            setOriginalInboundConfig(loadedConfig);
         }
 
         if (outboundAgent) {
-            const loadedConfig = {
+            const loadedConfig: AgentConfig = {
                 name: outboundAgent.name || 'Outbound Agent',
-                systemPrompt: outboundAgent.system_prompt || '',
-                firstMessage: outboundAgent.first_message || '',
+                systemPrompt: outboundAgent.systemPrompt || outboundAgent.system_prompt || '',
+                firstMessage: outboundAgent.firstMessage || outboundAgent.first_message || '',
                 voice: outboundAgent.voice || '',
+                voiceProvider: outboundAgent.voiceProvider || outboundAgent.voice_provider || undefined,
                 language: outboundAgent.language || 'en-US',
-                maxDuration: outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                maxDuration: outboundAgent.maxCallDuration || outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
             };
 
-            if (outboundAgent.vapi_phone_number_id) {
-                setSelectedOutboundNumberId(outboundAgent.vapi_phone_number_id);
-                setOriginalOutboundPhoneNumberId(outboundAgent.vapi_phone_number_id);
+            if (outboundAgent.vapi_phone_number_id || outboundAgent.vapiPhoneNumberId) {
+                const phoneId = outboundAgent.vapi_phone_number_id || outboundAgent.vapiPhoneNumberId;
+                setSelectedOutboundNumberId(phoneId);
+                setOriginalOutboundPhoneNumberId(phoneId);
             }
 
-            const currentStore = useAgentStore.getState().outboundConfig;
-            if (!areConfigsEqual(currentStore, loadedConfig)) {
-                if (areConfigsEqual(currentStore, INITIAL_CONFIG) || (!currentStore.systemPrompt && !currentStore.voice)) {
-                    setOutboundConfig(loadedConfig);
-                    setOriginalOutboundConfig(loadedConfig);
-                } else {
-                    setHasDraft(true);
-                    setServerOutbound(loadedConfig);
-                    setOriginalOutboundConfig(loadedConfig);
-                }
-            } else {
-                setOutboundConfig(loadedConfig);
-                setOriginalOutboundConfig(loadedConfig);
-            }
+            setOutboundConfig(loadedConfig);
+            setOriginalOutboundConfig(loadedConfig);
         }
     }, [agentData]);
 
@@ -260,15 +240,6 @@ export default function AgentConfigPage() {
         return false;
     };
 
-    const restoreDraft = () => {
-        setHasDraft(false);
-    };
-
-    const discardDraft = () => {
-        if (serverInbound) setInboundConfig(serverInbound);
-        if (serverOutbound) setOutboundConfig(serverOutbound);
-        setHasDraft(false);
-    };
 
     const validateAgentConfig = (config: AgentConfig, agentType: 'inbound' | 'outbound'): string | null => {
         if (!config.systemPrompt || config.systemPrompt.trim() === '') {
@@ -379,13 +350,53 @@ export default function AgentConfigPage() {
         }
     };
 
-    const handleTestInbound = () => {
+    const handleTestInbound = async () => {
         setError(null);
         const inboundError = validateAgentConfig(inboundConfig, 'inbound');
         if (inboundError) {
             setError(inboundError);
             return;
         }
+
+        // FIX: Auto-save unsaved changes before testing so the browser test
+        // uses the config the user sees in the UI, not stale DB data.
+        if (inboundChanged) {
+            setIsSaving(true);
+            setSavingAgent('inbound');
+            try {
+                const payload = {
+                    inbound: {
+                        name: inboundConfig.name,
+                        systemPrompt: inboundConfig.systemPrompt,
+                        firstMessage: inboundConfig.firstMessage,
+                        voiceId: inboundConfig.voice,
+                        voiceProvider: inboundConfig.voiceProvider,
+                        language: inboundConfig.language,
+                        maxDurationSeconds: inboundConfig.maxDuration
+                    }
+                };
+                const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    timeoutMs: 30000,
+                    retries: 1,
+                });
+                if (!result?.success) {
+                    throw new Error(result?.error || 'Failed to save before testing');
+                }
+                setOriginalInboundConfig(inboundConfig);
+            } catch (err) {
+                console.error('Auto-save before test failed:', err);
+                setError(err instanceof Error ? err.message : 'Failed to save changes before testing. Please save manually first.');
+                setIsSaving(false);
+                setSavingAgent(null);
+                return;
+            } finally {
+                setIsSaving(false);
+                setSavingAgent(null);
+            }
+        }
+
         router.push('/dashboard/test?tab=web&autostart=1');
     };
 
@@ -397,6 +408,46 @@ export default function AgentConfigPage() {
                 setError(outboundError);
                 return;
             }
+
+            // FIX: Auto-save unsaved changes before testing (same fix as inbound)
+            if (outboundChanged) {
+                setIsSaving(true);
+                setSavingAgent('outbound');
+                try {
+                    const payload = {
+                        outbound: {
+                            name: outboundConfig.name,
+                            systemPrompt: outboundConfig.systemPrompt,
+                            firstMessage: outboundConfig.firstMessage,
+                            voiceId: outboundConfig.voice,
+                            voiceProvider: outboundConfig.voiceProvider,
+                            language: outboundConfig.language,
+                            maxDurationSeconds: outboundConfig.maxDuration,
+                            vapiPhoneNumberId: selectedOutboundNumberId || null
+                        }
+                    };
+                    const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                        timeoutMs: 30000,
+                        retries: 1,
+                    });
+                    if (!result?.success) {
+                        throw new Error(result?.error || 'Failed to save before testing');
+                    }
+                    setOriginalOutboundConfig(outboundConfig);
+                } catch (saveErr) {
+                    console.error('Auto-save before test failed:', saveErr);
+                    setError(saveErr instanceof Error ? saveErr.message : 'Failed to save changes before testing. Please save manually first.');
+                    setIsSaving(false);
+                    setSavingAgent(null);
+                    return;
+                } finally {
+                    setIsSaving(false);
+                    setSavingAgent(null);
+                }
+            }
+
             router.push('/dashboard/test?tab=phone');
         } catch (err) {
             console.error('Failed to start outbound test:', err);
@@ -669,33 +720,6 @@ export default function AgentConfigPage() {
                     </div>
                 )}
 
-                {hasDraft && (
-                    <div className="mb-6 p-4 bg-surgical-50 border border-surgical-200 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-surgical-100 rounded-full flex items-center justify-center">
-                                <Save className="w-4 h-4 text-surgical-600" />
-                            </div>
-                            <div>
-                                <h3 className="font-medium text-obsidian">Unsaved Changes Restored</h3>
-                                <p className="text-sm text-obsidian/60">We found unsaved changes from your last session.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={discardDraft}
-                                className="px-3 py-1.5 bg-white text-obsidian/60 border border-surgical-200 rounded-lg hover:bg-surgical-50 text-sm font-medium transition-colors"
-                            >
-                                Discard
-                            </button>
-                            <button
-                                onClick={restoreDraft}
-                                className="px-3 py-1.5 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 text-sm font-medium transition-colors shadow-sm"
-                            >
-                                Keep Draft
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${isLoading ? 'hidden' : ''}`}>
                     {/* LEFT COLUMN - Configuration */}

@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target, Smartphone } from 'lucide-react';
+import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target, Smartphone, Wallet } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LeftSidebar() {
@@ -21,6 +21,7 @@ export default function LeftSidebar() {
                 { label: 'Dashboard', href: '/dashboard', icon: Activity },
                 { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
                 { label: 'Leads', href: '/dashboard/leads', icon: Target },
+                { label: 'Wallet', href: '/dashboard/wallet', icon: Wallet },
             ],
         },
         {
@@ -179,7 +180,7 @@ export default function LeftSidebar() {
                     <p className="text-xs font-semibold text-obsidian truncate tracking-tight">
                         {user?.email}
                     </p>
-                    <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium">Pro Plan</p>
+                    <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium">Prepaid</p>
                 </div>
                 <button
                     onClick={handleLogout}

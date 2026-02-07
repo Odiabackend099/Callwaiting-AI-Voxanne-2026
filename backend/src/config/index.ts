@@ -214,6 +214,13 @@ export const config = {
   INTERNAL_API_KEY: getOptional('INTERNAL_API_KEY'),
 
   // ========================================================================
+  // WALLET / PREPAID BILLING (Optional)
+  // ========================================================================
+  WALLET_MIN_TOPUP_PENCE: getNumber('WALLET_MIN_TOPUP_PENCE', 2500),       // £25 minimum top-up
+  WALLET_MIN_BALANCE_FOR_CALL: getNumber('WALLET_MIN_BALANCE_FOR_CALL', 50), // 50p minimum to start call
+  USD_TO_GBP_RATE: getOptional('USD_TO_GBP_RATE', '0.79'),                  // Vapi costs in USD
+
+  // ========================================================================
   // BUSINESS CONFIGURATION (Optional)
   // ========================================================================
   FOUNDER_NAME: getOptional('FOUNDER_NAME'),

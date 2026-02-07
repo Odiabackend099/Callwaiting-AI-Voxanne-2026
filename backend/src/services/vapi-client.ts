@@ -726,6 +726,73 @@ export class VapiClient {
     return await this.request<any>(() => this.client.delete(`/phone-number/${phoneNumberId}`), { route: 'DELETE /phone-number/:id', phoneNumberId });
   }
 
+  // ========== CREDENTIALS ==========
+
+  /**
+   * Create a Twilio credential in Vapi.
+   * Returns the full credential object including the `id` (UUID) which must be stored.
+   */
+  async createCredential(twilioAccountSid: string, twilioAuthToken: string, name?: string): Promise<{ id: string; [key: string]: any }> {
+    const payload: any = {
+      provider: 'twilio',
+      authToken: twilioAuthToken,
+      accountSid: twilioAccountSid,
+    };
+    if (name) payload.name = name;
+
+    const result = await this.request<any>(
+      () => this.client.post('/credential', payload),
+      { route: 'POST /credential' }
+    );
+    logger.info('Created Vapi credential', { credentialId: result?.id, provider: 'twilio' });
+    return result;
+  }
+
+  /**
+   * Update an existing Twilio credential in Vapi.
+   * Throws if the credential doesn't exist (404).
+   */
+  async updateCredential(credentialId: string, twilioAccountSid: string, twilioAuthToken: string): Promise<any> {
+    const payload = {
+      provider: 'twilio',
+      authToken: twilioAuthToken,
+      accountSid: twilioAccountSid,
+    };
+
+    return await this.request<any>(
+      () => this.client.patch(`/credential/${credentialId}`, payload),
+      { route: 'PATCH /credential/:id', credentialId }
+    );
+  }
+
+  /**
+   * Get a credential by ID. Returns null if not found (404).
+   */
+  async getCredential(credentialId: string): Promise<any | null> {
+    try {
+      return await this.request<any>(
+        () => this.client.get(`/credential/${credentialId}`),
+        { route: 'GET /credential/:id', credentialId }
+      );
+    } catch (err: any) {
+      if (err?.response?.status === 404 || err?.message?.includes('404')) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Delete a credential by ID.
+   */
+  async deleteCredential(credentialId: string): Promise<void> {
+    await this.request<any>(
+      () => this.client.delete(`/credential/${credentialId}`),
+      { route: 'DELETE /credential/:id', credentialId }
+    );
+    logger.info('Deleted Vapi credential', { credentialId });
+  }
+
   /**
    * Get default demo delivery tools in modern Vapi tools format
    * These are server-type tools that send demo videos via email, SMS, or WhatsApp
