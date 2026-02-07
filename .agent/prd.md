@@ -1,8 +1,40 @@
 # Voxanne AI - Product Requirements Document (PRD)
 
-**Version:** 2026.18.0 (Onboarding Intake System Edition)
-**Last Updated:** 2026-02-06 08:00 UTC
-**Status:** 🏆 **PRODUCTION VALIDATED - ONBOARDING INTAKE OPERATIONAL**
+**Version:** 2026.20.0 (Managed Telephony Credentials Fix Edition)
+**Last Updated:** 2026-02-07 12:00 UTC
+**Status:** 🏆 **PRODUCTION VALIDATED - MANAGED TELEPHONY CREDENTIALS FIXED**
+
+---
+
+## ⚠️ CRITICAL: READ THIS FIRST (All AI Assistants)
+
+**🚨 MANAGED TELEPHONY CREDENTIALS - DO NOT MODIFY**
+
+This platform runs a **managed telephony service** that provisions Vapi phone numbers for clients. The credential architecture is CRITICAL and breaking it causes production failures.
+
+**THE RULE (Never Break This):**
+
+When calling `vapiClient.importTwilioNumber()` in managed telephony provisioning:
+- ✅ **ALWAYS** use `getMasterCredentials()` to get master Twilio account SID/token
+- ❌ **NEVER** use subaccount credentials (from database) for Vapi import
+- ❌ **NEVER** change this logic without explicit authorization
+
+**Why This Matters:**
+- Master account owns all phone numbers
+- Vapi needs credentials that match ownership
+- Subaccount credentials cause import failures
+- This was fixed in commit `2d23c28` after production bug
+
+**If You See Code Doing This - DO NOT CHANGE IT:**
+```typescript
+const masterCreds = getMasterCredentials();
+await vapiClient.importTwilioNumber({
+  twilioAccountSid: masterCreds.sid,    // ✅ CORRECT
+  twilioAuthToken: masterCreds.token,   // ✅ CORRECT
+});
+```
+
+**Full details:** See Rule 7 in CRITICAL INVARIANTS section (line 1629)
 
 ---
 
@@ -23,8 +55,69 @@
 | **Onboarding Intake** | ✅ **OPERATIONAL** | Secret form at /start, dual emails, PDF upload, domain verified |
 | **Automated Tests** | ✅ READY | 13 website tests + 9 audio player tests (22 total) |
 | **Demo Readiness** | ✅ LOCKED | Friday demo + website + audio player + chat widget ready |
+| **GEO Implementation** | ✅ **COMPLETE** | AI crawler rules, JSON-LD schemas, UTM tracking, A/B testing ready |
 
-### 📞 Latest Achievement: AI Forwarding Backend Validation (2026-02-05)
+### 🔍 Latest Achievement: GEO + Conversion Tracking (2026-02-07)
+
+**Status:** ✅ **IMPLEMENTATION COMPLETE - PRODUCTION READY**
+
+**What is GEO (Generative Engine Optimization)?**
+
+GEO optimizes the platform for discovery and recommendation by AI search engines (ChatGPT, Gemini, Claude, Grok) when users ask questions like "best AI receptionist for healthcare" or "AI voice agents for clinics."
+
+**Three-Part Implementation:**
+
+**Part 1: AI Welcome Mat** ✅
+- Updated robots.txt with AI crawler rules (ClaudeBot, anthropic-ai, PerplexityBot, Twitterbot)
+- Ensured domain consistency across all SEO files (voxanne.ai)
+- Expanded sitemap from 2 to 5 URLs (/start, /privacy, /terms, /cookie-policy)
+- Enhanced JSON-LD with 3 schema blocks:
+  - Organization schema with 3 pricing SKUs ($299, $799, Custom)
+  - LocalBusiness schema with 5-country areaServed (GB, US, CA, TR, NG)
+  - FAQPage schema with 5 questions (product, pricing, calendar, booking, HIPAA)
+
+**Part 2: Conversion Telemetry** ✅
+- UTM parameter capture (utm_source, utm_medium, utm_campaign)
+- Plan pre-selection tracking (from pricing page links)
+- Time-to-complete tracking (form load to submission)
+- GA4 event tracking (form_view, utm_landing, form_abandon, form_submit_success)
+- Database migration applied (5 new columns in onboarding_submissions)
+- Backend integration (emails include attribution data)
+
+**Part 3: A/B Testing Infrastructure** ✅
+- Cookie-based variant assignment (getVariant utility)
+- 30-day persistence
+- SSR-safe implementation
+- Ready for future experiments
+
+**Files Created/Modified:**
+- Created: `src/lib/analytics.ts` (GA4 wrapper, 15 lines)
+- Created: `src/lib/ab-testing.ts` (A/B testing utility, 30 lines)
+- Created: `backend/supabase/migrations/20260207_add_conversion_tracking.sql` (16 lines)
+- Updated: `src/app/robots.ts` (AI crawlers added: ClaudeBot, anthropic-ai, PerplexityBot, Twitterbot)
+- Updated: `src/app/sitemap.ts` (expanded from 2 to 5 URLs)
+- Updated: `src/components/JsonLd.tsx` (3 schema blocks with pricing SKUs and FAQs)
+- Updated: `backend/src/routes/onboarding-intake.ts` (UTM capture)
+- Updated: `src/app/start/page.tsx` (tracking + Suspense)
+- Updated: `src/components/PricingRedesigned.tsx` (plan params)
+
+**Production Status:**
+- ✅ TypeScript compilation: No errors
+- ✅ Database migration: Applied successfully (5 columns added to onboarding_submissions)
+- ✅ AI crawler rules: 4 new bots added (ClaudeBot, anthropic-ai, PerplexityBot, Twitterbot)
+- ✅ Domain consistency: voxanne.ai throughout all SEO files (robots.ts, sitemap.ts, JsonLd.tsx)
+- ✅ JSON-LD schemas: 3 blocks validated (Organization, LocalBusiness, FAQPage)
+- ✅ Conversion tracking: All 5 fields captured (UTM + plan + timing)
+- ✅ GA4 events: Custom tracking active (form_view, utm_landing, form_abandon, form_submit_success)
+
+**Business Impact:**
+- AI search visibility: Optimized for LLM recommendations
+- Conversion funnel: Full UTM attribution tracking
+- Marketing analytics: Source/medium/campaign data
+- A/B testing: Infrastructure ready for experiments
+- SEO foundation: Structured data for search engines
+
+### 📞 AI Forwarding Backend Validation (2026-02-05)
 
 **Status:** ✅ **BACKEND FULLY VALIDATED**
 
@@ -1565,6 +1658,65 @@ npx playwright test tests/e2e/audio-player-with-auth.spec.ts --headed
 
 ---
 
+### Rule 7: NEVER use subaccount credentials for Vapi number import in managed telephony
+
+**File:** `backend/src/services/managed-telephony-service.ts`
+
+**Why:** Voxanne AI runs a managed telephony service - we provision Vapi phone numbers for clients who don't have their own Twilio accounts. When importing a Twilio number to Vapi, **Vapi MUST receive master account credentials** (the account that owns the numbers), NOT subaccount credentials. Passing subaccount credentials breaks number provisioning.
+
+**The Architecture:**
+- **Master Account:** Twilio master account (TWILIO_MASTER_ACCOUNT_SID) purchases and owns all phone numbers
+- **Subaccounts:** Created per organization for billing/organization purposes, stored encrypted in database
+- **Vapi Import:** Requires master credentials because numbers belong to master, not subaccounts
+
+**What MUST Happen (Correct Flow):**
+1. Master account purchases number via Twilio API ✅ (uses `getMasterClient()`)
+2. Master credentials retrieved from environment variables ✅ (uses `getMasterCredentials()`)
+3. **Vapi import receives master credentials** ✅ (passes `masterCreds.sid` and `masterCreds.token`)
+4. Vapi successfully imports number (credentials match ownership) ✅
+
+**What MUST NOT Happen (Broken Flow):**
+1. Master account purchases number via Twilio API ✅
+2. Subaccount credentials retrieved from database ❌
+3. **Vapi import receives subaccount credentials** ❌ (would pass `subaccountSid` and `subToken`)
+4. Vapi import fails (credentials don't match ownership) ❌
+
+**The Fix (Applied 2026-02-07, Commit 2d23c28):**
+```typescript
+// CORRECT (lines 277-286):
+const masterCreds = getMasterCredentials();
+const vapiClient = new VapiClient(config.VAPI_PRIVATE_KEY);
+const vapiResult = await vapiClient.importTwilioNumber({
+  phoneNumber: purchasedNumber.phoneNumber,
+  twilioAccountSid: masterCreds.sid,    // ✅ MASTER credentials
+  twilioAuthToken: masterCreds.token,   // ✅ MASTER credentials
+});
+
+// NEVER DO THIS (old broken code):
+const vapiResult = await vapiClient.importTwilioNumber({
+  phoneNumber: purchasedNumber.phoneNumber,
+  twilioAccountSid: subaccountSid,  // ❌ WRONG - subaccount
+  twilioAuthToken: subToken,        // ❌ WRONG - subaccount
+});
+```
+
+**Critical Environment Variables (Required at Startup):**
+- `TWILIO_MASTER_ACCOUNT_SID` - Master account SID (validated in `backend/src/config/index.ts`)
+- `TWILIO_MASTER_AUTH_TOKEN` - Master account token (validated in `backend/src/config/index.ts`)
+- Backend WILL NOT START without these (enforced since commit 15c3c69)
+
+**Helper Functions (DO NOT MODIFY):**
+- `getMasterClient()` - Returns Twilio client for master account (line 69-76)
+- `getMasterCredentials()` - Returns master SID/token for Vapi import (line 78-85)
+
+**Action:** Always use `getMasterCredentials()` when calling `vapiClient.importTwilioNumber()` in managed telephony provisioning. Never use subaccount credentials for Vapi import.
+
+**Related Commits:**
+- `15c3c69` - Made Twilio credentials required for managed telephony
+- `2d23c28` - Fixed Vapi import to use master credentials instead of subaccount
+
+---
+
 ## 🔧 TOOL CHAIN IMMUTABILITY
 
 **Status:** 🔒 LOCKED (Since 2026-01-31)
@@ -1738,31 +1890,58 @@ Project Root/
 
 ### Production URLs
 
+**Production Domain:** ✅ https://voxanne.ai
+
+**Current Production URLs:**
 - **Frontend:** https://voxanne.ai
-- **Backend:** https://api.voxanne.ai
-- **Webhook:** https://api.voxanne.ai/api/webhooks/vapi
+- **Backend:** https://callwaitingai-backend-sjbi.onrender.com
+- **Webhook:** https://callwaitingai-backend-sjbi.onrender.com/api/webhooks/vapi
+
+**Domain Consistency Verified:**
+- ✅ `src/app/robots.ts` - Uses voxanne.ai (line 40)
+- ✅ `src/app/sitemap.ts` - Uses voxanne.ai (line 4)
+- ✅ `src/components/JsonLd.tsx` - Uses voxanne.ai throughout (3 schemas)
 
 ### Environment Variables (Required)
 
+**⚠️ CRITICAL:** Backend will NOT START without these variables (enforced in `backend/src/config/index.ts`)
+
 ```bash
-# Database
+# Database (CRITICAL - Backend fails without these)
 SUPABASE_URL=https://lbjymlodxprzqgtyqtcq.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<jwt-token>
 
-# External Services
-VAPI_API_KEY=<vapi-key>
+# Voice AI Service (CRITICAL - Backend fails without these)
+VAPI_PRIVATE_KEY=<vapi-private-key>
+
+# Managed Telephony (CRITICAL - Backend fails without these)
+# Standard Twilio credentials (for SMS, general telephony)
 TWILIO_ACCOUNT_SID=<twilio-sid>
 TWILIO_AUTH_TOKEN=<twilio-token>
-OPENAI_API_KEY=<openai-key>
+TWILIO_PHONE_NUMBER=<+1234567890>
 
-# Security
+# Master Twilio Account (CRITICAL - For provisioning Vapi numbers for clients)
+TWILIO_MASTER_ACCOUNT_SID=<master-twilio-sid>
+TWILIO_MASTER_AUTH_TOKEN=<master-twilio-token>
+
+# Security (CRITICAL - Backend fails without these)
 ENCRYPTION_KEY=<256-bit-hex-key>
-JWT_SECRET=<jwt-secret>
 
-# Optional
+# Optional Services
+OPENAI_API_KEY=<openai-key>
+JWT_SECRET=<jwt-secret>
 SENTRY_DSN=<sentry-dsn>
 SLACK_WEBHOOK_URL=<slack-webhook>
 ```
+
+**Why Twilio is Required:**
+Voxanne AI runs a managed telephony service - we provision phone numbers for clients who don't have their own Twilio accounts. Without Twilio credentials, the platform cannot:
+- Provision phone numbers for clients
+- Import numbers to Vapi for voice AI calling
+- Send SMS notifications
+
+**Startup Validation (Since Commit 15c3c69):**
+If ANY critical variable is missing, backend logs detailed error message and exits with code 1. This prevents broken production deployments.
 
 ### Deployment Commands
 
@@ -1815,13 +1994,14 @@ npx supabase db push
 ### Platform Status Summary
 
 **Production Readiness:** ✅ 100% VALIDATED
-**Evidence:** Live transaction + Audio player + Chat widget backend + AI Forwarding wizard all operational
-**Proof:** Event ID `hvfi32jlj9hnafmn0bai83b39s` in Google Calendar + 9 passing audio player tests + Chat widget production tested + AI Forwarding 404 errors eliminated
+**Evidence:** Live transaction + Audio player + Chat widget backend + AI Forwarding wizard + GEO implementation all operational
+**Proof:** Event ID `hvfi32jlj9hnafmn0bai83b39s` in Google Calendar + 9 passing audio player tests + Chat widget production tested + AI Forwarding 404 errors eliminated + GEO schemas validated
 **Holy Grail:** ✅ ACHIEVED (Voice → Database → SMS → Calendar loop closed)
 **Audio Player:** ✅ PRODUCTION READY (Modal, controls, download, keyboard shortcuts)
 **Chat Widget:** ✅ BACKEND OPERATIONAL (Multi-turn AI conversations, CSRF fixed, Groq live)
 **AI Forwarding:** ✅ WIZARD FIXED (404 errors eliminated, production readiness 98/100)
-**Demo Readiness:** ✅ CERTIFIED with zero blockers (website + dashboard + audio player + chat widget + AI forwarding)
+**GEO Implementation:** ✅ COMPLETE (AI crawler rules, 3 JSON-LD schemas, UTM tracking, A/B testing ready)
+**Demo Readiness:** ✅ CERTIFIED with zero blockers (website + dashboard + audio player + chat widget + AI forwarding + GEO)
 
 ### What Makes This Different
 
@@ -1842,8 +2022,13 @@ This isn't just theoretical readiness.
 - Lead qualification and scoring ✅
 - AI Forwarding wizard fully functional ✅
 - 404 errors eliminated (100% → 0%) ✅
+- GEO implementation complete ✅
+- AI crawler rules configured ✅
+- JSON-LD structured data (3 schemas) ✅
+- UTM conversion tracking ✅
+- A/B testing infrastructure ✅
 
-**The loop is closed. The dashboard is complete. The chat widget is operational. The AI Forwarding wizard works. The system is production-ready. You are ready to scale.**
+**The loop is closed. The dashboard is complete. The chat widget is operational. The AI Forwarding wizard works. GEO is implemented. The system is production-ready. You are ready to scale.**
 
 ---
 
@@ -1851,7 +2036,8 @@ This isn't just theoretical readiness.
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| 2026.18.0 | 2026-02-06 08:00 | **Onboarding Intake System operational** - Secret /start form, dual email notifications (user + support), PDF upload to Supabase Storage, Resend domain verified (voxanne.ai), emails delivering successfully | ✅ CURRENT |
+| 2026.19.0 | 2026-02-07 00:00 | **GEO + Conversion Tracking complete** - AI crawler rules (ClaudeBot, anthropic-ai, PerplexityBot, Twitterbot), JSON-LD schemas (Organization/LocalBusiness/FAQPage), UTM parameter capture, plan pre-selection, time-to-complete tracking, GA4 custom events, A/B testing infrastructure, 5 new database columns | ✅ CURRENT |
+| 2026.18.0 | 2026-02-06 08:00 | **Onboarding Intake System operational** - Secret /start form, dual email notifications (user + support), PDF upload to Supabase Storage, Resend domain verified (voxanne.ai), emails delivering successfully | Superseded |
 | 2026.17.0 | 2026-02-05 15:00 | **AI Forwarding wizard bugs fixed** - 404 errors eliminated, error handling improved, production readiness verified (98/100) | Superseded |
 | 2026.16.0 | 2026-02-05 03:00 | **AI Forwarding backend validation** - Credential decryption, Twilio API, GSM code generation verified | Superseded |
 | 2026.15.0 | 2026-02-04 14:30 | **Chat widget backend operational** - CSRF fix, multi-turn AI conversations, production tested, Groq API live | Superseded |
@@ -1863,9 +2049,9 @@ This isn't just theoretical readiness.
 
 ---
 
-**Last Updated:** 2026-02-06 08:00 UTC
+**Last Updated:** 2026-02-07 00:00 UTC
 **Next Review:** Before Friday demo
-**Status:** 🏆 **PRODUCTION VALIDATED - ONBOARDING INTAKE OPERATIONAL**
+**Status:** 🏆 **PRODUCTION VALIDATED - GEO IMPLEMENTATION COMPLETE**
 
 ---
 
