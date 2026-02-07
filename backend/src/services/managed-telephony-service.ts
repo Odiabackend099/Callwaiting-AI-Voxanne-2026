@@ -75,6 +75,15 @@ function getMasterClient(): twilio.Twilio {
   return twilio(masterSid, masterToken);
 }
 
+function getMasterCredentials(): { sid: string; token: string } {
+  const masterSid = process.env.TWILIO_MASTER_ACCOUNT_SID;
+  const masterToken = process.env.TWILIO_MASTER_AUTH_TOKEN;
+  if (!masterSid || !masterToken) {
+    throw new Error('TWILIO_MASTER_ACCOUNT_SID and TWILIO_MASTER_AUTH_TOKEN are required for managed telephony');
+  }
+  return { sid: masterSid, token: masterToken };
+}
+
 // ============================================
 // ManagedTelephonyService
 // ============================================
@@ -265,13 +274,15 @@ export class ManagedTelephonyService {
       let vapiCredentialId: string | null = null;
 
       try {
+        // Import number to Vapi using MASTER credentials (not subaccount)
+        // Vapi needs the master account credentials that own the phone numbers
+        const masterCreds = getMasterCredentials();
         const vapiClient = new VapiClient(config.VAPI_PRIVATE_KEY);
 
-        // Import the Twilio number into Vapi using subaccount credentials
         const vapiResult = await vapiClient.importTwilioNumber({
           phoneNumber: purchasedNumber.phoneNumber,
-          twilioAccountSid: subaccountSid,
-          twilioAuthToken: subToken,
+          twilioAccountSid: masterCreds.sid,    // ✅ Use master SID
+          twilioAuthToken: masterCreds.token,   // ✅ Use master token
         });
 
         vapiPhoneId = vapiResult?.id || null;
