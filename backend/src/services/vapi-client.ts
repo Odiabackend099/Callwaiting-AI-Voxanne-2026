@@ -235,11 +235,14 @@ export class VapiClient {
    * @throws Error if API request fails
    */
   async createAssistant(config: AssistantConfig): Promise<any> {
+    // Support both nested objects (from ensureAssistantSynced) and flat properties (legacy callers)
+    const configAny = config as any;
+
     const payload: any = {
       name: config.name,
-      serverUrl: config.serverUrl,
-      serverMessages: config.serverMessages, // Pass serverMessages
-      model: {
+      serverUrl: configAny.serverUrl || config.serverUrl,
+      serverMessages: configAny.serverMessages || config.serverMessages,
+      model: configAny.model ?? {
         provider: config.modelProvider || 'openai',
         model: config.modelName || 'gpt-4',
         messages: [
@@ -249,16 +252,17 @@ export class VapiClient {
           }
         ]
       },
-      voice: {
+      voice: configAny.voice ?? {
         provider: config.voiceProvider || 'vapi',
         voiceId: config.voiceId || process.env.VAPI_DEFAULT_VOICE || 'Rohan'
       },
-      transcriber: config.transcriber || {
+      transcriber: configAny.transcriber || config.transcriber || {
         provider: 'deepgram',
         model: 'nova-2',
         language: config.language || 'en'  // Use stored language
       },
       firstMessage: config.firstMessage || 'Hello! How can I help you today?',
+      maxDurationSeconds: configAny.maxDurationSeconds || config.maxDurationSeconds,
       recordingEnabled: true  // CRITICAL: Enable recording for all calls
     };
 
@@ -267,9 +271,9 @@ export class VapiClient {
       payload.tools = config.tools;
     }
 
-    // Add maxDurationSeconds if provided
-    if (config.maxDurationSeconds) {
-      payload.maxDurationSeconds = config.maxDurationSeconds;
+    // Clean up undefined maxDurationSeconds (already set in payload construction above)
+    if (!payload.maxDurationSeconds) {
+      delete payload.maxDurationSeconds;
     }
 
     // DISABLED: Vapi API doesn't support fallbacks property (returns 400 error)
@@ -630,20 +634,41 @@ export class VapiClient {
   }
 
   async createWebSocketCall(params: {
-    assistantId: string;
+    assistantId?: string;
+    assistant?: Record<string, any>;
     audioFormat: {
       format: 'pcm_s16le' | 'mulaw';
       container: 'raw';
       sampleRate: number;
     };
   }) {
-    const payload = {
-      assistantId: params.assistantId,
+    const payload: Record<string, any> = {
       transport: {
         provider: 'vapi.websocket',
         audioFormat: params.audioFormat
       }
     };
+
+    // Use inline assistant config if provided (bypasses Vapi cache entirely).
+    // Otherwise fall back to assistantId.
+    if (params.assistant) {
+      payload.assistant = params.assistant;
+    } else if (params.assistantId) {
+      payload.assistantId = params.assistantId;
+    }
+
+    // Log the actual payload being sent to Vapi API
+    logger.info('[VapiClient] POST /call payload', {
+      route: 'POST /call',
+      has_assistant: !!payload.assistant,
+      has_assistantId: !!payload.assistantId,
+      assistant_preview: payload.assistant ? {
+        name: payload.assistant.name,
+        firstMessage: payload.assistant.firstMessage?.substring(0, 80),
+        voiceId: payload.assistant.voice?.voiceId,
+        voiceProvider: payload.assistant.voice?.provider
+      } : null
+    });
 
     return await this.request<any>(() => this.client.post('/call', payload), { route: 'POST /call' });
   }

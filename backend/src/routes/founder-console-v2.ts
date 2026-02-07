@@ -1,6 +1,56 @@
 /**
  * CallWaiting AI API Routes
  * Handles agent configuration, leads, and call management for CallWaiting AI
+ *
+ * ================================================================================================
+ * ⚠️  CRITICAL: ORGANIZATION CONTEXT REQUIREMENTS - READ THIS BEFORE MODIFYING
+ * ================================================================================================
+ *
+ * ALL endpoints in this file operate on organization-specific data. You MUST:
+ *
+ * 1. ✅ ALWAYS use req.user?.orgId to get the authenticated user's organization
+ * 2. ❌ NEVER query organizations table randomly: .from('organizations').limit(1).single()
+ * 3. ✅ ALWAYS filter database queries by org_id BEFORE using .limit(1) or .single()
+ * 4. ❌ NEVER assume there's only one organization in the database
+ *
+ * BUG HISTORY - LEARN FROM THIS:
+ * ------------------------------
+ * Date: 2026-02-07
+ * Bug: Browser test played wrong voice (female JennyNeural instead of male Rohan)
+ * Root Cause: getOrgAndVapiConfig() queried random org instead of authenticated user's org
+ * Impact: Data leakage across organizations, wrong agent configuration used
+ * Fix: Changed to use req.user?.orgId from JWT authentication (Single Source of Truth)
+ *
+ * WHY THIS MATTERS:
+ * -----------------
+ * - Each organization has different agent configurations (voices, prompts, tools)
+ * - Using the wrong org ID causes agents to behave incorrectly
+ * - Breaks multi-tenancy isolation (SECURITY RISK)
+ * - Causes customer-facing bugs that damage trust
+ *
+ * CORRECT PATTERN (use this):
+ * ---------------------------
+ * const orgId = req.user?.orgId;  // ✅ From JWT authentication
+ * if (!orgId) {
+ *   return res.status(401).json({ error: 'Organization context required' });
+ * }
+ * const { data } = await supabase.from('agents').select('*').eq('org_id', orgId).single();
+ *
+ * INCORRECT PATTERN (DO NOT USE):
+ * --------------------------------
+ * const { data: org } = await supabase.from('organizations').limit(1).single(); // ❌ RANDOM ORG!
+ * const orgId = org.id;  // ❌ WRONG! This returns whichever org was created first!
+ *
+ * VALIDATION HELPERS:
+ * -------------------
+ * - assertOrgContext(req) - Runtime validation (throws if orgId missing)
+ * - requireOrgContext middleware - Validates before route handler
+ * - getOrgIdFromRequest(req) - Safe orgId extraction with validation
+ *
+ * See: backend/src/middleware/org-context-validator.ts for implementation
+ * Tests: backend/src/__tests__/unit/org-context-validator.test.ts
+ *
+ * ================================================================================================
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
@@ -153,8 +203,30 @@ import { resolveOrgPhoneNumberId } from '../services/phone-number-resolver';
 
 /**
  * Helper: Get organization and Vapi configuration
- * Eliminates code duplication across routes
- * Returns null if any validation fails (response already sent)
+ *
+ * CRITICAL: This function MUST use req.user.orgId from JWT authentication.
+ *
+ * ⚠️ NEVER query organizations table randomly: .from('organizations').limit(1).single()
+ * ⚠️ This returns a RANDOM org and causes data leakage across organizations.
+ *
+ * BUG HISTORY:
+ * - 2026-02-07: Browser test was fetching random org (demo org a0000000...)
+ *   instead of authenticated user's org (46cf2995...), causing voice mismatch.
+ * - FIX: Changed to use req.user.orgId from JWT app_metadata (SSOT).
+ * - PREVENTION: Added runtime validation, TypeScript guards, automated tests.
+ *
+ * CORRECT PATTERN:
+ *   const orgId = req.user?.orgId;  // ✅ From JWT authentication
+ *
+ * INCORRECT PATTERN (DO NOT USE):
+ *   const { data: org } = await supabase.from('organizations').limit(1).single();
+ *   const orgId = org.id;  // ❌ Returns RANDOM org!
+ *
+ * @param req - Express request with authenticated user (must have req.user.orgId)
+ * @param res - Express response
+ * @param requestId - Request tracking ID
+ * @param requireApiKey - Whether to require Vapi API key (default: true)
+ * @returns Organization ID, Vapi API key, and integration config, or null if validation fails
  */
 async function getOrgAndVapiConfig(
   req: Request,
@@ -162,22 +234,46 @@ async function getOrgAndVapiConfig(
   requestId: string,
   requireApiKey: boolean = true  // Allow callers to opt-out of requiring Vapi API key
 ): Promise<{ orgId: string; vapiApiKey: string | undefined; vapiIntegration: any } | null> {
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('id')
-    .limit(1)
-    .single();
+  // CRITICAL FIX (2026-02-07): Use req.user.orgId (SSOT - user's org from JWT/auth)
+  // This ensures we fetch the correct organization's data based on authentication.
+  // The auth middleware extracts orgId from JWT app_metadata and attaches to req.user.
+  const orgId = req.user?.orgId;
 
-  if (!org?.id) {
-    res.status(500).json({ error: 'Internal server error', requestId });
+  // Runtime validation: Throw clear error if orgId is missing
+  if (!orgId) {
+    logger.error('CRITICAL: Organization context missing in getOrgAndVapiConfig', {
+      requestId,
+      path: req.path,
+      method: req.method,
+      userId: req.user?.id || 'unknown',
+      userEmail: req.user?.email || 'unknown',
+      hasUser: !!req.user,
+      errorType: 'missing_org_context',
+      bugReference: 'Fixed 2026-02-07 - browser test voice mismatch'
+    });
+
+    res.status(401).json({
+      error: 'Organization not found for authenticated user',
+      message: 'Your authentication token is missing organization context. Please log in again.',
+      requestId
+    });
     return null;
   }
 
+  // Audit log: Track which org is being accessed
+  logger.debug('Organization context validated in getOrgAndVapiConfig', {
+    orgId,
+    requestId,
+    userId: req.user?.id,
+    path: req.path
+  });
+
+  // Fetch Vapi integration for the CORRECT organization (no more random org query)
   const { data: vapiIntegration } = await supabase
     .from('integrations')
     .select('config')
     .eq('provider', INTEGRATION_PROVIDERS.VAPI)
-    .eq('org_id', org.id)
+    .eq('org_id', orgId)
     .maybeSingle();
 
   const vapiApiKey: string | undefined =
@@ -195,7 +291,7 @@ async function getOrgAndVapiConfig(
   if (vapiApiKey) {
     logger.info('Vapi key resolved for request', {
       requestId,
-      orgId: org.id,
+      orgId: orgId,
       source: vapiIntegration?.config?.vapi_api_key
         ? 'integrations.config.vapi_api_key'
         : 'integrations.config.vapi_secret_key',
@@ -204,11 +300,11 @@ async function getOrgAndVapiConfig(
   } else {
     logger.warn('Vapi key not available (browser-only mode may be limited)', {
       requestId,
-      orgId: org.id
+      orgId: orgId
     });
   }
 
-  return { orgId: org.id, vapiApiKey, vapiIntegration };
+  return { orgId: orgId, vapiApiKey, vapiIntegration };
 }
 
 // ========== TYPE DEFINITIONS ==========
@@ -592,6 +688,86 @@ async function withRetry<T>(
 }
 
 /**
+ * Verifies that the assistant ID stored in database actually exists in Vapi
+ * and matches the expected configuration.
+ *
+ * This function helps detect:
+ * - Stale assistant IDs (assistant deleted in Vapi dashboard)
+ * - Configuration drift (DB config doesn't match Vapi config)
+ * - Cross-org leaks (assistant belongs to wrong org)
+ *
+ * @param assistantId - Vapi assistant ID to verify
+ * @param expectedConfig - Expected configuration from database
+ * @param vapiApiKey - Vapi API key to use
+ * @returns Validation result with reason if invalid
+ */
+async function verifyVapiAssistant(
+  assistantId: string,
+  expectedConfig: {
+    voice?: string;
+    systemPrompt?: string;
+  },
+  vapiApiKey: string
+): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    const vapiClient = new VapiClient(vapiApiKey);
+    const vapiAssistant = await vapiClient.getAssistant(assistantId);
+
+    if (!vapiAssistant) {
+      return { valid: false, reason: 'Assistant not found in Vapi (may have been deleted)' };
+    }
+
+    // Check voice mismatch (only if voice is specified in expected config)
+    if (expectedConfig.voice) {
+      const vapiVoiceId = vapiAssistant.voice?.voiceId;
+      const vapiVoiceProvider = vapiAssistant.voice?.provider;
+
+      logger.info('[verifyVapiAssistant] Voice comparison', {
+        assistant_id: assistantId,
+        expected_voice: expectedConfig.voice,
+        vapi_voiceId: vapiVoiceId,
+        vapi_provider: vapiVoiceProvider,
+        match: vapiVoiceId === expectedConfig.voice
+      });
+
+      if (vapiVoiceId !== expectedConfig.voice) {
+        return {
+          valid: false,
+          reason: `Voice mismatch: Database expects '${expectedConfig.voice}', but Vapi has '${vapiVoiceId}' (provider: ${vapiVoiceProvider})`
+        };
+      }
+    }
+
+    // Check system prompt mismatch (first 100 chars to avoid huge strings in logs)
+    if (expectedConfig.systemPrompt) {
+      const vapiPrompt = vapiAssistant.model?.messages?.[0]?.content || '';
+      const dbPrompt = expectedConfig.systemPrompt;
+
+      // Compare first 100 characters to detect major mismatches
+      const vapiPromptPreview = vapiPrompt.substring(0, 100);
+      const dbPromptPreview = dbPrompt.substring(0, 100);
+
+      if (vapiPromptPreview !== dbPromptPreview) {
+        return {
+          valid: false,
+          reason: 'System prompt mismatch between database and Vapi (first 100 chars differ)'
+        };
+      }
+    }
+
+    // All checks passed
+    return { valid: true };
+  } catch (error: any) {
+    logger.error('[verifyVapiAssistant] Failed to verify assistant', {
+      assistant_id: assistantId,
+      error: error.message,
+      stack: error.stack
+    });
+    return { valid: false, reason: `Verification failed: ${error.message}` };
+  }
+}
+
+/**
  * Idempotent Vapi Assistant Sync Helper (PRODUCTION-READY)
  * 
  * Ensures Vapi assistant exists and matches DB config. This function is safe
@@ -756,6 +932,28 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
       console.time(`${timerId}-vapi-update`);
       await withRetry(() => vapiClient.updateAssistant(agent.vapi_assistant_id!, updatePayload));
       console.timeEnd(`${timerId}-vapi-update`);
+
+      // Read-back verification: confirm Vapi actually applied the voice
+      try {
+        const updatedAssistant = await vapiClient.getAssistant(agent.vapi_assistant_id!);
+        const appliedVoiceId = updatedAssistant?.voice?.voiceId;
+        if (appliedVoiceId && appliedVoiceId !== resolvedVoiceId) {
+          logger.warn('[VOICE_DRIFT] Vapi did not apply voice update, retrying with voice-only PATCH', {
+            expected: resolvedVoiceId,
+            actual: appliedVoiceId,
+            assistantId: agent.vapi_assistant_id,
+            provider: resolvedVoiceProvider
+          });
+          await vapiClient.updateAssistant(agent.vapi_assistant_id!, {
+            voice: { provider: resolvedVoiceProvider, voiceId: resolvedVoiceId }
+          });
+        }
+      } catch (readBackError: unknown) {
+        logger.warn('[VOICE_DRIFT] Read-back verification failed (non-blocking)', {
+          error: (readBackError as Error).message,
+          assistantId: agent.vapi_assistant_id
+        });
+      }
 
       const duration = Date.now() - startTime;
       logger.info('Vapi assistant synced (updated)', {
@@ -2946,15 +3144,43 @@ router.post(
         return;
       }
 
-      const { data: agent } = await supabase
+      // FIX: Use same selection logic as the save route (most recent by created_at DESC)
+      // Previously this preferred active=true agents, but the save route always updates
+      // the most recent agent without setting active=true, causing a mismatch where
+      // the browser test would use a stale older agent instead of the one just saved.
+      const { data: agents } = await supabase
         .from('agents')
-        .select('id, system_prompt, first_message, voice, language, max_call_duration')
+        .select('id, system_prompt, first_message, voice, language, max_call_duration, vapi_assistant_id, voice_provider, active, created_at')
         .eq('role', AGENT_ROLES.INBOUND)
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
-        .maybeSingle();
+        .limit(1);
+
+      const agent = agents?.[0];
+
+      // ADD: Detailed diagnostic logging
+      logger.info('[Browser Test] Inbound agent query result', {
+        org_id: orgId,
+        agent_found: !!agent,
+        agent_id: agent?.id,
+        agent_role: AGENT_ROLES.INBOUND,
+        has_vapi_assistant_id: !!agent?.vapi_assistant_id,
+        voice: agent?.voice,
+        voice_provider: agent?.voice_provider,
+        system_prompt_length: agent?.system_prompt?.length || 0,
+        first_message_preview: agent?.first_message?.substring(0, 50) || 'N/A',
+        is_active: agent?.active,
+        total_agents: agents?.length || 0,
+        selection_reason: 'most recent by created_at (aligned with save route)',
+        request_id: requestId
+      });
 
       if (!agent?.id) {
+        logger.error('[Browser Test] No inbound agent found', {
+          org_id: orgId,
+          hint: 'User needs to configure inbound agent first',
+          request_id: requestId
+        });
         res.status(400).json({ error: 'Agent not configured. Save Agent Behavior first.', requestId });
         return;
       }
@@ -2980,8 +3206,73 @@ router.post(
       }
 
       // Always re-sync to pick up latest system_prompt, voice, language, and other changes
+      logger.info('[Browser Test] Calling ensureAssistantSynced', {
+        org_id: orgId,
+        agent_id: agent.id,
+        cached_vapi_assistant_id: agent.vapi_assistant_id || 'none',
+        request_id: requestId
+      });
+
       const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
-      const assistantId = syncResult.assistantId;
+      let assistantId = syncResult.assistantId;
+
+      // ADD: Log sync result
+      logger.info('[Browser Test] Assistant sync complete', {
+        org_id: orgId,
+        agent_id: agent.id,
+        assistant_id: assistantId,
+        was_created: !agent.vapi_assistant_id,
+        tools_synced: syncResult.toolsSynced,
+        request_id: requestId
+      });
+
+      // ADD: Verify assistant is valid in Vapi
+      const verification = await verifyVapiAssistant(
+        assistantId,
+        {
+          voice: agent.voice,
+          systemPrompt: agent.system_prompt
+        },
+        vapiApiKey
+      );
+
+      if (!verification.valid) {
+        logger.warn('[Browser Test] Assistant verification failed', {
+          org_id: orgId,
+          agent_id: agent.id,
+          assistant_id: assistantId,
+          reason: verification.reason,
+          request_id: requestId
+        });
+
+        // Force re-sync to fix the mismatch
+        logger.info('[Browser Test] Forcing assistant re-sync due to invalid state', {
+          org_id: orgId,
+          agent_id: agent.id,
+          request_id: requestId
+        });
+
+        const resyncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
+        const newAssistantId = resyncResult.assistantId;
+
+        logger.info('[Browser Test] Re-sync complete', {
+          org_id: orgId,
+          agent_id: agent.id,
+          old_assistant_id: assistantId,
+          new_assistant_id: newAssistantId,
+          request_id: requestId
+        });
+
+        // Use the new assistant ID
+        assistantId = newAssistantId;
+      } else {
+        logger.info('[Browser Test] Assistant verification passed', {
+          org_id: orgId,
+          agent_id: agent.id,
+          assistant_id: assistantId,
+          request_id: requestId
+        });
+      }
 
       // Create call_tracking row for web test
       const { data: trackingRow, error: trackingInsertError } = await supabase
@@ -3009,12 +3300,54 @@ router.post(
 
       const trackingId = trackingRow.id;
 
-      // Create Vapi WebSocket call
+      // Build inline assistant config directly from DB (SSOT).
+      // This bypasses the cached Vapi assistant entirely, guaranteeing the browser test
+      // uses the exact voice, first message, and system prompt from the database.
+      const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
+      const voiceDataForCall = getVoiceById(resolvedVoiceId) || { provider: 'vapi' };
+      const resolvedVoiceProvider = voiceDataForCall.provider || agent.voice_provider || 'vapi';
+
+      const inlineAssistant: Record<string, any> = {
+        name: agent.name || 'Browser Test Agent',
+        firstMessage: agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE,
+        model: {
+          provider: VAPI_DEFAULTS.MODEL_PROVIDER,
+          model: VAPI_DEFAULTS.MODEL_NAME,
+          messages: [{ role: 'system', content: agent.system_prompt || '' }]
+        },
+        voice: {
+          provider: resolvedVoiceProvider,
+          voiceId: resolvedVoiceId
+        },
+        transcriber: {
+          provider: VAPI_DEFAULTS.TRANSCRIBER_PROVIDER,
+          model: VAPI_DEFAULTS.TRANSCRIBER_MODEL,
+          language: agent.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE
+        },
+        maxDurationSeconds: agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION
+      };
+
+      logger.info('[Browser Test] Creating call with INLINE assistant from DB (SSOT)', {
+        org_id: orgId,
+        agent_id: agent.id,
+        voice: resolvedVoiceId,
+        voice_provider: resolvedVoiceProvider,
+        first_message_preview: (agent.first_message || '').substring(0, 80),
+        request_id: requestId
+      });
+
+      // Log the FULL inline assistant payload for debugging
+      logger.info('[Browser Test] Full inline assistant payload', {
+        org_id: orgId,
+        request_id: requestId,
+        inline_assistant: JSON.stringify(inlineAssistant, null, 2)
+      });
+
       const wsVapiClient = new VapiClient(vapiApiKey);
       let call;
       try {
         call = await wsVapiClient.createWebSocketCall({
-          assistantId,
+          assistant: inlineAssistant,
           audioFormat: {
             format: 'pcm_s16le',
             container: 'raw',
@@ -3237,14 +3570,35 @@ router.post(
       }
 
       // Fetch from agents table (single source of truth)
-      // This is where /agent/behavior saves to
-      const { data: agent } = await supabase
+      // FIX: Use same selection logic as the save route (most recent by created_at DESC)
+      // Previously this preferred active=true agents, causing mismatch with save route.
+      const { data: agents } = await supabase
         .from('agents')
-        .select('id, system_prompt, first_message, voice, language, max_call_duration, vapi_assistant_id, vapi_phone_number_id')
+        .select('id, system_prompt, first_message, voice, language, max_call_duration, vapi_assistant_id, vapi_phone_number_id, voice_provider, active, created_at')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
-        .maybeSingle();
+        .limit(1);
+
+      const agent = agents?.[0];
+
+      // ADD: Detailed diagnostic logging
+      logger.info('[Live Call Test] Outbound agent query result', {
+        org_id: orgId,
+        agent_found: !!agent,
+        agent_id: agent?.id,
+        agent_role: AGENT_ROLES.OUTBOUND,
+        has_vapi_assistant_id: !!agent?.vapi_assistant_id,
+        has_vapi_phone_number_id: !!agent?.vapi_phone_number_id,
+        voice: agent?.voice,
+        voice_provider: agent?.voice_provider,
+        system_prompt_length: agent?.system_prompt?.length || 0,
+        first_message_preview: agent?.first_message?.substring(0, 50) || 'N/A',
+        is_active: agent?.active,
+        total_agents: agents?.length || 0,
+        selection_reason: 'most recent by created_at (aligned with save route)',
+        request_id: requestId
+      });
 
       // DIAGNOSTIC: Check for duplicate outbound agents (data integrity issue)
       if (agent?.id) {
@@ -3317,21 +3671,49 @@ router.post(
       // Sync/Get Assistant
       // If we have a vapi_assistant_id from the new config, use it directly.
       // Otherwise, fall back to the legacy ensureAssistantSynced which might create one.
+      logger.info('[Live Call Test] Resolving assistant ID', {
+        org_id: orgId,
+        agent_id: agent.id,
+        cached_vapi_assistant_id: activeConfig.vapi_assistant_id || 'none',
+        will_sync: !activeConfig.vapi_assistant_id,
+        request_id: requestId
+      });
+
       let assistantId = activeConfig.vapi_assistant_id;
 
       if (!assistantId) {
-        logger.warn('No vapi_assistant_id in outbound config, falling back to legacy agent sync', { orgId });
+        logger.warn('[Live Call Test] No vapi_assistant_id in outbound config, falling back to legacy agent sync', { orgId, request_id: requestId });
         try {
           const syncResult = await ensureAssistantSynced(agent.id, vapiApiKey);
           assistantId = syncResult.assistantId;
+
+          logger.info('[Live Call Test] Assistant synced', {
+            org_id: orgId,
+            agent_id: agent.id,
+            assistant_id: assistantId,
+            tools_synced: syncResult.toolsSynced,
+            request_id: requestId
+          });
         } catch (syncError: any) {
-          logger.error('Failed to sync assistant from legacy agents table', { error: syncError?.message });
+          logger.error('[Live Call Test] Failed to sync assistant from legacy agents table', {
+            org_id: orgId,
+            agent_id: agent.id,
+            error: syncError?.message,
+            request_id: requestId
+          });
           res.status(500).json({
             error: 'Failed to sync agent configuration. Please save the Outbound Configuration again.',
             requestId
           });
           return;
         }
+      } else {
+        logger.info('[Live Call Test] Using cached assistant ID', {
+          org_id: orgId,
+          agent_id: agent.id,
+          assistant_id: assistantId,
+          request_id: requestId
+        });
       }
 
       // DIAGNOSTIC: Validate assistant belongs to correct org (prevent cross-org leaks)
