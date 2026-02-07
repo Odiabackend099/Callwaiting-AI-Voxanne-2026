@@ -1,13 +1,74 @@
 'use client';
 export const dynamic = "force-dynamic";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Smartphone, Loader2, Phone, CheckCircle, AlertCircle } from 'lucide-react';
+import { Smartphone, Loader2, Phone, CheckCircle, AlertCircle, ShoppingCart, Trash2 } from 'lucide-react';
 import TelephonySetupWizard from './components/TelephonySetupWizard';
+import { BuyNumberModal } from '@/components/dashboard/BuyNumberModal';
+import { authedBackendFetch } from '@/lib/authedFetch';
+
+interface ManagedNumber {
+  phoneNumber: string;
+  status: string;
+  vapiPhoneId: string | null;
+  countryCode: string;
+}
 
 export default function TelephonyPage() {
   const { user, loading } = useAuth();
+  const [showBuyNumberModal, setShowBuyNumberModal] = useState(false);
+  const [managedNumbers, setManagedNumbers] = useState<ManagedNumber[]>([]);
+  const [fetchingNumbers, setFetchingNumbers] = useState(false);
+  const [deletingNumber, setDeletingNumber] = useState<string | null>(null);
+
+  // Fetch managed numbers on mount
+  useEffect(() => {
+    fetchManagedNumbers();
+  }, []);
+
+  const fetchManagedNumbers = async () => {
+    try {
+      setFetchingNumbers(true);
+      const data = await authedBackendFetch<{
+        mode: string;
+        subaccount?: any;
+        numbers: ManagedNumber[];
+      }>('/api/managed-telephony/status');
+      setManagedNumbers(data.numbers || []);
+    } catch (err) {
+      console.error('Failed to fetch managed numbers:', err);
+      setManagedNumbers([]);
+    } finally {
+      setFetchingNumbers(false);
+    }
+  };
+
+  const handleDeleteNumber = async (phoneNumber: string) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${phoneNumber}?\n\nThis will:\n- Release the number from Vapi\n- Release the number from Twilio\n- Remove all routing configurations\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      setDeletingNumber(phoneNumber);
+
+      await authedBackendFetch(`/api/managed-telephony/numbers/${encodeURIComponent(phoneNumber)}`, {
+        method: 'DELETE',
+      });
+
+      // Refresh the list
+      await fetchManagedNumbers();
+
+      alert(`Successfully deleted ${phoneNumber}`);
+    } catch (err: any) {
+      console.error('Failed to delete number:', err);
+      alert(`Failed to delete number: ${err.message || 'Unknown error'}`);
+    } finally {
+      setDeletingNumber(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -32,6 +93,99 @@ export default function TelephonyPage() {
             Connect your personal phone number to AI without porting
           </p>
         </div>
+      </div>
+
+      {/* Active Managed Numbers */}
+      {managedNumbers.length > 0 && (
+        <div className="bg-white border border-surgical-200 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Phone className="w-5 h-5 text-surgical-600" />
+              <h3 className="text-lg font-semibold text-obsidian">
+                Active Managed Numbers
+              </h3>
+            </div>
+            <span className="text-sm text-obsidian/60">
+              {managedNumbers.length} {managedNumbers.length === 1 ? 'number' : 'numbers'}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {managedNumbers.map((num) => (
+              <div
+                key={num.phoneNumber}
+                className="flex items-center justify-between p-4 border border-surgical-200 rounded-lg hover:bg-surgical-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-surgical-100 flex items-center justify-center">
+                    <Phone className="w-5 h-5 text-surgical-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-obsidian">{num.phoneNumber}</div>
+                    <div className="text-xs text-obsidian/60">
+                      {num.countryCode} • {num.status}
+                      {num.vapiPhoneId && ` • Vapi ID: ${num.vapiPhoneId.slice(0, 8)}...`}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDeleteNumber(num.phoneNumber)}
+                  disabled={deletingNumber === num.phoneNumber}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deletingNumber === num.phoneNumber ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Buy Managed Number Option */}
+      <div className="bg-white border border-surgical-200 rounded-xl p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <ShoppingCart className="w-5 h-5 text-surgical-600" />
+              <h3 className="text-lg font-semibold text-obsidian">
+                {managedNumbers.length > 0 ? 'Buy Another Number' : 'Managed Phone Number'}
+              </h3>
+            </div>
+            <p className="text-sm text-obsidian/60 mb-4">
+              Get a dedicated AI phone number in minutes. No Twilio account needed—we handle everything.
+            </p>
+            <ul className="space-y-2 text-sm text-obsidian/60 ml-6 list-disc">
+              <li>Instant provisioning (2-3 minutes)</li>
+              <li>Local or toll-free numbers available</li>
+              <li>$1.50/month + usage-based pricing</li>
+              <li>Fully managed by Voxanne</li>
+            </ul>
+          </div>
+          <button
+            onClick={() => setShowBuyNumberModal(true)}
+            className="px-6 py-3 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium flex items-center gap-2 whitespace-nowrap"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            {managedNumbers.length > 0 ? 'Buy Another' : 'Buy Number'}
+          </button>
+        </div>
+      </div>
+
+      {/* OR Separator */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 border-t border-surgical-200"></div>
+        <span className="text-sm font-medium text-obsidian/40">OR</span>
+        <div className="flex-1 border-t border-surgical-200"></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -94,6 +248,19 @@ export default function TelephonyPage() {
           </div>
         </div>
       </div>
+
+      {/* Buy Number Modal */}
+      {showBuyNumberModal && (
+        <BuyNumberModal
+          isOpen={showBuyNumberModal}
+          onClose={() => {
+            setShowBuyNumberModal(false);
+            // Refresh numbers list after modal closes (in case new number was provisioned)
+            fetchManagedNumbers();
+          }}
+          currentMode="none"
+        />
+      )}
     </div>
   );
 }
