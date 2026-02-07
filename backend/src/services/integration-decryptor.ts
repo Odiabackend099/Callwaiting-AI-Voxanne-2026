@@ -1077,7 +1077,10 @@ export class IntegrationDecryptor {
     // 4. Update organizations.telephony_mode
     await supabase
       .from('organizations')
-      .update({ telephony_mode: source })
+      .update({
+        telephony_mode: source,
+        wallet_markup_percent: source === 'byoc' ? 50 : 300,
+      })
       .eq('id', orgId);
 
     // 5. Sync credential to Vapi

@@ -7,7 +7,7 @@
  * Financial Integrity Rules:
  * - All amounts in integer pence (GBP, no floating point)
  * - Vapi costs (USD) converted to GBP pence via USD_TO_GBP_RATE
- * - 100% markup applied (providerPence × 2 = clientPence)
+ * - Markup per org: BYOC 50% (×1.5), Managed 300% (×4)
  * - Atomic writes via Postgres FOR UPDATE lock in RPC functions
  * - Idempotency via UNIQUE(call_id) in credit_transactions
  */
@@ -75,7 +75,7 @@ export function usdToPence(usdDollars: number): number {
 
 /**
  * Apply markup percentage to provider cost.
- * 100% markup = cost × 2.
+ * BYOC 50% = ×1.5, Managed 300% = ×4.
  */
 export function applyMarkup(providerPence: number, markupPercent: number): number {
   if (providerPence <= 0) return 0;
@@ -136,7 +136,7 @@ export async function hasEnoughBalance(orgId: string): Promise<boolean> {
  * Deduct credits from wallet after a call ends.
  *
  * 1. Converts Vapi USD cost to GBP pence
- * 2. Applies markup (default 100% = cost × 2)
+ * 2. Applies per-org markup (BYOC 50%, Managed 300%)
  * 3. Atomic deduction via deduct_call_credits() RPC
  * 4. Enqueues auto-recharge if balance drops below threshold
  */
@@ -168,7 +168,7 @@ export async function deductCallCredits(
     return { success: false, error: 'Organization not found' };
   }
 
-  const markupPercent = (org as any).wallet_markup_percent ?? 100;
+  const markupPercent = (org as any).wallet_markup_percent ?? 50;
 
   // Convert and calculate
   const providerCostPence = usdToPence(vapiCostDollars);
