@@ -56,7 +56,10 @@ interface TransactionsResponse {
 // ---------------------------------------------------------------------------
 
 function formatPence(pence: number): string {
-    return `\u00A3${(pence / 100).toFixed(2)}`;
+    // Display as USD for customer (internal is still GBP pence)
+    const USD_TO_GBP_RATE = 0.79;
+    const usdAmount = (pence / USD_TO_GBP_RATE / 100).toFixed(2);
+    return `$${usdAmount}`;
 }
 
 function formatDate(iso: string): string {
@@ -135,8 +138,8 @@ const WalletPageContent = () => {
     // Handlers
     const handleTopUp = useCallback(async () => {
         const pence = selectedAmount || Math.round(parseFloat(customAmount) * 100);
-        if (!pence || pence < 2500) {
-            showError('Minimum top-up is \u00A325.00');
+        if (!pence || pence < 1975) { // $25 USD = ~1975 pence at 0.79 rate
+            showError('Minimum top-up is $25.00');
             return;
         }
         setProcessingTopUp(true);
@@ -193,16 +196,28 @@ const WalletPageContent = () => {
             {/* Balance Card */}
             <div className="bg-white border border-surgical-200 rounded-2xl p-6 md:p-8 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div>
-                        <p className="text-xs font-semibold text-obsidian/40 uppercase tracking-wider mb-1">
-                            Current Balance
-                        </p>
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                            <p className="text-xs font-semibold text-obsidian/40 uppercase tracking-wider">
+                                Current Balance
+                            </p>
+                            <span className="px-2.5 py-1 bg-surgical-50 text-surgical-600 rounded-full text-xs font-bold">
+                                $0.70/min
+                            </span>
+                        </div>
                         {walletLoading ? (
                             <span className="animate-pulse bg-surgical-100 rounded h-12 w-40 inline-block" />
                         ) : (
-                            <p className="text-5xl font-bold text-obsidian tracking-tight">
-                                {wallet?.balance_formatted ?? '\u00A30.00'}
-                            </p>
+                            <>
+                                <p className="text-5xl font-bold text-obsidian tracking-tight">
+                                    {wallet ? formatPence(wallet.balance_pence) : '$0.00'}
+                                </p>
+                                {wallet && wallet.balance_pence > 0 && (
+                                    <p className="text-sm text-obsidian/60 mt-2">
+                                        ~{Math.floor(wallet.balance_pence / Math.ceil(70 * 0.79))} minutes remaining at $0.70/min
+                                    </p>
+                                )}
+                            </>
                         )}
                         {wallet?.is_low_balance && (
                             <div className="flex items-center gap-2 mt-3 text-amber-600">
@@ -393,7 +408,7 @@ const WalletPageContent = () => {
                                         Recharge when balance falls below
                                     </label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">{'\u00A3'}</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -409,7 +424,7 @@ const WalletPageContent = () => {
                                         Recharge amount
                                     </label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">{'\u00A3'}</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -457,56 +472,76 @@ const WalletPageContent = () => {
                         <div className="p-6 space-y-5">
                             <p className="text-sm text-obsidian/60">Select an amount or enter a custom value</p>
                             <div className="grid grid-cols-2 gap-3">
-                                {[2500, 5000, 10000, 20000].map((amount) => (
+                                {[
+                                    { pence: 1975, label: '$25', minutes: '~35 min' },
+                                    { pence: 3950, label: '$50', minutes: '~71 min' },
+                                    { pence: 7900, label: '$100', minutes: '~142 min' },
+                                    { pence: 15800, label: '$200', minutes: '~286 min' }
+                                ].map((option) => (
                                     <button
-                                        key={amount}
-                                        onClick={() => { setSelectedAmount(amount); setCustomAmount(''); }}
-                                        className={`p-4 rounded-xl border-2 text-center transition-all font-bold text-lg
-                                            ${selectedAmount === amount
+                                        key={option.pence}
+                                        onClick={() => { setSelectedAmount(option.pence); setCustomAmount(''); }}
+                                        className={`p-4 rounded-xl border-2 text-center transition-all
+                                            ${selectedAmount === option.pence
                                                 ? 'border-surgical-600 bg-surgical-50 text-surgical-600'
                                                 : 'border-surgical-200 hover:border-surgical-300 text-obsidian'
                                             }`}
                                     >
-                                        {'\u00A3'}{amount / 100}
+                                        <div className="font-bold text-lg">{option.label}</div>
+                                        <div className="text-xs text-obsidian/60 mt-1">{option.minutes}</div>
                                     </button>
                                 ))}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-obsidian mb-1.5">
-                                    Custom amount (min {'\u00A3'}25)
+                                    Custom amount (min $25)
                                 </label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">{'\u00A3'}</span>
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
                                     <input
                                         type="number"
                                         min="25"
                                         step="1"
                                         value={customAmount}
-                                        onChange={(e) => { setCustomAmount(e.target.value); setSelectedAmount(null); }}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setCustomAmount(val);
+                                            setSelectedAmount(null);
+                                        }}
                                         placeholder="25.00"
                                         className="w-full pl-8 pr-4 py-2.5 border border-surgical-200 rounded-lg text-sm text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-200"
                                     />
                                 </div>
+                                {customAmount && parseFloat(customAmount) >= 25 && (
+                                    <p className="text-xs text-obsidian/60 mt-1.5">
+                                        ~{Math.floor((parseFloat(customAmount) * 0.79 * 100) / Math.ceil(70 * 0.79))} minutes at $0.70/min
+                                    </p>
+                                )}
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-surgical-200 flex justify-end gap-3">
-                            <button
-                                onClick={() => { setShowTopUp(false); setSelectedAmount(null); setCustomAmount(''); }}
-                                className="px-4 py-2 border border-surgical-200 rounded-lg text-sm font-medium text-obsidian hover:bg-surgical-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleTopUp}
-                                disabled={processingTopUp || (!selectedAmount && !customAmount)}
-                                className="flex items-center gap-2 px-5 py-2 bg-surgical-600 text-white rounded-lg text-sm font-medium hover:bg-surgical-700 transition-colors disabled:opacity-60"
-                            >
-                                {processingTopUp ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                                ) : (
-                                    'Proceed to Payment'
-                                )}
-                            </button>
+                        <div className="px-6 py-4 border-t border-surgical-200">
+                            <p className="text-xs text-obsidian/60 mb-3 text-center">
+                                💡 You'll be charged in GBP (British Pounds). USD amounts are approximate based on current exchange rate.
+                            </p>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => { setShowTopUp(false); setSelectedAmount(null); setCustomAmount(''); }}
+                                    className="px-4 py-2 border border-surgical-200 rounded-lg text-sm font-medium text-obsidian hover:bg-surgical-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleTopUp}
+                                    disabled={processingTopUp || (!selectedAmount && !customAmount)}
+                                    className="flex items-center gap-2 px-5 py-2 bg-surgical-600 text-white rounded-lg text-sm font-medium hover:bg-surgical-700 transition-colors disabled:opacity-60"
+                                >
+                                    {processingTopUp ? (
+                                        <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                                    ) : (
+                                        'Proceed to Payment'
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

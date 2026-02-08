@@ -11,6 +11,7 @@ import { getStripeClient } from '../config/stripe';
 import { supabase } from '../services/supabase-client';
 import { log } from '../services/logger';
 import { checkBalance, getWalletSummary } from '../services/wallet-service';
+import { config } from '../config';
 
 interface OrgUsageRow {
   billing_plan: string;
@@ -362,7 +363,13 @@ router.get('/wallet', requireAuth, async (req: Request, res: Response) => {
 
     const summary = await getWalletSummary(orgId);
 
+    // Fixed-rate billing constants
+    const USD_TO_GBP_RATE = parseFloat(config.USD_TO_GBP_RATE || '0.79');
+    const RATE_PER_MINUTE_USD_CENTS = config.RATE_PER_MINUTE_USD_CENTS || 70;
+    const pencePerMinute = Math.ceil(RATE_PER_MINUTE_USD_CENTS * USD_TO_GBP_RATE); // 56p
+
     res.json({
+      // Existing fields (backward compatibility)
       balance_pence: balance.balancePence,
       balance_formatted: `£${(balance.balancePence / 100).toFixed(2)}`,
       low_balance_pence: balance.lowBalancePence,
@@ -370,6 +377,14 @@ router.get('/wallet', requireAuth, async (req: Request, res: Response) => {
       auto_recharge_enabled: balance.autoRechargeEnabled,
       has_payment_method: balance.hasPaymentMethod,
       summary: summary || null,
+
+      // NEW: USD display fields (Step 5a)
+      balance_usd: (balance.balancePence / USD_TO_GBP_RATE / 100).toFixed(2),
+      rate_per_minute: '$0.70',
+      rate_per_minute_cents: RATE_PER_MINUTE_USD_CENTS,
+      estimated_minutes_remaining: Math.floor(balance.balancePence / pencePerMinute),
+      currency_display: 'usd',
+      exchange_rate_used: USD_TO_GBP_RATE,
     });
   } catch (error: any) {
     log.error('BillingAPI', 'Error fetching wallet', { error: error.message });
@@ -449,6 +464,15 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
       });
     }
 
+    // Fixed-rate billing constants for USD display
+    const USD_TO_GBP_RATE = parseFloat(config.USD_TO_GBP_RATE || '0.79');
+    const RATE_PER_MINUTE_USD_CENTS = config.RATE_PER_MINUTE_USD_CENTS || 70;
+    const pencePerMinute = Math.ceil(RATE_PER_MINUTE_USD_CENTS * USD_TO_GBP_RATE); // 56p
+
+    // Calculate USD equivalent and estimated minutes
+    const amount_usd = (amount_pence / USD_TO_GBP_RATE / 100).toFixed(2);
+    const estimated_minutes = Math.floor(amount_pence / pencePerMinute);
+
     // Look up or create Stripe customer
     const { data: orgData } = await supabase
       .from('organizations')
@@ -473,6 +497,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
+    // Step 5b: Dual-currency Stripe metadata (CRITICAL - prevents customer confusion)
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
@@ -483,7 +508,8 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
             currency: 'gbp',
             product_data: {
               name: 'Voxanne AI Credits',
-              description: `Top-up: £${(amount_pence / 100).toFixed(2)}`,
+              // Show BOTH currencies in description to prevent confusion
+              description: `Voxanne AI Top-up: ~$${Math.round(parseFloat(amount_usd))} (£${(amount_pence / 100).toFixed(2)} GBP) — ~${estimated_minutes} minutes`,
             },
             unit_amount: amount_pence,
           },
@@ -496,6 +522,8 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
           type: 'wallet_topup',
           org_id: orgId,
           amount_pence: String(amount_pence),
+          amount_usd: amount_usd,
+          estimated_minutes: String(estimated_minutes),
         },
       },
       success_url: `${frontendUrl}/dashboard/wallet?topup=success`,
@@ -504,12 +532,16 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
         type: 'wallet_topup',
         org_id: orgId,
         amount_pence: String(amount_pence),
+        amount_usd: amount_usd,
+        estimated_minutes: String(estimated_minutes),
       },
     });
 
     log.info('BillingAPI', 'Wallet top-up checkout session created', {
       orgId,
       amountPence: amount_pence,
+      amountUsd: amount_usd,
+      estimatedMinutes: estimated_minutes,
       sessionId: session.id,
     });
 
@@ -613,6 +645,9 @@ router.get('/wallet/profit', requireAuth, async (req: Request, res: Response) =>
       return res.status(500).json({ error: 'Internal server error' });
     }
 
+    // Fixed-rate billing constants for USD display
+    const USD_TO_GBP_RATE = parseFloat(config.USD_TO_GBP_RATE || '0.79');
+
     let totalProviderCost = 0;
     let totalClientCharged = 0;
     let totalGrossProfit = 0;
@@ -636,6 +671,7 @@ router.get('/wallet/profit', requireAuth, async (req: Request, res: Response) =>
     res.json({
       period_days: days,
       total_calls: (transactions || []).length,
+      // Existing GBP fields (backward compatibility)
       total_provider_cost_pence: totalProviderCost,
       total_client_charged_pence: totalClientCharged,
       total_gross_profit_pence: totalGrossProfit,
@@ -646,6 +682,16 @@ router.get('/wallet/profit', requireAuth, async (req: Request, res: Response) =>
         ? Math.round((totalGrossProfit / totalClientCharged) * 100)
         : 0,
       daily_breakdown: dailyBreakdown,
+
+      // NEW: Step 5c - USD display fields
+      total_provider_cost_usd: (totalProviderCost / USD_TO_GBP_RATE / 100).toFixed(2),
+      total_client_charged_usd: (totalClientCharged / USD_TO_GBP_RATE / 100).toFixed(2),
+      total_gross_profit_usd: (totalGrossProfit / USD_TO_GBP_RATE / 100).toFixed(2),
+      total_provider_cost_usd_formatted: `$${(totalProviderCost / USD_TO_GBP_RATE / 100).toFixed(2)}`,
+      total_client_charged_usd_formatted: `$${(totalClientCharged / USD_TO_GBP_RATE / 100).toFixed(2)}`,
+      total_gross_profit_usd_formatted: `$${(totalGrossProfit / USD_TO_GBP_RATE / 100).toFixed(2)}`,
+      currency_display: 'usd',
+      exchange_rate_used: USD_TO_GBP_RATE,
     });
   } catch (error: any) {
     log.error('BillingAPI', 'Error fetching profit data', { error: error.message });

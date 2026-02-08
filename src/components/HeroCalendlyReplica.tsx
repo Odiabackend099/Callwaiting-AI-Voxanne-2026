@@ -300,18 +300,18 @@ export function HeroCalendlyReplica() {
                             </GlassMorphCard>
 
                             {/* Floating Elements behind */}
-                            <motion.div 
+                            <motion.div
                                 animate={{ y: [0, -15, 0] }}
                                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                                 className="absolute -top-12 -right-12 bg-white p-5 rounded-2xl shadow-xl z-10 hidden md:block border border-slate-100"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                                        <span className="text-green-600 font-bold text-xl">£</span>
+                                        <span className="text-green-600 font-bold text-xl">$</span>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Revenue Saved</p>
-                                        <p className="font-bold text-slate-900 text-lg">£120.00</p>
+                                        <p className="font-bold text-slate-900 text-lg">$120.00 USD</p>
                                     </div>
                                 </div>
                             </motion.div>

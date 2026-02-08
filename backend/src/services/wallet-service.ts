@@ -15,6 +15,7 @@
 import { supabase } from './supabase-client';
 import { log } from './logger';
 import { enqueueAutoRechargeJob } from '../config/wallet-queue';
+import { config } from '../config';
 
 // ============================================
 // Types
@@ -54,11 +55,11 @@ export interface TopUpResult {
 // Constants
 // ============================================
 
-/** USD to GBP exchange rate. Override via USD_TO_GBP_RATE env var. */
-const USD_TO_GBP_RATE = parseFloat(process.env.USD_TO_GBP_RATE || '0.79');
+/** USD to GBP exchange rate. Use config constant for consistency. */
+const USD_TO_GBP_RATE = parseFloat(config.USD_TO_GBP_RATE);
 
-/** Minimum wallet balance (pence) required to start a call. */
-const MIN_BALANCE_FOR_CALL = parseInt(process.env.WALLET_MIN_BALANCE_FOR_CALL || '50', 10);
+/** Minimum wallet balance (pence) required to start a call. Updated to 79p ($1.00) for fixed-rate billing. */
+const MIN_BALANCE_FOR_CALL = config.WALLET_MIN_BALANCE_FOR_CALL;
 
 // ============================================
 // Pure Functions
@@ -76,10 +77,41 @@ export function usdToPence(usdDollars: number): number {
 /**
  * Apply markup percentage to provider cost.
  * BYOC 50% = ×1.5, Managed 300% = ×4.
+ *
+ * @deprecated This function is deprecated in favor of fixed-rate billing.
+ * Use calculateFixedRateCharge() instead.
  */
 export function applyMarkup(providerPence: number, markupPercent: number): number {
   if (providerPence <= 0) return 0;
   return Math.ceil(providerPence * (1 + markupPercent / 100));
+}
+
+/**
+ * Fixed-rate charge: per-second precision, rounds UP to nearest cent.
+ * Formula: Math.ceil((durationSeconds / 60) * ratePerMinuteCents)
+ * Then converts to pence for internal storage.
+ *
+ * INTENTIONAL DOUBLE ROUNDING (Agent Team Finding #5):
+ * - Step 1: Round seconds→cents UP (prevents undercharging in USD)
+ * - Step 2: Round cents→pence UP (prevents undercharging in GBP)
+ * - Maximum overcharge: ~$0.02 per call (industry standard, protects platform)
+ *
+ * Examples at $0.70/min (rate=70):
+ *   30s  → ceil(0.5  * 70) = 35 cents → ceil(35 * 0.79) = 28p
+ *   60s  → ceil(1.0  * 70) = 70 cents → ceil(70 * 0.79) = 56p
+ *   91s  → ceil(1.517 * 70) = 107 cents → ceil(107 * 0.79) = 85p
+ *   1s   → ceil(0.0167 * 70) = 2 cents → ceil(2 * 0.79) = 2p
+ */
+export function calculateFixedRateCharge(
+  durationSeconds: number,
+  ratePerMinuteCents: number = config.RATE_PER_MINUTE_USD_CENTS
+): { usdCents: number; pence: number } {
+  if (durationSeconds <= 0 || ratePerMinuteCents <= 0) return { usdCents: 0, pence: 0 };
+
+  const usdCents = Math.ceil((durationSeconds / 60) * ratePerMinuteCents);
+  const pence = Math.ceil(usdCents * parseFloat(config.USD_TO_GBP_RATE));
+
+  return { usdCents, pence };
 }
 
 // ============================================
@@ -120,7 +152,7 @@ export async function checkBalance(orgId: string): Promise<WalletBalance | null>
 
 /**
  * Check if an org has enough balance to start a call.
- * Returns true if balance >= MIN_BALANCE_FOR_CALL (default 50p).
+ * Returns true if balance >= MIN_BALANCE_FOR_CALL (79p ≈ $1.00 at $0.70/min rate).
  */
 export async function hasEnoughBalance(orgId: string): Promise<boolean> {
   const balance = await checkBalance(orgId);
@@ -135,60 +167,67 @@ export async function hasEnoughBalance(orgId: string): Promise<boolean> {
 /**
  * Deduct credits from wallet after a call ends.
  *
- * 1. Converts Vapi USD cost to GBP pence
- * 2. Applies per-org markup (BYOC 50%, Managed 300%)
+ * FIXED-RATE BILLING MODEL (2026-02-08):
+ * 1. Calculates charge based on duration at fixed $0.70/min rate
+ * 2. Converts USD cents to GBP pence
  * 3. Atomic deduction via deduct_call_credits() RPC
  * 4. Enqueues auto-recharge if balance drops below threshold
+ * 5. Sends low balance warning email if needed
+ *
+ * CRITICAL: Does NOT read wallet_markup_percent from org (Agent Team Finding #1).
+ * The fixed rate is the ONLY billing input, regardless of telephony mode.
+ *
+ * @param durationSeconds - Call duration (drives billing)
+ * @param vapiCostDollars - Vapi cost (kept for profit tracking only)
  */
 export async function deductCallCredits(
   orgId: string,
   callId: string,
   vapiCallId: string,
+  durationSeconds: number,
   vapiCostDollars: number,
   costBreakdown: Record<string, any> | null
 ): Promise<DeductionResult> {
-  // Skip zero-cost calls
-  if (!vapiCostDollars || vapiCostDollars <= 0) {
-    log.debug('WalletService', 'Zero-cost call, skipping deduction', { orgId, callId });
+  // Skip zero-duration calls (Step 2d: skip condition based on duration)
+  if (!durationSeconds || durationSeconds <= 0) {
+    log.debug('WalletService', 'Zero-duration call, skipping deduction', { orgId, callId });
     return { success: true };
   }
 
-  // Fetch org markup config
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('wallet_markup_percent')
-    .eq('id', orgId)
-    .single();
-
-  if (orgError || !org) {
-    log.error('WalletService', 'Failed to fetch org markup config', {
-      orgId,
-      error: orgError?.message,
-    });
-    return { success: false, error: 'Organization not found' };
-  }
-
-  const markupPercent = (org as any).wallet_markup_percent ?? 50;
-
-  // Convert and calculate
-  const providerCostPence = usdToPence(vapiCostDollars);
-  const clientChargedPence = applyMarkup(providerCostPence, markupPercent);
+  // Calculate fixed-rate charge (Step 2a, 2b)
+  const { usdCents, pence: clientChargedPence } = calculateFixedRateCharge(
+    durationSeconds,
+    config.RATE_PER_MINUTE_USD_CENTS
+  );
 
   if (clientChargedPence <= 0) {
     log.debug('WalletService', 'Calculated charge is zero, skipping', { orgId, callId });
     return { success: true };
   }
 
-  // Atomic deduction via RPC
+  // Convert Vapi cost to pence (for profit tracking only)
+  const providerCostPence = usdToPence(vapiCostDollars);
+
+  // Augment cost breakdown with fixed-rate billing metadata (Step 2b)
+  const enhancedCostBreakdown = {
+    ...(costBreakdown || {}),
+    billing_model: 'fixed_rate',
+    rate_cents: config.RATE_PER_MINUTE_USD_CENTS,
+    duration_seconds: durationSeconds,
+    usd_charged: usdCents,
+    gbp_charged: clientChargedPence,
+  };
+
+  // Atomic deduction via RPC (Step 2b: p_markup_percent: 0)
   const { data: result, error: rpcError } = await supabase.rpc('deduct_call_credits', {
     p_org_id: orgId,
     p_call_id: callId,
     p_vapi_call_id: vapiCallId,
     p_provider_cost_pence: providerCostPence,
-    p_markup_percent: markupPercent,
+    p_markup_percent: 0, // Fixed-rate model has no markup
     p_client_charged_pence: clientChargedPence,
-    p_cost_breakdown: costBreakdown || {},
-    p_description: `Call ${callId} | Provider: ${providerCostPence}p | Charged: ${clientChargedPence}p`,
+    p_cost_breakdown: enhancedCostBreakdown,
+    p_description: `Call ${callId} | $0.70/min × ${durationSeconds}s = ${clientChargedPence}p`,
   });
 
   if (rpcError) {
@@ -217,16 +256,39 @@ export async function deductCallCredits(
     return { success: false, error: rpcResult?.error };
   }
 
-  log.info('WalletService', 'Credits deducted', {
+  log.info('WalletService', 'Credits deducted (fixed-rate billing)', {
     orgId,
     callId,
-    providerCostPence,
+    durationSeconds,
+    usdCents,
     clientChargedPence,
+    providerCostPence,
     grossProfitPence: rpcResult.gross_profit_pence,
     balanceBefore: rpcResult.balance_before,
     balanceAfter: rpcResult.balance_after,
     needsRecharge: rpcResult.needs_recharge,
   });
+
+  // Step 2e: Low balance email warning (fire and forget)
+  const lowBalanceThresholdPence = Math.ceil(
+    config.WALLET_LOW_BALANCE_WARNING_CENTS * parseFloat(config.USD_TO_GBP_RATE)
+  );
+  if (rpcResult.balance_after < lowBalanceThresholdPence) {
+    try {
+      // TODO: Implement sendLowBalanceWarning(orgId, rpcResult.balance_after)
+      // Non-blocking email via Resend API
+      log.warn('WalletService', 'Low balance warning needed', {
+        orgId,
+        balancePence: rpcResult.balance_after,
+        thresholdPence: lowBalanceThresholdPence,
+      });
+    } catch (err) {
+      log.warn('WalletService', 'Failed to send low balance email (non-blocking)', {
+        orgId,
+        error: (err as Error).message,
+      });
+    }
+  }
 
   // Trigger auto-recharge if needed
   if (rpcResult.needs_recharge) {

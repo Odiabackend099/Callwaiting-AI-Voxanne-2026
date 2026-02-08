@@ -6,10 +6,11 @@ import { Check, Wallet, Phone, Zap } from "lucide-react";
 import Link from "next/link";
 
 const TOP_UP_OPTIONS = [
-    { label: "£25", pence: 2500 },
-    { label: "£50", pence: 5000 },
-    { label: "£100", pence: 10000 },
-    { label: "£250", pence: 25000 },
+    { label: "$25", pence: 1975, minutes: "~35 min" },
+    { label: "$50", pence: 3950, minutes: "~71 min" },
+    { label: "$100", pence: 7900, minutes: "~142 min" },
+    { label: "$250", pence: 19750, minutes: "~357 min" },
+    { label: "$600", pence: 47400, minutes: "~857 min" },
 ];
 
 const FEATURES = [
@@ -28,7 +29,7 @@ const STEPS = [
     {
         icon: Wallet,
         title: "Top Up",
-        description: "Add credits to your wallet from £25",
+        description: "Top up from $25",
     },
     {
         icon: Phone,
@@ -69,9 +70,9 @@ export default function Pricing() {
 
                         <div className="text-center mb-8">
                             <div className="flex items-baseline justify-center gap-2">
-                                <span className="text-5xl font-bold text-surgical-600">From £25</span>
+                                <span className="text-5xl font-bold text-surgical-600">$0.70/min</span>
                             </div>
-                            <p className="text-sm text-slate-400 mt-2">Minimum top-up. Calls billed per minute based on actual usage.</p>
+                            <p className="text-sm text-slate-400 mt-2">Per-second billing. No minimums. No contracts.</p>
                         </div>
 
                         {/* Top-up pills */}
@@ -81,7 +82,7 @@ export default function Pricing() {
                                     key={option.pence}
                                     className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50"
                                 >
-                                    {option.label}
+                                    {option.label} ({option.minutes})
                                 </span>
                             ))}
                             <span className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-400 bg-slate-50">

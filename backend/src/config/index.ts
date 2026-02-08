@@ -217,8 +217,18 @@ export const config = {
   // WALLET / PREPAID BILLING (Optional)
   // ========================================================================
   WALLET_MIN_TOPUP_PENCE: getNumber('WALLET_MIN_TOPUP_PENCE', 2500),       // £25 minimum top-up
-  WALLET_MIN_BALANCE_FOR_CALL: getNumber('WALLET_MIN_BALANCE_FOR_CALL', 50), // 50p minimum to start call
   USD_TO_GBP_RATE: getOptional('USD_TO_GBP_RATE', '0.79'),                  // Vapi costs in USD
+
+  // Fixed-rate billing configuration
+  RATE_PER_MINUTE_USD_CENTS: getNumber('RATE_PER_MINUTE_USD_CENTS', 70),   // Fixed client rate ($0.70/min)
+  WALLET_LOW_BALANCE_WARNING_CENTS: getNumber('WALLET_LOW_BALANCE_WARNING_CENTS', 1400), // $14.00 = ~20 min remaining
+  WALLET_MIN_BALANCE_USD_CENTS: getNumber('WALLET_MIN_BALANCE_USD_CENTS', 100), // $1.00 hard stop
+
+  // Convert $1.00 hard stop to pence equivalent (derived from USD constant)
+  WALLET_MIN_BALANCE_FOR_CALL: Math.ceil(
+    getNumber('WALLET_MIN_BALANCE_USD_CENTS', 100) *
+    parseFloat(getOptional('USD_TO_GBP_RATE', '0.79'))
+  ), // 79p ≈ $1.00
 
   // ========================================================================
   // BUSINESS CONFIGURATION (Optional)

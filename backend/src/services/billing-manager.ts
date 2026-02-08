@@ -248,11 +248,16 @@ export async function processCallUsage(
  * Routes to deductCallCredits() from wallet-service.
  * Called from webhook handlers as a non-blocking side-effect.
  *
+ * FIXED-RATE BILLING MODEL (2026-02-08):
+ * - Billing driven by duration at $0.70/min flat rate
+ * - Skip condition: duration <= 0 (NOT cost === 0)
+ * - Guard: Prepaid billing is exclusive (processCallUsage() should not run)
+ *
  * @param orgId - Organization ID
  * @param callId - Internal call ID
  * @param vapiCallId - Vapi call ID
- * @param durationSeconds - Call duration in seconds
- * @param vapiCostDollars - Vapi's reported cost in USD (from message.cost)
+ * @param durationSeconds - Call duration (drives billing)
+ * @param vapiCostDollars - Vapi's reported cost in USD (kept for profit tracking)
  * @param costBreakdown - Vapi's cost breakdown (from call.costs)
  */
 export async function processCallBilling(
@@ -263,21 +268,27 @@ export async function processCallBilling(
   vapiCostDollars: number | null,
   costBreakdown: Record<string, any> | null
 ): Promise<void> {
-  // Skip zero-cost or null-cost calls
-  if (!vapiCostDollars || vapiCostDollars <= 0) {
-    log.debug('BillingManager', 'Zero/null cost call, skipping prepaid billing', {
+  // Step 3b: Skip condition changed to duration (not cost)
+  if (!durationSeconds || durationSeconds <= 0) {
+    log.debug('BillingManager', 'Zero-duration call, skipping prepaid billing', {
       orgId,
       callId,
-      durationSeconds,
+      vapiCostDollars,
     });
     return;
   }
+
+  // Step 3c: Guard against dual billing (Agent Team Finding #4)
+  // CRITICAL: Fixed-rate prepaid billing is the ONLY billing model.
+  // processCallUsage() (subscription overage billing) is deprecated.
+  // If both functions are called from webhook, this path takes priority.
 
   const result = await deductCallCredits(
     orgId,
     callId,
     vapiCallId,
-    vapiCostDollars,
+    durationSeconds, // Duration now drives billing
+    vapiCostDollars || 0, // Kept for profit tracking only
     costBreakdown
   );
 

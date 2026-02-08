@@ -53,7 +53,7 @@ export default function JsonLd() {
                         "name": "Voxanne AI",
                         "applicationCategory": "BusinessApplication",
                         "operatingSystem": "Web",
-                        "description": "AI voice receptionist for clinics — pay-as-you-go billing from £25, all features included, no setup fees, no contracts."
+                        "description": "AI voice receptionist for clinics — pay-as-you-go billing from $25 at $0.70/min, all features included, no setup fees, no contracts."
                     }
                 }
             ]
@@ -84,7 +84,7 @@ export default function JsonLd() {
             { "@type": "Country", "name": "Turkey" },
             { "@type": "Country", "name": "Nigeria" }
         ],
-        "priceRange": "From £25 (pay-as-you-go)"
+        "priceRange": "From $25 (pay-as-you-go at $0.70/min)"
     };
 
     const faqSchema = {
