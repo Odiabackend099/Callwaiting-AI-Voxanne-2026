@@ -11,7 +11,7 @@
     "grepInvert": null,
     "maxFailures": 0,
     "metadata": {
-      "actualWorkers": 2
+      "actualWorkers": 3
     },
     "preserveOutput": "always",
     "reporter": [
@@ -49,7 +49,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 2
+          "actualWorkers": 3
         },
         "id": "chromium",
         "name": "chromium",
@@ -66,7 +66,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 2
+          "actualWorkers": 3
         },
         "id": "firefox",
         "name": "firefox",
@@ -83,7 +83,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 2
+          "actualWorkers": 3
         },
         "id": "webkit",
         "name": "webkit",
@@ -100,7 +100,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 2
+          "actualWorkers": 3
         },
         "id": "Mobile Chrome",
         "name": "Mobile Chrome",
@@ -117,7 +117,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 2
+          "actualWorkers": 3
         },
         "id": "Mobile Safari",
         "name": "Mobile Safari",
@@ -140,21 +140,21 @@
   },
   "suites": [
     {
-      "title": "e2e/capture-dashboard-fully-loaded.spec.ts",
-      "file": "e2e/capture-dashboard-fully-loaded.spec.ts",
+      "title": "e2e/agent-test-verification.spec.ts",
+      "file": "e2e/agent-test-verification.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [],
       "suites": [
         {
-          "title": "Capture Dashboard Screenshots with Full Data Load",
-          "file": "e2e/capture-dashboard-fully-loaded.spec.ts",
-          "line": 5,
+          "title": "Agent Test Verification - Browser Test & Live Call Test",
+          "file": "e2e/agent-test-verification.spec.ts",
+          "line": 25,
           "column": 6,
           "specs": [
             {
-              "title": "Capture homepage screenshot",
-              "ok": true,
+              "title": "Step 1: Login and get authentication token",
+              "ok": false,
               "tags": [],
               "tests": [
                 {
@@ -167,31 +167,175 @@
                     {
                       "workerIndex": 0,
                       "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 13012,
-                      "errors": [],
+                      "status": "failed",
+                      "duration": 74253,
+                      "error": {
+                        "message": "TimeoutError: page.waitForURL: Timeout 10000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/dashboard**\" until \"load\"\n============================================================",
+                        "stack": "TimeoutError: page.waitForURL: Timeout 10000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/dashboard**\" until \"load\"\n============================================================\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:69:16",
+                        "location": {
+                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                          "column": 16,
+                          "line": 69
+                        },
+                        "snippet": "  67 |\n  68 |     // Wait for redirect to dashboard\n> 69 |     await page.waitForURL('**/dashboard**', { timeout: 10000 });\n     |                ^\n  70 |\n  71 |     console.log('✅ Login successful');\n  72 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                            "column": 16,
+                            "line": 69
+                          },
+                          "message": "TimeoutError: page.waitForURL: Timeout 10000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/dashboard**\" until \"load\"\n============================================================\n\n  67 |\n  68 |     // Wait for redirect to dashboard\n> 69 |     await page.waitForURL('**/dashboard**', { timeout: 10000 });\n     |                ^\n  70 |\n  71 |     console.log('✅ Login successful');\n  72 |\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:69:16"
+                        }
+                      ],
                       "stdout": [
                         {
-                          "text": "✅ Homepage screenshot saved: /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/public/screenshots/01_homepage.png\n"
+                          "text": "🔧 Test Configuration:\n"
+                        },
+                        {
+                          "text": "   Frontend: http://localhost:3000\n"
+                        },
+                        {
+                          "text": "   Backend: http://localhost:3001\n"
+                        },
+                        {
+                          "text": "   Test User: voxanne@demo.com\n"
+                        },
+                        {
+                          "text": "\n🔑 Step 1: Authenticating...\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-02-05T01:24:34.955Z",
+                      "startTime": "2026-02-06T16:00:03.194Z",
                       "annotations": [],
-                      "attachments": []
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-062a7-nd-get-authentication-token-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-062a7-nd-get-authentication-token-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                        "column": 16,
+                        "line": 69
+                      }
                     }
                   ],
-                  "status": "expected"
+                  "status": "unexpected"
                 }
               ],
-              "id": "8307114bfa6f6d4e5ac5-b5156fb446bdadaf4232",
-              "file": "e2e/capture-dashboard-fully-loaded.spec.ts",
-              "line": 6,
+              "id": "9a7da86dc8b4d3fd6544-1ecffeb7ebb7a569399e",
+              "file": "e2e/agent-test-verification.spec.ts",
+              "line": 56,
               "column": 7
             },
             {
-              "title": "Capture fully loaded dashboard with manifest extraction",
+              "title": "Step 2: Fetch diagnostic endpoint to get agent configuration",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 12721,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mundefined\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mundefined\u001b[39m\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:125:40",
+                        "location": {
+                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                          "column": 40,
+                          "line": 125
+                        },
+                        "snippet": "  123 |\n  124 |     // Verify diagnostic response\n> 125 |     expect(diagnosticResponse.success).toBe(true);\n      |                                        ^\n  126 |     expect(diagnosticResponse.agents).toBeDefined();\n  127 |     expect(diagnosticResponse.agentCounts).toBeDefined();\n  128 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                            "column": 40,
+                            "line": 125
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mundefined\u001b[39m\n\n  123 |\n  124 |     // Verify diagnostic response\n> 125 |     expect(diagnosticResponse.success).toBe(true);\n      |                                        ^\n  126 |     expect(diagnosticResponse.agents).toBeDefined();\n  127 |     expect(diagnosticResponse.agentCounts).toBeDefined();\n  128 |\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:125:40"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "🔧 Test Configuration:\n"
+                        },
+                        {
+                          "text": "   Frontend: http://localhost:3000\n"
+                        },
+                        {
+                          "text": "   Backend: http://localhost:3001\n"
+                        },
+                        {
+                          "text": "   Test User: voxanne@demo.com\n"
+                        },
+                        {
+                          "text": "\n📊 Step 2: Checking agent configuration via diagnostic endpoint...\n"
+                        },
+                        {
+                          "text": "⚠️  Could not extract org_id from page, will try API call\n"
+                        },
+                        {
+                          "text": "❌ Browser Error: Failed to load resource: the server responded with a status of 401 (Unauthorized)\n"
+                        },
+                        {
+                          "text": "\n📋 Diagnostic Response:\n"
+                        },
+                        {
+                          "text": "{\n  \"error\": \"Invalid or expired token\"\n}\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-02-06T16:01:36.951Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-579e2--to-get-agent-configuration-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-579e2--to-get-agent-configuration-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                        "column": 40,
+                        "line": 125
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "9a7da86dc8b4d3fd6544-f324f4cb6279b135c3d9",
+              "file": "e2e/agent-test-verification.spec.ts",
+              "line": 87,
+              "column": 7
+            },
+            {
+              "title": "Step 3: Test Browser Test feature and verify assistant ID",
               "ok": false,
               "tags": [],
               "tests": [
@@ -206,71 +350,250 @@
                       "workerIndex": 1,
                       "parallelIndex": 1,
                       "status": "failed",
-                      "duration": 76693,
+                      "duration": 68973,
                       "error": {
-                        "message": "Error: page.evaluate: SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text(\"Create Assistant\"), button:has-text(\"Create Agent\"), a[href*=\"agent-config\"]' is not a valid selector.\n    at eval (eval at evaluate (:290:30), <anonymous>:13:34)\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
-                        "stack": "Error: page.evaluate: SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text(\"Create Assistant\"), button:has-text(\"Create Agent\"), a[href*=\"agent-config\"]' is not a valid selector.\n    at eval (eval at evaluate (:290:30), <anonymous>:13:34)\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at eval (eval at evaluate (:290:30), <anonymous>:13:34)\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/capture-dashboard-fully-loaded.spec.ts:59:33",
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first()\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first()\u001b[22m\n\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:197:31",
                         "location": {
-                          "file": "eval at evaluate (:290:30), <anonymous>",
-                          "column": 34,
-                          "line": 13
-                        }
+                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                          "column": 31,
+                          "line": 197
+                        },
+                        "snippet": "  195 |     const startButton = page.locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first();\n  196 |\n> 197 |     await expect(startButton).toBeVisible({ timeout: 5000 });\n      |                               ^\n  198 |     console.log('✅ Found start button');\n  199 |\n  200 |     // Click the button"
                       },
                       "errors": [
                         {
                           "location": {
-                            "file": "eval at evaluate (:290:30), <anonymous>",
-                            "column": 34,
-                            "line": 13
+                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                            "column": 31,
+                            "line": 197
                           },
-                          "message": "Error: page.evaluate: SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text(\"Create Assistant\"), button:has-text(\"Create Agent\"), a[href*=\"agent-config\"]' is not a valid selector.\n    at eval (eval at evaluate (:290:30), <anonymous>:13:34)\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at eval (eval at evaluate (:290:30), <anonymous>:13:34)\n    at UtilityScript.evaluate (<anonymous>:292:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/capture-dashboard-fully-loaded.spec.ts:59:33"
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first()\u001b[22m\n\n\n  195 |     const startButton = page.locator('button:has-text(\"Start\"), button:has-text(\"Connect\"), button:has-text(\"Begin\")').first();\n  196 |\n> 197 |     await expect(startButton).toBeVisible({ timeout: 5000 });\n      |                               ^\n  198 |     console.log('✅ Found start button');\n  199 |\n  200 |     // Click the button\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:197:31"
                         }
                       ],
                       "stdout": [
                         {
-                          "text": "⏳ Waiting for dashboard data to fully load...\n"
+                          "text": "🔧 Test Configuration:\n"
                         },
                         {
-                          "text": "✅ Dashboard fully loaded\n"
+                          "text": "   Frontend: http://localhost:3000\n"
                         },
                         {
-                          "text": "✅ Dashboard screenshot saved: /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/public/screenshots/02_dashboard.png\n"
+                          "text": "   Backend: http://localhost:3001\n"
+                        },
+                        {
+                          "text": "   Test User: voxanne@demo.com\n"
+                        },
+                        {
+                          "text": "\n🌐 Step 3: Testing Browser Test feature...\n"
+                        },
+                        {
+                          "text": "✅ Navigated to /dashboard/test\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-02-05T01:24:34.948Z",
+                      "startTime": "2026-02-06T16:00:03.209Z",
                       "annotations": [],
                       "attachments": [
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/test-failed-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/video.webm"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-4eb11-ure-and-verify-assistant-ID-chromium/test-failed-1.png"
                         },
                         {
                           "name": "error-context",
                           "contentType": "text/markdown",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/error-context.md"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-4eb11-ure-and-verify-assistant-ID-chromium/error-context.md"
                         }
                       ],
                       "errorLocation": {
-                        "file": "eval at evaluate (:290:30), <anonymous>",
-                        "column": 34,
-                        "line": 13
+                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                        "column": 31,
+                        "line": 197
                       }
                     }
                   ],
                   "status": "unexpected"
                 }
               ],
-              "id": "8307114bfa6f6d4e5ac5-c7dc2049a87f84387f32",
-              "file": "e2e/capture-dashboard-fully-loaded.spec.ts",
-              "line": 22,
+              "id": "9a7da86dc8b4d3fd6544-dbdeeb9e2de212b16f56",
+              "file": "e2e/agent-test-verification.spec.ts",
+              "line": 159,
+              "column": 7
+            },
+            {
+              "title": "Step 4: Test Live Call Test feature and verify assistant ID",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 17955,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first()\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first()\u001b[22m\n\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:265:30",
+                        "location": {
+                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                          "column": 30,
+                          "line": 265
+                        },
+                        "snippet": "  263 |     // Find phone number input\n  264 |     const phoneInput = page.locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first();\n> 265 |     await expect(phoneInput).toBeVisible({ timeout: 5000 });\n      |                              ^\n  266 |     console.log('✅ Found phone number input');\n  267 |\n  268 |     // Enter test phone number"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                            "column": 30,
+                            "line": 265
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first()\u001b[22m\n\n\n  263 |     // Find phone number input\n  264 |     const phoneInput = page.locator('input[type=\"tel\"], input[placeholder*=\"phone\" i], input[name*=\"phone\" i]').first();\n> 265 |     await expect(phoneInput).toBeVisible({ timeout: 5000 });\n      |                              ^\n  266 |     console.log('✅ Found phone number input');\n  267 |\n  268 |     // Enter test phone number\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:265:30"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "🔧 Test Configuration:\n"
+                        },
+                        {
+                          "text": "   Frontend: http://localhost:3000\n"
+                        },
+                        {
+                          "text": "   Backend: http://localhost:3001\n"
+                        },
+                        {
+                          "text": "   Test User: voxanne@demo.com\n"
+                        },
+                        {
+                          "text": "\n📞 Step 4: Testing Live Call Test feature...\n"
+                        },
+                        {
+                          "text": "✅ Navigated to /dashboard/test\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-02-06T16:01:33.937Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-05adb-ure-and-verify-assistant-ID-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-agent-test-verificatio-05adb-ure-and-verify-assistant-ID-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts",
+                        "column": 30,
+                        "line": 265
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "9a7da86dc8b4d3fd6544-bb34ac1705f61d8e94ab",
+              "file": "e2e/agent-test-verification.spec.ts",
+              "line": 227,
+              "column": 7
+            },
+            {
+              "title": "Step 5: Verify backend logs for correct assistant IDs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 755,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🔧 Test Configuration:\n"
+                        },
+                        {
+                          "text": "   Frontend: http://localhost:3000\n"
+                        },
+                        {
+                          "text": "   Backend: http://localhost:3001\n"
+                        },
+                        {
+                          "text": "   Test User: voxanne@demo.com\n"
+                        },
+                        {
+                          "text": "\n📋 Step 5: Final verification summary...\n"
+                        },
+                        {
+                          "text": "\n📊 Expected Configuration:\n"
+                        },
+                        {
+                          "text": "   Inbound Agent Assistant ID: NOT FOUND\n"
+                        },
+                        {
+                          "text": "   Outbound Agent Assistant ID: NOT FOUND\n"
+                        },
+                        {
+                          "text": "\n✅ Tests completed successfully!\n"
+                        },
+                        {
+                          "text": "\n📝 NEXT STEPS:\n"
+                        },
+                        {
+                          "text": "   1. Check backend logs for \"[Browser Test]\" entries\n"
+                        },
+                        {
+                          "text": "   2. Check backend logs for \"[Live Call Test]\" entries\n"
+                        },
+                        {
+                          "text": "   3. Verify assistant_id in logs matches the expected IDs above\n"
+                        },
+                        {
+                          "text": "   4. Confirm \"Assistant verification passed\" appears in logs\n"
+                        },
+                        {
+                          "text": "\n💡 To check backend logs:\n"
+                        },
+                        {
+                          "text": "   cd backend\n"
+                        },
+                        {
+                          "text": "   grep -E \"\\[Browser Test\\]|\\[Live Call Test\\]\" logs/*.log | tail -50\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-02-06T16:00:03.211Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9a7da86dc8b4d3fd6544-97764588cb575cd90319",
+              "file": "e2e/agent-test-verification.spec.ts",
+              "line": 304,
               "column": 7
             }
           ]
@@ -280,11 +603,11 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-02-05T01:24:33.167Z",
-    "duration": 79364.006,
+    "startTime": "2026-02-06T16:00:01.660Z",
+    "duration": 114051.005,
     "expected": 1,
     "skipped": 0,
-    "unexpected": 1,
+    "unexpected": 4,
     "flaky": 0
   }
 }

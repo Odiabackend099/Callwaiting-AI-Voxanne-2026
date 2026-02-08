@@ -516,7 +516,7 @@ const TestAgentPageContent = () => {
                             {displayTranscripts.length === 0 ? (
                                 <div className="flex-1 flex flex-col min-h-0 items-center justify-center text-obsidian/60">
                                     <div className="w-20 h-20 rounded-2xl bg-surgical-50 border border-surgical-200 flex items-center justify-center">
-                                        <Mic className="w-10 h-10 text-surgical-500" />
+                                        <Phone className="w-10 h-10 text-surgical-500" />
                                     </div>
                                 </div>
                             ) : (
@@ -809,34 +809,41 @@ const TestAgentPageContent = () => {
 
                             {/* Active Call State */}
                             {outboundTrackingId && !callSummary && (
-                                <div className="text-center space-y-6">
-                                    <div className="p-6 bg-surgical-50 rounded-2xl border border-surgical-200">
-                                        <Activity className="w-12 h-12 text-surgical-600 mx-auto mb-3 animate-pulse" />
-                                        <h3 className="text-lg font-semibold text-surgical-600 tracking-tight">Call In Progress</h3>
-                                        <p className="text-sm text-obsidian/60">Check your phone!</p>
+                                <div className="flex flex-col h-full">
+                                    {/* Fixed header section */}
+                                    <div className="flex-none p-6">
+                                        <div className="p-6 bg-surgical-50 rounded-2xl border border-surgical-200 text-center">
+                                            <Activity className="w-12 h-12 text-surgical-600 mx-auto mb-3 animate-pulse" />
+                                            <h3 className="text-lg font-semibold text-surgical-600 tracking-tight">Call In Progress</h3>
+                                            <p className="text-sm text-obsidian/60">Check your phone!</p>
+                                        </div>
+
+                                        <button
+                                            onClick={handleEndPhoneCall}
+                                            className="mt-6 w-full px-8 py-3 rounded-xl border border-surgical-200 text-obsidian/60 hover:bg-surgical-50 font-medium transition-all tracking-tight"
+                                        >
+                                            End Test Session
+                                        </button>
                                     </div>
 
-                                    <button
-                                        onClick={handleEndPhoneCall}
-                                        className="px-8 py-3 rounded-xl border border-surgical-200 text-obsidian/60 hover:bg-surgical-50 font-medium transition-all tracking-tight"
-                                    >
-                                        End Test Session
-                                    </button>
-
-                                    {/* Live Transcript Preview */}
+                                    {/* Scrollable transcript section */}
                                     {outboundTranscripts.length > 0 && (
-                                        <div className="mt-8 text-left bg-surgical-50 rounded-xl p-4 max-h-64 overflow-y-auto border border-surgical-200">
-                                            <p className="text-xs font-semibold text-obsidian/60 uppercase tracking-widest mb-3">Live Transcript</p>
-                                            <div className="space-y-3">
-                                                {outboundTranscripts.map((t, i) => (
-                                                    <div key={i} className="text-sm">
-                                                        <span className={`font-semibold ${t.speaker === 'agent' ? 'text-surgical-600' : 'text-obsidian/60'}`}>
-                                                            {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
-                                                        </span>
-                                                        <span className="text-obsidian">{t.text}</span>
+                                        <div className="flex-1 min-h-0 px-6 pb-6">
+                                            <div className="h-full bg-surgical-50 rounded-xl p-4 border border-surgical-200 flex flex-col">
+                                                <p className="text-xs font-semibold text-obsidian/60 uppercase tracking-widest mb-3 flex-none">Live Transcript</p>
+                                                <div className="flex-1 overflow-y-auto min-h-0">
+                                                    <div className="space-y-3">
+                                                        {outboundTranscripts.map((t, i) => (
+                                                            <div key={i} className="text-sm">
+                                                                <span className={`font-semibold ${t.speaker === 'agent' ? 'text-surgical-600' : 'text-obsidian/60'}`}>
+                                                                    {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
+                                                                </span>
+                                                                <span className="text-obsidian">{t.text}</span>
+                                                            </div>
+                                                        ))}
+                                                        <div ref={outboundTranscriptEndRef} />
                                                     </div>
-                                                ))}
-                                                <div ref={outboundTranscriptEndRef} />
+                                                </div>
                                             </div>
                                         </div>
                                     )}

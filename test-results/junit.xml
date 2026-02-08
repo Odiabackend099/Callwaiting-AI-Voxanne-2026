@@ -1,45 +1,208 @@
-<testsuites id="" name="" tests="2" failures="1" skipped="0" errors="0" time="79.36400599999999">
-<testsuite name="e2e/capture-dashboard-fully-loaded.spec.ts" timestamp="2026-02-05T01:24:33.247Z" hostname="chromium" tests="2" failures="1" skipped="0" time="89.705" errors="0">
-<testcase name="Capture Dashboard Screenshots with Full Data Load › Capture homepage screenshot" classname="e2e/capture-dashboard-fully-loaded.spec.ts" time="13.012">
-<system-out>
-<![CDATA[✅ Homepage screenshot saved: /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/public/screenshots/01_homepage.png
-]]>
-</system-out>
-</testcase>
-<testcase name="Capture Dashboard Screenshots with Full Data Load › Capture fully loaded dashboard with manifest extraction" classname="e2e/capture-dashboard-fully-loaded.spec.ts" time="76.693">
-<failure message="capture-dashboard-fully-loaded.spec.ts:22:7 Capture fully loaded dashboard with manifest extraction" type="FAILURE">
-<![CDATA[  [chromium] › e2e/capture-dashboard-fully-loaded.spec.ts:22:7 › Capture Dashboard Screenshots with Full Data Load › Capture fully loaded dashboard with manifest extraction 
+<testsuites id="" name="" tests="5" failures="4" skipped="0" errors="0" time="114.051005">
+<testsuite name="e2e/agent-test-verification.spec.ts" timestamp="2026-02-06T16:00:01.725Z" hostname="chromium" tests="5" failures="4" skipped="0" time="174.657" errors="0">
+<testcase name="Agent Test Verification - Browser Test &amp; Live Call Test › Step 1: Login and get authentication token" classname="e2e/agent-test-verification.spec.ts" time="74.253">
+<failure message="agent-test-verification.spec.ts:56:7 Step 1: Login and get authentication token" type="FAILURE">
+<![CDATA[  [chromium] › e2e/agent-test-verification.spec.ts:56:7 › Agent Test Verification - Browser Test & Live Call Test › Step 1: Login and get authentication token 
 
-    Error: page.evaluate: SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text("Create Assistant"), button:has-text("Create Agent"), a[href*="agent-config"]' is not a valid selector.
-        at eval (eval at evaluate (:290:30), <anonymous>:13:34)
-        at UtilityScript.evaluate (<anonymous>:292:16)
-        at UtilityScript.<anonymous> (<anonymous>:1:44)
-        at eval (eval at evaluate (:290:30), <anonymous>:13:34)
-        at UtilityScript.evaluate (<anonymous>:292:16)
-        at UtilityScript.<anonymous> (<anonymous>:1:44)
-        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/capture-dashboard-fully-loaded.spec.ts:59:33
+    TimeoutError: page.waitForURL: Timeout 10000ms exceeded.
+    =========================== logs ===========================
+    waiting for navigation to "**/dashboard**" until "load"
+    ============================================================
+
+      67 |
+      68 |     // Wait for redirect to dashboard
+    > 69 |     await page.waitForURL('**/dashboard**', { timeout: 10000 });
+         |                ^
+      70 |
+      71 |     console.log('✅ Login successful');
+      72 |
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:69:16
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/test-failed-1.png
+    ../test-results/e2e-agent-test-verificatio-062a7-nd-get-authentication-token-chromium/test-failed-1.png
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    Error Context: ../test-results/e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/error-context.md
+    Error Context: ../test-results/e2e-agent-test-verificatio-062a7-nd-get-authentication-token-chromium/error-context.md
 ]]>
 </failure>
 <system-out>
-<![CDATA[⏳ Waiting for dashboard data to fully load...
-✅ Dashboard fully loaded
-✅ Dashboard screenshot saved: /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/public/screenshots/02_dashboard.png
+<![CDATA[🔧 Test Configuration:
+   Frontend: http://localhost:3000
+   Backend: http://localhost:3001
+   Test User: voxanne@demo.com
 
-[[ATTACHMENT|e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/test-failed-1.png]]
+🔑 Step 1: Authenticating...
 
-[[ATTACHMENT|e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/video.webm]]
+[[ATTACHMENT|e2e-agent-test-verificatio-062a7-nd-get-authentication-token-chromium/test-failed-1.png]]
 
-[[ATTACHMENT|e2e-capture-dashboard-full-7c5ec-rd-with-manifest-extraction-chromium/error-context.md]]
+[[ATTACHMENT|e2e-agent-test-verificatio-062a7-nd-get-authentication-token-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Agent Test Verification - Browser Test &amp; Live Call Test › Step 2: Fetch diagnostic endpoint to get agent configuration" classname="e2e/agent-test-verification.spec.ts" time="12.721">
+<failure message="agent-test-verification.spec.ts:87:7 Step 2: Fetch diagnostic endpoint to get agent configuration" type="FAILURE">
+<![CDATA[  [chromium] › e2e/agent-test-verification.spec.ts:87:7 › Agent Test Verification - Browser Test & Live Call Test › Step 2: Fetch diagnostic endpoint to get agent configuration 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+      123 |
+      124 |     // Verify diagnostic response
+    > 125 |     expect(diagnosticResponse.success).toBe(true);
+          |                                        ^
+      126 |     expect(diagnosticResponse.agents).toBeDefined();
+      127 |     expect(diagnosticResponse.agentCounts).toBeDefined();
+      128 |
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:125:40
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/e2e-agent-test-verificatio-579e2--to-get-agent-configuration-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/e2e-agent-test-verificatio-579e2--to-get-agent-configuration-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[🔧 Test Configuration:
+   Frontend: http://localhost:3000
+   Backend: http://localhost:3001
+   Test User: voxanne@demo.com
+
+📊 Step 2: Checking agent configuration via diagnostic endpoint...
+⚠️  Could not extract org_id from page, will try API call
+❌ Browser Error: Failed to load resource: the server responded with a status of 401 (Unauthorized)
+
+📋 Diagnostic Response:
+{
+  "error": "Invalid or expired token"
+}
+
+[[ATTACHMENT|e2e-agent-test-verificatio-579e2--to-get-agent-configuration-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|e2e-agent-test-verificatio-579e2--to-get-agent-configuration-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Agent Test Verification - Browser Test &amp; Live Call Test › Step 3: Test Browser Test feature and verify assistant ID" classname="e2e/agent-test-verification.spec.ts" time="68.973">
+<failure message="agent-test-verification.spec.ts:159:7 Step 3: Test Browser Test feature and verify assistant ID" type="FAILURE">
+<![CDATA[  [chromium] › e2e/agent-test-verification.spec.ts:159:7 › Agent Test Verification - Browser Test & Live Call Test › Step 3: Test Browser Test feature and verify assistant ID 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('button:has-text("Start"), button:has-text("Connect"), button:has-text("Begin")').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('button:has-text("Start"), button:has-text("Connect"), button:has-text("Begin")').first()
+
+
+      195 |     const startButton = page.locator('button:has-text("Start"), button:has-text("Connect"), button:has-text("Begin")').first();
+      196 |
+    > 197 |     await expect(startButton).toBeVisible({ timeout: 5000 });
+          |                               ^
+      198 |     console.log('✅ Found start button');
+      199 |
+      200 |     // Click the button
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:197:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/e2e-agent-test-verificatio-4eb11-ure-and-verify-assistant-ID-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/e2e-agent-test-verificatio-4eb11-ure-and-verify-assistant-ID-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[🔧 Test Configuration:
+   Frontend: http://localhost:3000
+   Backend: http://localhost:3001
+   Test User: voxanne@demo.com
+
+🌐 Step 3: Testing Browser Test feature...
+✅ Navigated to /dashboard/test
+
+[[ATTACHMENT|e2e-agent-test-verificatio-4eb11-ure-and-verify-assistant-ID-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|e2e-agent-test-verificatio-4eb11-ure-and-verify-assistant-ID-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Agent Test Verification - Browser Test &amp; Live Call Test › Step 4: Test Live Call Test feature and verify assistant ID" classname="e2e/agent-test-verification.spec.ts" time="17.955">
+<failure message="agent-test-verification.spec.ts:227:7 Step 4: Test Live Call Test feature and verify assistant ID" type="FAILURE">
+<![CDATA[  [chromium] › e2e/agent-test-verification.spec.ts:227:7 › Agent Test Verification - Browser Test & Live Call Test › Step 4: Test Live Call Test feature and verify assistant ID 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('input[type="tel"], input[placeholder*="phone" i], input[name*="phone" i]').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('input[type="tel"], input[placeholder*="phone" i], input[name*="phone" i]').first()
+
+
+      263 |     // Find phone number input
+      264 |     const phoneInput = page.locator('input[type="tel"], input[placeholder*="phone" i], input[name*="phone" i]').first();
+    > 265 |     await expect(phoneInput).toBeVisible({ timeout: 5000 });
+          |                              ^
+      266 |     console.log('✅ Found phone number input');
+      267 |
+      268 |     // Enter test phone number
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/agent-test-verification.spec.ts:265:30
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/e2e-agent-test-verificatio-05adb-ure-and-verify-assistant-ID-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/e2e-agent-test-verificatio-05adb-ure-and-verify-assistant-ID-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[🔧 Test Configuration:
+   Frontend: http://localhost:3000
+   Backend: http://localhost:3001
+   Test User: voxanne@demo.com
+
+📞 Step 4: Testing Live Call Test feature...
+✅ Navigated to /dashboard/test
+
+[[ATTACHMENT|e2e-agent-test-verificatio-05adb-ure-and-verify-assistant-ID-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|e2e-agent-test-verificatio-05adb-ure-and-verify-assistant-ID-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Agent Test Verification - Browser Test &amp; Live Call Test › Step 5: Verify backend logs for correct assistant IDs" classname="e2e/agent-test-verification.spec.ts" time="0.755">
+<system-out>
+<![CDATA[🔧 Test Configuration:
+   Frontend: http://localhost:3000
+   Backend: http://localhost:3001
+   Test User: voxanne@demo.com
+
+📋 Step 5: Final verification summary...
+
+📊 Expected Configuration:
+   Inbound Agent Assistant ID: NOT FOUND
+   Outbound Agent Assistant ID: NOT FOUND
+
+✅ Tests completed successfully!
+
+📝 NEXT STEPS:
+   1. Check backend logs for "[Browser Test]" entries
+   2. Check backend logs for "[Live Call Test]" entries
+   3. Verify assistant_id in logs matches the expected IDs above
+   4. Confirm "Assistant verification passed" appears in logs
+
+💡 To check backend logs:
+   cd backend
+   grep -E "\[Browser Test\]|\[Live Call Test\]" logs/*.log | tail -50
 ]]>
 </system-out>
 </testcase>

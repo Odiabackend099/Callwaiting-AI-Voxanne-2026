@@ -59,22 +59,22 @@ export default async function DashboardLayout({
     return (
         <DashboardGate>
             <DashboardWebSocketProvider>
-            <VoiceAgentProvider>
-                <div className="flex h-screen overflow-hidden bg-clinical-bg">
-                    {/* Persistent Sidebar */}
-                    <LeftSidebar />
+                <VoiceAgentProvider>
+                    <div className="flex h-screen overflow-hidden bg-clinical-bg">
+                        {/* Persistent Sidebar */}
+                        <LeftSidebar />
 
-                    {/* Main Content Area */}
-                    <div className="flex-1 md:ml-72 flex flex-col h-full overflow-hidden relative">
-                        {/* Command Palette */}
-                        <CommandPalette />
+                        {/* Main Content Area */}
+                        <div className="flex-1 md:ml-72 flex flex-col h-full overflow-hidden relative">
+                            {/* Command Palette */}
+                            <CommandPalette />
 
-                        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-4 pr-4 pb-4 bg-clinical-bg">
-                            {children}
-                        </main>
+                            <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-4 pr-4 pb-4 bg-clinical-bg">
+                                {children}
+                            </main>
+                        </div>
                     </div>
-                </div>
-            </VoiceAgentProvider>
+                </VoiceAgentProvider>
             </DashboardWebSocketProvider>
         </DashboardGate>
     );

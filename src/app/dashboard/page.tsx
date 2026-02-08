@@ -151,8 +151,8 @@ export default function CallWaitingAIDashboard() {
                                             {/* Event Type Icon */}
                                             <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-surgical-600/10 text-surgical-600 border border-surgical-200 font-bold">
                                                 {event.type === 'call_completed' ? '📞' :
-                                                event.type === 'hot_lead_detected' ? '🔥' :
-                                                '📅'}
+                                                    event.type === 'hot_lead_detected' ? '🔥' :
+                                                        '📅'}
                                             </div>
 
                                             {/* Event Details */}

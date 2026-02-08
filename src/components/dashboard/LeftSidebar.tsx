@@ -89,7 +89,7 @@ export default function LeftSidebar() {
         <>
             <div className="p-6">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 rounded-xl bg-surgical-50 flex items-center justify-center border border-surgical-200 shadow-inner overflow-hidden">
+                    <div className="w-8 h-8 rounded-xl bg-[#0000FF]/10 flex items-center justify-center border border-[#AACCFF] shadow-sm overflow-hidden">
                         <Image
                             src="/Brand/3.png"
                             alt="Voxanne"
@@ -99,7 +99,7 @@ export default function LeftSidebar() {
                             priority
                         />
                     </div>
-                    <span className="text-lg font-bold text-obsidian tracking-tight">
+                    <span className="text-lg font-bold text-[#0A0E27] tracking-tight">
                         Voxanne
                     </span>
                 </div>
@@ -108,7 +108,7 @@ export default function LeftSidebar() {
             <nav className="flex-1 px-3 space-y-6 overflow-y-auto custom-scrollbar">
                 {navSections.map((section) => (
                     <div key={section.label}>
-                        <h3 className="px-3 py-2 text-[10px] font-bold text-obsidian/40 uppercase tracking-widest opacity-80">
+                        <h3 className="px-3 py-2 text-xs font-semibold text-[#0A0E27]/50 uppercase tracking-wider">
                             {section.label}
                         </h3>
                         <div className="space-y-0.5">
@@ -123,17 +123,14 @@ export default function LeftSidebar() {
                                         key={item.href}
                                         href={item.href}
                                         onClick={(e) => handleLinkClick(e, item.href)}
-                                        className={`group relative w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-200 font-medium text-sm text-left ${isActive
-                                            ? 'text-surgical-600 bg-surgical-50 shadow-sm'
-                                            : 'text-obsidian/60 hover:text-obsidian hover:bg-surgical-50'
+                                        className={`group relative w-full px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all duration-200 font-semibold text-sm text-left ${isActive
+                                            ? 'text-[#0000FF] bg-gradient-to-r from-[#0000FF]/10 to-transparent border-l-4 border-[#0000FF] shadow-sm'
+                                            : 'text-[#0A0E27]/60 hover:text-[#0A0E27] hover:bg-[#AACCFF]/10'
                                             }`}
                                     >
-                                        {isActive && (
-                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-surgical-600 rounded-r-full" />
-                                        )}
-                                        <Icon className={`w-4 h-4 transition-colors ${isActive
-                                            ? 'text-surgical-600'
-                                            : 'text-obsidian/40 group-hover:text-obsidian/60'
+                                        <Icon className={`w-5 h-5 transition-colors ${isActive
+                                            ? 'text-[#0000FF]'
+                                            : 'text-[#0A0E27]/40 group-hover:text-[#0A0E27]/70'
                                             }`} />
                                         <span className="tracking-tight">{item.label}</span>
                                     </Link>
@@ -144,8 +141,8 @@ export default function LeftSidebar() {
                 ))}
 
                 {/* Divider before footer items */}
-                <div className="pt-4 mt-2 border-t border-surgical-200">
-                    <h3 className="px-3 py-2 text-[10px] font-bold text-obsidian/40 uppercase tracking-widest opacity-80">
+                <div className="pt-4 mt-2 border-t border-[#AACCFF]/50">
+                    <h3 className="px-3 py-2 text-xs font-semibold text-[#0A0E27]/50 uppercase tracking-wider">
                         QUICK ACCESS
                     </h3>
                     <div className="space-y-0.5">
@@ -158,14 +155,14 @@ export default function LeftSidebar() {
                                     key={item.href}
                                     href={item.href}
                                     onClick={(e) => handleLinkClick(e, item.href)}
-                                    className={`group relative w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-all duration-200 font-medium text-sm text-left ${isActive
-                                        ? 'text-surgical-600 bg-surgical-50 shadow-sm border border-surgical-200'
-                                        : 'text-obsidian/60 hover:text-obsidian hover:bg-surgical-50'
+                                    className={`group relative w-full px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all duration-200 font-semibold text-sm text-left ${isActive
+                                        ? 'text-[#0000FF] bg-gradient-to-r from-[#0000FF]/10 to-transparent border-l-4 border-[#0000FF] shadow-sm'
+                                        : 'text-[#0A0E27]/60 hover:text-[#0A0E27] hover:bg-[#AACCFF]/10'
                                         }`}
                                 >
-                                    <Icon className={`w-4 h-4 transition-colors ${isActive
-                                        ? 'text-surgical-600'
-                                        : 'text-obsidian/40 group-hover:text-obsidian/60'
+                                    <Icon className={`w-5 h-5 transition-colors ${isActive
+                                        ? 'text-[#0000FF]'
+                                        : 'text-[#0A0E27]/40 group-hover:text-[#0A0E27]/70'
                                         }`} />
                                     <span className="tracking-tight">{item.label}</span>
                                 </Link>
@@ -176,15 +173,15 @@ export default function LeftSidebar() {
             </nav>
 
             <div className="p-4 space-y-1">
-                <div className="px-3 py-2 rounded-lg border border-surgical-200 bg-white mb-2">
-                    <p className="text-xs font-semibold text-obsidian truncate tracking-tight">
+                <div className="px-3 py-2.5 rounded-lg border border-[#AACCFF] bg-white mb-2 shadow-sm">
+                    <p className="text-xs font-semibold text-[#0A0E27] truncate tracking-tight">
                         {user?.email}
                     </p>
-                    <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium">Prepaid</p>
+                    <p className="text-[10px] text-[#0A0E27]/60 uppercase tracking-wider font-medium">Prepaid</p>
                 </div>
                 <button
                     onClick={handleLogout}
-                    className="w-full px-3 py-1.5 rounded-lg text-xs font-medium text-obsidian/60 hover:text-red-600 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                    className="w-full px-3 py-2 rounded-lg text-xs font-medium text-[#0A0E27]/60 hover:text-[#0A0E27] hover:bg-[#0A0E27]/5 transition-all flex items-center justify-center gap-2"
                 >
                     <LogOut className="w-3.5 h-3.5" />
                     Logout
@@ -196,16 +193,16 @@ export default function LeftSidebar() {
     return (
         <>
             {/* Mobile Header */}
-            <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 border-b border-surgical-200 z-20 flex items-center justify-between px-4 backdrop-blur-md">
+            <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 border-b border-[#AACCFF]/50 z-20 flex items-center justify-between px-4 backdrop-blur-md shadow-sm">
                 <button
                     onClick={() => setMobileOpen(true)}
-                    className="p-2 rounded-lg text-obsidian/60 hover:bg-surgical-50 transition-colors"
+                    className="p-2 rounded-lg text-[#0A0E27]/60 hover:bg-[#AACCFF]/10 transition-colors"
                 >
                     <Menu className="w-5 h-5" />
                 </button>
 
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-obsidian">
+                    <span className="text-sm font-bold text-[#0A0E27]">
                         Voxanne
                     </span>
                 </div>
@@ -214,20 +211,20 @@ export default function LeftSidebar() {
             </div>
 
             {/* Desktop Sidebar */}
-            <div className="hidden md:flex fixed left-4 top-4 bottom-4 w-60 bg-white/80 border border-surgical-200 rounded-2xl flex-col z-10 backdrop-blur-xl shadow-2xl shadow-surgical-200/20">
+            <div className="hidden md:flex fixed left-4 top-4 bottom-4 w-60 bg-white/80 border border-[#AACCFF] rounded-2xl flex-col z-10 backdrop-blur-xl shadow-2xl shadow-[#3366FF]/10">
                 {SidebarContents}
             </div>
 
             {/* Mobile Drawer */}
             {mobileOpen && (
                 <div className="md:hidden fixed inset-0 z-30">
-                    <div className="absolute inset-0 bg-obsidian/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-                    <div className="absolute left-0 top-0 h-full w-72 bg-white border-r border-surgical-200 flex flex-col shadow-2xl">
-                        <div className="p-4 flex items-center justify-between border-b border-surgical-200">
-                            <span className="text-lg font-bold text-obsidian tracking-tight">Voxanne</span>
+                    <div className="absolute inset-0 bg-[#0A0E27]/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+                    <div className="absolute left-0 top-0 h-full w-72 bg-white border-r border-[#AACCFF] flex flex-col shadow-2xl">
+                        <div className="p-4 flex items-center justify-between border-b border-[#AACCFF]/50">
+                            <span className="text-lg font-bold text-[#0A0E27] tracking-tight">Voxanne</span>
                             <button
                                 onClick={() => setMobileOpen(false)}
-                                className="p-2 rounded-lg text-obsidian/60 hover:bg-surgical-50 transition-colors"
+                                className="p-2 rounded-lg text-[#0A0E27]/60 hover:bg-[#AACCFF]/10 transition-colors"
                             >
                                 <X className="w-5 h-5" />
                             </button>
