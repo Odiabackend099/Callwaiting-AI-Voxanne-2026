@@ -40,6 +40,11 @@ _ARCHIVE_2026/
 Archived/
 .archive/
 
+# Test artifacts
+test-results/
+playwright-report/
+*.backup
+
 # Render deployment files with credentials
 RENDER_ENV_VARIABLES.txt
 backend/.env.render

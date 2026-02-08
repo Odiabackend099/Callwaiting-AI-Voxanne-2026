@@ -69,7 +69,7 @@ export function PhoneNumberInputStep({
                 className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-surgical-200 hover:border-surgical-600 focus:ring-2 focus:ring-surgical-500 focus:outline-none transition-all"
               >
                 <span className="font-mono text-sm text-obsidian">
-                  {number.phone_number}
+                  {number.phoneNumber}
                 </span>
                 <span className="text-xs text-green-700 flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" /> Verified

@@ -252,7 +252,6 @@ export default function TelephonyPage() {
       {/* Buy Number Modal */}
       {showBuyNumberModal && (
         <BuyNumberModal
-          isOpen={showBuyNumberModal}
           onClose={() => {
             setShowBuyNumberModal(false);
             // Refresh numbers list after modal closes (in case new number was provisioned)

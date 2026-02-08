@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 
 type FadeInProps = {
   children: React.ReactNode;
@@ -23,7 +23,7 @@ export const FadeIn = ({
     right: -20,
   };
 
-  const variants = {
+  const variants: Variants = {
     hidden: { 
       opacity: 0, 
       y: direction === 'up' || direction === 'down' ? offsets[direction] : 0,

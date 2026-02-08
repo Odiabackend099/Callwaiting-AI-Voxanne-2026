@@ -369,7 +369,43 @@ export const easings = {
   backOut: 'backOut',
   backIn: 'backIn',
   backInOut: 'backInOut',
+  smooth: [0.25, 0.1, 0.25, 1.0],
+  bounce: [0.68, -0.55, 0.27, 1.55],
+  antiGravity: [0.33, 1.0, 0.68, 1.0],
+  professional: [0.4, 0.0, 0.2, 1.0],
 };
+
+// ============================================================================
+// Brand Colors
+// ============================================================================
+
+export const brandColors = {
+  primary: '#0000FF',
+  secondary: '#3366FF',
+  obsidian: '#0A0E27',
+  surgical: '#1D4ED8',
+  clinical: '#3B82F6',
+  skyMist: '#BFDBFE',
+  blueBright: '#0000FF',
+  blueMedium: '#3366FF',
+  blueLight: '#BFDBFE',
+  navyDark: '#0A0E27',
+};
+
+// ============================================================================
+// Stagger Transition Factory
+// ============================================================================
+
+export const createStaggerTransition = (staggerAmount: number = 0.1, delayChildren: number = 0.2) => ({
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: staggerAmount,
+      delayChildren,
+    },
+  },
+});
 
 // ============================================================================
 // Motion Utilities

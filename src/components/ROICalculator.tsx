@@ -153,23 +153,23 @@ export const ROICalculator = () => {
                                 <div>
                                     <p className="text-slate-400 text-sm mb-1">Monthly Revenue Saved</p>
                                     <motion.p
-                                        key={withCallWaitingAIRevenueSaved}
+                                        key={withVoxanneAIRevenueSaved}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="text-3xl font-bold text-emerald-400"
                                     >
-                                        ${withCallWaitingAIRevenueSaved.toLocaleString()}
+                                        ${withVoxanneAIRevenueSaved.toLocaleString()}
                                     </motion.p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400 text-sm mb-1">Yearly Revenue Saved</p>
                                     <motion.p
-                                        key={withCallWaitingAIRevenueSaved * 12}
+                                        key={withVoxanneAIRevenueSaved * 12}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="text-2xl font-bold text-emerald-300"
                                     >
-                                        ${(withCallWaitingAIRevenueSaved * 12).toLocaleString()}
+                                        ${(withVoxanneAIRevenueSaved * 12).toLocaleString()}
                                     </motion.p>
                                 </div>
                                 <div className="pt-4 border-t border-emerald-500/20">
@@ -178,7 +178,7 @@ export const ROICalculator = () => {
                                         <span>98% Call Answer Rate</span>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-1">
-                                        Only {withCallWaitingAIMissed} missed calls/month
+                                        Only {withVoxanneAIMissed} missed calls/month
                                     </p>
                                 </div>
                             </div>

@@ -10,7 +10,7 @@ export function useOptimizedAnimation() {
   useEffect(() => {
     // Check device capabilities
     const isHighPerformance = window.navigator.hardwareConcurrency > 2;
-    const isGoodConnection = navigator.connection?.effectiveType !== 'slow-2g';
+    const isGoodConnection = (navigator as any).connection?.effectiveType !== 'slow-2g';
 
     // Only animate if device can handle it
     setShouldAnimate(

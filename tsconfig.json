@@ -42,6 +42,15 @@
     "backend",
     "scripts",
     "frontend",
-    "src/components/integrations"
+    "src/components/integrations",
+    "remotion-videos",
+    "Voxanne copy.ai",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "src/__tests__",
+    "e2e",
+    "tests"
   ]
 }

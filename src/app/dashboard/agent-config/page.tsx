@@ -22,16 +22,16 @@ const AGENT_CONFIG_CONSTRAINTS = {
 interface Voice {
     id: string;
     name: string;
-    gender: string;
     provider: string;
+    gender: string;
     language: string;
     characteristics: string;
     accent: string;
     bestFor: string;
     latency: string;
     quality: string;
-    isDefault?: boolean;
-    requiresApiKey?: boolean;
+    isDefault: boolean;
+    requiresApiKey: boolean;
 }
 
 interface AgentConfig {

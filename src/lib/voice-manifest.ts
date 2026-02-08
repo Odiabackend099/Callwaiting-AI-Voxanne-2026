@@ -61,7 +61,7 @@ export function getAvailableVoices() {
     id: id as VoiceId,
     label: config.label,
     description: config.description,
-    isDefault: config.isDefault || false,
+    isDefault: 'isDefault' in config ? config.isDefault : false,
   }));
 }
 
@@ -84,5 +84,5 @@ export function isValidVoiceId(voiceId: string): boolean {
  * Get default voice ID (healthcare-focused)
  */
 export function getDefaultVoiceId(): VoiceId {
-  return 'Neha';
+  return 'Rohan';
 }
