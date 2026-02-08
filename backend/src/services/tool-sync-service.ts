@@ -21,7 +21,7 @@ import * as crypto from 'crypto';
 import { VapiClient } from './vapi-client';
 import { IntegrationDecryptor } from './integration-decryptor';
 import { getUnifiedBookingTool } from '../config/unified-booking-tool';
-import { getTransferCallTool, getLookupCallerTool, getEndCallTool, getCheckAvailabilityTool } from '../config/phase1-tools';
+import { getTransferCallTool, getLookupCallerTool, getEndCallTool, getCheckAvailabilityTool, getQueryKnowledgeBaseTool } from '../config/phase1-tools';
 import { supabase } from './supabase-client';
 import { log } from './logger';
 import { resolveBackendUrl } from '../utils/resolve-backend-url';
@@ -233,6 +233,9 @@ export class ToolSyncService {
         break;
       case 'endCall':
         toolDef = getEndCallTool(backendUrl);
+        break;
+      case 'queryKnowledgeBase':
+        toolDef = getQueryKnowledgeBaseTool(backendUrl);
         break;
       default:
         throw new Error(`Unsupported tool: ${toolBlueprint.name}`);
@@ -498,6 +501,12 @@ export class ToolSyncService {
       {
         name: 'endCall',
         description: 'Gracefully end the current call',
+        enabled: true
+      },
+      // Phase 2: Knowledge Base Access
+      {
+        name: 'queryKnowledgeBase',
+        description: 'Search organization knowledge base for services, pricing, policies, and business information',
         enabled: true
       }
     ];

@@ -1,5 +1,28 @@
 /**
- * VAPI Tool Definitions
+ * ⚠️ DEPRECATION NOTICE ⚠️
+ *
+ * This file contains LEGACY tool definitions with snake_case naming convention.
+ * These tools are NOT actively synced to VAPI assistants.
+ *
+ * **DO NOT USE THIS FILE FOR NEW TOOLS**
+ *
+ * Source of Truth: backend/src/config/phase1-tools.ts (camelCase naming)
+ *
+ * Active Tools (synced via ToolSyncService):
+ * - checkAvailability (NOT check_availability)
+ * - bookClinicAppointment (NOT book_appointment)
+ * - transferCall
+ * - lookupCaller
+ * - endCall
+ *
+ * See TOOL_ARCHITECTURE.md for complete documentation.
+ *
+ * This file is kept for backward compatibility only.
+ * Migration plan: Remove after verifying no legacy imports exist.
+ *
+ * ---
+ *
+ * VAPI Tool Definitions (LEGACY - DO NOT USE)
  * OpenAPI-compliant function schemas for VAPI AI assistants
  *
  * These tools enable the AI voice agent to:

@@ -153,3 +153,47 @@ export function getCheckAvailabilityTool(backendUrl: string) {
     }
   };
 }
+
+/**
+ * Query Knowledge Base Tool (Phase 2 Addition)
+ *
+ * MUST be used when patient asks questions about:
+ * - Services, pricing, procedures
+ * - Business hours, location, policies
+ * - Insurance, payment options
+ * - Specialist information
+ *
+ * Returns relevant information from the organization's knowledge base.
+ */
+export const QUERY_KNOWLEDGE_BASE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'queryKnowledgeBase',
+    description: 'Search the organization\'s knowledge base for information about services, pricing, policies, hours, location, insurance, and other business details. Use this BEFORE answering questions about the clinic to ensure accurate information.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The question or topic to search for (e.g., "Botox pricing", "business hours", "insurance accepted", "parking information"). Use natural language.'
+        },
+        category: {
+          type: 'string',
+          enum: ['services', 'pricing', 'policies', 'hours', 'location', 'insurance', 'general'],
+          description: 'The category of information being requested. Helps narrow down search results.'
+        }
+      },
+      required: ['query']
+    }
+  },
+  async: true // Allows AI to say "Let me check our information..." while the search runs
+};
+
+export function getQueryKnowledgeBaseTool(backendUrl: string) {
+  return {
+    ...QUERY_KNOWLEDGE_BASE_TOOL,
+    server: {
+      url: `${backendUrl}/api/vapi/tools/knowledge-base`
+    }
+  };
+}
