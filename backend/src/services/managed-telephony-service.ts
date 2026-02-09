@@ -153,7 +153,7 @@ export class ManagedTelephonyService {
       // Update org telephony_mode
       await supabaseAdmin
         .from('organizations')
-        .update({ telephony_mode: 'managed', wallet_markup_percent: 300 })
+        .update({ telephony_mode: 'managed' })
         .eq('id', orgId);
 
       log.info('ManagedTelephony', 'Subaccount created successfully', {

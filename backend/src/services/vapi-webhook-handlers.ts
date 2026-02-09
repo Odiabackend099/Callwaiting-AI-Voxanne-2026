@@ -120,40 +120,44 @@ export async function processEndOfCallReport(event: any, orgId: string): Promise
       status = 'completed';
     }
 
-    // Insert into call_logs table
-    const { data: callLogData, error: callLogError } = await supabase
-      .from('call_logs')
-      .upsert({
-        id: callId,
-        org_id: orgId,
-        vapi_call_id: callId,
-        phone_number: phoneNumber,
-        caller_name: callerName,
-        duration_seconds: durationSeconds,
-        status: status,
-        transcript: transcript,
-        recording_storage_path: recordingUrl,
-        sentiment_label: sentimentLabel,
-        sentiment_score: sentimentScore,
-        sentiment_summary: sentimentSummary,
-        sentiment_urgency: sentimentUrgency,
-        call_type: 'inbound',
-        created_at: startedAt.toISOString(),
-        ended_at: endedAt.toISOString(),
-        metadata: {
-          vapi_end_reason: event.call?.endedReason,
-          vapi_cost: event.call?.cost,
-          vapi_customer: event.call?.customer,
-          analysis: event.analysis
-        }
-      }, {
-        onConflict: 'vapi_call_id'
-      });
+    // Legacy call_logs write — disabled by default.
+    // The canonical write now happens in vapi-webhook.ts → calls table.
+    // Set ENABLE_LEGACY_CALL_LOGS=true to re-enable for rollback safety.
+    if (process.env.ENABLE_LEGACY_CALL_LOGS === 'true') {
+      const { data: callLogData, error: callLogError } = await supabase
+        .from('call_logs')
+        .upsert({
+          id: callId,
+          org_id: orgId,
+          vapi_call_id: callId,
+          phone_number: phoneNumber,
+          caller_name: callerName,
+          duration_seconds: durationSeconds,
+          status: status,
+          transcript: transcript,
+          recording_storage_path: recordingUrl,
+          sentiment_label: sentimentLabel,
+          sentiment_score: sentimentScore,
+          sentiment_summary: sentimentSummary,
+          sentiment_urgency: sentimentUrgency,
+          call_type: 'inbound',
+          created_at: startedAt.toISOString(),
+          ended_at: endedAt.toISOString(),
+          metadata: {
+            vapi_end_reason: event.call?.endedReason,
+            vapi_cost: event.call?.cost,
+            vapi_customer: event.call?.customer,
+            analysis: event.analysis
+          }
+        }, {
+          onConflict: 'vapi_call_id'
+        });
 
-    if (callLogError) {
-      log.error('VapiWebhookHandlers', `Failed to insert call_logs: ${callLogError.message}`, { callId, orgId });
-    } else {
-      log.info('VapiWebhookHandlers', `Call log created/updated for call ${callId}`);
+      if (callLogError) {
+        log.error('VapiWebhookHandlers', `Failed to insert call_logs: ${callLogError.message}`, { callId, orgId });
+      } else {
+        log.info('VapiWebhookHandlers', `Call log created/updated for call ${callId}`);
+      }
     }
 
     // Also store detailed report in call_reports table if it exists

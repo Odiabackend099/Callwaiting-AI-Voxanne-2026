@@ -10,62 +10,32 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    // Step 1: Get authenticated user
+    const supabase = await createClient();
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { error: 'Supabase configuration missing' },
-        { status: 500 }
-      );
-    }
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    // Step 1: Get Supabase session
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
-    });
-
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-    if (sessionError || !session?.user?.id) {
-      console.error('[Google OAuth] No valid session:', sessionError?.message);
+    if (userError || !user?.id) {
+      console.error('[Google OAuth] No valid user:', userError?.message);
       return NextResponse.json(
         { error: 'Unauthorized. Please log in.' },
         { status: 401 }
       );
     }
 
-    // Step 2: Extract org_id from JWT app_metadata (single source of truth)
-    let orgId = session.user.app_metadata?.org_id as string | undefined;
-
-    // Fallback: try user_metadata as well
-    if (!orgId) {
-      orgId = session.user.user_metadata?.org_id as string | undefined;
-    }
+    // Step 2: Extract org_id from JWT app_metadata (single source of truth).
+    // Only trust app_metadata (admin-set, cryptographically signed).
+    const orgId = user.app_metadata?.org_id as string | undefined;
 
     if (!orgId) {
-      console.error('[Google OAuth] User missing org_id in JWT:', {
-        user_id: session.user.id,
-        email: session.user.email,
-        app_metadata: session.user.app_metadata,
-        user_metadata: session.user.user_metadata,
-        message: 'User may need to log out and back in to refresh JWT with org_id'
+      console.error('[Google OAuth] User missing org_id in app_metadata:', {
+        user_id: user.id,
+        email: user.email,
+        app_metadata: user.app_metadata,
       });
       return NextResponse.json(
         {

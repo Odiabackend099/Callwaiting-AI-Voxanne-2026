@@ -73,13 +73,12 @@ Simple, transparent pricing — no subscriptions, no tiers, no setup fees.
 How it works:
 1. Top up your wallet (from $25 minimum)
 2. AI handles your calls 24/7
-3. Credits deducted per second at $0.70/min
+3. Credits deducted per call based on duration
 4. All features included for every customer
 
 Pricing details:
-- Rate: $0.70 per minute (per-second precision)
-- Billing: Per-second, displayed as per-minute rate
-- Top-up options: $25 (~35 min), $50 (~71 min), $100 (~142 min), $250 (~357 min), $600 (~857 min) or any custom amount
+- Billing: Credit-based, deducted per call based on duration
+- Top-up options: $25 (350 credits), $50 (700 credits), $100 (1,400 credits), $250 (3,500 credits), $600 (8,500 credits) or any custom amount
 - Auto-recharge: Optional — set a threshold and amount, card charged automatically
 - Average clinic spend: $150-$400/month based on call volume
 
@@ -197,7 +196,7 @@ Q: Does it work with my existing phone system?
 A: Yes. Compatible with Twilio, VoIP.ms, Bandwidth, SIP systems, and regular phone lines.
 
 Q: How much does it cost vs. hiring a receptionist?
-A: Voxanne: pay-as-you-go at $0.70/min, average clinic spends $150-$400/month. Full-time receptionist: $40K-$60K/year + benefits. ROI typically 2-3 months.
+A: Voxanne: pay-as-you-go credits, average clinic spends $150-$400/month. Full-time receptionist: $40K-$60K/year + benefits. ROI typically 2-3 months.
 
 Q: Can it handle pricing inquiries?
 A: Yes. Voxanne can quote pricing, explain packages, and discuss financing options. Complex negotiations go to humans.

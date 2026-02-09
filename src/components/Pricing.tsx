@@ -6,11 +6,11 @@ import { Check, Wallet, Phone, Zap } from "lucide-react";
 import Link from "next/link";
 
 const TOP_UP_OPTIONS = [
-    { label: "$25", pence: 1975, minutes: "~35 min" },
-    { label: "$50", pence: 3950, minutes: "~71 min" },
-    { label: "$100", pence: 7900, minutes: "~142 min" },
-    { label: "$250", pence: 19750, minutes: "~357 min" },
-    { label: "$600", pence: 47400, minutes: "~857 min" },
+    { label: "$25", pence: 1975, credits: "350 credits" },
+    { label: "$50", pence: 3950, credits: "700 credits" },
+    { label: "$100", pence: 7900, credits: "1,400 credits" },
+    { label: "$250", pence: 19750, credits: "3,500 credits" },
+    { label: "$600", pence: 47400, credits: "8,500 credits" },
 ];
 
 const FEATURES = [
@@ -39,7 +39,7 @@ const STEPS = [
     {
         icon: Zap,
         title: "Pay Per Use",
-        description: "Credits deducted per minute of call time",
+        description: "Credits deducted per call based on duration",
     },
 ];
 
@@ -64,15 +64,15 @@ export default function Pricing() {
                         <div className="text-center mb-8">
                             <h3 className="text-2xl font-bold text-deep-obsidian mb-2">Pay As You Go</h3>
                             <p className="text-slate-600 text-sm">
-                                Top up your wallet. AI handles calls. Credits deducted per minute.
+                                Top up your wallet. AI handles calls. Credits deducted per call.
                             </p>
                         </div>
 
                         <div className="text-center mb-8">
                             <div className="flex items-baseline justify-center gap-2">
-                                <span className="text-5xl font-bold text-surgical-600">$0.70/min</span>
+                                <span className="text-5xl font-bold text-surgical-600">Credit Packs</span>
                             </div>
-                            <p className="text-sm text-slate-400 mt-2">Per-second billing. No minimums. No contracts.</p>
+                            <p className="text-sm text-slate-400 mt-2">No minimums. No contracts. All features included.</p>
                         </div>
 
                         {/* Top-up pills */}
@@ -82,7 +82,7 @@ export default function Pricing() {
                                     key={option.pence}
                                     className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50"
                                 >
-                                    {option.label} ({option.minutes})
+                                    {option.label} ({option.credits})
                                 </span>
                             ))}
                             <span className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-400 bg-slate-50">

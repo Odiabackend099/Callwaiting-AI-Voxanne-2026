@@ -382,7 +382,9 @@ router.get('/wallet', requireAuth, async (req: Request, res: Response) => {
       balance_usd: (balance.balancePence / USD_TO_GBP_RATE / 100).toFixed(2),
       rate_per_minute: '$0.70',
       rate_per_minute_cents: RATE_PER_MINUTE_USD_CENTS,
+      credits_per_minute: 10,
       estimated_minutes_remaining: Math.floor(balance.balancePence / pencePerMinute),
+      estimated_credits_remaining: Math.floor(balance.balancePence / pencePerMinute) * 10,
       currency_display: 'usd',
       exchange_rate_used: USD_TO_GBP_RATE,
     });
@@ -469,9 +471,10 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
     const RATE_PER_MINUTE_USD_CENTS = config.RATE_PER_MINUTE_USD_CENTS || 70;
     const pencePerMinute = Math.ceil(RATE_PER_MINUTE_USD_CENTS * USD_TO_GBP_RATE); // 56p
 
-    // Calculate USD equivalent and estimated minutes
+    // Calculate USD equivalent, estimated minutes, and credits
     const amount_usd = (amount_pence / USD_TO_GBP_RATE / 100).toFixed(2);
     const estimated_minutes = Math.floor(amount_pence / pencePerMinute);
+    const estimated_credits = estimated_minutes * 10;
 
     // Look up or create Stripe customer
     const { data: orgData } = await supabase
@@ -509,7 +512,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
             product_data: {
               name: 'Voxanne AI Credits',
               // Show BOTH currencies in description to prevent confusion
-              description: `Voxanne AI Top-up: ~$${Math.round(parseFloat(amount_usd))} (£${(amount_pence / 100).toFixed(2)} GBP) — ~${estimated_minutes} minutes`,
+              description: `Voxanne AI Top-up: ~$${Math.round(parseFloat(amount_usd))} (£${(amount_pence / 100).toFixed(2)} GBP) — ~${estimated_credits} credits`,
             },
             unit_amount: amount_pence,
           },
@@ -524,6 +527,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
           amount_pence: String(amount_pence),
           amount_usd: amount_usd,
           estimated_minutes: String(estimated_minutes),
+          estimated_credits: String(estimated_credits),
         },
       },
       success_url: `${frontendUrl}/dashboard/wallet?topup=success`,
@@ -534,6 +538,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
         amount_pence: String(amount_pence),
         amount_usd: amount_usd,
         estimated_minutes: String(estimated_minutes),
+        estimated_credits: String(estimated_credits),
       },
     });
 

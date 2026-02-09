@@ -30,7 +30,7 @@ export default function ClinicalPulse() {
         {
             refreshInterval: 10000,
             revalidateOnFocus: false,      // Prevent reload on tab switch
-            revalidateOnMount: false,      // Use cache if available
+            revalidateOnMount: true,       // Always fetch on mount
             dedupingInterval: 5000,        // Prevent duplicate requests within 5s
             revalidateIfStale: true,       // Only refetch if data is stale
         }

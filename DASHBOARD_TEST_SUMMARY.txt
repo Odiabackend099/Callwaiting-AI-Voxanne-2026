@@ -1,0 +1,203 @@
+═══════════════════════════════════════════════════════════════════════════════
+   VOXANNE AI DASHBOARD DATA QUALITY VERIFICATION - EXECUTIVE SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST DATE: February 9, 2026
+TEST ORG: voxanne@demo.com (Voxanne Demo Clinic)
+DASHBOARD: http://localhost:3000
+
+───────────────────────────────────────────────────────────────────────────────
+OVERALL RESULT: ⚠️  PARTIAL PASS - Dashboard Functional, Data Quality Issues
+───────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ DATA QUALITY SCORE: 63/100                                                  │
+│ TESTS PASSED: 5/8 (62.5%)                                                   │
+│ CRITICAL ISSUES: 2                                                           │
+│ RECOMMENDATION: NEEDS FIX BEFORE PRODUCTION                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+┌───────┬────────────────────────────────────────────────┬────────┬────────┐
+│ TEST  │ NAME                                           │ STATUS │ SCORE  │
+├───────┼────────────────────────────────────────────────┼────────┼────────┤
+│   1   │ Dashboard Recent Calls Widget                  │   ❌   │  0/13  │
+│   2   │ Call Logs Table - Full Inspection              │   ❌   │  0/13  │
+│   3   │ Call Details Deep Inspection                   │   ✅   │ 13/13  │
+│   4   │ Leads/Hot Leads Table                          │   ❌   │  0/13  │
+│   5   │ Recent Activity Widget                         │   ✅   │ 13/13  │
+│   6   │ Stats Cards                                    │   ✅   │ 13/13  │
+│   7   │ Search & Filter Data Integrity                 │   ✅   │ 13/13  │
+│   8   │ Data Consistency Check                         │   ✅   │ 13/13  │
+└───────┴────────────────────────────────────────────────┴────────┴────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL ISSUES (BLOCKING PRODUCTION)
+═══════════════════════════════════════════════════════════════════════════════
+
+🔴 ISSUE #1: CONTACT CREATION BROKEN (Critical)
+   ├─ Impact: Leads table completely empty
+   ├─ Root Cause: Webhook not creating contacts from completed calls
+   ├─ Evidence: 0 contacts found, expected 7+ (one per completed call)
+   ├─ Fix Time: 2 hours
+   └─ Priority: P0 - BLOCKS LEADS FEATURE
+
+🟡 ISSUE #2: MISSING SENTIMENT DATA (High)
+   ├─ Impact: 71% of completed calls missing sentiment analysis
+   ├─ Root Cause: Webhook not saving sentiment fields
+   ├─ Evidence: 5/7 completed calls have NULL sentiment_label/score
+   ├─ Fix Time: 2 hours
+   └─ Priority: P1 - BLOCKS ANALYTICS
+
+🟢 ISSUE #3: INCOMPLETE CALLS DISPLAYED (Medium)
+   ├─ Impact: Users see "Unknown Caller" for in-progress calls
+   ├─ Root Cause: Dashboard shows calls in "queued"/"ringing" status
+   ├─ Evidence: 4 calls with status != "completed" in Recent Calls widget
+   ├─ Fix Time: 1 hour
+   └─ Priority: P2 - CONFUSING UX (NOT A BUG)
+
+═══════════════════════════════════════════════════════════════════════════════
+DATABASE STATE SNAPSHOT
+═══════════════════════════════════════════════════════════════════════════════
+
+CALLS TABLE (11 total)
+  ├─ Completed:    7 (64%)  │  ✅ 2 with full data
+  ├─ Queued:       3 (27%)  │  ⚠️  4 missing sentiment
+  └─ Ringing:      1 (9%)   │  ❌ 1 missing ALL data
+
+COMPLETED CALLS DATA QUALITY (7 total)
+  ├─ Caller Name:   86% complete (6/7)  ✅
+  ├─ Phone Number:  86% complete (6/7)  ✅
+  ├─ Sentiment:     29% complete (2/7)  ❌ CRITICAL
+  └─ Transcript:    ???  (not tested)
+
+CONTACTS TABLE (0 total)
+  ├─ First Name:    0% complete (0/0)   ❌ CRITICAL
+  ├─ Last Name:     0% complete (0/0)   ❌ CRITICAL
+  ├─ Phone:         0% complete (0/0)   ❌ CRITICAL
+  └─ Email:         0% complete (0/0)   ❌ CRITICAL
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT'S WORKING ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Dashboard UI displays data correctly (not a UI bug)
+✅ Call details page functional for complete calls
+✅ Hot lead alerts generating correctly (2 found)
+✅ Stats cards calculating correctly (11 calls, 7 completed, 70% avg sentiment)
+✅ Phone numbers in E.164 format for search
+✅ Data consistency across all dashboard pages
+✅ Recent activity timeline chronological
+✅ Most recent 2 calls (Feb 3-5) have complete data
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT'S BROKEN ❌
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ Webhook processing not creating contacts (0 contacts found)
+❌ Webhook processing not saving sentiment for 5 completed calls
+❌ Dashboard shows incomplete calls without context (confusing UX)
+❌ Leads table empty (blocks entire leads feature)
+❌ Analytics incomplete (only 29% of calls have sentiment data)
+
+═══════════════════════════════════════════════════════════════════════════════
+RECOMMENDED FIX PLAN
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 1: DATA QUALITY FIXES (4 hours) - IMMEDIATE
+  ├─ [2h] Fix contact creation in webhook processing
+  │   ├─ Review backend/src/routes/vapi-webhook.ts
+  │   ├─ Verify Vapi webhook payload includes caller info
+  │   ├─ Test manual contact creation
+  │   └─ Re-process 7 completed calls
+  │
+  ├─ [2h] Fix sentiment data extraction
+  │   ├─ Verify Vapi webhook includes sentiment analysis
+  │   ├─ Check webhook saves sentiment_label + sentiment_score
+  │   └─ Re-process historical calls (if possible)
+  │
+  └─ Expected Outcome: 90+/100 data quality score
+
+PHASE 2: UX IMPROVEMENTS (1 hour) - SHORT-TERM
+  ├─ [1h] Filter incomplete calls from Recent Calls widget
+  │   ├─ Add WHERE status = 'completed' to queries
+  │   └─ OR add "In Progress" badge to incomplete calls
+  │
+  └─ Expected Outcome: 100% clear UX, no confusion
+
+PHASE 3: MONITORING (4 hours) - NEXT WEEK
+  ├─ [2h] Add webhook processing logs
+  │   ├─ Log contact creation success/failure
+  │   ├─ Log sentiment extraction success/failure
+  │   └─ Alert on missing required fields
+  │
+  ├─ [1h] Add database constraints
+  │   ├─ phone_number NOT NULL for completed calls
+  │   └─ sentiment_label NOT NULL for completed calls
+  │
+  └─ [1h] Add unit tests for webhook processing
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST (After Fixes)
+═══════════════════════════════════════════════════════════════════════════════
+
+□ All completed calls have sentiment data (7/7)
+□ All completed calls have associated contacts (7/7)
+□ Contacts table has 7+ entries with real names
+□ Recent Calls widget shows only completed calls
+□ Leads table displays 7+ contacts with scores
+□ Average sentiment reflects all completed calls
+□ Hot lead alerts triggered for all high-scoring calls
+□ Dashboard data quality score: 90+/100
+
+═══════════════════════════════════════════════════════════════════════════════
+KEY INSIGHTS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ DASHBOARD IS NOT BROKEN - UI displays data correctly
+2. ❌ DATA QUALITY IS BROKEN - Webhook processing has gaps
+3. ⚠️  MOST RECENT CALLS WORK - Feb 3-5 calls have complete data
+4. ❌ HISTORICAL CALLS INCOMPLETE - Jan 26-31 calls missing sentiment
+5. 🔍 HYPOTHESIS: Webhook processing improved recently, but historical data lost
+
+═══════════════════════════════════════════════════════════════════════════════
+NEXT STEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Review backend/src/routes/vapi-webhook.ts for contact creation logic
+2. Test Vapi webhook payload structure (use Vapi dashboard webhook logs)
+3. Apply fixes for contact creation + sentiment extraction
+4. Re-run verification: npx ts-node backend/src/scripts/verify-dashboard-data-quality.ts
+5. Expect 90+/100 score after fixes
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST ARTIFACTS
+═══════════════════════════════════════════════════════════════════════════════
+
+📄 DASHBOARD_VERIFICATION_REPORT.md - Full detailed report (400+ lines)
+📄 DASHBOARD_TEST_SUMMARY.txt - This executive summary
+📄 backend/src/scripts/verify-dashboard-data-quality.ts - Automated test suite
+📄 backend/src/scripts/investigate-data-issues.ts - Root cause analysis script
+📄 backend/src/scripts/check-demo-data.ts - Quick data check script
+
+═══════════════════════════════════════════════════════════════════════════════
+CONCLUSION
+═══════════════════════════════════════════════════════════════════════════════
+
+RECOMMENDATION: ❌ NEEDS FIX BEFORE PRODUCTION
+
+CONFIDENCE: 95% - All issues verified through database inspection
+
+ESTIMATED FIX TIME: 4-5 hours total
+  └─ 2 hours: Fix contact creation
+  └─ 2 hours: Fix sentiment extraction
+  └─ 1 hour: Dashboard UX improvements
+
+EXPECTED POST-FIX SCORE: 90+/100 ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF SUMMARY - See DASHBOARD_VERIFICATION_REPORT.md for full details
+═══════════════════════════════════════════════════════════════════════════════

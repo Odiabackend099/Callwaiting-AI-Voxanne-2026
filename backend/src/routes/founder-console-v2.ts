@@ -3348,6 +3348,7 @@ router.post(
       try {
         call = await wsVapiClient.createWebSocketCall({
           assistant: inlineAssistant,
+          metadata: { is_test_call: true, channel: 'web', source: 'dashboard-test' },
           audioFormat: {
             format: 'pcm_s16le',
             container: 'raw',

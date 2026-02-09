@@ -27,7 +27,7 @@ function transformContact(contact: any) {
     contact_name: contact.name,
     phone_number: contact.phone,
     email: contact.email,
-    last_contact_time: contact.last_contact_at,  // Fixed: was last_contacted_at
+    last_contact_time: contact.last_contacted_at,  // DB column is last_contacted_at
     booking_source: contact.booking_source,
     notes: contact.notes,
     services_interested: contact.service_interests || [],
@@ -97,28 +97,32 @@ contactsRouter.get('/', async (req: Request, res: Response) => {
     const parsed = schema.parse(req.query);
     const offset = (parsed.page - 1) * parsed.limit;
 
-    // Call RPC function directly - bypasses schema introspection cache
-    const { data, error } = await supabase.rpc('get_contacts_paged', {
-      p_org_id: orgId,
-      p_limit: parsed.limit,
-      p_offset: offset,
-      p_lead_status: parsed.leadStatus || null,
-      p_search: parsed.search || null
-    });
+    // Direct query with all needed columns (RPC misses lead_score, lead_status, service_interests)
+    let query = supabase
+      .from('contacts')
+      .select('id, name, phone, email, lead_status, lead_score, service_interests, last_contacted_at, booking_source, notes, created_at, updated_at', { count: 'exact' })
+      .eq('org_id', orgId)
+      .order('last_contacted_at', { ascending: false, nullsFirst: false })
+      .range(offset, offset + parsed.limit - 1);
+
+    if (parsed.leadStatus) {
+      query = query.eq('lead_status', parsed.leadStatus);
+    }
+    if (parsed.search) {
+      query = query.or(`name.ilike.%${parsed.search}%,phone.ilike.%${parsed.search}%,email.ilike.%${parsed.search}%`);
+    }
+
+    const { data, error, count } = await query;
 
     if (error) {
-      log.error('Contacts', 'GET / - RPC error', { orgId, error: error.message });
+      log.error('Contacts', 'GET / - Query error', { orgId, error: error.message });
       return res.status(500).json({ error: error.message });
     }
 
     const rows = Array.isArray(data) ? data : [];
-    const total = rows.length > 0 ? (rows[0] as any).total_count : 0;
+    const total = count || rows.length;
 
-    // Remove total_count from response data and transform fields
-    const contacts = rows.map(row => {
-      const { total_count, ...contact } = row as any;
-      return transformContact(contact);
-    });
+    const contacts = rows.map(row => transformContact(row));
 
     return res.json({
       contacts,

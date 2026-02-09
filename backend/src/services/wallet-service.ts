@@ -7,7 +7,7 @@
  * Financial Integrity Rules:
  * - All amounts in integer pence (GBP, no floating point)
  * - Vapi costs (USD) converted to GBP pence via USD_TO_GBP_RATE
- * - Markup per org: BYOC 50% (×1.5), Managed 300% (×4)
+ * - Fixed-rate billing: $0.70/min flat rate for all orgs
  * - Atomic writes via Postgres FOR UPDATE lock in RPC functions
  * - Idempotency via UNIQUE(call_id) in credit_transactions
  */
@@ -75,18 +75,6 @@ export function usdToPence(usdDollars: number): number {
 }
 
 /**
- * Apply markup percentage to provider cost.
- * BYOC 50% = ×1.5, Managed 300% = ×4.
- *
- * @deprecated This function is deprecated in favor of fixed-rate billing.
- * Use calculateFixedRateCharge() instead.
- */
-export function applyMarkup(providerPence: number, markupPercent: number): number {
-  if (providerPence <= 0) return 0;
-  return Math.ceil(providerPence * (1 + markupPercent / 100));
-}
-
-/**
  * Fixed-rate charge: per-second precision, rounds UP to nearest cent.
  * Formula: Math.ceil((durationSeconds / 60) * ratePerMinuteCents)
  * Then converts to pence for internal storage.
@@ -96,11 +84,11 @@ export function applyMarkup(providerPence: number, markupPercent: number): numbe
  * - Step 2: Round cents→pence UP (prevents undercharging in GBP)
  * - Maximum overcharge: ~$0.02 per call (industry standard, protects platform)
  *
- * Examples at $0.70/min (rate=70):
- *   30s  → ceil(0.5  * 70) = 35 cents → ceil(35 * 0.79) = 28p
- *   60s  → ceil(1.0  * 70) = 70 cents → ceil(70 * 0.79) = 56p
- *   91s  → ceil(1.517 * 70) = 107 cents → ceil(107 * 0.79) = 85p
- *   1s   → ceil(0.0167 * 70) = 2 cents → ceil(2 * 0.79) = 2p
+ * Examples at $0.70/min (rate=70, 10 credits/min):
+ *   30s  → ceil(0.5  * 70) = 35 cents → ceil(35 * 0.79) = 28p (5 credits)
+ *   60s  → ceil(1.0  * 70) = 70 cents → ceil(70 * 0.79) = 56p (10 credits)
+ *   91s  → ceil(1.517 * 70) = 107 cents → ceil(107 * 0.79) = 85p (16 credits)
+ *   1s   → ceil(0.0167 * 70) = 2 cents → ceil(2 * 0.79) = 2p (1 credit)
  */
 export function calculateFixedRateCharge(
   durationSeconds: number,
@@ -227,7 +215,7 @@ export async function deductCallCredits(
     p_markup_percent: 0, // Fixed-rate model has no markup
     p_client_charged_pence: clientChargedPence,
     p_cost_breakdown: enhancedCostBreakdown,
-    p_description: `Call ${callId} | $0.70/min × ${durationSeconds}s = ${clientChargedPence}p`,
+    p_description: `Call ${callId} | ${Math.ceil(durationSeconds / 60 * 10)} credits × ${durationSeconds}s = ${clientChargedPence}p`,
   });
 
   if (rpcError) {
@@ -248,6 +236,41 @@ export async function deductCallCredits(
   }
 
   if (!rpcResult?.success) {
+    // Handle debt limit exceeded error gracefully
+    if (rpcResult?.error === 'debt_limit_exceeded') {
+      log.error('WalletService', 'Debt limit exceeded - call charge blocked', {
+        orgId,
+        callId,
+        currentBalance: rpcResult.current_balance,
+        debtLimit: rpcResult.debt_limit,
+        attemptedDeduction: rpcResult.attempted_deduction,
+        newBalanceWouldBe: rpcResult.new_balance_would_be,
+        amountOverLimit: rpcResult.amount_over_limit,
+        message: rpcResult.message,
+      });
+
+      // Trigger auto-recharge immediately if configured
+      const balance = await checkBalance(orgId);
+      if (balance?.autoRechargeEnabled && balance?.hasPaymentMethod) {
+        log.info('WalletService', 'Triggering auto-recharge due to debt limit', { orgId });
+        try {
+          await enqueueAutoRechargeJob({ orgId });
+        } catch (err) {
+          log.warn('WalletService', 'Failed to enqueue auto-recharge for debt limit', {
+            orgId,
+            error: (err as Error).message,
+          });
+        }
+      }
+
+      return {
+        success: false,
+        error: 'debt_limit_exceeded',
+        balanceBefore: rpcResult.current_balance,
+        needsRecharge: true,
+      };
+    }
+
     log.error('WalletService', 'deduct_call_credits returned failure', {
       orgId,
       callId,

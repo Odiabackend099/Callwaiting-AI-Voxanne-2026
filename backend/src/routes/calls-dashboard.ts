@@ -88,9 +88,14 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       query = query.eq('status', parsed.status);
     }
 
-    // Apply search filter (phone number or call type)
+    // Filter out test calls by default (browser test calls)
+    if ((req.query as any).include_test !== 'true') {
+      query = query.or('is_test_call.is.null,is_test_call.eq.false');
+    }
+
+    // Apply search filter (phone number, caller name, or call type)
     if (parsed.search) {
-      query = query.or(`call_type.ilike.%${parsed.search}%,from_number.ilike.%${parsed.search}%`);
+      query = query.or(`phone_number.ilike.%${parsed.search}%,from_number.ilike.%${parsed.search}%,caller_name.ilike.%${parsed.search}%`);
     }
 
     // Order by created_at descending (newest first)
@@ -152,7 +157,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
       return {
         id: call.id,
-        phone_number: call.from_number || call.contact_id || 'Unknown',  // Use from_number, fallback to contact_id for outbound
+        phone_number: call.phone_number || call.from_number || 'Unknown',  // SSOT: phone_number, legacy fallback: from_number
         caller_name: resolvedCallerName,
         call_date: call.created_at,
         duration_seconds: call.duration_seconds || 0,
@@ -210,38 +215,67 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       p_time_window: timeWindow
     });
 
+    // Compute time window start for fallback query
+    const windowMs = timeWindow === '24h' ? 24*60*60*1000 : timeWindow === '30d' ? 30*24*60*60*1000 : 7*24*60*60*1000;
+    const windowStart = new Date(Date.now() - windowMs).toISOString();
+
+    let totalCalls = 0, completedCalls = 0, callsToday = 0, inboundCalls = 0, outboundCalls = 0, avgDuration = 0, pipelineValue = 0;
+
     if (statsError) {
-      log.error('Calls', 'GET /stats - Database error', { orgId, error: statsError.message });
-      return res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+      // RPC not deployed or failed — fallback to direct aggregation
+      log.warn('Calls', 'GET /stats - RPC failed, using fallback', { orgId, error: statsError.message });
+
+      const { data: fallbackCalls } = await supabase
+        .from('calls')
+        .select('id, call_direction, duration_seconds, created_at, status')
+        .eq('org_id', orgId)
+        .or('is_test_call.is.null,is_test_call.eq.false')
+        .gt('created_at', windowStart);
+
+      if (fallbackCalls && Array.isArray(fallbackCalls)) {
+        const today = new Date().toISOString().slice(0, 10);
+        let totalDur = 0;
+        for (const c of fallbackCalls) {
+          totalCalls++;
+          if (c.status === 'completed') completedCalls++;
+          if (c.created_at?.slice(0, 10) === today) callsToday++;
+          if (c.call_direction === 'inbound') inboundCalls++;
+          if (c.call_direction === 'outbound') outboundCalls++;
+          totalDur += c.duration_seconds || 0;
+        }
+        avgDuration = totalCalls > 0 ? Math.round(totalDur / totalCalls) : 0;
+      }
+    } else {
+      // RPC RETURNS TABLE → Supabase JS client returns an array; extract first row
+      const row = Array.isArray(statsData) ? statsData[0] : statsData;
+      totalCalls = Number(row?.total_calls || 0);
+      completedCalls = Number(row?.completed_calls || 0);
+      callsToday = Number(row?.calls_today || 0);
+      inboundCalls = Number(row?.inbound_calls || 0);
+      outboundCalls = Number(row?.outbound_calls || 0);
+      avgDuration = Number(row?.avg_duration || 0);
+      pipelineValue = Number(row?.pipeline_value || 0);
     }
 
     // Recent calls still need separate query for detailed data
     const { data: recentCallsData, error: recentError } = await supabase
       .from('calls')
-      .select('id, from_number, call_type, created_at, duration_seconds, status, call_direction, metadata')
+      .select('id, phone_number, from_number, caller_name, call_type, created_at, duration_seconds, status, call_direction, is_test_call, metadata')
       .eq('org_id', orgId)
+      .or('is_test_call.is.null,is_test_call.eq.false')
       .order('created_at', { ascending: false })
       .limit(5);
-
-    // Extract stats from RPC result
-    const totalCalls = Number(statsData?.total_calls || 0);
-    const completedCalls = Number(statsData?.completed_calls || 0);
-    const callsToday = Number(statsData?.calls_today || 0);
-    const inboundCalls = Number(statsData?.inbound_calls || 0);
-    const outboundCalls = Number(statsData?.outbound_calls || 0);
-    const avgDuration = Number(statsData?.avg_duration || 0);
-    const pipelineValue = Number(statsData?.pipeline_value || 0);
 
     // Format recent calls for frontend (map actual schema columns to expected output)
     const recentCalls = (recentCallsData || []).map((c: any) => ({
       id: c.id,
-      // New field names (use from_number from actual schema)
-      phone_number: c.from_number || 'Unknown',
-      caller_name: c.call_type || 'Unknown',
+      // FIXED: Use phone_number (SSOT) and caller_name (was c.call_type — returned "inbound"/"outbound")
+      phone_number: c.phone_number || c.from_number || 'Unknown',
+      caller_name: c.caller_name || 'Unknown',
       call_date: c.created_at,
       call_type: c.call_direction || (c.metadata?.channel === 'inbound' ? 'inbound' : 'outbound'),
       // Legacy field names (for backwards compatibility with frontend)
-      to_number: c.from_number || 'Unknown',
+      to_number: c.phone_number || c.from_number || 'Unknown',
       started_at: c.created_at,
       duration_seconds: c.duration_seconds || 0,
       status: c.status || 'completed',

@@ -5,41 +5,26 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       return NextResponse.json(
         { error: 'Server configuration missing' },
         { status: 500 }
       );
     }
 
-    // Get user session
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
-    });
+    // Get authenticated user
+    const supabase = await createClient();
 
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (sessionError || !session?.user?.id) {
+    if (userError || !user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -47,13 +32,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Use service role client to bypass RLS
-    const { createClient } = await import('@supabase/supabase-js');
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey);
+    const { createClient: createServiceClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createServiceClient(supabaseUrl, serviceRoleKey);
 
     const { data: profile, error: profileError } = await adminSupabase
       .from('profiles')
       .select('tenant_id')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
     if (profileError) {
@@ -73,7 +58,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       tenantId: profile.tenant_id,
-      userId: session.user.id,
+      userId: user.id,
     });
   } catch (error) {
     console.error('[Tenant ID] Error:', error);

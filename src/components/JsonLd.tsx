@@ -53,7 +53,7 @@ export default function JsonLd() {
                         "name": "Voxanne AI",
                         "applicationCategory": "BusinessApplication",
                         "operatingSystem": "Web",
-                        "description": "AI voice receptionist for clinics — pay-as-you-go billing from $25 at $0.70/min, all features included, no setup fees, no contracts."
+                        "description": "AI voice receptionist for clinics — pay-as-you-go credit-based billing from $25, all features included, no setup fees, no contracts."
                     }
                 }
             ]
@@ -84,7 +84,7 @@ export default function JsonLd() {
             { "@type": "Country", "name": "Turkey" },
             { "@type": "Country", "name": "Nigeria" }
         ],
-        "priceRange": "From $25 (pay-as-you-go at $0.70/min)"
+        "priceRange": "From $25 (pay-as-you-go credits)"
     };
 
     const faqSchema = {
@@ -104,7 +104,7 @@ export default function JsonLd() {
                 "name": "How much does Voxanne AI cost?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Voxanne AI uses simple pay-as-you-go pricing. Top up your wallet from £25 and calls are billed per minute based on actual usage. All features are included — no setup fees, no monthly subscriptions, no lock-in."
+                    "text": "Voxanne AI uses simple pay-as-you-go pricing. Top up your wallet from $25 and get credits. Credits are deducted based on call duration. All features are included — no setup fees, no monthly subscriptions, no lock-in."
                 }
             },
             {

@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabase = await createClient();
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json({
-        status: 'error',
-        message: 'Supabase configuration missing',
-        database_connected: false,
-      }, { status: 500 });
-    }
+    // Get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        get(name: string) { return cookieStore.get(name)?.value; },
-        set(name: string, value: string, options: any) { cookieStore.set({ name, value, ...options }); },
-        remove(name: string, options: any) { cookieStore.set({ name, value: '', ...options }); },
-      },
-    });
-
-    // Get session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-    if (sessionError || !session?.user?.id) {
+    if (userError || !user?.id) {
       return NextResponse.json({
         status: 'unauthenticated',
         user_id: null,
@@ -37,8 +18,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const userId = session.user.id;
-    const userEmail = session.user.email;
+    const userId = user.id;
+    const userEmail = user.email;
 
     // Try to fetch user profile and organization
     let organizationId = null;

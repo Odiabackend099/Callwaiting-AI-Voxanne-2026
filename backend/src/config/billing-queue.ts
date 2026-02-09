@@ -1,152 +1,227 @@
+/**
+ * Billing Queue Configuration (P0-1: Stripe Webhook Async Processing)
+ *
+ * BullMQ queue for processing Stripe webhooks asynchronously.
+ * Ensures webhooks return 200 to Stripe within <1 second while
+ * processing happens in the background with retry logic.
+ *
+ * Architecture:
+ * - Queue: Receives webhook events from HTTP endpoint
+ * - Worker: Processes events asynchronously
+ * - Retry: 3 attempts with exponential backoff (2s, 4s, 8s)
+ * - Dead Letter Queue: Permanent failures trigger Slack alerts
+ */
+
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection } from './redis';
 import { log } from '../services/logger';
 import { sendSlackAlert } from '../services/slack-alerts';
 
-export type BillingJobData = {
-  orgId: string;
-  ledgerId: string;
-  subscriptionItemId: string;
-  overageMinutes: number;
-  callId: string;
+type StripeWebhookJobData = {
+  eventId: string;
+  eventType: string;
+  eventData: any;
+  receivedAt: string;
 };
 
-let billingQueue: Queue<BillingJobData> | null = null;
-let billingWorker: Worker<BillingJobData> | null = null;
+let billingQueue: Queue<StripeWebhookJobData> | null = null;
+let worker: Worker<StripeWebhookJobData> | null = null;
 
+/**
+ * Initialize the billing webhook queue.
+ * Call this once on server startup.
+ */
 export function initializeBillingQueue(): void {
   const connection = createRedisConnection();
   if (!connection) {
-    log.warn('BillingQueue', 'Redis not available, billing queue disabled');
+    log.error('BillingQueue', 'Redis not available, cannot initialize billing queue');
     return;
   }
 
-  billingQueue = new Queue('billing-stripe-reporting', {
+  billingQueue = new Queue<StripeWebhookJobData>('stripe-webhooks', {
     connection,
     defaultJobOptions: {
-      attempts: 5,
+      attempts: 3,
       backoff: {
         type: 'exponential',
-        delay: 2000,
+        delay: 2000 // 2s, 4s, 8s
       },
       removeOnComplete: {
-        age: 3600,  // Keep completed jobs 1 hour
-        count: 100
+        age: 86400,  // Keep completed jobs 24 hours
+        count: 1000
       },
       removeOnFail: {
-        age: 86400, // Keep failed jobs 1 day
-        count: 50
+        age: 7 * 86400, // Keep failed jobs 7 days
+        count: 100
       }
-    },
+    }
   });
 
-  log.info('BillingQueue', 'Billing queue initialized');
+  log.info('BillingQueue', 'Billing queue initialized', {
+    queueName: 'stripe-webhooks',
+    maxAttempts: 3,
+    backoffDelay: '2s exponential'
+  });
 }
 
-export function initializeBillingWorker(processor: (job: Job<BillingJobData>) => Promise<any>): void {
+/**
+ * Initialize the billing worker.
+ * Processes Stripe webhook events asynchronously.
+ *
+ * @param processor - Async function that handles webhook event processing
+ */
+export function initializeBillingWorker(
+  processor: (job: Job<StripeWebhookJobData>) => Promise<void>
+): void {
   const connection = createRedisConnection();
   if (!connection || !billingQueue) {
-    log.warn('BillingQueue', 'Redis or queue not available, billing worker disabled');
+    log.error('BillingQueue', 'Redis or queue not available, cannot initialize billing worker');
     return;
   }
 
-  billingWorker = new Worker<BillingJobData>(
-    'billing-stripe-reporting',
+  worker = new Worker<StripeWebhookJobData>(
+    'stripe-webhooks',
     processor,
     {
       connection,
-      concurrency: 2,
-      drainDelay: 5, // Wait 5 seconds between polls when queue is empty (saves Redis commands)
+      concurrency: 5, // Process up to 5 webhooks in parallel
+      drainDelay: 5, // Wait 5 seconds between polls when queue is empty
     }
   );
 
-  billingWorker.on('completed', (job) => {
-    log.info('BillingQueue', `Billing job ${job.id} completed`, {
-      orgId: job.data.orgId,
-      callId: job.data.callId,
-      overageMinutes: job.data.overageMinutes,
+  worker.on('completed', (job) => {
+    const duration = Date.now() - new Date(job.data.receivedAt).getTime();
+    log.info('BillingQueue', `Job ${job.id} completed`, {
+      eventType: job.data.eventType,
+      eventId: job.data.eventId,
+      duration: `${duration}ms`,
       attempts: job.attemptsMade + 1,
     });
   });
 
-  billingWorker.on('failed', (job, err) => {
+  worker.on('failed', (job, err) => {
     const isLastAttempt = job?.attemptsMade === job?.opts?.attempts;
 
-    log.error('BillingQueue', `Billing job ${job?.id} failed`, {
+    log.error('BillingQueue', `Job ${job?.id} failed`, {
       error: err.message,
-      orgId: job?.data.orgId,
-      callId: job?.data.callId,
-      overageMinutes: job?.data.overageMinutes,
+      eventType: job?.data.eventType,
+      eventId: job?.data.eventId,
       attempt: `${job?.attemptsMade}/${job?.opts?.attempts}`,
       isLastAttempt,
+      stack: err.stack,
     });
 
     if (isLastAttempt) {
-      log.error('BillingQueue', `Billing job ${job?.id} permanently failed`, {
-        orgId: job?.data.orgId,
-        callId: job?.data.callId,
+      // Final failure - send alert and move to dead letter queue
+      log.error('BillingQueue', `Job ${job?.id} moved to dead letter queue`, {
+        eventType: job?.data.eventType,
+        eventId: job?.data.eventId,
+        totalAttempts: job?.attemptsMade,
       });
 
-      sendSlackAlert('🔴 Billing Stripe Reporting Failed Permanently', {
-        jobId: job?.id || 'unknown',
-        orgId: job?.data.orgId || 'unknown',
-        callId: job?.data.callId || 'unknown',
-        overageMinutes: String(job?.data.overageMinutes || 0),
+      sendSlackAlert('🚨 CRITICAL: Stripe Webhook Failed Permanently', {
+        jobId: job?.id,
+        eventType: job?.data.eventType,
+        eventId: job?.data.eventId,
         error: err.message,
-        attempts: String(job?.attemptsMade || 0),
+        attempts: job?.attemptsMade,
+        receivedAt: job?.data.receivedAt,
+        severity: 'critical',
+        action: 'Manual investigation required - billing data may be inconsistent'
       }).catch(() => {});
     }
   });
 
-  billingWorker.on('error', (err) => {
+  worker.on('error', (err) => {
     log.error('BillingQueue', 'Worker error', {
       error: err.message,
       stack: err.stack,
     });
   });
 
-  billingWorker.on('stalled', (jobId) => {
-    log.warn('BillingQueue', `Billing job ${jobId} stalled - will be retried`);
+  worker.on('stalled', (jobId) => {
+    log.warn('BillingQueue', `Job ${jobId} stalled - will be retried`);
   });
 
   log.info('BillingQueue', 'Billing worker started', {
-    concurrency: 2,
-    maxAttempts: 5,
+    concurrency: 5,
+    maxAttempts: 3,
     backoffDelay: '2s exponential',
   });
 }
 
-export async function enqueueBillingJob(data: BillingJobData): Promise<Job<BillingJobData> | null> {
+/**
+ * Enqueue a Stripe webhook event for async processing.
+ * Returns immediately after queueing (does not wait for processing).
+ *
+ * @param data - Webhook event data
+ * @returns Job instance or null if enqueueing failed
+ */
+export async function enqueueBillingWebhook(
+  data: StripeWebhookJobData
+): Promise<Job<StripeWebhookJobData> | null> {
   if (!billingQueue) {
-    log.warn('BillingQueue', 'Queue not available, cannot enqueue billing job');
+    log.error('BillingQueue', 'Billing queue not initialized');
     return null;
   }
 
   try {
-    const job = await billingQueue.add('report-overage', data, {
-      jobId: `billing-${data.callId}`, // Prevents duplicate jobs for same call
+    const job = await billingQueue.add('process-stripe-webhook', data, {
+      // Idempotency: Use Stripe event ID as job ID to prevent duplicates
+      jobId: `stripe-${data.eventId}`,
     });
-    log.info('BillingQueue', `Billing job enqueued: ${job.id}`, {
-      orgId: data.orgId,
-      callId: data.callId,
-      overageMinutes: data.overageMinutes,
+
+    log.info('BillingQueue', 'Stripe webhook enqueued', {
+      jobId: job.id,
+      eventType: data.eventType,
+      eventId: data.eventId,
     });
+
     return job;
   } catch (error) {
-    log.error('BillingQueue', 'Failed to enqueue billing job', {
+    log.error('BillingQueue', 'Failed to enqueue Stripe webhook', {
       error: (error as Error).message,
-      callId: data.callId,
+      eventType: data.eventType,
+      eventId: data.eventId,
     });
     return null;
   }
 }
 
+/**
+ * Get billing queue metrics.
+ * Useful for monitoring and debugging.
+ */
+export async function getBillingQueueMetrics() {
+  if (!billingQueue) {
+    return null;
+  }
+
+  try {
+    const counts = await billingQueue.getJobCounts();
+    return {
+      ...counts,
+      queueName: 'stripe-webhooks',
+    };
+  } catch (error) {
+    log.error('BillingQueue', 'Failed to get billing queue metrics', {
+      error: (error as Error).message,
+    });
+    return null;
+  }
+}
+
+/**
+ * Close the billing queue and worker gracefully.
+ * Call this on server shutdown.
+ */
 export async function closeBillingQueue(): Promise<void> {
-  if (billingWorker) {
-    await billingWorker.close();
+  if (worker) {
+    await worker.close();
+    log.info('BillingQueue', 'Billing worker closed');
   }
   if (billingQueue) {
     await billingQueue.close();
+    log.info('BillingQueue', 'Billing queue closed');
   }
-  log.info('BillingQueue', 'Billing queue closed');
 }

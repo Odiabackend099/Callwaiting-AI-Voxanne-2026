@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from '@/lib/supabase/server';
 import DashboardGate from './DashboardGate';
 import { VoiceAgentProvider } from '@/contexts/VoiceAgentContext';
 import { DashboardWebSocketProvider } from '@/contexts/DashboardWebSocketContext';
@@ -15,45 +14,20 @@ export const metadata: Metadata = {
 
 export default async function DashboardLayout({
     children,
-    searchParams,
 }: Readonly<{
     children: React.ReactNode;
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }>) {
-    // Server-side org check: ensures org_id is present before rendering dashboard
-    // Allow test mode to bypass auth by checking for ?_test=1 parameter
-    const params = await searchParams;
-    const isTestMode = params?._test === '1';
+    // Server-side auth check: validates JWT and ensures org_id is present.
+    // Middleware already handles redirects, but this is defense-in-depth.
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!isTestMode) {
-        const cookieStore = await cookies();
-        const supabase = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            {
-                cookies: {
-                    get(name: string) {
-                        return cookieStore.get(name)?.value;
-                    },
-                    set(name: string, value: string, options: any) {
-                        cookieStore.set(name, value, options);
-                    },
-                    remove(name: string, options: any) {
-                        cookieStore.delete(name);
-                    },
-                },
-            }
-        );
-        const {
-            data: { session },
-        } = await supabase.auth.getSession();
+    // Only trust app_metadata.org_id (admin-set, cryptographically signed).
+    // Never fall back to user_metadata which is user-writable.
+    const orgId = user?.app_metadata?.org_id;
 
-        const user = session?.user;
-        const orgId = (user?.app_metadata as any)?.org_id || (user?.user_metadata as any)?.org_id;
-
-        if (!session || !orgId) {
-            redirect('/login');
-        }
+    if (!user || !orgId) {
+        redirect('/login');
     }
 
     return (

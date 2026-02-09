@@ -31,7 +31,7 @@ const faqs = [
     },
     {
         question: "How much does Voxanne AI cost?",
-        answer: "Voxanne AI uses simple pay-as-you-go pricing at $0.70/min. Top up your wallet from $25 and calls are billed per second based on actual usage. There are no monthly subscriptions, no setup fees, and no lock-in. Every customer gets access to every feature.",
+        answer: "Top up your wallet from $25 and get credits. Credits are deducted based on call duration. No monthly subscriptions, no setup fees, and no lock-in. Every customer gets access to every feature.",
     },
     {
         question: "How does billing work?",

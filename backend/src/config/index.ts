@@ -221,7 +221,8 @@ export const config = {
 
   // Fixed-rate billing configuration
   RATE_PER_MINUTE_USD_CENTS: getNumber('RATE_PER_MINUTE_USD_CENTS', 70),   // Fixed client rate ($0.70/min)
-  WALLET_LOW_BALANCE_WARNING_CENTS: getNumber('WALLET_LOW_BALANCE_WARNING_CENTS', 1400), // $14.00 = ~20 min remaining
+  CREDITS_PER_MINUTE: getNumber('CREDITS_PER_MINUTE', 10),                 // 10 credits = 1 minute (display ratio)
+  WALLET_LOW_BALANCE_WARNING_CENTS: getNumber('WALLET_LOW_BALANCE_WARNING_CENTS', 1400), // $14.00 = ~200 credits remaining
   WALLET_MIN_BALANCE_USD_CENTS: getNumber('WALLET_MIN_BALANCE_USD_CENTS', 100), // $1.00 hard stop
 
   // Convert $1.00 hard stop to pence equivalent (derived from USD constant)

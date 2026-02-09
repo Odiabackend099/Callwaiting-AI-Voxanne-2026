@@ -275,7 +275,7 @@ export default function TermsOfService() {
                             <li><strong>Billing Model:</strong> Voxanne AI operates on a prepaid credit (pay-as-you-go) basis. You purchase credits which are deducted based on actual call usage</li>
                             <li><strong>Payment Method:</strong> Payments are processed via Stripe. You may purchase credits via one-time card payments</li>
                             <li><strong>Auto-Recharge:</strong> You may optionally enable automatic top-ups when your balance falls below a configured threshold</li>
-                            <li><strong>Minimum Top-Up:</strong> The minimum credit purchase is £25</li>
+                            <li><strong>Minimum Top-Up:</strong> The minimum credit purchase is $25</li>
                         </ul>
 
                         <h3 className="text-xl font-semibold text-deep-obsidian mb-4 mt-8">6.2 Price Changes</h3>

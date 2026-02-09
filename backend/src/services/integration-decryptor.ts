@@ -1079,7 +1079,6 @@ export class IntegrationDecryptor {
       .from('organizations')
       .update({
         telephony_mode: source,
-        wallet_markup_percent: source === 'byoc' ? 50 : 300,
       })
       .eq('id', orgId);
 

@@ -32,7 +32,6 @@ interface WalletData {
         total_topped_up_pence: number;
         total_profit_pence: number;
         recharge_amount_pence: number;
-        markup_percent: number;
     } | null;
 }
 
@@ -194,33 +193,35 @@ const WalletPageContent = () => {
             </div>
 
             {/* Balance Card */}
-            <div className="bg-white border border-surgical-200 rounded-2xl p-6 md:p-8 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="bg-gradient-to-br from-surgical-600 to-surgical-800 rounded-2xl p-6 md:p-8 shadow-lg relative overflow-hidden">
+                <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/5 rounded-full" />
+                <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-white/5 rounded-full" />
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex-1">
                         <div className="flex items-center gap-3 mb-1">
-                            <p className="text-xs font-semibold text-obsidian/40 uppercase tracking-wider">
+                            <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">
                                 Current Balance
                             </p>
-                            <span className="px-2.5 py-1 bg-surgical-50 text-surgical-600 rounded-full text-xs font-bold">
-                                $0.70/min
+                            <span className="px-2.5 py-1 bg-white/20 text-white rounded-full text-xs font-bold">
+                                10 credits/min
                             </span>
                         </div>
                         {walletLoading ? (
-                            <span className="animate-pulse bg-surgical-100 rounded h-12 w-40 inline-block" />
+                            <span className="animate-pulse bg-white/20 rounded h-12 w-40 inline-block" />
                         ) : (
                             <>
-                                <p className="text-5xl font-bold text-obsidian tracking-tight">
+                                <p className="text-5xl font-bold text-white tracking-tight">
                                     {wallet ? formatPence(wallet.balance_pence) : '$0.00'}
                                 </p>
                                 {wallet && wallet.balance_pence > 0 && (
-                                    <p className="text-sm text-obsidian/60 mt-2">
-                                        ~{Math.floor(wallet.balance_pence / Math.ceil(70 * 0.79))} minutes remaining at $0.70/min
+                                    <p className="text-sm text-white/60 mt-2">
+                                        ~{Math.floor(wallet.balance_pence / Math.ceil(70 * 0.79)) * 10} credits remaining
                                     </p>
                                 )}
                             </>
                         )}
                         {wallet?.is_low_balance && (
-                            <div className="flex items-center gap-2 mt-3 text-amber-600">
+                            <div className="flex items-center gap-2 mt-3 px-3 py-1.5 bg-white/10 rounded-lg text-amber-300">
                                 <AlertTriangle className="w-4 h-4" />
                                 <span className="text-sm font-medium">
                                     Low balance — top up to avoid service interruption
@@ -230,7 +231,7 @@ const WalletPageContent = () => {
                     </div>
                     <button
                         onClick={() => setShowTopUp(true)}
-                        className="flex items-center gap-2 px-6 py-3 bg-surgical-600 text-white rounded-xl hover:bg-surgical-700 transition-colors font-medium text-sm shadow-sm shrink-0"
+                        className="flex items-center gap-2 px-6 py-3 bg-white text-surgical-700 rounded-xl hover:bg-white/90 transition-colors font-medium text-sm shadow-sm shrink-0"
                     >
                         <Plus className="w-4 h-4" />
                         Top Up
@@ -473,10 +474,10 @@ const WalletPageContent = () => {
                             <p className="text-sm text-obsidian/60">Select an amount or enter a custom value</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    { pence: 1975, label: '$25', minutes: '~35 min' },
-                                    { pence: 3950, label: '$50', minutes: '~71 min' },
-                                    { pence: 7900, label: '$100', minutes: '~142 min' },
-                                    { pence: 15800, label: '$200', minutes: '~286 min' }
+                                    { pence: 1975, label: '$25', credits: '350 credits' },
+                                    { pence: 3950, label: '$50', credits: '700 credits' },
+                                    { pence: 7900, label: '$100', credits: '1,400 credits' },
+                                    { pence: 15800, label: '$200', credits: '2,800 credits' }
                                 ].map((option) => (
                                     <button
                                         key={option.pence}
@@ -488,7 +489,7 @@ const WalletPageContent = () => {
                                             }`}
                                     >
                                         <div className="font-bold text-lg">{option.label}</div>
-                                        <div className="text-xs text-obsidian/60 mt-1">{option.minutes}</div>
+                                        <div className="text-xs text-obsidian/60 mt-1">{option.credits}</div>
                                     </button>
                                 ))}
                             </div>
@@ -514,7 +515,7 @@ const WalletPageContent = () => {
                                 </div>
                                 {customAmount && parseFloat(customAmount) >= 25 && (
                                     <p className="text-xs text-obsidian/60 mt-1.5">
-                                        ~{Math.floor((parseFloat(customAmount) * 0.79 * 100) / Math.ceil(70 * 0.79))} minutes at $0.70/min
+                                        ~{Math.floor((parseFloat(customAmount) * 0.79 * 100) / Math.ceil(70 * 0.79)) * 10} credits
                                     </p>
                                 )}
                             </div>

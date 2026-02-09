@@ -384,7 +384,7 @@ const LeadsDashboardContent = () => {
                                                 {scoreBadge.label} ({lead.lead_score})
                                             </span>
                                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getLeadStatusColor(lead.lead_status || 'new')}`}>
-                                                {lead.lead_status ? (lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1)) : 'New'}
+                                                {lead.lead_status && ['hot','warm','cold'].includes(lead.lead_status.toLowerCase()) ? (lead.lead_status.charAt(0).toUpperCase() + lead.lead_status.slice(1).toLowerCase()) : 'New'}
                                             </span>
                                         </div>
                                         <h3 className="text-lg font-bold text-obsidian">{lead.contact_name}</h3>

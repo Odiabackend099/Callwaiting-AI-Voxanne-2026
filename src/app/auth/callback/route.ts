@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -15,21 +15,24 @@ export async function GET(request: Request) {
                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
                 {
                     cookies: {
-                        get(name: string) {
-                            return cookieStore.get(name)?.value;
+                        getAll() {
+                            return cookieStore.getAll();
                         },
-                        set(name: string, value: string, options: any) {
-                            cookieStore.set({ name, value, ...options });
-                        },
-                        remove(name: string, options: any) {
-                            cookieStore.set({ name, value: '', ...options });
+                        setAll(cookiesToSet) {
+                            try {
+                                cookiesToSet.forEach(({ name, value, options }) =>
+                                    cookieStore.set(name, value, options)
+                                );
+                            } catch {
+                                // setAll called from a Server Component context
+                            }
                         },
                     },
                 }
             );
 
             const { error } = await supabase.auth.exchangeCodeForSession(code);
-            
+
             if (error) {
                 const safeError = (error.code || error.name || 'auth_failed')
                     .toString()
@@ -37,8 +40,6 @@ export async function GET(request: Request) {
                     .replace(/[^a-z0-9_\-]/g, '')
                     .slice(0, 40);
 
-                // Provide a conservative, non-sensitive hint for debugging without requiring server logs.
-                // This is intentionally heavily sanitized to avoid leaking any sensitive details.
                 const safeHint = (error.message || '')
                     .toString()
                     .toLowerCase()
@@ -68,7 +69,6 @@ export async function GET(request: Request) {
     }
 
     // In dev/local we must NOT force redirect to a production domain.
-    // Only use NEXT_PUBLIC_APP_URL override in production.
     const nodeEnv = process.env.NODE_ENV || 'development';
     const appUrl = nodeEnv === 'production'
         ? (process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin)
@@ -77,7 +77,6 @@ export async function GET(request: Request) {
     const baseUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
 
     // Ensure next param is safe (prevent open redirect)
-    // Reject protocol-relative URLs like "//evil.com".
     const safeNext = (next.startsWith('/') && !next.startsWith('//')) ? next : '/dashboard';
 
     return NextResponse.redirect(baseUrl + safeNext);

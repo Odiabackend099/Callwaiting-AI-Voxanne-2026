@@ -73,6 +73,7 @@ import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
 import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
 import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
 import gdprCleanupModule from './jobs/gdpr-cleanup';
+import { scheduleVapiReconciliation, shutdownReconciliationWorker } from './jobs/vapi-reconciliation-worker';
 import escalationRulesRouter from './routes/escalation-rules'; // default export
 import teamRouter from './routes/team'; // default export
 import agentsRouter from './routes/agents'; // default export
@@ -111,19 +112,20 @@ import {
 import { processWebhookJob } from './services/webhook-processor';
 import { initializeStripe } from './config/stripe';
 import {
-  initializeBillingQueue,
-  initializeBillingWorker,
-  closeBillingQueue
-} from './config/billing-queue';
-import { processBillingJob } from './services/billing-manager';
-import {
   initializeWalletQueue,
   initializeWalletWorker,
   closeWalletQueue
 } from './config/wallet-queue';
 import { processAutoRecharge } from './services/wallet-recharge-processor';
+import {
+  initializeBillingQueue,
+  initializeBillingWorker,
+  closeBillingQueue
+} from './config/billing-queue';
+import { processStripeWebhook } from './jobs/stripe-webhook-processor';
 import stripeWebhooksRouter from './routes/stripe-webhooks';
 import billingApiRouter from './routes/billing-api';
+import billingReconciliationRouter from './routes/billing-reconciliation'; // default export
 import calendlyWebhookRouter from './routes/calendly-webhook';
 import contactFormRouter from './routes/contact-form';
 import chatWidgetRouter from './routes/chat-widget';
@@ -142,10 +144,10 @@ initializeRedis(); // Initialize Redis connection
 initializeWebhookQueue();
 initializeWebhookWorker(processWebhookJob);
 initializeStripe(); // Initialize Stripe billing client
-initializeBillingQueue();
-initializeBillingWorker(processBillingJob);
 initializeWalletQueue(); // Initialize wallet auto-recharge queue
 initializeWalletWorker(processAutoRecharge); // Start wallet worker
+initializeBillingQueue(); // P0-1: Initialize billing webhook queue
+initializeBillingWorker(processStripeWebhook); // P0-1: Start billing worker
 initializeSmsQueue(); // Initialize SMS queue after Redis is ready
 
 declare global {
@@ -324,6 +326,7 @@ app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data exp
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
 app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
+app.use('/api/billing/reconciliation', billingReconciliationRouter); // P0-5: Vapi call reconciliation
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
 app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
 app.use('/api/onboarding-intake', onboardingIntakeRouter); // Onboarding intake form
@@ -644,8 +647,8 @@ webTestWss.on('connection', (ws, req) => {
                   ws.close(1008, 'Unauthorized: Invalid dev token');
                   return;
                 }
-                // CRITICAL SSOT: Extract org_id from app_metadata
-                const orgId = (data.user.app_metadata?.org_id || data.user.user_metadata?.org_id) as string;
+                // Only trust app_metadata.org_id (admin-set, cryptographically signed)
+                const orgId = (data.user.app_metadata?.org_id) as string;
                 attach(data.user.id, orgId);
               })
               .catch(() => {
@@ -665,9 +668,8 @@ webTestWss.on('connection', (ws, req) => {
               ws.close(1008, 'Unauthorized: Invalid or expired token');
               return;
             }
-            // CRITICAL SSOT: Extract org_id from app_metadata (admin-set, immutable)
-            // Fallback to user_metadata for backward compatibility during migration
-            const orgId = (data.user.app_metadata?.org_id || data.user.user_metadata?.org_id) as string;
+            // Only trust app_metadata.org_id (admin-set, cryptographically signed)
+            const orgId = (data.user.app_metadata?.org_id) as string;
 
             if (!orgId) {
               ws.close(1008, 'Forbidden: User not assigned to organization');
@@ -805,6 +807,14 @@ if (process.env.NODE_ENV !== 'test') {
       console.warn('Failed to schedule GDPR cleanup job:', error.message);
     }
 
+    try {
+      scheduleVapiReconciliation();
+      console.log('✅ Vapi reconciliation job scheduled (daily at 3 AM UTC)');
+      console.log('   Revenue protection: Recovers 2-5% of missed webhooks (~$108-1080/year)');
+    } catch (error: any) {
+      console.warn('Failed to schedule Vapi reconciliation job:', error.message);
+    }
+
     // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
     // Reason: Polling caused race conditions with webhook handlers and wasted bandwidth
     // Webhooks are more reliable (immediate notification) and prevent duplicate processing
@@ -845,16 +855,20 @@ process.on('SIGTERM', () => {
     console.log('Webhook queue closed');
   });
 
-  closeBillingQueue().then(() => {
-    console.log('Billing queue closed');
-  });
-
   closeWalletQueue().then(() => {
     console.log('Wallet queue closed');
   });
 
+  closeBillingQueue().then(() => {
+    console.log('Billing queue closed');
+  });
+
   shutdownSmsQueue().then(() => {
     console.log('SMS queue closed');
+  });
+
+  shutdownReconciliationWorker().then(() => {
+    console.log('Vapi reconciliation worker closed');
   });
 
   server.close(() => {
@@ -874,16 +888,20 @@ process.on('SIGINT', () => {
     console.log('Webhook queue closed');
   });
 
-  closeBillingQueue().then(() => {
-    console.log('Billing queue closed');
-  });
-
   closeWalletQueue().then(() => {
     console.log('Wallet queue closed');
   });
 
+  closeBillingQueue().then(() => {
+    console.log('Billing queue closed');
+  });
+
   shutdownSmsQueue().then(() => {
     console.log('SMS queue closed');
+  });
+
+  shutdownReconciliationWorker().then(() => {
+    console.log('Vapi reconciliation worker closed');
   });
 
   server.close(() => {

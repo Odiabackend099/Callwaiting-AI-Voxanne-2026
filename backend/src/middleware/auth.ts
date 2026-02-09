@@ -211,9 +211,9 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
 
             if (!error && user) {
               // Token is valid, resolve org
-              // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
-              // Fallback to user_metadata.org_id for backward compatibility during migration
-              let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
+              // Only trust app_metadata.org_id (admin-set, cryptographically signed).
+              // Never fall back to user_metadata which is user-writable (security risk).
+              let orgId: string = (user.app_metadata?.org_id) as string || 'default';
 
               // SECURITY FIX: STRICT validation - NO fallback to limit(1)
               // If org_id is missing or 'default', reject with 401
@@ -334,9 +334,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     // Attach user info to request
-    // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
-    // Fallback to user_metadata.org_id for backward compatibility during migration
-    let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
+    // Only trust app_metadata.org_id (admin-set, cryptographically signed).
+    // Never fall back to user_metadata which is user-writable (security risk).
+    let orgId: string = (user.app_metadata?.org_id) as string || 'default';
 
     // DEBUG: Log auth details for regression debugging
     if (orgId === 'default' || process.env.NODE_ENV === 'test') {
@@ -436,9 +436,9 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
       }
 
       if (!error && user) {
-        // CRITICAL SSOT FIX: Prioritize app_metadata.org_id (admin-set, immutable)
-        // Fallback to user_metadata.org_id for backward compatibility during migration
-        let orgId: string = (user.app_metadata?.org_id || user.user_metadata?.org_id) as string || 'default';
+        // Only trust app_metadata.org_id (admin-set, cryptographically signed).
+        // Never fall back to user_metadata which is user-writable (security risk).
+        let orgId: string = (user.app_metadata?.org_id) as string || 'default';
 
         // SECURITY FIX: Don't attach user if org_id is 'default' or missing
         // This prevents accidental cross-tenant data access via database fallback

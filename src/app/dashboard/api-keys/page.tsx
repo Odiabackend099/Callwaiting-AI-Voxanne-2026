@@ -63,14 +63,8 @@ export default function ApiKeysPage() {
             let orgId: string | undefined;
 
             if (user) {
-                // Try multiple possible locations for org_id (for backward compatibility)
-                // 1. app_metadata.org_id (from database trigger - fresh logins)
+                // Only trust app_metadata.org_id (admin-set, cryptographically signed)
                 orgId = (user as any).app_metadata?.org_id;
-
-                // 2. user_metadata.org_id (fallback - some edge cases)
-                if (!orgId) {
-                    orgId = (user as any).user_metadata?.org_id;
-                }
 
                 // 3. Check raw JWT structure for debugging
                 const userAny = user as any;
@@ -164,14 +158,11 @@ export default function ApiKeysPage() {
                     console.log(`[OAuth Callback] Checking status (attempt ${attempt}/${maxAttempts})`);
 
                     try {
-                        // Get org_id - try multiple sources
-                        let orgId = (user as any)?.app_metadata?.org_id;
-                        if (!orgId) {
-                            orgId = (user as any)?.user_metadata?.org_id;
-                        }
+                        // Only trust app_metadata.org_id (admin-set, cryptographically signed)
+                        const orgId = (user as any)?.app_metadata?.org_id;
 
                         if (!orgId) {
-                            console.error('[OAuth Callback] Cannot get org_id from user - no org_id in app_metadata or user_metadata');
+                            console.error('[OAuth Callback] Cannot get org_id from user app_metadata');
                             lastError = new Error('Cannot determine organization ID');
                             continue;
                         }
@@ -343,7 +334,7 @@ export default function ApiKeysPage() {
                                         {JSON.stringify({
                                             timestamp: new Date().toISOString(),
                                             calendarStatus,
-                                            userOrgId: user?.user_metadata?.org_id
+                                            userOrgId: (user as any)?.app_metadata?.org_id
                                         }, null, 2)}
                                     </pre>
                                 </details>

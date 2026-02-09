@@ -508,11 +508,17 @@ const CallsPageContent = () => {
     };
 
     const getStatusColor = (status: string) => {
-        switch (status) {
+        switch (status?.toLowerCase()) {
             case 'completed': return 'bg-surgical-50 text-surgical-600 border-surgical-200';
             case 'missed': return 'bg-red-50 text-red-700 border-red-200';
             case 'transferred': return 'bg-surgical-50 text-surgical-500 border-surgical-200';
             case 'failed': return 'bg-red-50 text-red-700 border-red-200';
+            case 'in-progress': return 'bg-blue-50 text-blue-700 border-blue-200';
+            case 'no-answer': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+            case 'voicemail': return 'bg-purple-50 text-purple-700 border-purple-200';
+            case 'cancelled': return 'bg-gray-50 text-gray-600 border-gray-200';
+            case 'ringing': return 'bg-blue-50 text-blue-600 border-blue-200';
+            case 'queued': return 'bg-gray-50 text-gray-600 border-gray-200';
             default: return 'bg-surgical-50 text-obsidian/60 border-surgical-200';
         }
     };

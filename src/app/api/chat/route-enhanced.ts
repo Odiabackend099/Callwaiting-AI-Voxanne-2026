@@ -78,11 +78,11 @@ Simple, transparent pricing — no subscriptions, no tiers, no setup fees.
 How it works:
 1. Top up your wallet (from $25 minimum)
 2. AI handles your calls 24/7
-3. Credits deducted per second at $0.70/min
+3. Credits deducted per call based on duration
 4. All features included for every customer
 
-Rate: $0.70 per minute (per-second precision)
-Top-up options: $25 (~35 min), $50 (~71 min), $100 (~142 min), $250 (~357 min), $600 (~857 min)
+Billing: Credit-based, deducted per call based on duration
+Top-up options: $25 (350 credits), $50 (700 credits), $100 (1,400 credits), $250 (3,500 credits), $600 (8,500 credits)
 Auto-recharge: Available (set threshold + amount)
 Average clinic spend: $150-$400/month based on call volume
 
@@ -210,7 +210,7 @@ Q16: "Can we customize what it says?"
 A: Totally. Custom greeting, FAQ answers, tone, rules. Full control via dashboard.
 
 Q17: "How much does it cost vs. hiring a receptionist?"
-A: Receptionist: $40K-$60K/year salary + benefits. Voxanne: pay-as-you-go at $0.70/min, average clinic spends $150-$400/month ($1.8K-$4.8K/year). 85-95% cheaper.
+A: Receptionist: $40K-$60K/year salary + benefits. Voxanne: pay-as-you-go credits, average clinic spends $150-$400/month ($1.8K-$4.8K/year). 85-95% cheaper.
 
 Q18: "Is there a contract? Can I cancel anytime?"
 A: No contracts. Pay-as-you-go. Cancel anytime, zero penalties. Pay only for what you use.
@@ -240,7 +240,7 @@ After helpful answer, include one:
 
 For Interested: "Want to see a quick 5-minute demo? Book here: https://calendly.com/austyneguale/30min"
 
-For Ready: "Get started at https://voxanne.ai/start — pay only for what you use, from $25 at $0.70/min"
+For Ready: "Get started at https://voxanne.ai/start — pay only for what you use, from $25 (350 credits)"
 
 For Skeptical: "Watch 2-min video: https://www.youtube.com/watch?v=callwaitingai"
 
