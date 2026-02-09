@@ -21,6 +21,10 @@ export default function TelephonyPage() {
   const [managedNumbers, setManagedNumbers] = useState<ManagedNumber[]>([]);
   const [fetchingNumbers, setFetchingNumbers] = useState(false);
   const [deletingNumber, setDeletingNumber] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [confirmDeleteNumber, setConfirmDeleteNumber] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Fetch managed numbers on mount
   useEffect(() => {
@@ -30,14 +34,16 @@ export default function TelephonyPage() {
   const fetchManagedNumbers = async () => {
     try {
       setFetchingNumbers(true);
+      setFetchError(null);
       const data = await authedBackendFetch<{
         mode: string;
         subaccount?: any;
         numbers: ManagedNumber[];
       }>('/api/managed-telephony/status');
       setManagedNumbers(data.numbers || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch managed numbers:', err);
+      setFetchError(err.message || 'Failed to load managed numbers');
       setManagedNumbers([]);
     } finally {
       setFetchingNumbers(false);
@@ -45,14 +51,9 @@ export default function TelephonyPage() {
   };
 
   const handleDeleteNumber = async (phoneNumber: string) => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete ${phoneNumber}?\n\nThis will:\n- Release the number from Vapi\n- Release the number from Twilio\n- Remove all routing configurations\n\nThis action cannot be undone.`
-    );
-
-    if (!confirmDelete) return;
-
     try {
       setDeletingNumber(phoneNumber);
+      setDeleteError(null);
 
       await authedBackendFetch(`/api/managed-telephony/numbers/${encodeURIComponent(phoneNumber)}`, {
         method: 'DELETE',
@@ -61,10 +62,13 @@ export default function TelephonyPage() {
       // Refresh the list
       await fetchManagedNumbers();
 
-      alert(`Successfully deleted ${phoneNumber}`);
+      // Show success message
+      setDeleteSuccess(`Successfully deleted ${phoneNumber}`);
+      setTimeout(() => setDeleteSuccess(null), 5000);
+      setConfirmDeleteNumber(null);
     } catch (err: any) {
       console.error('Failed to delete number:', err);
-      alert(`Failed to delete number: ${err.message || 'Unknown error'}`);
+      setDeleteError(err.message || 'Failed to delete number');
     } finally {
       setDeletingNumber(null);
     }
@@ -95,21 +99,75 @@ export default function TelephonyPage() {
         </div>
       </div>
 
-      {/* Active Managed Numbers */}
-      {managedNumbers.length > 0 && (
-        <div className="bg-white border border-surgical-200 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Phone className="w-5 h-5 text-surgical-600" />
-              <h3 className="text-lg font-semibold text-obsidian">
-                Active Managed Numbers
-              </h3>
-            </div>
+      {/* Active Managed Numbers - Always Show */}
+      <div className="bg-white border border-surgical-200 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Phone className="w-5 h-5 text-surgical-600" />
+            <h3 className="text-lg font-semibold text-obsidian">
+              Active Managed Numbers
+            </h3>
+          </div>
+          {!fetchingNumbers && managedNumbers.length > 0 && (
             <span className="text-sm text-obsidian/60">
               {managedNumbers.length} {managedNumbers.length === 1 ? 'number' : 'numbers'}
             </span>
-          </div>
+          )}
+        </div>
 
+        {/* Error State */}
+        {fetchError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900 mb-2">
+                  Failed to Load Numbers
+                </p>
+                <p className="text-sm text-red-700 mb-3">{fetchError}</p>
+              </div>
+              <button
+                onClick={fetchManagedNumbers}
+                className="text-sm text-red-600 hover:text-red-700 font-medium whitespace-nowrap"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {fetchingNumbers && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-surgical-600 mr-2" />
+            <span className="text-obsidian/60">Loading numbers...</span>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!fetchingNumbers && managedNumbers.length === 0 && !fetchError && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 rounded-full bg-surgical-50 mx-auto flex items-center justify-center mb-4 border border-surgical-200">
+              <Phone className="w-8 h-8 text-surgical-400" />
+            </div>
+            <h4 className="text-lg font-semibold text-obsidian mb-2">
+              No Managed Numbers Yet
+            </h4>
+            <p className="text-sm text-obsidian/60 mb-6 max-w-sm mx-auto">
+              Buy a dedicated AI phone number to get started. We'll handle all the setup in minutes.
+            </p>
+            <button
+              onClick={() => setShowBuyNumberModal(true)}
+              className="px-4 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium inline-flex items-center gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Buy Your First Number
+            </button>
+          </div>
+        )}
+
+        {/* Numbers List */}
+        {!fetchingNumbers && managedNumbers.length > 0 && (
           <div className="space-y-3">
             {managedNumbers.map((num) => (
               <div
@@ -129,7 +187,7 @@ export default function TelephonyPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDeleteNumber(num.phoneNumber)}
+                  onClick={() => setConfirmDeleteNumber(num.phoneNumber)}
                   disabled={deletingNumber === num.phoneNumber}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -148,8 +206,8 @@ export default function TelephonyPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Buy Managed Number Option */}
       <div className="bg-white border border-surgical-200 rounded-xl p-6">
@@ -248,6 +306,88 @@ export default function TelephonyPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteNumber && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center border border-red-200">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-obsidian">
+                  Delete Phone Number?
+                </h3>
+                <p className="text-sm text-obsidian/60 font-mono">
+                  {confirmDeleteNumber}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-sm font-semibold text-red-900 mb-2">
+                This action cannot be undone. This will:
+              </p>
+              <ul className="text-sm text-red-800 space-y-1 ml-4 list-disc">
+                <li>Release the number from Vapi</li>
+                <li>Release the number from Twilio</li>
+                <li>Remove all routing configurations</li>
+                <li>Disconnect any active calls</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteNumber(null)}
+                className="flex-1 px-4 py-2 border border-surgical-200 text-obsidian rounded-lg hover:bg-surgical-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteNumber(confirmDeleteNumber);
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Delete Number
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Toast */}
+      {deleteSuccess && (
+        <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg max-w-sm animate-pulse z-40">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <p className="text-sm font-medium text-green-900">{deleteSuccess}</p>
+            <button
+              onClick={() => setDeleteSuccess(null)}
+              className="ml-auto text-green-600 hover:text-green-700 font-bold"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {deleteError && (
+        <div className="fixed bottom-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg max-w-sm z-40">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <p className="text-sm font-medium text-red-900">{deleteError}</p>
+            <button
+              onClick={() => setDeleteError(null)}
+              className="ml-auto text-red-600 hover:text-red-700 font-bold"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Buy Number Modal */}
       {showBuyNumberModal && (
