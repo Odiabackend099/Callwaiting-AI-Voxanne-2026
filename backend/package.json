@@ -4,9 +4,10 @@
   "description": "Voxanne AI backend for Vapi integration",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "NODE_ENV=development tsx src/server.ts",
+    "validate-env": "npx tsx scripts/validate-env.ts",
+    "dev": "npm run validate-env && NODE_ENV=development tsx src/server.ts",
     "build": "tsc --skipLibCheck true --noEmit false || echo 'Build completed with warnings'",
-    "start": "node dist/server.js",
+    "start": "npm run validate-env && node dist/server.js",
     "test": "jest",
     "test:unit": "jest --testPathPatterns='src/__tests__/unit'",
     "test:integration": "jest --testPathPattern='integration'",

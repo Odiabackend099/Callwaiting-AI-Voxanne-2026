@@ -9,12 +9,21 @@
  *
  * IMPORTANT: This file MUST be imported BEFORE any other modules in server.ts
  *
+ * ⚠️ CRITICAL CONFIGURATION RULES:
+ * Before modifying this file, read: CONFIGURATION_CRITICAL_INVARIANTS.md
+ * - 7 rules that MUST NOT be broken
+ * - ENCRYPTION_KEY requirements (Section 3)
+ * - Startup validation rules (Section 5)
+ * - Master credentials usage (Section 4)
+ *
  * Usage:
  *   import { config } from './config';
  *
  *   // Access any configuration variable
  *   console.log(config.PORT);
  *   console.log(config.TWILIO_PHONE_NUMBER);
+ *
+ * Reference: CONFIGURATION_CRITICAL_INVARIANTS.md
  */
 
 // Load environment variables FIRST
