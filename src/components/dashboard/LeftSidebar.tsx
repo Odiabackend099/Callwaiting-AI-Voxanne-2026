@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target, Smartphone, Wallet } from 'lucide-react';
+import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target, Smartphone, Wallet, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LeftSidebar() {
@@ -40,6 +40,7 @@ export default function LeftSidebar() {
             items: [
                 { label: 'API Keys', href: '/dashboard/api-keys', icon: Key },
                 { label: 'Telephony', href: '/dashboard/inbound-config', icon: Phone },
+                { label: 'Verified Caller ID', href: '/dashboard/verified-caller-id', icon: CheckCircle },
                 { label: 'AI Forwarding', href: '/dashboard/telephony', icon: Smartphone },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ],

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { authenticateRequest } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
-import { log } from '../services/logger';
+import logger from '../services/logger';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ const supabase = createClient(
  * POST /api/verified-caller-id/verify
  * Initiate phone number verification via Twilio Caller ID validation
  */
-router.post('/verify', authenticateRequest, async (req: Request, res: Response) => {
+router.post('/verify', requireAuth, async (req: Request, res: Response) => {
   try {
     const { phoneNumber, countryCode = 'US' } = req.body;
     const orgId = (req.user as any)?.orgId;
@@ -29,7 +29,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
       return res.status(400).json({ error: 'Phone number must be in E.164 format (e.g., +15551234567)' });
     }
 
-    log.info('Initiating caller ID verification', { orgId, phoneNumber });
+    logger.info('Initiating caller ID verification', { orgId, phoneNumber });
 
     // Get Twilio client for this organization
     const twilioClient = await IntegrationDecryptor.getTwilioClient(orgId);
@@ -54,7 +54,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
       .maybeSingle();
 
     if (selectError) {
-      log.error('Error checking existing verification', selectError);
+      logger.error('Error checking existing verification', selectError);
     }
 
     if (existingRecord) {
@@ -71,7 +71,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
         .eq('id', existingRecord.id);
 
       if (updateError) {
-        log.error('Error updating verification record', updateError);
+        logger.error('Error updating verification record', updateError);
         return res.status(500).json({ error: 'Failed to update verification record' });
       }
     } else {
@@ -88,12 +88,12 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
         });
 
       if (insertError) {
-        log.error('Error creating verification record', insertError);
+        logger.error('Error creating verification record', insertError);
         return res.status(500).json({ error: 'Failed to create verification record' });
       }
     }
 
-    log.info('Verification initiated successfully', { orgId, phoneNumber, sid: validation.sid });
+    logger.info('Verification initiated successfully', { orgId, phoneNumber, sid: validation.sid });
 
     res.json({
       success: true,
@@ -102,7 +102,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
     });
 
   } catch (error: any) {
-    log.error('Error in caller ID verification', error);
+    logger.error('Error in caller ID verification', error);
     res.status(500).json({ error: error.message || 'Verification failed' });
   }
 });
@@ -111,7 +111,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
  * POST /api/verified-caller-id/confirm
  * Confirm phone number verification with 6-digit code
  */
-router.post('/confirm', authenticateRequest, async (req: Request, res: Response) => {
+router.post('/confirm', requireAuth, async (req: Request, res: Response) => {
   try {
     const { phoneNumber, code } = req.body;
     const orgId = (req.user as any)?.orgId;
@@ -120,7 +120,7 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
       return res.status(400).json({ error: 'Phone number and verification code are required' });
     }
 
-    log.info('Confirming caller ID verification', { orgId, phoneNumber });
+    logger.info('Confirming caller ID verification', { orgId, phoneNumber });
 
     // Get verification record
     const { data: record, error: selectError } = await supabase
@@ -132,13 +132,13 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
       .maybeSingle();
 
     if (selectError || !record) {
-      log.error('Verification record not found', { orgId, phoneNumber, selectError });
+      logger.error('Verification record not found', { orgId, phoneNumber, selectError });
       return res.status(404).json({ error: 'Verification record not found. Please request a new verification code.' });
     }
 
     // Check if code matches
     if (record.verification_code !== code) {
-      log.warn('Invalid verification code', { orgId, phoneNumber });
+      logger.warn('Invalid verification code', { orgId, phoneNumber });
 
       // Mark as failed
       await supabase
@@ -164,11 +164,11 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
       .eq('id', record.id);
 
     if (updateError) {
-      log.error('Error updating verification status', updateError);
+      logger.error('Error updating verification status', updateError);
       return res.status(500).json({ error: 'Failed to confirm verification' });
     }
 
-    log.info('Caller ID verified successfully', { orgId, phoneNumber });
+    logger.info('Caller ID verified successfully', { orgId, phoneNumber });
 
     res.json({
       success: true,
@@ -178,7 +178,7 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
     });
 
   } catch (error: any) {
-    log.error('Error confirming verification', error);
+    logger.error('Error confirming verification', error);
     res.status(500).json({ error: error.message || 'Confirmation failed' });
   }
 });
@@ -187,7 +187,7 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
  * GET /api/verified-caller-id/list
  * Get all verified numbers for the organization
  */
-router.get('/list', authenticateRequest, async (req: Request, res: Response) => {
+router.get('/list', requireAuth, async (req: Request, res: Response) => {
   try {
     const orgId = (req.user as any)?.orgId;
 
@@ -198,7 +198,7 @@ router.get('/list', authenticateRequest, async (req: Request, res: Response) => 
       .order('verified_at', { ascending: false });
 
     if (error) {
-      log.error('Error fetching verified numbers', error);
+      logger.error('Error fetching verified numbers', error);
       return res.status(500).json({ error: 'Failed to fetch verified numbers' });
     }
 
@@ -208,7 +208,7 @@ router.get('/list', authenticateRequest, async (req: Request, res: Response) => 
     });
 
   } catch (error: any) {
-    log.error('Error listing verified numbers', error);
+    logger.error('Error listing verified numbers', error);
     res.status(500).json({ error: error.message || 'Failed to list numbers' });
   }
 });
@@ -217,7 +217,7 @@ router.get('/list', authenticateRequest, async (req: Request, res: Response) => 
  * DELETE /api/verified-caller-id/:id
  * Remove a verified caller ID
  */
-router.delete('/:id', authenticateRequest, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const orgId = (req.user as any)?.orgId;
@@ -229,16 +229,16 @@ router.delete('/:id', authenticateRequest, async (req: Request, res: Response) =
       .eq('org_id', orgId); // Security: only delete own org's numbers
 
     if (error) {
-      log.error('Error deleting verified number', error);
+      logger.error('Error deleting verified number', error);
       return res.status(500).json({ error: 'Failed to delete verified number' });
     }
 
-    log.info('Verified caller ID deleted', { orgId, id });
+    logger.info('Verified caller ID deleted', { orgId, id });
 
     res.json({ success: true, message: 'Verified number removed' });
 
   } catch (error: any) {
-    log.error('Error deleting verified number', error);
+    logger.error('Error deleting verified number', error);
     res.status(500).json({ error: error.message || 'Deletion failed' });
   }
 });
