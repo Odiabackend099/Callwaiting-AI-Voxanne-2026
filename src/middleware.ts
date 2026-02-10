@@ -56,6 +56,12 @@ export async function middleware(req: NextRequest) {
 
     const pathname = req.nextUrl.pathname;
 
+    // Route redirects: old telephony URLs → unified phone-settings page
+    if (pathname === '/dashboard/telephony' || pathname === '/dashboard/verified-caller-id') {
+        const phoneSettingsUrl = new URL('/dashboard/phone-settings', req.url);
+        return NextResponse.redirect(phoneSettingsUrl, 301); // Permanent redirect
+    }
+
     // Route protection: block unauthenticated users from /dashboard/*
     if (!user && pathname.startsWith('/dashboard')) {
         const loginUrl = new URL('/login', req.url);
