@@ -39,6 +39,18 @@ export async function validateAndResolveOrgId(orgId: string | null | undefined):
     .single();
 
   if (error || !org) {
+    if (process.env.NODE_ENV === 'development') {
+      const { data: created, error: createError } = await supabase
+        .from('organizations')
+        .upsert({ id: orgId, name: 'Dev Organization', status: 'active' })
+        .select('id, name, status')
+        .single();
+
+      if (!createError && created) {
+        return created.id;
+      }
+    }
+
     throw new Error(`ORG_ID_NOT_FOUND: Organization ${orgId} does not exist`);
   }
 

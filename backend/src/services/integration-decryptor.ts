@@ -1010,22 +1010,28 @@ export class IntegrationDecryptor {
       authToken: string;
       phoneNumber: string;
       source: 'byoc' | 'managed';
+      vapiPhoneId?: string;
+      vapiCredentialId?: string;
     }
   ): Promise<{ vapiCredentialId: string | null }> {
-    const { accountSid, authToken, phoneNumber, source } = creds;
+    const { accountSid, authToken, phoneNumber, source, vapiPhoneId, vapiCredentialId } = creds;
 
     log.info('IntegrationDecryptor', 'saveTwilioCredential: starting', {
       orgId,
       source,
       sidLast4: accountSid.slice(-4),
       phoneLast4: phoneNumber.slice(-4),
+      hasVapiPhoneId: !!vapiPhoneId,
     });
 
-    // 1. Encrypt credentials
+    // 1. Encrypt credentials with additional metadata for managed numbers
     const encryptedConfig = EncryptionService.encryptObject({
       accountSid,
       authToken,
       phoneNumber,
+      managedByVoxanne: source === 'managed', // Flag to distinguish managed vs BYOC
+      vapiPhoneId: vapiPhoneId || undefined,
+      vapiCredentialId: vapiCredentialId || undefined,
     });
 
     // 2. UPSERT into org_credentials (single-slot — UNIQUE on org_id,provider)
@@ -1036,8 +1042,9 @@ export class IntegrationDecryptor {
           org_id: orgId,
           provider: 'twilio' as const,
           is_active: true,
+          is_managed: source === 'managed', // NEW: Set is_managed flag
           encrypted_config: encryptedConfig,
-          metadata: { accountSid, phoneNumber },
+          metadata: { accountSid, phoneNumber, vapiPhoneId },
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'org_id,provider' }
@@ -1083,23 +1090,23 @@ export class IntegrationDecryptor {
       .eq('id', orgId);
 
     // 5. Sync credential to Vapi
-    const vapiCredentialId = await this.syncVapiCredential(orgId, accountSid, authToken);
+    const syncedVapiCredentialId = await this.syncVapiCredential(orgId, accountSid, authToken);
 
     // 6. Store vapi_credential_id on organizations
-    if (vapiCredentialId) {
+    if (syncedVapiCredentialId) {
       await supabase
         .from('organizations')
-        .update({ vapi_credential_id: vapiCredentialId })
+        .update({ vapi_credential_id: syncedVapiCredentialId })
         .eq('id', orgId);
     }
 
     log.info('IntegrationDecryptor', 'saveTwilioCredential: complete', {
       orgId,
       source,
-      vapiCredentialId,
+      vapiCredentialId: syncedVapiCredentialId,
     });
 
-    return { vapiCredentialId };
+    return { vapiCredentialId: syncedVapiCredentialId };
   }
 
   /**

@@ -16,11 +16,11 @@ export default function LeftSidebar() {
     const navSections = useMemo(() => ([
         {
             label: 'OPERATIONS',
-            description: 'Review calls, manage leads, and monitor agent activity',
+            description: 'Review calls, manage appointments, and monitor agent activity',
             items: [
                 { label: 'Dashboard', href: '/dashboard', icon: Activity },
                 { label: 'Call Logs', href: '/dashboard/calls', icon: Phone },
-                { label: 'Leads', href: '/dashboard/leads', icon: Target },
+                { label: 'Appointments', href: '/dashboard/appointments', icon: Target },
                 { label: 'Wallet', href: '/dashboard/wallet', icon: Wallet },
             ],
         },

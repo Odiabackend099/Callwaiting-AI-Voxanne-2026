@@ -94,6 +94,7 @@ import internalApiRoutes from './routes/internal-api-routes'; // default export
 import integrationsApiRouter from './routes/integrations-api'; // default export
 import telephonyRouter from './routes/telephony'; // default export - Hybrid Telephony
 import managedTelephonyRouter from './routes/managed-telephony'; // default export - Managed Telephony (Reseller)
+import verifiedCallerIdRouter from './routes/verified-caller-id'; // default export - Verified Caller ID (Phase 1 Alternative)
 import webhookHealthRouter from './routes/webhook-health'; // default export - Webhook Health Check
 import testErrorRouter from './routes/test-error'; // Test endpoint for exception handling
 import monitoringRouter from './routes/monitoring'; // default export - System monitoring endpoints
@@ -339,9 +340,11 @@ app.use('/api/google-oauth', googleOAuthRouter);
 app.use('/api/health', healthIntegrationsRouter);
 app.use('/api/telephony', telephonyRouter); // Hybrid Telephony BYOC routes
 app.use('/api/managed-telephony', managedTelephonyRouter); // Managed Telephony (Reseller) routes
+app.use('/api/verified-caller-id', verifiedCallerIdRouter); // Verified Caller ID (Phase 1 Alternative)
 log.info('Server', 'Google OAuth routes registered at /api/google-oauth');
 log.info('Server', 'Hybrid Telephony routes registered at /api/telephony');
 log.info('Server', 'Managed Telephony routes registered at /api/managed-telephony');
+log.info('Server', 'Verified Caller ID routes registered at /api/verified-caller-id');
 log.info('Server', 'Health integrations diagnostic endpoint registered at /api/health/integrations');
 log.info('Server', 'Contacts, appointments, notifications, calendar, and org validation routes registered');
 // app.use('/api/founder-console/workspace', workspaceRouter);

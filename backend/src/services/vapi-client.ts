@@ -695,14 +695,20 @@ export class VapiClient {
   }
 
   async importTwilioNumber(params: ImportTwilioParams) {
+    // ✅ FIXED: Use official Vapi API parameter names
+    // See: https://docs.vapi.ai/api-reference/phone-numbers/import-twilio-number
     const payload = {
-      provider: 'twilio',
-      number: params.phoneNumber,
+      twilioPhoneNumber: params.phoneNumber,  // Official param name (not 'number')
       twilioAccountSid: params.twilioAccountSid,
-      twilioAuthToken: params.twilioAuthToken
+      twilioAuthToken: params.twilioAuthToken,
+      name: params.name || 'Imported Twilio Number'  // Required field
     };
 
-    return await this.request<any>(() => this.client.post('/phone-number', payload), { route: 'POST /phone-number (twilio)' });
+    // ✅ FIXED: Use correct endpoint URL
+    return await this.request<any>(
+      () => this.client.post('/phone-number/import/twilio', payload),
+      { route: 'POST /phone-number/import/twilio' }
+    );
   }
 
   async getPhoneNumber(phoneNumberId: string) {

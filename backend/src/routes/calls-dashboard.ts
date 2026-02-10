@@ -57,14 +57,14 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     const limit = parsed.limit;
 
     // UNIFIED CALLS TABLE QUERY
-    // Single query to unified 'calls' table with call_direction filter
+    // Single query to 'calls_with_caller_names' VIEW (Strategic SSOT Fix 2026-02-09)
+    // VIEW automatically JOINs with contacts table to provide live name resolution
+    // Key change: Always get fresh names from contacts.name (SSOT), never stale data
     // FIXED (2026-02-01): Now includes all 4 sentiment fields (label, score, summary, urgency)
-    // FIXED (2026-02-02): Added LEFT JOIN with contacts table to resolve caller names
-    // FIXED (2026-02-03): Now selects phone_number to JOIN contacts for inbound calls
-    // FIXED (2026-02-02): Removed non-existent recording_path column (only recording_url and recording_storage_path exist)
+    // FIXED (2026-02-09): Changed from 'calls' table to 'calls_with_caller_names' view
     let query = supabase
-      .from('calls')  // ← Unified table for both inbound + outbound
-      .select('*, contacts!contact_id(name)', { count: 'exact' })
+      .from('calls_with_caller_names')  // ← VIEW with live name resolution from contacts
+      .select('*', { count: 'exact' })
       .eq('org_id', orgId);  // CRITICAL: Tenant isolation
 
     // Filter by call direction if specified
@@ -93,9 +93,10 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       query = query.or('is_test_call.is.null,is_test_call.eq.false');
     }
 
-    // Apply search filter (phone number, caller name, or call type)
+    // Apply search filter (phone number or resolved caller name from VIEW)
+    // FIXED (2026-02-09): Search resolved_caller_name (live from contacts) instead of deprecated caller_name
     if (parsed.search) {
-      query = query.or(`phone_number.ilike.%${parsed.search}%,from_number.ilike.%${parsed.search}%,caller_name.ilike.%${parsed.search}%`);
+      query = query.or(`phone_number.ilike.%${parsed.search}%,resolved_caller_name.ilike.%${parsed.search}%`);
     }
 
     // Order by created_at descending (newest first)
@@ -126,14 +127,11 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    // FIX 2.1: REMOVED runtime contacts lookup - Trust database SSOT (calls.caller_name)
-    // Webhook enrichment is now the single source of truth
-    // No need to query contacts on every page load
-
     // Transform response (handle both inbound + outbound)
     // PERFORMANCE OPTIMIZATION: No longer generate signed URLs on list load
     // URLs generated on-demand when user clicks play (see /:callId/recording-url endpoint)
     // FIXED (2026-02-01): Now uses individual sentiment fields instead of parsing packed string
+    // FIXED (2026-02-09): Use resolved_caller_name from VIEW (always live from contacts.name SSOT)
     const finalCalls = (calls || []).map((call: any) => {
       // Use individual sentiment fields directly (more reliable than parsing packed strings)
       // Fallback to parsing legacy sentiment field if individual fields not available
@@ -151,13 +149,13 @@ callsRouter.get('/', async (req: Request, res: Response) => {
         sentimentUrgency = parts[3] || null;
       }
 
-      // FIX 2.1: SIMPLIFIED caller name resolution - Trust database SSOT
-      // Webhook enrichment already populated calls.caller_name (single source of truth)
-      const resolvedCallerName = call.caller_name || 'Unknown Caller';
+      // Strategic SSOT Fix (2026-02-09): Use resolved_caller_name from VIEW
+      // Always live data from contacts.name (never stale), with phone fallback
+      const resolvedCallerName = call.resolved_caller_name || call.phone_number || 'Unknown';
 
       return {
         id: call.id,
-        phone_number: call.phone_number || call.from_number || 'Unknown',  // SSOT: phone_number, legacy fallback: from_number
+        phone_number: call.phone_number || 'Unknown',  // SSOT: phone_number (from_number deprecated 2026-02-09)
         caller_name: resolvedCallerName,
         call_date: call.created_at,
         duration_seconds: call.duration_seconds || 0,
@@ -257,25 +255,25 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       pipelineValue = Number(row?.pipeline_value || 0);
     }
 
-    // Recent calls still need separate query for detailed data
+    // Recent calls: Use VIEW for live name resolution (Strategic SSOT Fix 2026-02-09)
     const { data: recentCallsData, error: recentError } = await supabase
-      .from('calls')
-      .select('id, phone_number, from_number, caller_name, call_type, created_at, duration_seconds, status, call_direction, is_test_call, metadata')
+      .from('calls_with_caller_names')  // ← VIEW with live caller names from contacts
+      .select('id, phone_number, resolved_caller_name, call_type, created_at, duration_seconds, status, call_direction, is_test_call, metadata')
       .eq('org_id', orgId)
       .or('is_test_call.is.null,is_test_call.eq.false')
       .order('created_at', { ascending: false })
       .limit(5);
 
     // Format recent calls for frontend (map actual schema columns to expected output)
+    // FIXED (2026-02-09): Use resolved_caller_name from VIEW (always fresh from contacts.name)
     const recentCalls = (recentCallsData || []).map((c: any) => ({
       id: c.id,
-      // FIXED: Use phone_number (SSOT) and caller_name (was c.call_type — returned "inbound"/"outbound")
-      phone_number: c.phone_number || c.from_number || 'Unknown',
-      caller_name: c.caller_name || 'Unknown',
+      phone_number: c.phone_number || 'Unknown',
+      caller_name: c.resolved_caller_name || c.phone_number || 'Unknown',  // Live name from contacts
       call_date: c.created_at,
       call_type: c.call_direction || (c.metadata?.channel === 'inbound' ? 'inbound' : 'outbound'),
       // Legacy field names (for backwards compatibility with frontend)
-      to_number: c.phone_number || c.from_number || 'Unknown',
+      to_number: c.phone_number || 'Unknown',
       started_at: c.created_at,
       duration_seconds: c.duration_seconds || 0,
       status: c.status || 'completed',

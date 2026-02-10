@@ -15,6 +15,7 @@
 import express from 'express';
 import { config } from '../config/index';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
+import { EncryptionService } from '../services/encryption';
 import { log } from '../services/logger';
 import { requireAuthOrDev } from '../middleware/auth';
 import { supabase } from '../services/supabase-client';
@@ -205,66 +206,53 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
 
     const orgId = (req as any).user.orgId;
 
-
-
-    // 1. Get Integration Settings
-    const { data: settings, error: settingsError } = await supabase
-      .from('integration_settings')
-      .select('api_key_encrypted')
+    // DB SSOT: Only return numbers that are explicitly provisioned/assigned for this org.
+    // Do NOT list all platform Vapi numbers via global VAPI_PRIVATE_KEY.
+    // UNIFIED SOURCE: Query org_credentials table for both managed and BYOC numbers
+    // This table now stores all Twilio credentials with is_managed flag
+    const { data: credentials, error: credErr } = await supabase
+      .from('org_credentials')
+      .select('encrypted_config, is_managed')
       .eq('org_id', orgId)
-      .single();
+      .eq('provider', 'twilio')
+      .eq('is_active', true);
 
-    // If no tenant key, check for global fallback (Default Org/Single Tenant Mode)
-    if (config.VAPI_PRIVATE_KEY) {
-      // Continue execution with global key
-    } else {
-      // Strict multi-tenancy: No key = no numbers.
-      return res.json({ success: true, numbers: [] });
+    if (credErr) {
+      log.error('integrations', 'Failed to read org credentials from DB', {
+        orgId,
+        error: credErr.message,
+      });
+      return res.status(500).json({ success: false, error: 'Failed to load phone numbers' } as IntegrationResponse);
     }
 
-    // 2. Decrypt Key
-    let apiKey: string | null = null;
-    try {
-      if (settings?.api_key_encrypted) {
-        apiKey = await IntegrationDecryptor.decrypt(settings.api_key_encrypted);
+    // Decrypt and format credentials with badges
+    const numbers = [];
+    for (const cred of credentials || []) {
+      try {
+        const decrypted = EncryptionService.decryptObject(cred.encrypted_config);
+
+        // Only include numbers with vapiPhoneId
+        if (decrypted.phoneNumber && decrypted.vapiPhoneId) {
+          numbers.push({
+            id: decrypted.vapiPhoneId,
+            number: decrypted.phoneNumber,
+            name: cred.is_managed ? 'Managed' : 'Your Twilio',  // Badge based on is_managed
+            type: cred.is_managed ? 'managed' : 'byoc',
+          });
+        }
+      } catch (decryptErr: any) {
+        log.warn('integrations', 'Failed to decrypt credential config', {
+          orgId,
+          error: decryptErr.message,
+        });
+        // Skip this credential and continue
       }
-    } catch (decryptError) {
-      console.error('Failed to decrypt Vapi key:', decryptError);
-      // Fallback to empty list instead of crashing
-      return res.json({ success: true, numbers: [] });
     }
 
-    // Fallback if not set by decryption
-    if (!apiKey && config.VAPI_PRIVATE_KEY) {
-      apiKey = config.VAPI_PRIVATE_KEY;
-    }
+    // De-duplicate by id (in case duplicates exist)
+    const deduped = Array.from(new Map(numbers.map((n: any) => [n.id, n])).values());
 
-    if (!apiKey) {
-      // Strict multi-tenancy: No key = no numbers. 
-      // Do not throw error, just return empty state.
-      return res.json({ success: true, numbers: [] });
-    }
-
-    // 3. Fetch numbers from Vapi
-    const vapiRes = await fetch('https://api.vapi.ai/phone-number', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!vapiRes.ok) {
-      const errorText = await vapiRes.text();
-      // If 401, maybe key is invalid
-      if (vapiRes.status === 401) {
-        return res.status(401).json({ success: false, error: 'Invalid Vapi API Key' });
-      }
-      throw new Error(`Failed to fetch Vapi numbers: ${errorText}`);
-    }
-
-    const numbers = await vapiRes.json();
-
-    res.json({ success: true, numbers });
+    return res.json({ success: true, numbers: deduped });
 
   } catch (error: any) {
     log.error('integrations', 'Failed to list Vapi numbers', { error: error.message });
@@ -528,12 +516,40 @@ integrationsRouter.delete('/:provider', async (req: express.Request, res: expres
     const { provider } = req.params;
 
     if (provider === 'twilio') {
+      // SSOT: org_credentials is the canonical store.
+      // Deactivate any active Twilio credential rows.
+      const { error: credErr } = await supabase
+        .from('org_credentials')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('org_id', orgId)
+        .eq('provider', 'twilio')
+        .eq('is_active', true);
+
+      if (credErr) {
+        log.error('integrations', 'Failed to deactivate Twilio org_credentials', {
+          orgId,
+          error: credErr.message,
+        });
+        return res.status(500).json({ success: false, error: 'Failed to disconnect Twilio' } as IntegrationResponse);
+      }
+
+      // Best-effort cleanup: legacy table (no longer SSOT)
       await supabase
         .from('customer_twilio_keys')
         .delete()
         .eq('org_id', orgId);
 
-      return res.json({ success: true, message: 'Twilio disconnected' });
+      // Invalidate in-memory decryptor cache so the change is reflected immediately
+      try {
+        IntegrationDecryptor.invalidateCache(orgId, 'twilio');
+      } catch {
+        // non-critical
+      }
+
+      return res.json({ success: true, message: 'Twilio disconnected' } as IntegrationResponse);
     }
 
     res.json({ success: false, error: 'Not implemented' });

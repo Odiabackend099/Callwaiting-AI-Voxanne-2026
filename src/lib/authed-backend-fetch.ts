@@ -178,6 +178,7 @@ export async function authedBackendFetch<T>(
         ...requestInit,
         signal: controller.signal,
         headers: finalHeaders,
+        credentials: 'include',
       });
 
       clearTimeout(timeoutId);

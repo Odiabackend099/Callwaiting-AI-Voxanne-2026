@@ -20,6 +20,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuthOrDev } from '../middleware/auth';
 import { requireFeature } from '../middleware/feature-flags';
 import { ManagedTelephonyService } from '../services/managed-telephony-service';
+import { PhoneValidationService } from '../services/phone-validation-service';
 import { supabaseAdmin } from '../config/supabase';
 import { createLogger } from '../services/logger';
 
@@ -34,14 +35,31 @@ router.use(requireFeature('managed_telephony'));
 // POST /provision - One-click phone number provisioning
 // ============================================
 router.post('/provision', async (req: Request, res: Response): Promise<void> => {
+  const orgId = req.user?.orgId;
+
   try {
-    const orgId = req.user?.orgId;
     if (!orgId) {
       res.status(401).json({ error: 'Unauthorized: missing org_id' });
       return;
     }
 
     const { country = 'US', numberType = 'local', areaCode } = req.body;
+
+    // Validate master credentials exist (CRITICAL for managed telephony)
+    const masterSid = process.env.TWILIO_MASTER_ACCOUNT_SID;
+    const masterToken = process.env.TWILIO_MASTER_AUTH_TOKEN;
+    if (!masterSid || !masterToken) {
+      logger.error('Missing master Twilio credentials', {
+        orgId,
+        hasMasterSid: !!masterSid,
+        hasMasterToken: !!masterToken
+      });
+      res.status(500).json({
+        error: 'Managed telephony not configured. Please contact support.',
+        canRetry: false
+      });
+      return;
+    }
 
     // Validate country code
     const validCountries = ['US', 'GB', 'CA', 'AU'];
@@ -56,7 +74,27 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    logger.info('Provisioning managed number', { orgId, country, numberType, areaCode });
+    // ENFORCE ONE-NUMBER-PER-ORG RULE
+    // Check if organization already has an existing phone number (managed or BYOC)
+    logger.info('Validating phone provisioning eligibility', { orgId, country, numberType, areaCode });
+
+    const validation = await PhoneValidationService.validateCanProvision(orgId);
+
+    if (!validation.canProvision) {
+      logger.warn('Provisioning blocked - existing number', {
+        orgId,
+        existingType: validation.existingNumber?.type,
+        phoneLast4: validation.existingNumber?.phoneNumber?.slice(-4),
+      });
+
+      res.status(409).json({
+        error: validation.reason,
+        existingNumber: validation.existingNumber,
+      });
+      return;
+    }
+
+    logger.info('Validation passed - proceeding with provisioning', { orgId });
 
     // Check if BYOC credentials exist (for warning)
     const { data: existingCred } = await supabaseAdmin
@@ -75,6 +113,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
 
     const hasByocCreds = !!existingCred && existingOrg?.telephony_mode === 'byoc';
 
+    // Call provisioning service with structured error handling
     const result = await ManagedTelephonyService.provisionManagedNumber({
       orgId,
       country,
@@ -83,9 +122,32 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     });
 
     if (!result.success) {
-      res.status(400).json({ error: result.error });
+      logger.error('Provisioning failed', {
+        orgId,
+        error: result.error,
+        failedStep: result.failedStep,
+        canRetry: result.canRetry,
+        country,
+        numberType,
+        areaCode
+      });
+
+      res.status(400).json({
+        error: result.error,
+        userMessage: result.userMessage || result.error,
+        failedStep: result.failedStep,
+        canRetry: result.canRetry
+      });
       return;
     }
+
+    logger.info('Provisioning succeeded', {
+      orgId,
+      phoneNumber: result.phoneNumber,
+      vapiPhoneId: result.vapiPhoneId,
+      country,
+      numberType
+    });
 
     res.status(201).json({
       success: true,
@@ -95,7 +157,43 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       ...(hasByocCreds ? { warning: 'Your existing BYOC Twilio connection has been replaced by this managed number.' } : {}),
     });
   } catch (err: any) {
-    logger.error('Provision endpoint error', { error: err.message });
+    logger.error('Unhandled provision error', {
+      orgId,
+      error: err.message,
+      stack: err.stack,
+      name: err.name,
+      code: err.code
+    });
+    res.status(500).json({
+      error: 'An unexpected error occurred. Please try again or contact support.',
+      canRetry: true,
+      requestId: (req as any).id
+    });
+  }
+});
+
+// ============================================
+// GET /phone-status - Check if org has existing phone number
+// ============================================
+router.get('/phone-status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) {
+      res.status(401).json({ error: 'Unauthorized: missing org_id' });
+      return;
+    }
+
+    logger.info('Checking org phone status', { orgId });
+
+    const status = await PhoneValidationService.checkOrgPhoneStatus(orgId);
+
+    res.status(200).json(status);
+  } catch (err: any) {
+    logger.error('Phone status check error', {
+      orgId: req.user?.orgId,
+      error: err.message,
+      stack: err.stack,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -238,7 +336,7 @@ router.get('/available-numbers', async (req: Request, res: Response): Promise<vo
     res.json({ numbers });
   } catch (err: any) {
     logger.error('Available-numbers endpoint error', { error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: err?.message || 'Internal server error' });
   }
 });
 

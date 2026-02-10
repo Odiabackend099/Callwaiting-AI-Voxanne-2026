@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Phone, Loader2, AlertCircle, Check, Search } from 'lucide-react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
@@ -19,9 +19,18 @@ interface AvailableNumber {
   region?: string;
 }
 
+// Country configuration with area code formats
+// ONLY 4 COUNTRIES SUPPORTED - Backend validates these in managed-telephony.ts line 65
+const COUNTRIES = [
+  { code: 'US', name: 'United States', flag: '🇺🇸', areaCodeFormat: '3 digits (e.g., 415, 212)', areaCodeLength: 3 },
+  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', areaCodeFormat: '3-5 digits (e.g., 020, 0161)', areaCodeLength: 5 },
+  { code: 'CA', name: 'Canada', flag: '🇨🇦', areaCodeFormat: '3 digits (e.g., 416, 514)', areaCodeLength: 3 },
+  { code: 'AU', name: 'Australia', flag: '🇦🇺', areaCodeFormat: '1-2 digits (e.g., 02, 07)', areaCodeLength: 2 },
+] as const;
+
 export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberModalProps) {
   const [step, setStep] = useState<Step>('search');
-  const [country] = useState('US');
+  const [country, setCountry] = useState('US');
   const [numberType, setNumberType] = useState<'local' | 'toll_free'>('local');
   const [areaCode, setAreaCode] = useState('');
   const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
@@ -29,12 +38,38 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
   const [loading, setLoading] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{
+    message: string;
+    canRetry?: boolean;
+    failedStep?: string;
+  } | null>(null);
   const [provisionedNumber, setProvisionedNumber] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
+  // One-number-per-org enforcement
+  const [hasExistingNumber, setHasExistingNumber] = useState(false);
+  const [existingNumberInfo, setExistingNumberInfo] = useState<{
+    type: 'managed' | 'byoc';
+    phoneNumber: string;
+    details: string;
+  } | null>(null);
+
   const searchNumbers = async () => {
+    // Enforce one-number-per-org: Block search if existing number detected
+    if (hasExistingNumber) {
+      const errorMsg = 'Cannot search - you already have an active phone number. Delete it first.';
+      setError(errorMsg);
+      setErrorDetails({
+        message: errorMsg,
+        canRetry: false,
+        failedStep: 'validation'
+      });
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setErrorDetails(null);
     try {
       const params = new URLSearchParams({ country, numberType });
       if (areaCode) params.set('areaCode', areaCode);
@@ -44,10 +79,22 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
       );
       setAvailableNumbers(data.numbers || []);
       if (!data.numbers?.length) {
-        setError('No numbers found. Try a different area code or number type.');
+        const errorMsg = 'No numbers found. Try a different area code or number type.';
+        setError(errorMsg);
+        setErrorDetails({
+          message: errorMsg,
+          canRetry: true,
+          failedStep: 'search'
+        });
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to search numbers');
+      const errorMsg = err.message || 'Failed to search numbers';
+      setError(errorMsg);
+      setErrorDetails({
+        message: errorMsg,
+        canRetry: true,
+        failedStep: 'search'
+      });
     } finally {
       setLoading(false);
     }
@@ -57,19 +104,47 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
     if (!selectedNumber) return;
     setProvisioning(true);
     setError(null);
+    setErrorDetails(null);
     try {
       const data = await authedBackendFetch<{
         success: boolean;
         phoneNumber: string;
         warning?: string;
         error?: string;
+        userMessage?: string;
+        canRetry?: boolean;
+        failedStep?: string;
+        existingNumber?: {
+          type: 'managed' | 'byoc';
+          phoneNumber: string;
+          details: string;
+        };
       }>('/api/managed-telephony/provision', {
         method: 'POST',
         body: JSON.stringify({ country, numberType, areaCode }),
       });
 
       if (!data.success) {
-        setError(data.error || 'Provisioning failed');
+        // Handle existing number conflict (409 status)
+        if (data.existingNumber) {
+          const errorMsg = `Cannot provision: You already have a ${data.existingNumber.type} phone number (${data.existingNumber.phoneNumber}). Delete it first.`;
+          setError(errorMsg);
+          setErrorDetails({
+            message: errorMsg,
+            canRetry: false,
+            failedStep: 'validation'
+          });
+          setHasExistingNumber(true);
+          setExistingNumberInfo(data.existingNumber);
+        } else {
+          const errorMsg = data.userMessage || data.error || 'Provisioning failed';
+          setError(errorMsg);
+          setErrorDetails({
+            message: errorMsg,
+            canRetry: data.canRetry ?? true,
+            failedStep: data.failedStep
+          });
+        }
         return;
       }
 
@@ -78,11 +153,62 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
       setStep('success');
       onSuccess?.(data.phoneNumber);
     } catch (err: any) {
-      setError(err.message || 'Failed to provision number');
+      const errorMsg = err.message || 'Failed to provision number';
+      setError(errorMsg);
+      setErrorDetails({
+        message: errorMsg,
+        canRetry: true,
+        failedStep: 'unknown'
+      });
     } finally {
       setProvisioning(false);
     }
   };
+
+  // Pre-flight check: Check if org has existing phone number
+  const checkExistingNumber = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setErrorDetails(null);
+
+      const data = await authedBackendFetch<{
+        hasPhoneNumber: boolean;
+        phoneNumberType: 'managed' | 'byoc' | 'none';
+        phoneNumber?: string;
+        details?: string;
+      }>('/api/managed-telephony/phone-status');
+
+      if (data.hasPhoneNumber) {
+        setHasExistingNumber(true);
+        setExistingNumberInfo({
+          type: data.phoneNumberType as 'managed' | 'byoc',
+          phoneNumber: data.phoneNumber!,
+          details: data.details!,
+        });
+        const errorMsg = `You already have ${data.phoneNumberType === 'managed' ? 'a managed' : 'a BYOC'} phone number (${data.phoneNumber}). Please delete it before provisioning a new one.`;
+        setError(errorMsg);
+        setErrorDetails({
+          message: errorMsg,
+          canRetry: false,
+          failedStep: 'validation'
+        });
+      } else {
+        setHasExistingNumber(false);
+        setExistingNumberInfo(null);
+      }
+    } catch (err: any) {
+      console.error('Failed to check existing number:', err);
+      // Non-blocking error - allow user to proceed
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check for existing number on modal open
+  useEffect(() => {
+    checkExistingNumber();
+  }, []);
 
   return (
     <AnimatePresence>
@@ -133,6 +259,67 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
           <div className="p-6 space-y-4">
             {step === 'search' && (
               <>
+                {/* Existing number warning banner - BLOCKING */}
+                {hasExistingNumber && existingNumberInfo && (
+                  <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-yellow-900 mb-1">
+                          One Number Limit
+                        </p>
+                        <p className="text-sm text-yellow-800 mb-2">
+                          You already have a {existingNumberInfo.type === 'managed' ? 'managed' : 'BYOC'} phone number:{' '}
+                          <span className="font-mono font-medium">{existingNumberInfo.phoneNumber}</span>
+                        </p>
+                        <p className="text-sm text-yellow-700 mb-3">
+                          {existingNumberInfo.type === 'managed'
+                            ? 'Delete your existing managed number to purchase a new one.'
+                            : 'Disconnect your BYOC credentials in Integrations to purchase a managed number.'}
+                        </p>
+                        <button
+                          onClick={() => {
+                            onClose();
+                            window.location.href = existingNumberInfo.type === 'managed'
+                              ? '/dashboard/telephony#managed-numbers'
+                              : '/dashboard/inbound-config#integrations';
+                          }}
+                          className="text-sm font-medium text-yellow-700 hover:text-yellow-800 underline"
+                        >
+                          {existingNumberInfo.type === 'managed'
+                            ? 'View & Manage Your Number →'
+                            : 'Manage Integrations →'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Country selector */}
+                <div>
+                  <label className="block text-sm font-medium text-obsidian/70 mb-2">Country</label>
+                  <select
+                    value={country}
+                    onChange={e => {
+                      setCountry(e.target.value);
+                      setAreaCode(''); // Reset area code when country changes
+                    }}
+                    className="w-full px-4 py-2.5 border border-surgical-200 rounded-lg text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:border-transparent bg-white"
+                  >
+                    {COUNTRIES.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-obsidian/50 mt-2">
+                    More countries coming soon. Need a different region?{' '}
+                    <a href="mailto:support@voxanne.ai" className="text-surgical-600 hover:underline">
+                      Contact us
+                    </a>
+                  </p>
+                </div>
+
                 {/* Number type selector */}
                 <div>
                   <label className="block text-sm font-medium text-obsidian/70 mb-2">Number Type</label>
@@ -153,26 +340,36 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                   </div>
                 </div>
 
-                {/* Area code input */}
-                {numberType === 'local' && (
-                  <div>
-                    <label className="block text-sm font-medium text-obsidian/70 mb-2">
-                      Area Code <span className="text-obsidian/40">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={areaCode}
-                      onChange={e => setAreaCode(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                      placeholder="e.g. 212"
-                      className="w-full px-4 py-2.5 border border-surgical-200 rounded-lg text-obsidian placeholder:text-obsidian/30 focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:border-transparent"
-                    />
-                  </div>
-                )}
+                {/* Area code input - country-aware */}
+                {numberType === 'local' && (() => {
+                  const selectedCountry = COUNTRIES.find(c => c.code === country);
+                  const areaCodeRequired = selectedCountry && selectedCountry.areaCodeLength > 0;
+
+                  return areaCodeRequired ? (
+                    <div>
+                      <label className="block text-sm font-medium text-obsidian/70 mb-2">
+                        Area Code <span className="text-obsidian/40">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={areaCode}
+                        onChange={e => setAreaCode(
+                          e.target.value.replace(/\D/g, '').slice(0, selectedCountry.areaCodeLength)
+                        )}
+                        placeholder={selectedCountry.areaCodeFormat}
+                        className="w-full px-4 py-2.5 border border-surgical-200 rounded-lg text-obsidian placeholder:text-obsidian/30 focus:outline-none focus:ring-2 focus:ring-surgical-500 focus:border-transparent"
+                      />
+                      <p className="mt-1.5 text-xs text-obsidian/50">
+                        Format: {selectedCountry.areaCodeFormat}
+                      </p>
+                    </div>
+                  ) : null;
+                })()}
 
                 {/* Search button */}
                 <button
                   onClick={searchNumbers}
-                  disabled={loading}
+                  disabled={loading || hasExistingNumber}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surgical-600 text-white rounded-lg font-medium hover:bg-surgical-700 transition-colors disabled:opacity-50"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -254,9 +451,30 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
 
             {/* Error display */}
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800 mb-1">Purchase Failed</p>
+                    <p className="text-sm text-red-700">{error}</p>
+                    {errorDetails?.canRetry && (
+                      <button
+                        onClick={() => {
+                          setError(null);
+                          setErrorDetails(null);
+                        }}
+                        className="mt-2 text-sm font-medium text-red-600 hover:text-red-700 underline"
+                      >
+                        Try Again →
+                      </button>
+                    )}
+                    {errorDetails?.canRetry === false && (
+                      <p className="mt-2 text-sm text-red-600">
+                        Please contact support if this issue persists.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>

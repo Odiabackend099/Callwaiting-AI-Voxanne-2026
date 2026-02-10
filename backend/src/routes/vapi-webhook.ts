@@ -489,66 +489,120 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           });
         }
       } catch (summaryError: any) {
-        log.error('Vapi-Webhook', 'Failed to generate outcome/sentiment', {
+        log.error('Vapi-Webhook', 'Failed to generate outcome/sentiment - using neutral defaults', {
           error: summaryError.message,
           callId: call?.id
         });
+
+        // Fallback to neutral sentiment to prevent NULL values (SSOT compliance)
+        sentimentLabel = 'neutral';
+        sentimentScore = 0.5;
+        sentimentSummary = 'Sentiment analysis unavailable';
+        sentimentUrgency = 'low';
       }
 
-      // 3.75. Enrich caller name from contacts table (for ALL calls - both inbound and outbound)
-      let enrichedCallerName: string | null = null;
+      // ========== CONTACT LOOKUP/AUTO-CREATION (Strategic SSOT Fix 2026-02-09) ==========
+      // This happens BEFORE upsert so we have contact_id ready for foreign key
+      // Key change: Auto-create contacts for ALL inbound calls (guarantees 100% contact_id coverage)
+      let contactIdForCall: string | null = null;
 
-      // FIX 1.1 & 1.2: Removed inbound-only condition, fixed schema bug (first_name/last_name don't exist)
       if (call?.customer?.number) {
+        const phoneNumber = call.customer.number;
+
         try {
+          // Step 1: Lookup existing contact
           const { data: existingContact, error: contactError } = await supabase
             .from('contacts')
-            .select('name')  // ← FIXED: Only query existing column (contacts table has no first_name/last_name)
+            .select('id, name')
             .eq('org_id', orgId)
-            .eq('phone', call.customer.number)
+            .eq('phone', phoneNumber)
             .maybeSingle();
 
           if (contactError) {
-            log.error('Vapi-Webhook', 'Contact lookup failed during enrichment', {
+            log.error('Vapi-Webhook', 'Contact lookup failed', {
               orgId,
-              phoneNumber: call.customer.number,
+              phoneNumber,
               error: contactError.message
             });
           }
 
-          // Use contact name if available and not "Unknown Caller"
-          if (existingContact?.name && existingContact.name !== 'Unknown Caller') {
-            enrichedCallerName = existingContact.name;
+          if (existingContact) {
+            // Contact exists - use its ID
+            contactIdForCall = existingContact.id;
 
-            log.info('Vapi-Webhook', '✅ Caller name enriched from contacts', {
-              phone: call.customer.number,
-              originalName: call?.customer?.name || 'Unknown',
-              enrichedName: enrichedCallerName,
-              orgId,
-              callDirection
+            log.info('Vapi-Webhook', 'Contact found for call', {
+              contactId: existingContact.id,
+              contactName: existingContact.name,
+              phone: phoneNumber,
+              callDirection,
+              orgId
             });
-          } else {
-            log.warn('Vapi-Webhook', '⚠️ No contact match for enrichment', {
+
+          } else if (callDirection === 'inbound') {
+            // Step 2: Auto-create contact for inbound calls (USER APPROVED - Phase 1)
+            // This guarantees 100% contact_id coverage for inbound calls
+
+            // Generate fallback name (phone number if Vapi doesn't provide)
+            const fallbackName = call?.customer?.name || phoneNumber;
+
+            // Run lead scoring for new contact
+            const { scoreLead } = await import('../services/lead-scoring');
+            const leadScoring = await scoreLead(
               orgId,
-              phoneNumber: call.customer.number,
-              vapiCallerName: call?.customer?.name || 'not provided',
-              callDirection
-            });
+              artifact?.transcript || '',
+              (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
+            );
+
+            // Extract service keywords
+            const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
+
+            const { data: newContact, error: createError } = await supabase
+              .from('contacts')
+              .insert({
+                org_id: orgId,
+                phone: phoneNumber,
+                name: fallbackName,
+                lead_score: leadScoring.score,
+                lead_status: leadScoring.tier,
+                service_interests: serviceKeywords,
+                source: 'inbound-call-auto',
+                last_contacted_at: call?.endedAt || new Date().toISOString(),
+                notes: `Auto-created from inbound call ${call?.id} on ${new Date().toISOString()}. Lead score: ${leadScoring.score}/100 (${leadScoring.tier})`
+              })
+              .select('id, name')
+              .single();
+
+            if (createError) {
+              log.error('Vapi-Webhook', 'Failed to auto-create contact', {
+                error: createError.message,
+                phone: phoneNumber,
+                orgId
+              });
+              contactIdForCall = null;
+            } else {
+              contactIdForCall = newContact.id;
+
+              log.info('Vapi-Webhook', '✅ Contact auto-created from inbound call', {
+                contactId: newContact.id,
+                phone: phoneNumber,
+                name: fallbackName,
+                vapiProvidedName: !!call?.customer?.name,
+                leadScore: leadScoring.score,
+                leadTier: leadScoring.tier,
+                orgId
+              });
+            }
           }
-        } catch (enrichmentError: any) {
-          log.error('Vapi-Webhook', 'Caller name enrichment exception', {
-            error: enrichmentError.message,
-            phone: call.customer.number,
+        } catch (contactError: any) {
+          log.error('Vapi-Webhook', 'Contact lookup/creation exception', {
+            error: contactError.message,
+            phone: phoneNumber,
+            callDirection,
             orgId
           });
-          // Continue without enrichment
+          // Continue without contact_id (will use phone_number fallback in view)
         }
       }
-
-      // Fallback to Vapi caller ID if enrichment failed
-      const finalCallerName = enrichedCallerName
-        || call?.customer?.name
-        || 'Unknown Caller';
 
       // 4. Validate vapi_call_id before upsert
       // Per Supabase docs: NULL in UNIQUE conflict column bypasses uniqueness, creating duplicate rows
@@ -573,16 +627,16 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           call_direction: callDirection,  // NEW: 'inbound' or 'outbound'
           call_type: callDirection,  // For backward compatibility
 
-          // Contact linking (outbound only)
-          contact_id: callDirection === 'outbound'
-            ? (call?.customer?.contactId || null)
-            : null,
+          // ✅ UNIFIED CONTACT LINKING: Set for BOTH inbound + outbound (Strategic SSOT Fix)
+          contact_id: contactIdForCall || call?.customer?.contactId || null,
 
-          // Caller info - Enriched from contacts table
-          // Write BOTH columns to keep legacy dashboard queries working until fully migrated
-          from_number: call?.customer?.number || null,  // Legacy column (dashboard reads this)
-          phone_number: call?.customer?.number || null,  // SSOT column
-          caller_name: finalCallerName, // Use enriched name for BOTH inbound and outbound
+          // ✅ KEEP: phone_number as nullable fallback for orphaned calls
+          phone_number: call?.customer?.number || null,
+
+          // ❌ DEPRECATED COLUMNS REMOVED (2026-02-09 Strategic SSOT Fix):
+          // - from_number: Duplicate of phone_number, removed
+          // - caller_name: Frozen snapshot, replaced with calls_with_caller_names view
+          // These columns are marked deprecated in migration, will be dropped Phase 3 (March 2026)
 
           // Call metadata
           call_sid: call?.phoneCallProviderId || `vapi-${call?.id}`,
@@ -635,7 +689,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
               summary: sentimentSummary,
               urgency: sentimentUrgency
             },
-            caller_name: finalCallerName
+            // Note: Caller name now resolved from contacts table via view (Strategic SSOT Fix)
+            caller_phone: call?.customer?.number,
+            caller_name_from_vapi: call?.customer?.name || null
           }
         }, { onConflict: 'vapi_call_id', defaultToNull: false });
 
@@ -701,209 +757,68 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           wsBroadcast(orgId, { type: 'call_ended', callId: call?.id });
         } catch (e) { /* non-critical */ }
 
-        // ========== AUTOMATIC CONTACT CREATION FROM INBOUND CALL ==========
-        const phoneNumber = call?.customer?.number;
-        const callerName = call?.customer?.name;
-
-        if (phoneNumber && orgId) {
-          try {
-            // 1. Check if contact already exists
-            const { data: existingContact } = await supabase
-              .from('contacts')
-              .select('id')
-              .eq('org_id', orgId)
-              .eq('phone', phoneNumber)
-              .maybeSingle();
-
-            if (!existingContact) {
-              // 2. Import and use lead scoring service
-              const { scoreLead } = await import('../services/lead-scoring');
-              const leadScoring = await scoreLead(
-                orgId,
-                artifact?.transcript || '',
-                (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
-              );
-
-              // 3. Extract service keywords from transcript
-              const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
-
-              // FIX 1.4 (PERMANENT): ALWAYS create contact with phone number as identifier
-              // This solves the circular dependency problem:
-              // - First call: Creates contact even if Vapi doesn't send a name
-              // - Uses phone number as fallback identifier: "Caller +15551234567"
-              // - Future calls: Enrichment will find this contact and update with real name
-              // - Works for ALL organizations (new and existing) automatically
-
-              // Generate fallback name from phone number if Vapi didn't provide one
-              const contactName = (finalCallerName && finalCallerName !== 'Unknown Caller')
-                ? finalCallerName
-                : `Caller ${phoneNumber}`;  // Fallback: "Caller +15551234567"
-
-              // 4. Create new contact with intelligent name handling
-              // FIXED (2026-02-03): Use leadScoring.score (number 0-100) instead of tier (string)
-              // FIXED (2026-02-09): Always create contact (use phone number as fallback name)
-              const { error: contactError } = await supabase
-                .from('contacts')
-                .insert({
-                  org_id: orgId,
-                  name: contactName,  // FIXED: Uses phone number as fallback instead of blocking
-                  phone: phoneNumber,
-                  lead_score: leadScoring.score,  // FIXED: Was leadScoring.tier (string), now leadScoring.score (number)
-                  lead_status: leadScoring.tier,   // ADDED: Store tier in lead_status for filtering
-                  service_interests: serviceKeywords,
-                  last_contacted_at: call?.endedAt || new Date().toISOString(),
-                  notes: contactName.startsWith('Caller +')
-                    ? `Auto-created from call ${call?.id}. Name not provided by Vapi - will be enriched on next call. Lead score: ${leadScoring.score}/100 (${leadScoring.tier})`
-                    : `Auto-created from inbound call ${call?.id}. Lead score: ${leadScoring.score}/100 (${leadScoring.tier})`
-                });
-
-              if (contactError) {
-                log.error('Vapi-Webhook', 'Failed to auto-create contact', {
-                  error: contactError.message,
-                  phone: phoneNumber,
-                  orgId
-                });
-              } else {
-                log.info('Vapi-Webhook', '✅ Contact auto-created from inbound call', {
-                  phone: phoneNumber,
-                  name: contactName,
-                  vapiProvidedName: finalCallerName !== 'Unknown Caller',
-                  leadScore: leadScoring.tier,
-                  leadScoreValue: leadScoring.score,
-                  orgId
-                });
-              }
-            } else {
-              // 5. Update existing contact's last_contact_at AND enrich name if needed
-              // SELF-HEALING: If contact was created with "Caller +15551234567" and we now have a real name, update it
-              const shouldEnrichName = (finalCallerName && finalCallerName !== 'Unknown Caller');
-
-              // Get current contact to check if name needs enrichment
-              const { data: currentContact } = await supabase
-                .from('contacts')
-                .select('name')
-                .eq('id', existingContact.id)
-                .single();
-
-              const nameNeedsEnrichment = currentContact?.name?.startsWith('Caller +');
-
-              const updatePayload: any = {
-                last_contacted_at: call?.endedAt || new Date().toISOString()
-              };
-
-              // PERMANENT FIX: Enrich contact name if it's still phone-number-based and we now have a real name
-              if (shouldEnrichName && nameNeedsEnrichment) {
-                updatePayload.name = finalCallerName;
-                updatePayload.notes = `Name enriched from "${currentContact?.name}" to "${finalCallerName}" on ${new Date().toISOString()}`;
-              }
-
-              const { error: updateError } = await supabase
-                .from('contacts')
-                .update(updatePayload)
-                .eq('id', existingContact.id);
-
-              if (updateError) {
-                log.error('Vapi-Webhook', 'Failed to update contact', {
-                  error: updateError.message,
-                  contactId: existingContact.id,
-                  orgId
-                });
-              } else {
-                log.info('Vapi-Webhook', '✅ Contact updated', {
-                  contactId: existingContact.id,
-                  phone: phoneNumber,
-                  nameEnriched: shouldEnrichName && nameNeedsEnrichment,
-                  oldName: nameNeedsEnrichment ? currentContact?.name : undefined,
-                  newName: shouldEnrichName && nameNeedsEnrichment ? finalCallerName : undefined
-                });
-              }
-            }
-          } catch (contactCreationError: any) {
-            log.error('Vapi-Webhook', 'Contact creation/update failed with exception', {
-              error: contactCreationError?.message || String(contactCreationError),
-              phone: phoneNumber,
-              orgId
-            });
-            // Don't fail webhook processing if contact creation fails
-          }
-        }
-
-        // ========== LINK CONTACT_ID TO CALL RECORD (FIX: was always NULL for inbound) ==========
-        if (phoneNumber && orgId && call?.id) {
-          try {
-            const { data: linkedContact } = await supabase
-              .from('contacts')
-              .select('id')
-              .eq('org_id', orgId)
-              .eq('phone', phoneNumber)
-              .maybeSingle();
-
-            if (linkedContact?.id) {
-              await supabase.from('calls')
-                .update({ contact_id: linkedContact.id })
-                .eq('vapi_call_id', call.id);
-            }
-          } catch (linkError: any) {
-            log.error('Vapi-Webhook', 'Failed to link contact_id to call', {
-              error: linkError?.message,
-              callId: call?.id
-            });
-            // Non-critical — don't fail webhook
-          }
-        }
+        // ❌ DELETED (2026-02-09 Strategic SSOT Fix):
+        // - Contact creation logic moved BEFORE upsert (lines 504-570)
+        // - Contact_id linking logic removed (now set directly in upsert)
+        // This eliminates race conditions and redundant database queries
 
         // ========== CREATE HOT LEAD ALERT IF LEAD SCORE IS HIGH ==========
         // FIXED: Create alerts for ALL calls (not just new contacts)
         // This populates the hot_lead_alerts table for dashboard "Recent Activity"
-        try {
-          // Calculate lead scoring for this call
-          const { scoreLead } = await import('../services/lead-scoring');
-          const leadScoring = await scoreLead(
-            orgId,
-            artifact?.transcript || '',
-            (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
-          );
-          const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
+        const alertPhoneNumber = call?.customer?.number;
+        const alertCallerName = call?.customer?.name || alertPhoneNumber || 'Unknown';
 
-          // FIXED: Lowered threshold from 70 to 60, added 3-tier urgency
-          if (leadScoring.score >= 60) {
-            const { error: alertError } = await supabase
-              .from('hot_lead_alerts')
-              .insert({
-                org_id: orgId,
-                call_id: call?.id,
-                lead_name: finalCallerName,
-                lead_phone: phoneNumber,
-                service_interest: serviceKeywords.length > 0 ? serviceKeywords.join(', ') : null,
-                urgency_level: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),
-                summary: `Lead scored ${leadScoring.score}/100 from call. Interests: ${serviceKeywords.join(', ') || 'General inquiry'}`,
-                lead_score: leadScoring.score,
-                created_at: call?.endedAt || new Date().toISOString()
-              });
+        if (alertPhoneNumber) {
+          try {
+            // Calculate lead scoring for this call
+            const { scoreLead } = await import('../services/lead-scoring');
+            const leadScoring = await scoreLead(
+              orgId,
+              artifact?.transcript || '',
+              (sentimentLabel as 'positive' | 'neutral' | 'negative') || 'neutral'
+            );
+            const serviceKeywords = extractServiceKeywords(artifact?.transcript || '');
 
-            if (alertError) {
-              log.error('Vapi-Webhook', 'Failed to create hot lead alert', {
-                error: alertError.message,
-                phone: phoneNumber,
-                leadScore: leadScoring.score,
-                orgId
-              });
-            } else {
-              log.info('Vapi-Webhook', '🔥 Hot lead alert created', {
-                phone: phoneNumber,
-                leadScore: leadScoring.score,
-                urgency: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),
-                orgId
-              });
+            // FIXED: Lowered threshold from 70 to 60, added 3-tier urgency
+            if (leadScoring.score >= 60) {
+              const { error: alertError } = await supabase
+                .from('hot_lead_alerts')
+                .insert({
+                  org_id: orgId,
+                  call_id: call?.id,
+                  lead_name: alertCallerName,
+                  lead_phone: alertPhoneNumber,
+                  service_interest: serviceKeywords.length > 0 ? serviceKeywords.join(', ') : null,
+                  urgency_level: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),
+                  summary: `Lead scored ${leadScoring.score}/100 from call. Interests: ${serviceKeywords.join(', ') || 'General inquiry'}`,
+                  lead_score: leadScoring.score,
+                  created_at: call?.endedAt || new Date().toISOString()
+                });
+
+              if (alertError) {
+                log.error('Vapi-Webhook', 'Failed to create hot lead alert', {
+                  error: alertError.message,
+                  phone: alertPhoneNumber,
+                  leadScore: leadScoring.score,
+                  orgId
+                });
+              } else {
+                log.info('Vapi-Webhook', '🔥 Hot lead alert created', {
+                  phone: alertPhoneNumber,
+                  leadScore: leadScoring.score,
+                  urgency: leadScoring.score >= 80 ? 'high' : (leadScoring.score >= 70 ? 'medium' : 'low'),
+                  orgId
+                });
+              }
             }
+          } catch (alertCreationError: any) {
+            log.error('Vapi-Webhook', 'Hot lead alert creation failed with exception', {
+              error: alertCreationError?.message || String(alertCreationError),
+              phone: alertPhoneNumber,
+              orgId
+            });
+            // Don't fail webhook processing if alert creation fails
           }
-        } catch (alertCreationError: any) {
-          log.error('Vapi-Webhook', 'Hot lead alert creation failed with exception', {
-            error: alertCreationError?.message || String(alertCreationError),
-            phone: phoneNumber,
-            orgId
-          });
-          // Don't fail webhook processing if alert creation fails
         }
       }
 

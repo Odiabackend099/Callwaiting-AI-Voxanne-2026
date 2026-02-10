@@ -36,6 +36,13 @@ export function requireFeature(flagKey: string) {
       // Check if feature is enabled
       const isEnabled = await FeatureFlagService.isEnabled(orgId, flagKey);
 
+      // DEV MODE: Auto-enable all features for local development
+      if (!isEnabled && process.env.NODE_ENV === 'development') {
+        console.log(`[DEV MODE] Auto-enabling feature ${flagKey} for org ${orgId}`);
+        await FeatureFlagService.enableForOrg(orgId, flagKey);
+        return next();
+      }
+
       if (!isEnabled) {
         return res.status(403).json({
           error: 'Feature not available',

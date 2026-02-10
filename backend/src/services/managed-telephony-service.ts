@@ -18,6 +18,7 @@ import twilio from 'twilio';
 import { supabaseAdmin } from '../config/supabase';
 import { EncryptionService } from './encryption';
 import { IntegrationDecryptor } from './integration-decryptor';
+import { log as logger } from './logger';
 import { VapiClient } from './vapi-client';
 import { config } from '../config';
 import { log } from './logger';
@@ -39,6 +40,9 @@ export interface ProvisionResult {
   vapiPhoneId?: string;
   subaccountSid?: string;
   error?: string;
+  failedStep?: 'lock' | 'validation' | 'subaccount' | 'search' | 'purchase' | 'vapi_import' | 'database' | 'credential_save' | 'unknown';
+  canRetry?: boolean;
+  userMessage?: string;
 }
 
 export interface ManagedStatus {
@@ -169,6 +173,53 @@ export class ManagedTelephonyService {
   }
 
   /**
+   * Helper: Release Twilio number with exponential backoff retry
+   * Used during rollback scenarios when provisioning fails mid-flow
+   *
+   * @param phoneSid - Twilio phone number SID to release
+   * @param client - Twilio client instance
+   * @param maxRetries - Maximum retry attempts (default: 3)
+   * @returns Promise that resolves when number is released or all retries exhausted
+   */
+  private static async releaseNumberWithRetry(
+    phoneSid: string,
+    client: any,
+    maxRetries: number = 3
+  ): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await client.incomingPhoneNumbers(phoneSid).remove();
+        log.info('ManagedTelephony', 'Successfully released number during rollback', {
+          phoneSid,
+          attempt
+        });
+        return; // Success - exit early
+      } catch (err: any) {
+        log.warn('ManagedTelephony', 'Failed to release number during rollback', {
+          phoneSid,
+          attempt,
+          maxRetries,
+          error: err.message
+        });
+
+        // If not the last attempt, wait with exponential backoff
+        if (attempt < maxRetries) {
+          const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          log.info('ManagedTelephony', `Retrying number release in ${delayMs}ms`, { phoneSid });
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+
+    // Failed all retries - log critical error for manual cleanup
+    log.error('ManagedTelephony', 'Failed to release number after all retries - MANUAL CLEANUP REQUIRED', {
+      phoneSid,
+      attemptsExhausted: maxRetries,
+      action: 'Orphaned number needs manual release in Twilio console'
+    });
+  }
+
+  /**
    * One-click phone number provisioning:
    * 1. Get/create subaccount
    * 2. Search available numbers
@@ -182,6 +233,40 @@ export class ManagedTelephonyService {
     const { orgId, country, numberType = 'local', areaCode } = request;
 
     try {
+      // STEP 0: Acquire advisory lock to prevent concurrent provisioning
+      // This ensures only ONE provisioning request can run at a time per organization
+      // Prevents race conditions where two simultaneous requests try to provision numbers
+      const { data: lockAcquired, error: lockError } = await supabaseAdmin
+        .rpc('acquire_managed_telephony_provision_lock', { p_org_id: orgId });
+
+      if (lockError) {
+        logger.error('Failed to acquire provisioning lock', {
+          orgId,
+          error: lockError.message
+        });
+        return {
+          success: false,
+          error: 'Failed to acquire provisioning lock',
+          failedStep: 'lock',
+          canRetry: true,
+          userMessage: 'Unable to start provisioning. Please try again.'
+        };
+      }
+
+      if (!lockAcquired) {
+        // Another provisioning request is already in progress for this org
+        logger.warn('Provisioning lock already held', { orgId });
+        return {
+          success: false,
+          error: 'Another provisioning request is already in progress for this organization',
+          failedStep: 'lock',
+          canRetry: true,
+          userMessage: 'A number purchase is already in progress. Please wait and try again.'
+        };
+      }
+
+      logger.info('Provisioning lock acquired', { orgId });
+
       // Step 1: Get org name for subaccount friendly name
       const { data: org } = await supabaseAdmin
         .from('organizations')
@@ -190,7 +275,13 @@ export class ManagedTelephonyService {
         .single();
 
       if (!org) {
-        return { success: false, error: 'Organization not found' };
+        return {
+          success: false,
+          error: 'Organization not found',
+          failedStep: 'subaccount',
+          canRetry: false,
+          userMessage: 'Organization not found. Please contact support.'
+        };
       }
 
       // Step 2: Ensure subaccount exists
@@ -207,7 +298,13 @@ export class ManagedTelephonyService {
       } else {
         const subResult = await this.createSubaccount(orgId, org.name || 'Unnamed Org');
         if (!subResult.success || !subResult.subaccountSid) {
-          return { success: false, error: subResult.error || 'Failed to create subaccount' };
+          return {
+            success: false,
+            error: subResult.error || 'Failed to create subaccount',
+            failedStep: 'subaccount',
+            canRetry: true,
+            userMessage: 'Unable to initialize Twilio account. Please try again in a moment.'
+          };
         }
         subaccountSid = subResult.subaccountSid;
       }
@@ -221,7 +318,13 @@ export class ManagedTelephonyService {
         .single();
 
       if (!subData) {
-        return { success: false, error: 'Subaccount not found after creation' };
+        return {
+          success: false,
+          error: 'Subaccount not found after creation',
+          failedStep: 'subaccount',
+          canRetry: true,
+          userMessage: 'Account setup incomplete. Please try again or contact support.'
+        };
       }
 
       const subToken = EncryptionService.decrypt(subData.twilio_auth_token_encrypted);
@@ -236,17 +339,36 @@ export class ManagedTelephonyService {
       log.info('ManagedTelephony', 'Searching available numbers', { orgId, country, numberType, areaCode });
 
       let searchResults: any[];
-      const searchParams: any = { voiceEnabled: true, limit: 1 };
-      if (areaCode) searchParams.areaCode = areaCode;
+      try {
+        const searchParams: any = { voiceEnabled: true, limit: 1 };
+        if (areaCode) searchParams.areaCode = areaCode;
 
-      if (numberType === 'toll_free') {
-        searchResults = await subClient.availablePhoneNumbers(country).tollFree.list(searchParams);
-      } else {
-        searchResults = await subClient.availablePhoneNumbers(country).local.list(searchParams);
-      }
+        if (numberType === 'toll_free') {
+          searchResults = await subClient.availablePhoneNumbers(country).tollFree.list(searchParams);
+        } else {
+          searchResults = await subClient.availablePhoneNumbers(country).local.list(searchParams);
+        }
 
-      if (!searchResults || searchResults.length === 0) {
-        return { success: false, error: `No ${numberType} numbers available in ${country}${areaCode ? ` (area code ${areaCode})` : ''}` };
+        if (!searchResults || searchResults.length === 0) {
+          return {
+            success: false,
+            error: `No ${numberType} numbers available in ${country}${areaCode ? ` (area code ${areaCode})` : ''}`,
+            failedStep: 'search',
+            canRetry: true,
+            userMessage: areaCode
+              ? `No numbers available in area code ${areaCode}. Try a different area code.`
+              : `No ${numberType} numbers available in ${country}. Please try a different number type or contact support.`
+          };
+        }
+      } catch (searchErr: any) {
+        log.error('ManagedTelephony', 'Number search failed', { orgId, error: searchErr.message });
+        return {
+          success: false,
+          error: `Twilio search failed: ${searchErr.message}`,
+          failedStep: 'search',
+          canRetry: true,
+          userMessage: 'Unable to search for available numbers. Please try again.'
+        };
       }
 
       const selectedNumber = searchResults[0].phoneNumber;
@@ -260,7 +382,13 @@ export class ManagedTelephonyService {
         });
       } catch (buyErr: any) {
         log.error('ManagedTelephony', 'Failed to purchase number', { orgId, error: buyErr.message });
-        return { success: false, error: `Failed to purchase number: ${buyErr.message}` };
+        return {
+          success: false,
+          error: `Failed to purchase number: ${buyErr.message}`,
+          failedStep: 'purchase',
+          canRetry: true,
+          userMessage: 'The selected number could not be purchased. It may have been claimed by someone else. Please try searching again.'
+        };
       }
 
       log.info('ManagedTelephony', 'Number purchased', {
@@ -274,15 +402,15 @@ export class ManagedTelephonyService {
       let vapiCredentialId: string | null = null;
 
       try {
-        // Import number to Vapi using MASTER credentials (not subaccount)
-        // Vapi needs the master account credentials that own the phone numbers
-        const masterCreds = getMasterCredentials();
+        // Import number to Vapi using SUBACCOUNT credentials
+        // Vapi needs the credentials of the account that owns the phone number
+        // (The number was purchased under the subaccount, not the master account)
         const vapiClient = new VapiClient(config.VAPI_PRIVATE_KEY);
 
         const vapiResult = await vapiClient.importTwilioNumber({
           phoneNumber: purchasedNumber.phoneNumber,
-          twilioAccountSid: masterCreds.sid,    // ✅ Use master SID
-          twilioAuthToken: masterCreds.token,   // ✅ Use master token
+          twilioAccountSid: subaccountSid,    // ✅ Use subaccount SID
+          twilioAuthToken: subToken,           // ✅ Use subaccount token
         });
 
         vapiPhoneId = vapiResult?.id || null;
@@ -294,83 +422,93 @@ export class ManagedTelephonyService {
           number: redactPhone(purchasedNumber.phoneNumber),
         });
       } catch (vapiErr: any) {
-        // Rollback: release the purchased number
-        log.error('ManagedTelephony', 'Vapi import failed, releasing number', { orgId, error: vapiErr.message });
-        try {
-          await subClient.incomingPhoneNumbers(purchasedNumber.sid).remove();
-        } catch (releaseErr: any) {
-          log.error('ManagedTelephony', 'Failed to release number during rollback', {
-            phoneSid: purchasedNumber.sid,
-            error: releaseErr.message,
-          });
-        }
-        return { success: false, error: `Vapi registration failed: ${vapiErr.message}` };
-      }
-
-      // Step 7: Store in managed_phone_numbers
-      const { error: mnError } = await supabaseAdmin
-        .from('managed_phone_numbers')
-        .insert({
-          org_id: orgId,
-          subaccount_id: subData.id,
-          phone_number: purchasedNumber.phoneNumber,
-          twilio_phone_sid: purchasedNumber.sid,
-          country_code: country,
-          number_type: numberType,
-          vapi_phone_id: vapiPhoneId,
-          vapi_credential_id: vapiCredentialId,
-          status: 'active',
-          provisioned_at: new Date().toISOString(),
+        // CRITICAL ROLLBACK: Release the purchased number (it's not in our system yet)
+        // If Vapi import fails, we MUST release the Twilio number to avoid orphaned resources
+        log.error('ManagedTelephony', 'Vapi import failed, initiating rollback', {
+          orgId,
+          error: vapiErr.message,
+          phoneSid: purchasedNumber.sid
         });
 
-      if (mnError) {
-        log.error('ManagedTelephony', 'Failed to store managed number', { orgId, error: mnError.message });
-        // Number is purchased and in Vapi — log for manual cleanup but don't fail
+        // Use retry logic to ensure number gets released
+        await this.releaseNumberWithRetry(purchasedNumber.sid, subClient);
+
+        return {
+          success: false,
+          error: `Vapi registration failed: ${vapiErr.message}`,
+          failedStep: 'vapi_import',
+          canRetry: true,
+          userMessage: 'Unable to complete number setup. Your purchase has been cancelled. Please try again.'
+        };
       }
 
-      // Step 8: Also insert into phone_number_mapping for inbound routing
-      if (vapiPhoneId) {
-        await supabaseAdmin
-          .from('phone_number_mapping')
-          .upsert({
-            org_id: orgId,
-            inbound_phone_number: purchasedNumber.phoneNumber,
-            vapi_phone_number_id: vapiPhoneId,
-            clinic_name: org.name || 'Managed Number',
-            is_active: true,
-          }, { onConflict: 'org_id,inbound_phone_number' });
+      // Step 7 & 8: Atomic database insert (all-or-nothing transaction)
+      // This ensures managed_phone_numbers, phone_number_mapping, organizations,
+      // and agents updates all succeed or all fail together
+      log.info('ManagedTelephony', 'Executing atomic database insert', {
+        orgId,
+        phoneNumber: redactPhone(purchasedNumber.phoneNumber)
+      });
 
-        // Update outbound agent if one exists
-        const { data: outboundAgent } = await supabaseAdmin
-          .from('agents')
-          .select('id')
-          .eq('org_id', orgId)
-          .eq('role', 'outbound')
-          .maybeSingle();
+      const { data: atomicResult, error: atomicError } = await supabaseAdmin
+        .rpc('insert_managed_number_atomic', {
+          p_org_id: orgId,
+          p_subaccount_id: subData.id,
+          p_phone_number: purchasedNumber.phoneNumber,
+          p_twilio_phone_sid: purchasedNumber.sid,
+          p_vapi_phone_id: vapiPhoneId || '',
+          p_vapi_credential_id: vapiCredentialId || '',
+          p_country_code: country,
+          p_number_type: numberType,
+          p_clinic_name: org.name || 'Managed Number'
+        });
 
-        if (outboundAgent) {
-          await supabaseAdmin
-            .from('agents')
-            .update({ vapi_phone_number_id: vapiPhoneId })
-            .eq('id', outboundAgent.id);
+      if (atomicError || !atomicResult?.success) {
+        // CRITICAL: Number is purchased in Twilio AND imported to Vapi, but not in our database
+        // This is an orphaned resource that needs manual reconciliation
+        const errorMsg = atomicError?.message || atomicResult?.error || 'Unknown database error';
+        log.error('ManagedTelephony', 'CRITICAL: Atomic database insert failed - ORPHANED RESOURCE', {
+          orgId,
+          phoneNumber: purchasedNumber.phoneNumber,
+          vapiPhoneId,
+          twilioSid: purchasedNumber.sid,
+          error: errorMsg,
+          action: 'MANUAL RECONCILIATION REQUIRED: Number exists in Twilio and Vapi but not in database',
+          sqlstate: atomicResult?.sqlstate
+        });
 
-          log.info('ManagedTelephony', 'Updated outbound agent with managed number', {
-            orgId,
-            agentId: outboundAgent.id,
-            vapiPhoneId,
-          });
-        }
+        // Return error to user (number is not fully provisioned)
+        return {
+          success: false,
+          error: 'Database error during provisioning',
+          failedStep: 'database',
+          canRetry: false,
+          userMessage: 'An error occurred during setup. Support has been notified and will complete your number provisioning.'
+        };
       }
+
+      log.info('ManagedTelephony', 'Atomic database insert succeeded', {
+        orgId,
+        managedNumberId: atomicResult.managed_number_id,
+        outboundAgentUpdated: atomicResult.outbound_agent_updated
+      });
 
       // Step 9: Save via single-slot gate (UPSERT + mutual exclusion + Vapi credential sync)
+      //         ALSO saves to org_credentials for unified agent config dropdown
       try {
         await IntegrationDecryptor.saveTwilioCredential(orgId, {
           accountSid: subaccountSid,
           authToken: subToken,
           phoneNumber: purchasedNumber.phoneNumber,
           source: 'managed',
+          vapiPhoneId: vapiPhoneId || undefined,
+          vapiCredentialId: vapiCredentialId || undefined,
         });
-        log.info('ManagedTelephony', 'Single-slot credential saved', { orgId });
+        log.info('ManagedTelephony', 'Single-slot credential saved to org_credentials', {
+          orgId,
+          phoneNumber: purchasedNumber.phoneNumber,
+          vapiPhoneId: vapiPhoneId || 'not_set'
+        });
       } catch (singleSlotErr: any) {
         // Non-fatal: number is already purchased and in Vapi. Log for review.
         log.error('ManagedTelephony', 'Single-slot save failed (non-fatal)', {
@@ -386,8 +524,19 @@ export class ManagedTelephonyService {
         subaccountSid,
       };
     } catch (err: any) {
-      log.error('ManagedTelephony', 'Provisioning failed', { orgId, error: err.message });
-      return { success: false, error: err.message };
+      log.error('ManagedTelephony', 'Provisioning failed (unexpected error)', {
+        orgId,
+        error: err.message,
+        stack: err.stack,
+        name: err.name
+      });
+      return {
+        success: false,
+        error: err.message || 'Unexpected error during provisioning',
+        failedStep: 'unknown',
+        canRetry: true,
+        userMessage: 'An unexpected error occurred. Please try again or contact support.'
+      };
     }
   }
 
@@ -589,19 +738,7 @@ export class ManagedTelephonyService {
   }): Promise<Array<{ phoneNumber: string; locality?: string; region?: string }>> {
     const { orgId, country, areaCode, numberType = 'local', limit = 5 } = request;
 
-    // Get subaccount (or use master for search)
-    const { data: subData } = await supabaseAdmin
-      .from('twilio_subaccounts')
-      .select('twilio_account_sid')
-      .eq('org_id', orgId)
-      .eq('status', 'active')
-      .maybeSingle();
-
-    const client = subData
-      ? twilio(process.env.TWILIO_MASTER_ACCOUNT_SID!, process.env.TWILIO_MASTER_AUTH_TOKEN!, {
-          accountSid: subData.twilio_account_sid,
-        })
-      : getMasterClient();
+    const client = getMasterClient();
 
     const searchParams: any = { voiceEnabled: true, limit };
     if (areaCode) searchParams.areaCode = areaCode;
