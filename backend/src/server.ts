@@ -64,14 +64,14 @@ import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; 
 import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
 import { bookDemoRouter } from './routes/book-demo';
 import integrationsStatusRouter from './routes/integrations-status'; // default export
-import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup';
+// import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup'; // DISABLED: orphaned_recordings table deleted
 import { scheduleTelephonyVerificationCleanup } from './jobs/telephony-verification-cleanup';
 import { scheduleWebhookEventsCleanup } from './jobs/webhook-events-cleanup';
-import { scheduleRecordingUploadRetry } from './services/recording-upload-retry';
+// import { scheduleRecordingUploadRetry } from './services/recording-upload-retry'; // DISABLED: recording_upload_queue table deleted
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
-import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
-// import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker'; // DISABLED: table deleted in 20260209 migration
+// import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor'; // DISABLED: recording_upload_metrics table deleted
+// import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker'; // DISABLED: recording_upload_queue table deleted
 import gdprCleanupModule from './jobs/gdpr-cleanup';
 import { scheduleVapiReconciliation, shutdownReconciliationWorker } from './jobs/vapi-reconciliation-worker';
 import escalationRulesRouter from './routes/escalation-rules'; // default export
@@ -764,12 +764,14 @@ if (process.env.NODE_ENV !== 'test') {
   `);
 
     // Schedule background jobs
-    try {
-      scheduleOrphanCleanup();
-      console.log('Orphan recording cleanup job scheduled');
-    } catch (error: any) {
-      console.warn('Failed to schedule orphan cleanup job:', error.message);
-    }
+
+    // DISABLED: orphaned_recordings table deleted in migration 20260209_delete_empty_tables_phase1.sql
+    // try {
+    //   scheduleOrphanCleanup();
+    //   console.log('Orphan recording cleanup job scheduled');
+    // } catch (error: any) {
+    //   console.warn('Failed to schedule orphan cleanup job:', error.message);
+    // }
 
     try {
       scheduleTelephonyVerificationCleanup();
@@ -785,19 +787,21 @@ if (process.env.NODE_ENV !== 'test') {
       console.warn('Failed to schedule webhook events cleanup job:', error.message);
     }
 
-    try {
-      scheduleRecordingUploadRetry();
-      console.log('Recording upload retry job scheduled');
-    } catch (error: any) {
-      console.warn('Failed to schedule recording upload retry job:', error.message);
-    }
+    // DISABLED: recording_upload_queue table deleted in migration 20260209_delete_empty_tables_phase1.sql
+    // try {
+    //   scheduleRecordingUploadRetry();
+    //   console.log('Recording upload retry job scheduled');
+    // } catch (error: any) {
+    //   console.warn('Failed to schedule recording upload retry job:', error.message);
+    // }
 
-    try {
-      scheduleRecordingMetricsMonitor();
-      console.log('Recording metrics monitor job scheduled');
-    } catch (error: any) {
-      console.warn('Failed to schedule recording metrics monitor job:', error.message);
-    }
+    // DISABLED: recording_upload_metrics table deleted in migration 20260209_delete_empty_tables_phase1.sql
+    // try {
+    //   scheduleRecordingMetricsMonitor();
+    //   console.log('Recording metrics monitor job scheduled');
+    // } catch (error: any) {
+    //   console.warn('Failed to schedule recording metrics monitor job:', error.message);
+    // }
 
     // DISABLED: recording_upload_queue table deleted in migration 20260209_delete_empty_tables_phase1.sql
     // Feature was abandoned (empty table). Re-enable if recording upload feature is reimplemented.
