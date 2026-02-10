@@ -71,7 +71,7 @@ import { scheduleRecordingUploadRetry } from './services/recording-upload-retry'
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
 import { scheduleRecordingMetricsMonitor } from './jobs/recording-metrics-monitor';
-import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker';
+// import { scheduleRecordingQueueWorker } from './jobs/recording-queue-worker'; // DISABLED: table deleted in 20260209 migration
 import gdprCleanupModule from './jobs/gdpr-cleanup';
 import { scheduleVapiReconciliation, shutdownReconciliationWorker } from './jobs/vapi-reconciliation-worker';
 import escalationRulesRouter from './routes/escalation-rules'; // default export
@@ -799,12 +799,14 @@ if (process.env.NODE_ENV !== 'test') {
       console.warn('Failed to schedule recording metrics monitor job:', error.message);
     }
 
-    try {
-      scheduleRecordingQueueWorker();
-      console.log('Recording queue worker job scheduled');
-    } catch (error: any) {
-      console.warn('Failed to schedule recording queue worker job:', error.message);
-    }
+    // DISABLED: recording_upload_queue table deleted in migration 20260209_delete_empty_tables_phase1.sql
+    // Feature was abandoned (empty table). Re-enable if recording upload feature is reimplemented.
+    // try {
+    //   scheduleRecordingQueueWorker();
+    //   console.log('Recording queue worker job scheduled');
+    // } catch (error: any) {
+    //   console.warn('Failed to schedule recording queue worker job:', error.message);
+    // }
 
     try {
       gdprCleanupModule.scheduleGDPRCleanup();
