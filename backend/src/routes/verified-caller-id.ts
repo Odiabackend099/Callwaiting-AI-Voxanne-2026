@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateRequest } from '../middleware/auth';
 import { IntegrationDecryptor } from '../services/integration-decryptor';
-import logger from '../utils/logger';
+import { log } from '../services/logger';
 
 const router = Router();
 
@@ -29,7 +29,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
       return res.status(400).json({ error: 'Phone number must be in E.164 format (e.g., +15551234567)' });
     }
 
-    logger.info('Initiating caller ID verification', { orgId, phoneNumber });
+    log.info('Initiating caller ID verification', { orgId, phoneNumber });
 
     // Get Twilio client for this organization
     const twilioClient = await IntegrationDecryptor.getTwilioClient(orgId);
@@ -54,7 +54,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
       .maybeSingle();
 
     if (selectError) {
-      logger.error('Error checking existing verification', selectError);
+      log.error('Error checking existing verification', selectError);
     }
 
     if (existingRecord) {
@@ -71,7 +71,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
         .eq('id', existingRecord.id);
 
       if (updateError) {
-        logger.error('Error updating verification record', updateError);
+        log.error('Error updating verification record', updateError);
         return res.status(500).json({ error: 'Failed to update verification record' });
       }
     } else {
@@ -88,12 +88,12 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
         });
 
       if (insertError) {
-        logger.error('Error creating verification record', insertError);
+        log.error('Error creating verification record', insertError);
         return res.status(500).json({ error: 'Failed to create verification record' });
       }
     }
 
-    logger.info('Verification initiated successfully', { orgId, phoneNumber, sid: validation.sid });
+    log.info('Verification initiated successfully', { orgId, phoneNumber, sid: validation.sid });
 
     res.json({
       success: true,
@@ -102,7 +102,7 @@ router.post('/verify', authenticateRequest, async (req: Request, res: Response) 
     });
 
   } catch (error: any) {
-    logger.error('Error in caller ID verification', error);
+    log.error('Error in caller ID verification', error);
     res.status(500).json({ error: error.message || 'Verification failed' });
   }
 });
@@ -120,7 +120,7 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
       return res.status(400).json({ error: 'Phone number and verification code are required' });
     }
 
-    logger.info('Confirming caller ID verification', { orgId, phoneNumber });
+    log.info('Confirming caller ID verification', { orgId, phoneNumber });
 
     // Get verification record
     const { data: record, error: selectError } = await supabase
@@ -132,13 +132,13 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
       .maybeSingle();
 
     if (selectError || !record) {
-      logger.error('Verification record not found', { orgId, phoneNumber, selectError });
+      log.error('Verification record not found', { orgId, phoneNumber, selectError });
       return res.status(404).json({ error: 'Verification record not found. Please request a new verification code.' });
     }
 
     // Check if code matches
     if (record.verification_code !== code) {
-      logger.warn('Invalid verification code', { orgId, phoneNumber });
+      log.warn('Invalid verification code', { orgId, phoneNumber });
 
       // Mark as failed
       await supabase
@@ -164,11 +164,11 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
       .eq('id', record.id);
 
     if (updateError) {
-      logger.error('Error updating verification status', updateError);
+      log.error('Error updating verification status', updateError);
       return res.status(500).json({ error: 'Failed to confirm verification' });
     }
 
-    logger.info('Caller ID verified successfully', { orgId, phoneNumber });
+    log.info('Caller ID verified successfully', { orgId, phoneNumber });
 
     res.json({
       success: true,
@@ -178,7 +178,7 @@ router.post('/confirm', authenticateRequest, async (req: Request, res: Response)
     });
 
   } catch (error: any) {
-    logger.error('Error confirming verification', error);
+    log.error('Error confirming verification', error);
     res.status(500).json({ error: error.message || 'Confirmation failed' });
   }
 });
@@ -198,7 +198,7 @@ router.get('/list', authenticateRequest, async (req: Request, res: Response) => 
       .order('verified_at', { ascending: false });
 
     if (error) {
-      logger.error('Error fetching verified numbers', error);
+      log.error('Error fetching verified numbers', error);
       return res.status(500).json({ error: 'Failed to fetch verified numbers' });
     }
 
@@ -208,7 +208,7 @@ router.get('/list', authenticateRequest, async (req: Request, res: Response) => 
     });
 
   } catch (error: any) {
-    logger.error('Error listing verified numbers', error);
+    log.error('Error listing verified numbers', error);
     res.status(500).json({ error: error.message || 'Failed to list numbers' });
   }
 });
@@ -229,16 +229,16 @@ router.delete('/:id', authenticateRequest, async (req: Request, res: Response) =
       .eq('org_id', orgId); // Security: only delete own org's numbers
 
     if (error) {
-      logger.error('Error deleting verified number', error);
+      log.error('Error deleting verified number', error);
       return res.status(500).json({ error: 'Failed to delete verified number' });
     }
 
-    logger.info('Verified caller ID deleted', { orgId, id });
+    log.info('Verified caller ID deleted', { orgId, id });
 
     res.json({ success: true, message: 'Verified number removed' });
 
   } catch (error: any) {
-    logger.error('Error deleting verified number', error);
+    log.error('Error deleting verified number', error);
     res.status(500).json({ error: error.message || 'Deletion failed' });
   }
 });
