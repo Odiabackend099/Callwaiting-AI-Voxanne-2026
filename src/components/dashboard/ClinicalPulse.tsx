@@ -39,14 +39,14 @@ export default function ClinicalPulse() {
     // Error state display
     if (error) {
         return (
-            <div className="bg-white rounded-2xl p-6 mb-4 border border-[#0A0E27]/20 shadow-md">
-                <div className="flex items-center gap-2 text-[#0A0E27] mb-4">
+            <div className="bg-white rounded-2xl p-6 mb-4 border border-obsidian/20 shadow-md">
+                <div className="flex items-center gap-2 text-obsidian mb-4">
                     <AlertCircle className="w-5 h-5" />
                     <p className="font-semibold">Error loading dashboard stats: {error.message || 'Unknown error'}</p>
                 </div>
                 <button
                     onClick={() => mutate()}
-                    className="px-4 py-2.5 text-white font-medium bg-[#0000FF] hover:scale-105 active:scale-100 rounded-lg transition-all shadow-lg shadow-[#0000FF]/20 hover:shadow-xl hover:shadow-[#0000FF]/30 focus:outline-none focus:ring-2 focus:ring-[#0000FF]/50 focus:ring-offset-2"
+                    className="px-4 py-2.5 text-white font-medium bg-surgical-600 hover:scale-105 active:scale-100 rounded-xl transition-all shadow-lg shadow-surgical-600/20 hover:shadow-xl hover:shadow-surgical-600/30 focus:outline-none focus:ring-2 focus:ring-surgical-600/50 focus:ring-offset-2"
                 >
                     Retry
                 </button>
@@ -64,22 +64,22 @@ export default function ClinicalPulse() {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Metric Card 1: Total Volume */}
-            <div className="bg-white rounded-2xl p-6 relative overflow-hidden group border border-[#AACCFF] shadow-md shadow-[#3366FF]/5 hover:shadow-lg hover:shadow-[#3366FF]/10 hover:-translate-y-0.5 transition-all duration-200">
+            <div className="bg-white rounded-2xl p-6 relative overflow-hidden group border border-surgical-200 shadow-md shadow-surgical-500/5 hover:shadow-lg hover:shadow-surgical-500/10 hover:-translate-y-0.5 transition-all duration-200">
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-15 transition-opacity">
-                    <Phone className="w-24 h-24 text-[#0000FF] transform rotate-12 translate-x-4 -translate-y-4" />
+                    <Phone className="w-24 h-24 text-surgical-600 transform rotate-12 translate-x-4 -translate-y-4" />
                 </div>
                 <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-4">
-                        <div className="p-2 rounded-lg bg-[#0000FF]/10 text-[#0000FF]">
+                        <div className="p-2 rounded-lg bg-surgical-600/10 text-surgical-600">
                             <Phone className="w-5 h-5" />
                         </div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-[#0A0E27]/60">Total Volume</span>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-obsidian/60">Total Volume</span>
                     </div>
-                    <h3 className="text-4xl font-bold text-[#0A0E27] tracking-tight mb-2">
-                        {isLoading ? <span className="animate-pulse bg-[#AACCFF]/30 rounded h-10 w-20 inline-block" /> : safeStats.total_calls}
+                    <h3 className="text-4xl font-bold text-obsidian tracking-tight mb-2">
+                        {isLoading ? <span className="animate-pulse bg-surgical-200/30 rounded h-10 w-20 inline-block" /> : safeStats.total_calls}
                     </h3>
-                    <div className="flex items-center gap-2 text-xs font-medium text-[#0A0E27]/60 mt-3">
-                        <span className="text-[#0000FF] bg-[#0000FF]/10 px-2 py-1 rounded-full font-semibold border border-[#0000FF]/20">
+                    <div className="flex items-center gap-2 text-xs font-medium text-obsidian/60 mt-3">
+                        <span className="text-surgical-600 bg-surgical-600/10 px-2 py-1 rounded-full font-semibold border border-surgical-600/20">
                             {safeStats.total_calls > 0 ? Math.round((safeStats.inbound_calls / safeStats.total_calls) * 100) : 0}% Inbound
                         </span>
                     </div>
@@ -88,22 +88,22 @@ export default function ClinicalPulse() {
 
 
             {/* Metric Card 2: Avg Duration */}
-            <div className="bg-white rounded-2xl p-6 relative overflow-hidden group border border-[#AACCFF] shadow-md shadow-[#3366FF]/5 hover:shadow-lg hover:shadow-[#3366FF]/10 hover:-translate-y-0.5 transition-all duration-200">
+            <div className="bg-white rounded-2xl p-6 relative overflow-hidden group border border-surgical-200 shadow-md shadow-surgical-500/5 hover:shadow-lg hover:shadow-surgical-500/10 hover:-translate-y-0.5 transition-all duration-200">
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-15 transition-opacity">
-                    <Clock className="w-24 h-24 text-[#3366FF] transform rotate-12 translate-x-4 -translate-y-4" />
+                    <Clock className="w-24 h-24 text-surgical-500 transform rotate-12 translate-x-4 -translate-y-4" />
                 </div>
                 <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-4">
-                        <div className="p-2 rounded-lg bg-[#3366FF]/10 text-[#3366FF]">
+                        <div className="p-2 rounded-lg bg-surgical-500/10 text-surgical-500">
                             <Clock className="w-5 h-5" />
                         </div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-[#0A0E27]/60">Avg Duration</span>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-obsidian/60">Avg Duration</span>
                     </div>
-                    <h3 className="text-4xl font-bold text-[#0A0E27] tracking-tight mb-2">
-                        {isLoading ? <span className="animate-pulse bg-[#AACCFF]/30 rounded h-10 w-20 inline-block" /> : formatDuration(safeStats.avg_duration_seconds)}
+                    <h3 className="text-4xl font-bold text-obsidian tracking-tight mb-2">
+                        {isLoading ? <span className="animate-pulse bg-surgical-200/30 rounded h-10 w-20 inline-block" /> : formatDuration(safeStats.avg_duration_seconds)}
                     </h3>
-                    <div className="flex items-center gap-2 text-xs font-medium text-[#0A0E27]/60 mt-3">
-                        <span className="text-[#3366FF] bg-[#3366FF]/10 px-2 py-1 rounded-full font-semibold border border-[#3366FF]/20">
+                    <div className="flex items-center gap-2 text-xs font-medium text-obsidian/60 mt-3">
+                        <span className="text-surgical-500 bg-surgical-500/10 px-2 py-1 rounded-full font-semibold border border-surgical-500/20">
                             Handle Time
                         </span>
                     </div>

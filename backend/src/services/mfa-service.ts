@@ -1,11 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
+import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Security: bcrypt work factor for recovery code hashing
+const RECOVERY_CODE_SALT_ROUNDS = 12;
 
 export class MFAService {
   /**
@@ -41,38 +46,86 @@ export class MFAService {
   }
 
   /**
-   * Generate recovery codes
+   * Generate recovery codes and store hashed versions in database
+   * SECURITY: Uses bcrypt one-way hashing (NOT reversible Base64 encoding)
+   * @returns Array of plaintext recovery codes to display to user ONCE
    */
-  static generateRecoveryCodes(count: number = 10): string[] {
+  static async generateRecoveryCodes(userId: string, count: number = 10): Promise<string[]> {
     const codes: string[] = [];
+
     for (let i = 0; i < count; i++) {
-      // Generate 8-character alphanumeric code
-      const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+      // Generate cryptographically secure random 16-character hex code
+      const code = crypto.randomBytes(8).toString('hex');
       codes.push(code);
+
+      // Hash with bcrypt (irreversible, one-way hashing)
+      const hashedCode = await bcrypt.hash(code, RECOVERY_CODE_SALT_ROUNDS);
+
+      // Store hash in database (NOT the plaintext code)
+      const { error } = await supabase.from('auth.mfa_factors').insert({
+        user_id: userId,
+        factor_type: 'recovery_code',
+        secret: hashedCode,
+        status: 'unverified',
+      });
+
+      if (error) {
+        throw new Error(`Failed to store recovery code: ${error.message}`);
+      }
     }
-    return codes;
+
+    return codes; // Return plaintext codes to user ONCE for saving
   }
 
   /**
-   * Hash recovery codes for storage
-   */
-  static async hashRecoveryCodes(codes: string[]): Promise<string[]> {
-    // In production, use bcrypt or similar
-    // For now, simple hash (should be replaced with proper hashing)
-    return codes.map(code => Buffer.from(code).toString('base64'));
-  }
-
-  /**
-   * Verify recovery code
+   * Verify recovery code against stored bcrypt hash
+   * SECURITY: Uses bcrypt.compare() for timing-safe comparison
+   * @returns true if code matches and marks it as verified (single-use)
    */
   static async verifyRecoveryCode(
     userId: string,
     code: string
   ): Promise<boolean> {
-    // This would check against stored hashed recovery codes
-    // Implementation depends on where recovery codes are stored
-    // For now, return false (to be implemented with proper storage)
-    return false;
+    // Fetch all unverified recovery codes for this user
+    const { data: factors, error } = await supabase
+      .from('auth.mfa_factors')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('factor_type', 'recovery_code')
+      .eq('status', 'unverified');
+
+    if (error || !factors || factors.length === 0) {
+      return false;
+    }
+
+    // Compare input code against each stored bcrypt hash
+    for (const factor of factors) {
+      const isMatch = await bcrypt.compare(code, factor.secret);
+
+      if (isMatch) {
+        // Mark this specific code as verified (single-use enforcement)
+        const { error: updateError } = await supabase
+          .from('auth.mfa_factors')
+          .update({ status: 'verified' })
+          .eq('id', factor.id);
+
+        if (updateError) {
+          throw new Error(`Failed to mark recovery code as used: ${updateError.message}`);
+        }
+
+        return true;
+      }
+    }
+
+    return false; // No codes matched
+  }
+
+  /**
+   * DEPRECATED: Use generateRecoveryCodes() instead
+   * This function was vulnerable (used Base64 encoding instead of hashing)
+   */
+  static async hashRecoveryCodes(codes: string[]): Promise<string[]> {
+    throw new Error('DEPRECATED: hashRecoveryCodes() is insecure. Use generateRecoveryCodes() with bcrypt hashing.');
   }
 
   /**

@@ -45,11 +45,11 @@ function getToastStyles(type: Toast['type']) {
     case 'info':
     default:
       return {
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
-        textColor: 'text-blue-900',
-        icon: <Info className="w-5 h-5 text-blue-600" />,
-        accent: 'bg-blue-600'
+        bgColor: 'bg-surgical-50',
+        borderColor: 'border-surgical-200',
+        textColor: 'text-surgical-900',
+        icon: <Info className="w-5 h-5 text-surgical-600" />,
+        accent: 'bg-surgical-600'
       };
   }
 }
@@ -74,7 +74,7 @@ function ToastItem({
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 100, scale: 0.9 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className={`w-full max-w-sm ${styles.bgColor} ${styles.borderColor} border rounded-lg shadow-lg p-4 flex gap-3 items-start`}
+      className={`w-full max-w-sm ${styles.bgColor} ${styles.borderColor} border rounded-xl shadow-lg p-4 flex gap-3 items-start`}
     >
       <div className="flex-shrink-0 mt-0.5">{styles.icon}</div>
       <div className="flex-1 min-w-0">

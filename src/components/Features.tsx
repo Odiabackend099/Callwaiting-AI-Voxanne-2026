@@ -18,7 +18,7 @@ const features = [
         description: "Analyze call sentiment and urgency to prioritize critical cases.",
         icon: BarChart3,
         colSpan: "lg:col-span-1",
-        bg: "bg-slate-50",
+        bg: "bg-surgical-50",
         delay: 0.1,
     },
     {
@@ -26,7 +26,7 @@ const features = [
         description: "Never miss a call. Handle after-hours inquiries with clinical precision.",
         icon: Zap,
         colSpan: "lg:col-span-1",
-        bg: "bg-slate-50",
+        bg: "bg-surgical-50",
         delay: 0.2,
     },
     {
@@ -46,11 +46,11 @@ export default function Features() {
             <div className="max-w-7xl mx-auto px-6">
                 <FadeIn>
                     <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-4xl font-bold text-navy-900 tracking-tight mb-4">
+                        <h2 className="text-4xl font-bold text-obsidian tracking-tight mb-4">
                             Everything your front desk does. <br />
                             <span className="text-surgical-600">Just faster.</span>
                         </h2>
-                        <p className="text-lg text-slate-600">
+                        <p className="text-lg text-obsidian/70">
                             Voxanne handles the repetitive tasks so your staff can focus on patient care.
                         </p>
                     </div>
@@ -61,14 +61,14 @@ export default function Features() {
                         <FadeIn
                             key={feature.title}
                             delay={feature.delay}
-                            className={`${feature.colSpan} group relative overflow-hidden rounded-3xl border border-slate-100 p-8 shadow-sm hover:shadow-md transition-shadow duration-300 ${feature.bg}`}
+                            className={`${feature.colSpan} group relative overflow-hidden rounded-3xl border border-surgical-100 p-8 shadow-sm hover:shadow-md transition-shadow duration-300 ${feature.bg}`}
                         >
                             <div className="h-12 w-12 rounded-2xl bg-surgical-50 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <feature.icon className="h-6 w-6 text-surgical-600" />
                             </div>
 
-                            <h3 className="text-xl font-bold text-navy-900 mb-3">{feature.title}</h3>
-                            <p className="text-slate-600 leading-relaxed mb-6">{feature.description}</p>
+                            <h3 className="text-xl font-bold text-obsidian mb-3">{feature.title}</h3>
+                            <p className="text-obsidian/70 leading-relaxed mb-6">{feature.description}</p>
 
                             {feature.badges && (
                                 <div className="flex gap-3">

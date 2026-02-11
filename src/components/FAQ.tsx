@@ -49,10 +49,10 @@ export default function FAQ() {
             <div className="max-w-3xl mx-auto px-6">
                 <FadeIn>
                     <div className="text-center mb-16">
-                        <h2 className="text-3xl font-bold text-navy-900 tracking-tight mb-4">
+                        <h2 className="text-3xl font-bold text-obsidian tracking-tight mb-4">
                             Frequently Asked Questions
                         </h2>
-                        <p className="text-lg text-slate-600">
+                        <p className="text-lg text-obsidian/70">
                             Everything you need to know about Voxanne AI.
                         </p>
                     </div>
@@ -62,10 +62,10 @@ export default function FAQ() {
                     <Accordion type="single" collapsible className="w-full">
                         {faqs.map((faq, index) => (
                             <AccordionItem key={index} value={`item-${index}`}>
-                                <AccordionTrigger className="text-left text-lg font-medium text-navy-900 hover:text-surgical-600">
+                                <AccordionTrigger className="text-left text-lg font-medium text-obsidian hover:text-surgical-600">
                                     {faq.question}
                                 </AccordionTrigger>
-                                <AccordionContent className="text-slate-600 leading-relaxed">
+                                <AccordionContent className="text-obsidian/70 leading-relaxed">
                                     {faq.answer}
                                 </AccordionContent>
                             </AccordionItem>

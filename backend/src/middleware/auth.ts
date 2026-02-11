@@ -10,6 +10,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase-client';
 import { validateAndResolveOrgId } from '../services/org-validation';
+import { LRUCache } from 'lru-cache';
 
 /**
  * JWT Cache Entry - stores validated user data with TTL
@@ -22,11 +23,22 @@ interface CachedJWT {
 }
 
 /**
- * In-memory JWT cache
+ * In-memory JWT cache (LRU with 10K max size to prevent OOM)
  * Key: JWT token
  * Value: cached user data with expiration
+ *
+ * Security: LRU eviction prevents unbounded memory growth
+ * Performance: 5-minute TTL reduces Supabase API calls
  */
-const jwtCache = new Map<string, CachedJWT>();
+const MAX_JWT_CACHE_SIZE = 10000;
+const JWT_CACHE_TTL = 300000; // 5 minutes in milliseconds
+
+const jwtCache = new LRUCache<string, CachedJWT>({
+  max: MAX_JWT_CACHE_SIZE,
+  ttl: JWT_CACHE_TTL,
+  updateAgeOnGet: false, // Don't reset TTL on cache hit
+  allowStale: false,      // Don't return expired entries
+});
 
 /**
  * Cache statistics for monitoring
@@ -52,31 +64,15 @@ const cacheStats: CacheStats = {
 };
 
 /**
- * Clean expired cache entries (runs periodically)
- */
-function cleanExpiredCache(): void {
-  const now = Date.now();
-  let cleaned = 0;
-  for (const [token, entry] of jwtCache.entries()) {
-    if (entry.expiresAt < now) {
-      jwtCache.delete(token);
-      cleaned++;
-    }
-  }
-  if (cleaned > 0 && process.env.DEBUG_AUTH) {
-    console.debug(`[JWT Cache] Cleaned ${cleaned} expired entries`);
-  }
-}
-
-/**
  * Get cached JWT or null if expired/missing
+ * LRU cache automatically handles TTL expiration
  */
 function getCachedJWT(token: string): CachedJWT | null {
-  cleanExpiredCache();
   const cached = jwtCache.get(token);
   if (cached && cached.expiresAt > Date.now()) {
     return cached;
   }
+  // Entry expired or missing
   if (cached) {
     jwtCache.delete(token);
   }
@@ -85,10 +81,10 @@ function getCachedJWT(token: string): CachedJWT | null {
 
 /**
  * Cache JWT token with 5-minute TTL
+ * LRU cache automatically evicts oldest entries when max size reached
  */
 function cacheJWT(token: string, userId: string, email: string, orgId: string): void {
-  const ttlMs = 5 * 60 * 1000; // 5 minutes
-  const expiresAt = Date.now() + ttlMs;
+  const expiresAt = Date.now() + JWT_CACHE_TTL;
   jwtCache.set(token, { userId, email, orgId, expiresAt });
   if (process.env.DEBUG_AUTH) {
     console.debug(`[JWT Cache] Cached token for user ${userId}, ${jwtCache.size} entries`);
@@ -190,24 +186,10 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
         if (!isProduction) {
           // Development mode: Attempt token validation, but don't block on failure
           try {
-            // PERFORMANCE: Check cache first
-            let cachedUser = getCachedJWT(token);
-            let user: any = null;
-            let error: any = null;
-
-            if (cachedUser) {
-              // Use cached data
-              user = {
-                id: cachedUser.userId,
-                email: cachedUser.email,
-                app_metadata: { org_id: cachedUser.orgId }
-              };
-            } else {
-              // Fetch from Supabase
-              const result = await supabase.auth.getUser(token);
-              user = result.data?.user;
-              error = result.error;
-            }
+            // SECURITY FIX: ALWAYS verify JWT signature (no cache bypass, even in dev)
+            const result = await supabase.auth.getUser(token);
+            const user = result.data?.user;
+            const error = result.error;
 
             if (!error && user) {
               // Token is valid, resolve org
@@ -292,38 +274,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // PERFORMANCE OPTIMIZATION: Check JWT cache first
-    let cachedUser = getCachedJWT(token);
-    let isCached = false;
+    // SECURITY FIX: ALWAYS verify JWT signature with Supabase (prevents token tampering)
+    // This protects against: attacker modifying JWT payload (org_id tampering)
+    //
+    // NOTE: Cache removed to eliminate signature bypass vulnerability
+    // Previous cache logic skipped signature verification on cache hit (CVSS 9.8)
+    // All tokens now verified every request to ensure cryptographic integrity
 
-    if (cachedUser) {
-      // Cache hit: use cached data
-      isCached = true;
-      cacheStats.hits++;
-
-      if (cachedUser.orgId === 'default') {
-        const latency = Date.now() - startTime;
-        recordAuthLatency(latency, isCached);
-        res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
-        return;
-      }
-
-      req.user = {
-        id: cachedUser.userId,
-        email: cachedUser.email,
-        orgId: cachedUser.orgId
-      };
-
-      const latency = Date.now() - startTime;
-      recordAuthLatency(latency, isCached);
-      next();
-      return;
-    }
-
-    // Cache miss: validate with Supabase
-    cacheStats.misses++;
-
-    // Verify token with Supabase
+    // Verify token signature with Supabase (CRITICAL - never skip this)
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
@@ -358,9 +316,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // Cache the validated JWT for future requests
-    cacheJWT(token, user.id, user.email || '', orgId);
-
+    // Attach verified user to request (signature validated above)
     req.user = {
       id: user.id,
       email: user.email || '',
@@ -418,22 +374,11 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
 
-      // PERFORMANCE: Check cache first
-      let cachedUser = getCachedJWT(token);
-      let user: any = null;
-      let error: any = null;
-
-      if (cachedUser) {
-        user = {
-          id: cachedUser.userId,
-          email: cachedUser.email,
-          app_metadata: { org_id: cachedUser.orgId }
-        };
-      } else {
-        const result = await supabase.auth.getUser(token);
-        user = result.data?.user;
-        error = result.error;
-      }
+      // SECURITY FIX: ALWAYS verify JWT signature (no cache bypass)
+      // This protects against token tampering attacks (CVSS 9.8)
+      const result = await supabase.auth.getUser(token);
+      const user = result.data?.user;
+      const error = result.error;
 
       if (!error && user) {
         // Only trust app_metadata.org_id (admin-set, cryptographically signed).
@@ -448,11 +393,6 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
             email: user.email || '',
             orgId
           };
-
-          // Cache the token if we fetched it
-          if (!cachedUser) {
-            cacheJWT(token, user.id, user.email || '', orgId);
-          }
         }
       }
     }

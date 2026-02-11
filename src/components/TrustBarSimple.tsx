@@ -14,10 +14,10 @@ export function TrustBarSimple() {
     return (
         <section className="bg-white py-12 border-y border-slate-100 overflow-hidden">
             <div className="max-w-7xl mx-auto px-6 mb-8 text-center">
-                <h2 className="text-2xl font-bold text-deep-obsidian mb-2">
+                <h2 className="text-2xl font-bold text-obsidian mb-2">
                     Trusted Integrations
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-obsidian/60">
                     Seamlessly connects with the tools you already use
                 </p>
             </div>
@@ -43,7 +43,7 @@ export function TrustBarSimple() {
                                         className="object-contain opacity-70 group-hover:opacity-100 transition-all duration-300"
                                     />
                                 </div>
-                                <span className="text-sm font-semibold text-slate-400 group-hover:text-deep-obsidian transition-colors duration-300 whitespace-nowrap">
+                                <span className="text-sm font-semibold text-obsidian/40 group-hover:text-obsidian transition-colors duration-300 whitespace-nowrap">
                                     {partner.name}
                                 </span>
                             </div>
@@ -63,7 +63,7 @@ export function TrustBarSimple() {
                                         className="object-contain opacity-70 group-hover:opacity-100 transition-all duration-300"
                                     />
                                 </div>
-                                <span className="text-sm font-semibold text-slate-400 group-hover:text-deep-obsidian transition-colors duration-300 whitespace-nowrap">
+                                <span className="text-sm font-semibold text-obsidian/40 group-hover:text-obsidian transition-colors duration-300 whitespace-nowrap">
                                     {partner.name}
                                 </span>
                             </div>

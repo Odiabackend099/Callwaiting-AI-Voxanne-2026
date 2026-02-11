@@ -53,7 +53,7 @@ export default function SecurityBadges() {
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="text-slate-400 max-w-2xl mx-auto"
+                        className="text-obsidian/50 max-w-2xl mx-auto"
                     >
                         Your patient data is protected by the highest security standards in healthcare technology.
                     </motion.p>
@@ -97,7 +97,7 @@ export default function SecurityBadges() {
                                 <h4 className="text-white font-bold mb-2">{badge.name}</h4>
 
                                 {/* Description */}
-                                <p className="text-slate-400 text-sm">{badge.description}</p>
+                                <p className="text-obsidian/50 text-sm">{badge.description}</p>
 
                                 {/* Verified Badge */}
                                 <div className="mt-4 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
@@ -116,10 +116,10 @@ export default function SecurityBadges() {
                     transition={{ delay: 0.5 }}
                     className="mt-12 text-center"
                 >
-                    <p className="text-slate-500 text-sm mb-4">
+                    <p className="text-obsidian/60 text-sm mb-4">
                         Trusted by 50+ medical practices across the UK and US
                     </p>
-                    <div className="flex items-center justify-center gap-2 text-slate-400 text-xs">
+                    <div className="flex items-center justify-center gap-2 text-obsidian/50 text-xs">
                         <Lock className="w-4 h-4" />
                         <span>All data encrypted in transit and at rest with AES-256</span>
                     </div>

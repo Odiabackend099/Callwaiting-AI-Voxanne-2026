@@ -9,47 +9,47 @@ const features = [
         icon: Phone,
         title: "AI Receptionist",
         description: "Answers calls 24/7, books appointments, and qualifies leads automatically.",
-        color: "text-cyan",
+        color: "text-surgical-600",
     },
     {
         icon: Clock,
         title: "Always Available",
         description: "Never miss a call. AI handles inquiries during business hours and after.",
-        color: "text-lime",
+        color: "text-surgical-500",
     },
     {
         icon: Shield,
         title: "UK GDPR & HIPAA Compliant",
         description: "Medical-grade security and privacy for patient data with full compliance.",
-        color: "text-blue-deep",
+        color: "text-surgical-900",
     },
     {
         icon: BarChart3,
         title: "Real-Time Analytics",
         description: "Track call metrics, conversion rates, and patient insights.",
-        color: "text-cyan",
+        color: "text-surgical-600",
     },
     {
         icon: Zap,
         title: "Instant Integration",
         description: "Connects with your existing systems in minutes.",
-        color: "text-lime",
+        color: "text-surgical-500",
     },
     {
         icon: Users,
         title: "Patient-Centric",
         description: "Natural conversations that feel human and professional.",
-        color: "text-blue-deep",
+        color: "text-surgical-900",
     },
 ];
 
 export default function FeaturesRedesigned() {
     return (
-        <section id="features" className="relative py-20 md:py-32 bg-cream overflow-hidden">
+        <section id="features" className="relative py-20 md:py-32 bg-surgical-50 overflow-hidden">
             {/* Background Elements */}
             <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-sage/30 rounded-full blur-[100px]" />
-                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-cyan/5 rounded-full blur-[80px]" />
+                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-surgical-100/30 rounded-full blur-[100px]" />
+                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-surgical-400/5 rounded-full blur-[80px]" />
             </div>
 
             <div className="container relative z-10 mx-auto px-4 md:px-6">
@@ -62,10 +62,10 @@ export default function FeaturesRedesigned() {
                             transition={{ duration: 0.6 }}
                             viewport={{ once: true }}
                         >
-                            <h2 className="text-h2-desktop md:text-h2-mobile font-display font-bold text-charcoal mb-4">
+                            <h2 className="text-h2-desktop md:text-h2-mobile font-display font-bold text-obsidian mb-4">
                                 Powerful Features for Modern Clinics
                             </h2>
-                            <p className="text-lg text-charcoal/70 max-w-2xl mx-auto">
+                            <p className="text-lg text-obsidian/70 max-w-2xl mx-auto">
                                 Everything you need to automate patient communication and grow your practice.
                             </p>
                         </motion.div>
@@ -87,15 +87,15 @@ export default function FeaturesRedesigned() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.6, delay: index * 0.1 }}
                                     viewport={{ once: true }}
-                                    className="bg-cream-light border border-sage-dark rounded-lg p-8 hover:shadow-card-hover transition-all duration-300 group"
+                                    className="bg-white border border-surgical-200 rounded-lg p-8 hover:shadow-lg transition-all duration-300 group"
                                 >
-                                    <div className={`w-12 h-12 rounded-lg bg-sage flex items-center justify-center mb-6 group-hover:scale-110 transition-transform ${feature.color}`}>
+                                    <div className={`w-12 h-12 rounded-lg bg-surgical-50 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform ${feature.color}`}>
                                         <Icon className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-charcoal mb-3">
+                                    <h3 className="text-xl font-bold text-obsidian mb-3">
                                         {feature.title}
                                     </h3>
-                                    <p className="text-charcoal/70 leading-relaxed">
+                                    <p className="text-obsidian/70 leading-relaxed">
                                         {feature.description}
                                     </p>
                                 </motion.div>

@@ -52,7 +52,7 @@ export default function Pricing() {
                         <h2 className="text-4xl font-bold text-deep-obsidian tracking-tight mb-4">
                             Simple, Transparent Pricing
                         </h2>
-                        <p className="text-lg text-slate-600">
+                        <p className="text-lg text-obsidian/70">
                             Pay only for what you use. No subscriptions, no setup fees, no lock-in.
                         </p>
                     </div>
@@ -63,7 +63,7 @@ export default function Pricing() {
                     <div className="max-w-2xl mx-auto bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-surgical-600 ring-1 ring-surgical-600 mb-16">
                         <div className="text-center mb-8">
                             <h3 className="text-2xl font-bold text-deep-obsidian mb-2">Pay As You Go</h3>
-                            <p className="text-slate-600 text-sm">
+                            <p className="text-obsidian/70 text-sm">
                                 Top up your wallet. AI handles calls. Credits deducted per call.
                             </p>
                         </div>
@@ -72,7 +72,7 @@ export default function Pricing() {
                             <div className="flex items-baseline justify-center gap-2">
                                 <span className="text-5xl font-bold text-surgical-600">Credit Packs</span>
                             </div>
-                            <p className="text-sm text-slate-400 mt-2">No minimums. No contracts. All features included.</p>
+                            <p className="text-sm text-obsidian/50 mt-2">No minimums. No contracts. All features included.</p>
                         </div>
 
                         {/* Top-up pills */}
@@ -80,12 +80,12 @@ export default function Pricing() {
                             {TOP_UP_OPTIONS.map((option) => (
                                 <span
                                     key={option.pence}
-                                    className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50"
+                                    className="px-4 py-2 rounded-full border border-surgical-200 text-sm font-medium text-obsidian/70 bg-surgical-50"
                                 >
                                     {option.label} ({option.credits})
                                 </span>
                             ))}
-                            <span className="px-4 py-2 rounded-full border border-slate-200 text-sm font-medium text-slate-400 bg-slate-50">
+                            <span className="px-4 py-2 rounded-full border border-surgical-200 text-sm font-medium text-obsidian/50 bg-surgical-50">
                                 Custom
                             </span>
                         </div>
@@ -96,7 +96,7 @@ export default function Pricing() {
                             </Button>
                         </Link>
 
-                        <p className="text-center text-xs text-slate-400 mt-4">
+                        <p className="text-center text-xs text-obsidian/50 mt-4">
                             Set up auto-recharge to never run out of credits.
                         </p>
                     </div>
@@ -108,7 +108,7 @@ export default function Pricing() {
                         {STEPS.map((step, index) => {
                             const Icon = step.icon;
                             return (
-                                <div key={step.title} className="text-center p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                                <div key={step.title} className="text-center p-6 bg-white rounded-2xl border border-surgical-200 shadow-sm">
                                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-surgical-600/10 mb-4">
                                         <Icon className="w-6 h-6 text-surgical-600" />
                                     </div>
@@ -116,7 +116,7 @@ export default function Pricing() {
                                         Step {index + 1}
                                     </div>
                                     <h4 className="text-lg font-bold text-deep-obsidian mb-1">{step.title}</h4>
-                                    <p className="text-sm text-slate-500">{step.description}</p>
+                                    <p className="text-sm text-obsidian/60">{step.description}</p>
                                 </div>
                             );
                         })}
@@ -131,7 +131,7 @@ export default function Pricing() {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {FEATURES.map((feature) => (
-                                <div key={feature} className="flex items-start gap-3 text-sm text-slate-600">
+                                <div key={feature} className="flex items-start gap-3 text-sm text-obsidian/70">
                                     <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
                                     {feature}
                                 </div>

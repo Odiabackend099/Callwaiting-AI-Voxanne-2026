@@ -35,14 +35,14 @@ const integrations = [
 
 export default function Integrations() {
     return (
-        <section className="py-24 bg-slate-50">
+        <section className="py-24 bg-surgical-50">
             <div className="max-w-7xl mx-auto px-6">
                 <FadeIn>
                     <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-3xl font-bold text-deep-obsidian tracking-tight mb-4">
+                        <h2 className="text-3xl font-bold text-obsidian tracking-tight mb-4">
                             Integrates with your existing stack
                         </h2>
-                        <p className="text-lg text-slate-600">
+                        <p className="text-lg text-obsidian/70">
                             No rip-and-replace. Voxanne connects to the tools you already use.
                         </p>
                     </div>
@@ -55,7 +55,7 @@ export default function Integrations() {
                                 {row.tools.map((tool) => (
                                     <div
                                         key={tool.name}
-                                        className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center h-32 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
+                                        className="bg-white rounded-xl p-6 shadow-sm border border-surgical-100 flex flex-col items-center justify-center h-32 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
                                     >
                                         <div className="relative w-14 h-14 flex items-center justify-center mb-2">
                                             <Image
@@ -67,7 +67,7 @@ export default function Integrations() {
                                                 priority={false}
                                             />
                                         </div>
-                                        <p className="text-sm font-medium text-slate-700 text-center leading-tight">
+                                        <p className="text-sm font-medium text-obsidian/80 text-center leading-tight">
                                             {tool.name}
                                         </p>
                                     </div>

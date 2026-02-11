@@ -59,7 +59,7 @@ export default function HowItWorks() {
     ];
 
     return (
-        <section className="py-24 md:py-32 bg-slate-50 relative overflow-hidden" id="how-it-works">
+        <section className="py-24 md:py-32 bg-surgical-50 relative overflow-hidden" id="how-it-works">
             <div className="container mx-auto px-4 relative z-10">
                 <div className="text-center mb-16 md:mb-24">
                     <FadeIn>
@@ -68,11 +68,11 @@ export default function HowItWorks() {
                             <span className="font-display">Real-Time Lead Conversion</span>
                         </div>
 
-                        <h2 className="text-4xl md:text-6xl font-bold text-navy-900 mb-6 font-display tracking-tight">
+                        <h2 className="text-4xl md:text-6xl font-bold text-obsidian mb-6 font-display tracking-tight">
                             How Voxanne Works
                         </h2>
 
-                        <p className="text-slate-600 max-w-2xl mx-auto text-lg font-body">
+                        <p className="text-obsidian/70 max-w-2xl mx-auto text-lg font-body">
                             From call to booked appointment in seconds. Watch how Voxanne captures every lead.
                         </p>
                     </FadeIn>
@@ -89,11 +89,11 @@ export default function HowItWorks() {
                                 className={`relative px-4 py-3 rounded-full font-semibold text-sm transition-all duration-300 ${
                                     activeStep === index
                                         ? "bg-surgical-600 text-white shadow-lg shadow-surgical-500/30"
-                                        : "bg-white text-slate-500 border border-slate-200 hover:border-surgical-200 hover:text-surgical-600"
+                                        : "bg-white text-obsidian/60 border border-surgical-200 hover:border-surgical-200 hover:text-surgical-600"
                                 }`}
                             >
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-xs font-bold ${activeStep === index ? "text-white" : "text-slate-400"}`}>{step.number}</span>
+                                    <span className={`text-xs font-bold ${activeStep === index ? "text-white" : "text-obsidian/50"}`}>{step.number}</span>
                                     <span className="hidden sm:inline">{step.title}</span>
                                 </div>
                             </motion.button>
@@ -105,7 +105,7 @@ export default function HowItWorks() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
-                        className="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 shadow-xl shadow-slate-200/50"
+                        className="bg-white border border-surgical-200 rounded-3xl p-8 md:p-12 shadow-xl shadow-surgical-200/50"
                     >
                         <div className="grid md:grid-cols-2 gap-12 items-center">
                             <div className="flex items-center justify-center order-2 md:order-1">
@@ -116,7 +116,7 @@ export default function HowItWorks() {
                                     className="relative"
                                 >
                                     <div className="absolute inset-0 bg-surgical-100 rounded-full blur-3xl opacity-60 animate-pulse" />
-                                    <div className="relative w-64 h-64 rounded-3xl bg-gradient-to-br from-slate-50 to-white border border-slate-100 flex items-center justify-center shadow-inner">
+                                    <div className="relative w-64 h-64 rounded-3xl bg-gradient-to-br from-surgical-50 to-white border border-surgical-100 flex items-center justify-center shadow-inner">
                                         <motion.div
                                             animate={{
                                                 y: [0, -10, 0],
@@ -145,7 +145,7 @@ export default function HowItWorks() {
                                             {steps[activeStep].number}
                                         </div>
                                         <div>
-                                            <h3 className="text-2xl md:text-3xl font-bold text-navy-900 font-display">
+                                            <h3 className="text-2xl md:text-3xl font-bold text-obsidian font-display">
                                                 {steps[activeStep].title}
                                             </h3>
                                         </div>
@@ -155,7 +155,7 @@ export default function HowItWorks() {
                                         initial={{ opacity: 0, x: 20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: 0.3 }}
-                                        className="text-slate-600 text-lg font-body leading-relaxed"
+                                        className="text-obsidian/70 text-lg font-body leading-relaxed"
                                     >
                                         {steps[activeStep].description}
                                     </motion.p>
@@ -165,7 +165,7 @@ export default function HowItWorks() {
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: 0.4 }}
-                                    className="p-4 rounded-xl bg-slate-50 border border-slate-100"
+                                    className="p-4 rounded-xl bg-surgical-50 border border-surgical-100"
                                 >
                                     <p className="text-surgical-700 font-semibold text-sm font-body flex items-center gap-2">
                                         <Zap className="w-4 h-4 text-yellow-500 fill-yellow-500" />
@@ -190,7 +190,7 @@ export default function HowItWorks() {
                                             <div className="bg-green-100 rounded-full p-1">
                                                 <CheckCircle className="w-4 h-4 text-green-600" />
                                             </div>
-                                            <span className="text-slate-600 font-body">{detail}</span>
+                                            <span className="text-obsidian/70 font-body">{detail}</span>
                                         </motion.li>
                                     ))}
                                 </motion.ul>
@@ -200,7 +200,7 @@ export default function HowItWorks() {
 
                     <FadeIn delay={0.6}>
                         <div className="mt-16 text-center">
-                            <p className="text-slate-600 mb-6 font-body">
+                            <p className="text-obsidian/70 mb-6 font-body">
                                 Ready to start capturing every lead?
                             </p>
                             <a href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" className="inline-block">

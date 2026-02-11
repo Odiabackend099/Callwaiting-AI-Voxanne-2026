@@ -73,13 +73,13 @@ export function HeroCalendlyReplica() {
                     {/* LEFT COLUMN: Copy */}
                     <div className="max-w-xl space-y-6 md:space-y-8">
                         {/* Headline with better mobile line breaks */}
-                        <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.15] md:leading-[1.1]">
+                        <h1 className="text-[2.5rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-obsidian leading-[1.15] md:leading-[1.1]">
                             Deploy a digital employee that{' '}
-                            <span className="text-blue-600 block sm:inline">never sleeps.</span>
+                            <span className="text-surgical-600 block sm:inline">never sleeps.</span>
                         </h1>
 
                         {/* Subheadline with improved mobile sizing */}
-                        <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-lg">
+                        <p className="text-lg sm:text-xl text-obsidian/70 leading-relaxed max-w-lg">
                             Answers every call on the first ring, never takes a sick day, and works holidays.
                             Stop losing revenue to missed calls.
                         </p>
@@ -89,7 +89,7 @@ export function HeroCalendlyReplica() {
                             <Link href="/start">
                                 <Button
                                     size="lg"
-                                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold shadow-lg shadow-blue-200 transition-transform hover:scale-105 active:scale-95"
+                                    className="w-full sm:w-auto bg-surgical-600 hover:bg-surgical-700 text-white px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold shadow-lg shadow-surgical-600/25 hover:shadow-xl hover:shadow-surgical-600/35 hover:scale-105 active:scale-95 transition-all duration-200"
                                 >
                                     Get Started
                                     <ArrowRight className="ml-2 h-5 w-5" />
@@ -98,32 +98,32 @@ export function HeroCalendlyReplica() {
                             <Button
                                 size="lg"
                                 variant="outline"
-                                className="w-full sm:w-auto bg-white hover:bg-slate-50 text-slate-900 border-2 border-slate-200 hover:border-slate-300 px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold transition-transform hover:scale-105 active:scale-95"
+                                className="w-full sm:w-auto bg-white hover:bg-surgical-50 text-obsidian border-2 border-surgical-200 hover:border-surgical-300 px-8 py-6 sm:py-7 text-base sm:text-lg rounded-full font-semibold hover:scale-105 active:scale-95 transition-all duration-200"
                                 onClick={() => setIsInlineDemoActive(true)}
                             >
-                                <Play className="mr-2 h-5 w-5 fill-slate-900" />
+                                <Play className="mr-2 h-5 w-5 fill-obsidian" />
                                 Watch Demo
                             </Button>
                         </div>
 
                         {/* Trust Badges - better mobile organization */}
                         <div className="pt-6 md:pt-8">
-                            <p className="text-xs sm:text-sm text-slate-500 font-medium mb-3 sm:mb-4 uppercase tracking-wider">
+                            <p className="text-xs sm:text-sm text-obsidian/50 font-medium mb-3 sm:mb-4 uppercase tracking-wider">
                                 Trusted by 47 Clinics
                             </p>
                             <div className="flex flex-wrap gap-4 sm:gap-6 md:gap-8 opacity-60 grayscale hover:grayscale-0 transition-all items-center">
                                 {/* Refined Logo Placeholders - mobile optimized */}
                                 <div className="flex items-center gap-2">
-                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-slate-800 rounded-full flex-shrink-0" />
-                                    <span className="font-bold text-base sm:text-lg md:text-xl text-slate-800 whitespace-nowrap">DermCare</span>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-obsidian rounded-full flex-shrink-0" />
+                                    <span className="font-bold text-base sm:text-lg md:text-xl text-obsidian whitespace-nowrap">DermCare</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-slate-800 rounded-sm flex-shrink-0" />
-                                    <span className="font-bold text-base sm:text-lg md:text-xl text-slate-800 whitespace-nowrap">EliteMed</span>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-obsidian rounded-sm flex-shrink-0" />
+                                    <span className="font-bold text-base sm:text-lg md:text-xl text-obsidian whitespace-nowrap">EliteMed</span>
                                 </div>
                                 <div className="flex items-center gap-2 hidden sm:flex">
-                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-slate-800 rotate-45 flex-shrink-0" />
-                                    <span className="font-bold text-base sm:text-lg md:text-xl text-slate-800 whitespace-nowrap">AestheticPro</span>
+                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-obsidian rotate-45 flex-shrink-0" />
+                                    <span className="font-bold text-base sm:text-lg md:text-xl text-obsidian whitespace-nowrap">AestheticPro</span>
                                 </div>
                             </div>
                         </div>

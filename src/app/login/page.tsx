@@ -84,10 +84,10 @@ export default function LoginPage() {
                                 Back to Home Page
                             </Link>
                         </div>
-                        <h1 className="text-4xl font-bold text-navy-900 tracking-tight mb-2">
+                        <h1 className="text-4xl font-bold text-obsidian tracking-tighter mb-2">
                             Welcome Back
                         </h1>
-                        <p className="text-lg text-slate-600">
+                        <p className="text-lg text-obsidian/70">
                             Secure access for clinical staff
                         </p>
                     </div>
@@ -98,13 +98,13 @@ export default function LoginPage() {
                                 {error}
                             </div>
                         )}
-                        
+
                         <div className="space-y-2">
-                            <label htmlFor="email" className="text-sm font-medium text-navy-900">Email address</label>
-                            <Input 
-                                id="email" 
-                                type="email" 
-                                placeholder="" 
+                            <label htmlFor="email" className="text-sm font-medium text-obsidian">Email address</label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder=""
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
@@ -114,7 +114,7 @@ export default function LoginPage() {
 
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <label htmlFor="password" className="text-sm font-medium text-navy-900">Password</label>
+                                <label htmlFor="password" className="text-sm font-medium text-obsidian">Password</label>
                                 <Link href="/forgot-password" className="text-sm font-medium text-surgical-600 hover:text-surgical-700">
                                     Forgot password?
                                 </Link>
@@ -132,7 +132,7 @@ export default function LoginPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-obsidian/40 hover:text-obsidian/60 transition-colors"
                                     disabled={loading}
                                 >
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -140,9 +140,9 @@ export default function LoginPage() {
                             </div>
                         </div>
 
-                        <Button 
-                            type="submit" 
-                            className="w-full bg-surgical-600 hover:bg-surgical-700 text-lg h-12"
+                        <Button
+                            type="submit"
+                            className="w-full h-12 text-base font-semibold bg-surgical-600 text-white rounded-xl shadow-lg shadow-surgical-600/25 hover:shadow-xl hover:shadow-surgical-600/35 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-100 focus:outline-none focus:ring-2 focus:ring-surgical-600/50 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
                             disabled={loading}
                         >
                             {loading ? (
@@ -158,22 +158,22 @@ export default function LoginPage() {
 
                     <div className="relative my-8">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-slate-200" />
+                            <div className="w-full border-t border-surgical-200" />
                         </div>
                         <div className="relative flex justify-center text-sm">
-                            <span className="bg-white px-2 text-slate-500">OR</span>
+                            <span className="bg-white px-2 text-obsidian/60">OR</span>
                         </div>
                     </div>
 
-                    <Button 
+                    <Button
                         type="button"
-                        variant="outline" 
-                        className="w-full h-12 gap-3 text-slate-700 border-slate-200 hover:bg-slate-50"
+                        variant="outline"
+                        className="w-full h-12 gap-3 text-obsidian border-2 border-surgical-200 rounded-xl bg-white shadow-md hover:shadow-lg hover:bg-surgical-50 hover:scale-[1.02] active:scale-100 focus:outline-none focus:ring-2 focus:ring-surgical-600/30 focus:ring-offset-2 transition-all duration-200"
                         onClick={handleGoogleSignIn}
                         disabled={loading}
                     >
                         {loading ? (
-                             <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                            <Loader2 className="h-5 w-5 animate-spin text-obsidian/40" />
                         ) : (
                             <svg className="h-5 w-5" viewBox="0 0 24 24">
                                 <path
@@ -197,7 +197,7 @@ export default function LoginPage() {
                         Continue with Google
                     </Button>
 
-                    <p className="mt-8 text-center text-sm text-slate-500">
+                    <p className="mt-8 text-center text-sm text-obsidian/60">
                         Don&apos;t have an account?{" "}
                         <Link href="https://calendly.com/austyneguale/30min" target="_blank" className="font-medium text-surgical-600 hover:text-surgical-700">
                             Book a Demo
@@ -208,12 +208,12 @@ export default function LoginPage() {
 
 
             {/* Right Column: Image/Testimonial */}
-            <div className="hidden lg:flex relative bg-navy-900 items-center justify-center overflow-hidden">
+            <div className="hidden lg:flex relative bg-obsidian items-center justify-center overflow-hidden">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-20"
                     style={{ backgroundImage: 'radial-gradient(#3b82f6 1px, transparent 1px)', backgroundSize: '32px 32px' }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-tr from-navy-900 via-navy-900/90 to-surgical-700/50" />
+                <div className="absolute inset-0 bg-gradient-to-tr from-obsidian via-obsidian/95 to-surgical-700/40" />
 
                 <div className="relative z-10 max-w-lg px-12 text-center">
                     <FadeIn delay={0.2}>
@@ -234,7 +234,7 @@ export default function LoginPage() {
                                     { name: 'Vapi', logo: '/integrations/vapi.png' },
                                     { name: 'Google Calendar', logo: '/integrations/google-calendar.png' }
                                 ].map((integration, i) => (
-                                    <div key={i} className="h-12 w-12 rounded-full border-2 border-navy-900 bg-white overflow-hidden relative flex items-center justify-center p-2">
+                                    <div key={i} className="h-12 w-12 rounded-full border-2 border-obsidian bg-white overflow-hidden relative flex items-center justify-center p-2">
                                         <Image
                                             src={integration.logo}
                                             alt={integration.name}

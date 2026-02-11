@@ -90,11 +90,11 @@ export default function CallWaitingAIDashboard() {
     if (!user && !authLoading) return null;
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-8 pb-32 space-y-8">
+        <div className="max-w-7xl mx-auto px-7 py-9 pb-32 space-y-7">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold text-obsidian tracking-tight mb-2">Dashboard</h1>
-                <p className="text-obsidian/60">Welcome back. Here&apos;s your clinical system overview.</p>
+                <h1 className="text-4xl font-bold text-obsidian tracking-tighter mb-2">Dashboard</h1>
+                <p className="text-base text-obsidian/70 font-normal">Welcome back. Here&apos;s your clinical system overview.</p>
             </div>
 
             {/* Clinical Pulse (Top ROI Metrics) */}
@@ -105,14 +105,14 @@ export default function CallWaitingAIDashboard() {
 
             {/* Recent Calls Table */}
             <div className="glass-panel rounded-2xl overflow-hidden">
-                <div className="p-6 border-b border-surgical-200 flex items-center justify-between">
+                <div className="px-7 py-6 border-b border-surgical-200 flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-bold text-obsidian tracking-tight">Recent Activity</h3>
                         <p className="text-xs text-obsidian/60">Real-time call logs</p>
                     </div>
                     <button
                         onClick={() => router.push('/dashboard/calls')}
-                        className="text-xs font-medium text-surgical-600 hover:text-surgical-700 transition-colors bg-surgical-50 px-3 py-1.5 rounded-lg border border-surgical-200"
+                        className="text-sm font-semibold text-surgical-600 bg-surgical-50 px-4 py-2.5 rounded-xl border border-surgical-200 shadow-sm hover:shadow-md hover:bg-surgical-100 hover:scale-105 hover:-translate-y-0.5 active:scale-100 focus:outline-none focus:ring-2 focus:ring-surgical-600/30 transition-all duration-200"
                     >
                         View All Activity
                     </button>
@@ -122,15 +122,17 @@ export default function CallWaitingAIDashboard() {
                     {isLoading ? (
                         <div className="p-6 space-y-4">
                             {[1, 2, 3].map((i) => (
-                                <div key={i} className="flex items-center justify-between animate-pulse">
+                                <div key={i} className="flex items-center justify-between overflow-hidden relative">
+                                    {/* Shimmer overlay */}
+                                    <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent" />
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-surgical-100" />
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-surgical-100 to-surgical-200 animate-pulse" />
                                         <div className="space-y-2">
-                                            <div className="h-4 w-32 bg-surgical-100 rounded" />
-                                            <div className="h-3 w-20 bg-surgical-100 rounded" />
+                                            <div className="h-4 w-32 bg-gradient-to-r from-surgical-100 to-surgical-200 rounded animate-pulse" />
+                                            <div className="h-3 w-20 bg-gradient-to-r from-surgical-100 to-surgical-200 rounded animate-pulse" />
                                         </div>
                                     </div>
-                                    <div className="h-6 w-20 bg-surgical-100 rounded-full" />
+                                    <div className="h-6 w-20 bg-gradient-to-r from-surgical-100 to-surgical-200 rounded-full animate-pulse" />
                                 </div>
                             ))}
                         </div>

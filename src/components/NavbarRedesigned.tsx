@@ -29,8 +29,8 @@ export default function NavbarRedesigned() {
     return (
         <nav
             className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled
-                    ? "bg-sterile-wash/95 backdrop-blur-md shadow-subtle border-b border-clinical-blue"
-                    : "bg-transparent"
+                ? "bg-surgical-50/95 backdrop-blur-md shadow-sm border-b border-surgical-200"
+                : "bg-transparent"
                 }`}
         >
             <div className="container mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
@@ -50,7 +50,7 @@ export default function NavbarRedesigned() {
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`text-sm font-medium transition-colors hover:text-surgical-blue ${isScrolled ? "text-deep-obsidian/70" : "text-deep-obsidian/70"
+                            className={`text-sm font-medium transition-colors hover:text-surgical-600 ${isScrolled ? "text-obsidian/70" : "text-obsidian/70"
                                 }`}
                         >
                             {item.label}
@@ -62,13 +62,13 @@ export default function NavbarRedesigned() {
                 <div className="hidden md:flex items-center gap-4">
                     <Link
                         href="/login"
-                        className="text-sm font-medium text-deep-obsidian/70 hover:text-deep-obsidian transition-colors"
+                        className="text-sm font-medium text-obsidian/70 hover:text-obsidian transition-colors"
                     >
                         Sign In
                     </Link>
                     <Link href="/start" className="inline-block">
                         <button
-                            className="px-6 py-2 bg-surgical-blue text-pure-white font-semibold rounded-lg hover:bg-surgical-blue/90 transition-all duration-300 hover:shadow-card-hover"
+                            className="px-6 py-2 bg-surgical-600 text-white font-semibold rounded-lg hover:bg-surgical-700 transition-all duration-300 hover:shadow-lg"
                         >
                             Book Demo
                         </button>
@@ -78,14 +78,14 @@ export default function NavbarRedesigned() {
                 {/* Mobile Menu Button */}
                 <button
                     onClick={() => setIsOpen(!isOpen)}
-                    className="md:hidden p-3 hover:bg-sky-mist/80 focus-visible:ring-2 focus-visible:ring-surgical-blue rounded-lg transition-colors min-h-12 min-w-12"
+                    className="md:hidden p-3 hover:bg-surgical-100 focus-visible:ring-2 focus-visible:ring-surgical-600 rounded-lg transition-colors min-h-12 min-w-12"
                     aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
                     aria-expanded={isOpen}
                 >
                     {isOpen ? (
-                        <X className="w-6 h-6 text-deep-obsidian" />
+                        <X className="w-6 h-6 text-obsidian" />
                     ) : (
-                        <Menu className="w-6 h-6 text-deep-obsidian" />
+                        <Menu className="w-6 h-6 text-obsidian" />
                     )}
                 </button>
             </div>
@@ -97,30 +97,30 @@ export default function NavbarRedesigned() {
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="md:hidden bg-sterile-wash border-b border-clinical-blue"
+                        className="md:hidden bg-surgical-50 border-b border-surgical-200"
                     >
                         <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
                             {navItems.map((item) => (
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className="text-sm font-medium text-deep-obsidian/70 hover:text-surgical-blue transition-colors py-2"
+                                    className="text-sm font-medium text-obsidian/70 hover:text-surgical-600 transition-colors py-2"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     {item.label}
                                 </Link>
                             ))}
-                            <div className="flex flex-col gap-3 pt-4 border-t border-clinical-blue">
+                            <div className="flex flex-col gap-3 pt-4 border-t border-surgical-200">
                                 <Link
                                     href="/login"
-                                    className="text-sm font-medium text-deep-obsidian/70 hover:text-deep-obsidian transition-colors py-2"
+                                    className="text-sm font-medium text-obsidian/70 hover:text-obsidian transition-colors py-2"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Sign In
                                 </Link>
                                 <Link href="/start" className="block w-full" onClick={() => setIsOpen(false)}>
                                     <button
-                                        className="px-6 py-2 bg-surgical-blue text-pure-white font-semibold rounded-lg hover:bg-surgical-blue/90 transition-all duration-300 w-full"
+                                        className="px-6 py-2 bg-surgical-600 text-white font-semibold rounded-lg hover:bg-surgical-700 transition-all duration-300 w-full"
                                     >
                                         Book Demo
                                     </button>

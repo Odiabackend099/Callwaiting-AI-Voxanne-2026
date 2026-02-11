@@ -460,9 +460,18 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
     const minTopUp = parseInt(process.env.WALLET_MIN_TOPUP_PENCE || '2500', 10);
     const { amount_pence } = req.body;
 
-    if (!amount_pence || typeof amount_pence !== 'number' || amount_pence < minTopUp) {
+    // SECURITY FIX: Comprehensive amount validation (prevents billing manipulation)
+    // Protects against: negative amounts, zero amounts, NaN, Infinity, non-integers
+    if (
+      !amount_pence ||
+      typeof amount_pence !== 'number' ||
+      !Number.isFinite(amount_pence) ||      // Reject NaN, Infinity, -Infinity
+      !Number.isInteger(amount_pence) ||     // Reject decimals (pence must be whole number)
+      amount_pence <= 0 ||                   // Reject negative and zero
+      amount_pence < minTopUp                // Reject below minimum
+    ) {
       return res.status(400).json({
-        error: `Minimum top-up is £${(minTopUp / 100).toFixed(2)} (${minTopUp}p)`,
+        error: `Invalid amount. Minimum top-up is £${(minTopUp / 100).toFixed(2)} (${minTopUp}p). Must be a positive integer.`,
       });
     }
 
@@ -503,6 +512,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
     // Step 5b: Dual-currency Stripe metadata (CRITICAL - prevents customer confusion)
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
+      client_reference_id: orgId, // CRITICAL: Stripe best practice for reconciliation
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [

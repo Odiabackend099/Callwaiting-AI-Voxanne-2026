@@ -421,6 +421,26 @@ export class ManagedTelephonyService {
           vapiPhoneId,
           number: redactPhone(purchasedNumber.phoneNumber),
         });
+
+        // VALIDATION: Ensure Vapi returned a valid phone ID
+        if (!vapiPhoneId) {
+          log.error('ManagedTelephony', 'CRITICAL: Vapi import returned null phone ID', {
+            orgId,
+            phoneNumber: redactPhone(purchasedNumber.phoneNumber),
+            vapiResult: JSON.stringify(vapiResult)
+          });
+
+          // Rollback: Release the number
+          await this.releaseNumberWithRetry(purchasedNumber.sid, subClient);
+
+          return {
+            success: false,
+            error: 'Phone number import failed: Vapi returned invalid phone ID',
+            failedStep: 'vapi_import_validation',
+            canRetry: true,
+            userMessage: 'Number purchase was successful but setup failed. The number has been released. Please try again.'
+          };
+        }
       } catch (vapiErr: any) {
         // CRITICAL ROLLBACK: Release the purchased number (it's not in our system yet)
         // If Vapi import fails, we MUST release the Twilio number to avoid orphaned resources
@@ -495,27 +515,32 @@ export class ManagedTelephonyService {
 
       // Step 9: Save via single-slot gate (UPSERT + mutual exclusion + Vapi credential sync)
       //         ALSO saves to org_credentials for unified agent config dropdown
-      try {
-        await IntegrationDecryptor.saveTwilioCredential(orgId, {
-          accountSid: subaccountSid,
-          authToken: subToken,
-          phoneNumber: purchasedNumber.phoneNumber,
-          source: 'managed',
-          vapiPhoneId: vapiPhoneId || undefined,
-          vapiCredentialId: vapiCredentialId || undefined,
-        });
-        log.info('ManagedTelephony', 'Single-slot credential saved to org_credentials', {
-          orgId,
-          phoneNumber: purchasedNumber.phoneNumber,
-          vapiPhoneId: vapiPhoneId || 'not_set'
-        });
-      } catch (singleSlotErr: any) {
-        // Non-fatal: number is already purchased and in Vapi. Log for review.
-        log.error('ManagedTelephony', 'Single-slot save failed (non-fatal)', {
-          orgId,
-          error: singleSlotErr.message,
-        });
-      }
+      // CRITICAL: This write is MANDATORY. If it fails, the number is unusable in agent config.
+      log.info('ManagedTelephony', 'Attempting MANDATORY SSOT write to org_credentials', {
+        orgId,
+        phoneNumber: redactPhone(purchasedNumber.phoneNumber),
+        vapiPhoneId: vapiPhoneId,
+        vapiCredentialId: vapiCredentialId || 'not_set',
+        source: 'managed',
+        hasSubaccountSid: !!subaccountSid,
+        hasSubToken: !!subToken
+      });
+
+      // Do NOT catch this error - let it bubble up to trigger proper error handling
+      await IntegrationDecryptor.saveTwilioCredential(orgId, {
+        accountSid: subaccountSid,
+        authToken: subToken,
+        phoneNumber: purchasedNumber.phoneNumber,
+        source: 'managed',
+        vapiPhoneId: vapiPhoneId,
+        vapiCredentialId: vapiCredentialId || undefined,
+      });
+
+      log.info('ManagedTelephony', 'MANDATORY SSOT write successful - number now visible in agent config', {
+        orgId,
+        phoneNumber: redactPhone(purchasedNumber.phoneNumber),
+        vapiPhoneId: vapiPhoneId
+      });
 
       return {
         success: true,
@@ -524,16 +549,37 @@ export class ManagedTelephonyService {
         subaccountSid,
       };
     } catch (err: any) {
+      const failurePoint = err.message?.includes('org_credentials') || err.message?.includes('saveTwilioCredential')
+        ? 'ssot_write'
+        : 'unknown';
+
       log.error('ManagedTelephony', 'Provisioning failed (unexpected error)', {
         orgId,
         error: err.message,
         stack: err.stack,
-        name: err.name
+        name: err.name,
+        failurePoint
       });
+
+      // If this was an SSOT write failure, escalate to Sentry
+      if (failurePoint === 'ssot_write') {
+        log.error('ManagedTelephony', 'CRITICAL: SSOT write failure detected - number will be invisible', {
+          orgId,
+          error: err.message,
+          component: 'managed-telephony',
+          failure_type: 'ssot_violation'
+        });
+        // Note: Sentry integration should be added here if available
+        // captureException(err, {
+        //   tags: { component: 'managed-telephony', failure_type: 'ssot_violation' },
+        //   extra: { orgId, attemptedPhoneNumber: purchasedNumber?.phoneNumber }
+        // });
+      }
+
       return {
         success: false,
         error: err.message || 'Unexpected error during provisioning',
-        failedStep: 'unknown',
+        failedStep: failurePoint,
         canRetry: true,
         userMessage: 'An unexpected error occurred. Please try again or contact support.'
       };

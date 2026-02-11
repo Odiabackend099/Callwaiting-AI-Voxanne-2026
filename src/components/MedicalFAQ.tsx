@@ -65,15 +65,15 @@ export const MedicalFAQ = () => {
     };
 
     return (
-        <section className="py-24 bg-slate-950 relative overflow-hidden" id="faq">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-950/20 via-slate-950 to-slate-950" />
+        <section className="py-24 bg-surgical-50 relative overflow-hidden" id="faq">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-surgical-100/50 via-surgical-50 to-surgical-50" />
 
             <div className="container mx-auto px-4 relative z-10">
                 <div className="text-center mb-16">
-                    <h2 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 mb-4">
+                    <h2 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-obsidian to-surgical-600 mb-4">
                         Common Questions from Medical Directors
                     </h2>
-                    <p className="text-slate-400 max-w-2xl mx-auto">
+                    <p className="text-obsidian/70 max-w-2xl mx-auto">
                         Clarifying compliance, capabilities, and clinical integration.
                     </p>
                 </div>
@@ -82,8 +82,8 @@ export const MedicalFAQ = () => {
                     {faqData.map((category, catIndex) => (
                         <div key={catIndex} className="space-y-4">
                             <div className="flex items-center gap-2 mb-4">
-                                <category.icon className="w-5 h-5 text-cyan-400" />
-                                <h3 className="text-xl font-semibold text-white">{category.title}</h3>
+                                <category.icon className="w-5 h-5 text-surgical-600" />
+                                <h3 className="text-xl font-semibold text-obsidian">{category.title}</h3>
                             </div>
 
                             <div className="grid gap-3">
@@ -100,18 +100,18 @@ export const MedicalFAQ = () => {
                                             <button
                                                 onClick={() => toggleAccordion(index)}
                                                 className={`w-full text-left p-4 md:p-6 rounded-2xl flex items-start justify-between gap-4 transition-all duration-300 ${isOpen
-                                                        ? 'bg-slate-800/80 shadow-lg ring-1 ring-cyan-500/20'
-                                                        : 'bg-slate-900/40 hover:bg-slate-800/60'
+                                                    ? 'bg-white shadow-lg ring-1 ring-surgical-200'
+                                                    : 'bg-white/60 hover:bg-white'
                                                     }`}
                                             >
-                                                <span className={`font-medium text-lg transition-colors ${isOpen ? 'text-cyan-400' : 'text-slate-200 group-hover:text-white'}`}>
+                                                <span className={`font-medium text-lg transition-colors ${isOpen ? 'text-surgical-600' : 'text-obsidian group-hover:text-surgical-600'}`}>
                                                     {item.question}
                                                 </span>
                                                 <span className={`flex-shrink-0 mt-1 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
                                                     {isOpen ? (
-                                                        <Minus className="w-5 h-5 text-cyan-400" />
+                                                        <Minus className="w-5 h-5 text-surgical-600" />
                                                     ) : (
-                                                        <Plus className="w-5 h-5 text-slate-400 group-hover:text-white" />
+                                                        <Plus className="w-5 h-5 text-obsidian/40 group-hover:text-surgical-600" />
                                                     )}
                                                 </span>
                                             </button>
@@ -125,7 +125,7 @@ export const MedicalFAQ = () => {
                                                         transition={{ duration: 0.3, ease: "easeInOut" }}
                                                         className="overflow-hidden"
                                                     >
-                                                        <div className="p-6 pt-2 text-slate-400 leading-relaxed border-l-2 border-cyan-500/20 ml-6">
+                                                        <div className="p-6 pt-2 text-obsidian/70 leading-relaxed border-l-2 border-surgical-200 ml-6">
                                                             {item.answer}
                                                         </div>
                                                     </motion.div>

@@ -85,9 +85,7 @@ const config: Config = {
                 full: "9999px", // Pill-shaped buttons
             },
             fontFamily: {
-                sans: ["var(--font-inter)", "var(--font-plus-jakarta)", "system-ui", "sans-serif"],
-                display: ["var(--font-plus-jakarta)", "var(--font-inter)", "system-ui", "sans-serif"],
-                body: ["var(--font-inter)", "system-ui", "sans-serif"],
+                sans: ["var(--font-inter)", "system-ui", "sans-serif"],
             },
             fontSize: {
                 xs: ["0.75rem", { lineHeight: "1rem" }],
@@ -122,9 +120,14 @@ const config: Config = {
                         "background-position": "right center",
                     },
                 },
+                "shimmer": {
+                    "0%": { transform: "translateX(-100%)" },
+                    "100%": { transform: "translateX(100%)" },
+                },
             },
             animation: {
                 "gradient-x": "gradient-x 3s ease infinite",
+                "shimmer": "shimmer 2s infinite",
             },
         },
     },

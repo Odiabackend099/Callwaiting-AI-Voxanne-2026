@@ -24,6 +24,7 @@ import { Router, Request, Response } from 'express';
 import { verifyStripeSignature } from '../middleware/verify-stripe-signature';
 import { log } from '../services/logger';
 import { enqueueBillingWebhook } from '../config/billing-queue';
+import { supabase } from '../services/supabase-client';
 
 const router = Router();
 
@@ -46,11 +47,43 @@ router.post('/stripe',
       return res.status(400).json({ error: 'Invalid event' });
     }
 
+    // SECURITY FIX (P0-3): Check for duplicate webhook events (idempotency)
+    // Protects against: replay attacks granting unlimited credits from single payment
+    // Defense-in-depth: BullMQ queue + database tracking
+    const { data: alreadyProcessed } = await supabase.rpc('is_stripe_event_processed', {
+      p_event_id: event.id
+    });
+
+    if (alreadyProcessed) {
+      log.info('StripeWebhook', 'Duplicate event detected - skipping', {
+        eventId: event.id,
+        eventType: event.type,
+      });
+      // Return 200 to Stripe (event already processed successfully)
+      return res.status(200).json({ received: true, duplicate: true });
+    }
+
     // Step 1: Return 200 IMMEDIATELY to Stripe (as recommended by Stripe docs)
     // This prevents timeout and retry loops
     res.status(200).json({ received: true });
 
-    // Step 2: Queue for async processing via BullMQ
+    // Step 2: Mark event as being processed (prevents race conditions)
+    const { data: marked } = await supabase.rpc('mark_stripe_event_processed', {
+      p_event_id: event.id,
+      p_event_type: event.type,
+      p_org_id: event.data?.object?.metadata?.org_id || null,
+      p_event_data: event.data?.object || null
+    });
+
+    if (!marked) {
+      log.warn('StripeWebhook', 'Event already being processed by another worker', {
+        eventId: event.id,
+        eventType: event.type,
+      });
+      return; // Another worker is handling this event
+    }
+
+    // Step 3: Queue for async processing via BullMQ
     try {
       const job = await enqueueBillingWebhook({
         eventId: event.id,

@@ -24,7 +24,7 @@ export default function RevenueLeak() {
     }, []);
 
     return (
-        <section ref={containerRef} className="relative py-24 md:py-32 bg-[#050505] text-white overflow-hidden">
+        <section ref={containerRef} className="relative py-24 md:py-32 bg-obsidian text-white overflow-hidden">
             <div className="container px-4 md:px-6 mx-auto">
                 <div className="grid md:grid-cols-2 gap-12 items-center">
 
@@ -75,7 +75,7 @@ export default function RevenueLeak() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8, delay: 0.2 }}
-                            className="space-y-6 text-lg text-slate-400 font-light"
+                            className="space-y-6 text-lg text-surgical-100 font-light"
                         >
                             <p className="text-xl text-white font-medium border-l-4 border-red-500 pl-4">
                                 Right now, while you&apos;re reading this:

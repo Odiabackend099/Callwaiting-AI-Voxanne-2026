@@ -66,16 +66,16 @@ export default function Contact() {
     };
 
     return (
-        <section id="contact" className="py-24 bg-slate-50">
+        <section id="contact" className="py-24 bg-surgical-50">
             <div className="max-w-7xl mx-auto px-6">
                 <div className="grid lg:grid-cols-2 gap-16">
                     {/* Left Column: Info */}
                     <FadeIn>
-                        <h2 className="text-4xl font-bold text-navy-900 tracking-tight mb-6">
+                        <h2 className="text-4xl font-bold text-obsidian tracking-tight mb-6">
                             Ready to transform your <br />
                             <span className="text-surgical-600">clinic&apos;s front desk?</span>
                         </h2>
-                        <p className="text-lg text-slate-600 mb-12">
+                        <p className="text-lg text-obsidian/70 mb-12">
                             Get in touch with our team to see how Voxanne can help you capture more patients and reduce admin work.
                         </p>
 
@@ -85,8 +85,8 @@ export default function Contact() {
                                     <Mail className="h-5 w-5 text-surgical-600" />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-navy-900">Email us</h3>
-                                    <p className="text-slate-600">support@voxanne.ai</p>
+                                    <h3 className="font-semibold text-obsidian">Email us</h3>
+                                    <p className="text-obsidian/70">support@voxanne.ai</p>
                                 </div>
                             </div>
 
@@ -95,8 +95,8 @@ export default function Contact() {
                                     <Phone className="h-5 w-5 text-surgical-600" />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-navy-900">Call us</h3>
-                                    <p className="text-slate-600">+44 7424 038250</p>
+                                    <h3 className="font-semibold text-obsidian">Call us</h3>
+                                    <p className="text-obsidian/70">+44 7424 038250</p>
                                 </div>
                             </div>
 
@@ -105,8 +105,8 @@ export default function Contact() {
                                     <MapPin className="h-5 w-5 text-surgical-600" />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-navy-900">Visit us</h3>
-                                    <p className="text-slate-600">
+                                    <h3 className="font-semibold text-obsidian">Visit us</h3>
+                                    <p className="text-obsidian/70">
                                         Collage House, 2nd Floor<br />
                                         17 King Edward Road<br />
                                         Ruislip, London HA4 7AE<br />
@@ -119,26 +119,26 @@ export default function Contact() {
 
                     {/* Right Column: Form */}
                     <FadeIn delay={0.2}>
-                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200">
+                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-surgical-200">
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label htmlFor="name" className="text-sm font-medium text-navy-900">Name</label>
+                                        <label htmlFor="name" className="text-sm font-medium text-obsidian">Name</label>
                                         <Input id="name" name="name" placeholder="Dr. Jane Doe" required disabled={status === "loading" || status === "success"} />
                                     </div>
                                     <div className="space-y-2">
-                                        <label htmlFor="email" className="text-sm font-medium text-navy-900">Email</label>
+                                        <label htmlFor="email" className="text-sm font-medium text-obsidian">Email</label>
                                         <Input id="email" name="email" type="email" placeholder="jane@clinic.com" required disabled={status === "loading" || status === "success"} />
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label htmlFor="phone" className="text-sm font-medium text-navy-900">Phone (Optional)</label>
+                                    <label htmlFor="phone" className="text-sm font-medium text-obsidian">Phone (Optional)</label>
                                     <Input id="phone" name="phone" type="tel" placeholder="+1 (555) 000-0000" disabled={status === "loading" || status === "success"} />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label htmlFor="message" className="text-sm font-medium text-navy-900">Message</label>
+                                    <label htmlFor="message" className="text-sm font-medium text-obsidian">Message</label>
                                     <Textarea id="message" name="message" placeholder="Tell us about your practice..." className="min-h-[120px]" required disabled={status === "loading" || status === "success"} />
                                 </div>
 

@@ -23,7 +23,7 @@ export default function BenefitsSection() {
   ];
 
   return (
-    <section className="relative py-20 md:py-32 bg-black text-white overflow-hidden">
+    <section className="relative py-20 md:py-32 bg-surgical-50 text-obsidian overflow-hidden">
       <div className="container relative z-10 px-4 md:px-6 max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -32,10 +32,10 @@ export default function BenefitsSection() {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl md:text-5xl font-bold mb-4">
+          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-obsidian">
             Why Aesthetic Clinics Choose Voxanne
           </h2>
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto">
+          <p className="text-xl text-obsidian/70 max-w-2xl mx-auto">
             Three key benefits that transform your practice
           </p>
         </motion.div>
@@ -50,17 +50,17 @@ export default function BenefitsSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
                 viewport={{ once: true }}
-                className="relative p-8 rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/10 hover:border-white/20 transition-all duration-300 group"
+                className="relative p-8 rounded-2xl bg-white border border-surgical-200 hover:shadow-xl transition-all duration-300 group"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 via-transparent to-red-500/0 rounded-2xl opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
-                
+                <div className="absolute inset-0 bg-gradient-to-br from-surgical-100/50 via-transparent to-white rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
                 <div className="relative z-10">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-red-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                  <div className="w-12 h-12 rounded-lg bg-surgical-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                     <Icon className="w-6 h-6 text-white" />
                   </div>
-                  
-                  <h3 className="text-xl font-bold mb-3">{benefit.title}</h3>
-                  <p className="text-slate-400 leading-relaxed">{benefit.description}</p>
+
+                  <h3 className="text-xl font-bold mb-3 text-obsidian">{benefit.title}</h3>
+                  <p className="text-obsidian/70 leading-relaxed">{benefit.description}</p>
                 </div>
               </motion.div>
             );

@@ -129,13 +129,23 @@ select {
   font-size: 15px;
 }
 
-/* Clinical Glassmorphism - Subtle & Clean */
+/* Clinical Glassmorphism - Premium Depth */
 .glass-panel {
-  @apply bg-white/80 backdrop-blur-md border border-surgical-200 shadow-sm;
+  @apply bg-white/90 backdrop-blur-md border border-surgical-200 transition-shadow duration-200;
+  box-shadow: 0 10px 15px -3px rgba(0, 102, 255, 0.08), 0 4px 6px -4px rgba(0, 102, 255, 0.08);
+}
+
+.glass-panel:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 102, 255, 0.12), 0 8px 10px -6px rgba(0, 102, 255, 0.12);
 }
 
 .glass-card {
-  @apply bg-white/60 backdrop-blur-sm border border-surgical-200 transition-all duration-300 hover:shadow-md;
+  @apply bg-white/70 backdrop-blur-sm border border-surgical-200 transition-all duration-300;
+  box-shadow: 0 1px 3px 0 rgba(0, 102, 255, 0.05);
+}
+
+.glass-card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 102, 255, 0.1), 0 4px 6px -4px rgba(0, 102, 255, 0.1);
 }
 
 /* Swiss Typography Utilities */
