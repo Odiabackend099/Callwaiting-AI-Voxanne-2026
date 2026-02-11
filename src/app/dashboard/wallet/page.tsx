@@ -203,7 +203,7 @@ const WalletPageContent = () => {
                                 Current Balance
                             </p>
                             <span className="px-2.5 py-1 bg-white/20 text-white rounded-full text-xs font-bold">
-                                10 credits/min
+                                $0.70/minute (10 credits/min)
                             </span>
                         </div>
                         {walletLoading ? (

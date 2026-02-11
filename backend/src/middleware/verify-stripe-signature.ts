@@ -23,14 +23,6 @@ export function verifyStripeSignature() {
     const stripe = getStripeClient();
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    // Skip in development if no secret is set
-    if (process.env.NODE_ENV === 'development' && !secret) {
-      log.warn('StripeSignature', 'Skipping signature verification in development mode (no secret set)');
-      // In dev mode, parse body as-is
-      (req as any).stripeEvent = req.body;
-      return next();
-    }
-
     if (!stripe) {
       log.error('StripeSignature', 'Stripe client not initialized');
       return res.status(500).json({ error: 'Billing not configured' });
