@@ -22,6 +22,13 @@ function getOAuth2Client() {
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/google-oauth/callback`;
 
+    // Production validation warning
+    if (redirectUri.includes('localhost') && process.env.NODE_ENV === 'production') {
+      console.error('[CRITICAL] OAuth redirect URI pointing to localhost in production!');
+      console.error(`GOOGLE_REDIRECT_URI: ${process.env.GOOGLE_REDIRECT_URI || 'NOT SET'}`);
+      console.error(`BACKEND_URL: ${process.env.BACKEND_URL || 'NOT SET'}`);
+    }
+
     if (!clientId || !clientSecret) {
       throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required');
     }
@@ -113,7 +120,10 @@ export async function exchangeCodeForTokens(
 
       // Provide more helpful error messages
       if (tokenError?.message?.includes('redirect_uri_mismatch')) {
-        throw new Error('Redirect URI mismatch. Ensure http://localhost:3001/api/google-oauth/callback is added to Google Cloud Console authorized redirect URIs.');
+        const currentRedirectUri = process.env.GOOGLE_REDIRECT_URI ||
+          `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/google-oauth/callback`;
+        throw new Error(`Redirect URI mismatch. Ensure ${currentRedirectUri} is added to Google Cloud Console authorized redirect URIs.
+  Current BACKEND_URL: ${process.env.BACKEND_URL || 'NOT SET'}`);
       } else if (tokenError?.message?.includes('invalid_grant')) {
         throw new Error('Authorization code expired or already used. Please restart the OAuth flow.');
       } else {

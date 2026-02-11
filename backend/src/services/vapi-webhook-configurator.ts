@@ -17,7 +17,16 @@ function getWebhookUrl(): string {
     return process.env.WEBHOOK_URL;
   }
 
-  const baseUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+  const baseUrl = process.env.BACKEND_URL;
+
+  if (!baseUrl) {
+    throw new Error('BACKEND_URL environment variable required for Vapi webhook configuration');
+  }
+
+  if (baseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+    throw new Error('Cannot configure Vapi webhooks with localhost URL in production');
+  }
+
   return `${baseUrl}/api/vapi/webhook`;
 }
 const MAX_RETRIES = 3;

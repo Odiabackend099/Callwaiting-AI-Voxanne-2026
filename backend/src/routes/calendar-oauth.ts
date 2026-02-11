@@ -118,7 +118,21 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
       result = await exchangeCodeForTokens(code as string, state as string);
     } catch (exchangeError: any) {
       console.error('Error exchanging authorization code:', exchangeError);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+      if (!frontendUrl) {
+        console.error('[OAuth] FRONTEND_URL not set, cannot redirect user');
+        res.status(500).json({
+          error: 'Frontend URL configuration missing. Contact administrator.'
+        });
+        return;
+      }
+
+      // Warn in production if using localhost
+      if (frontendUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+        console.error('[OAuth] Frontend URL pointing to localhost in production!');
+      }
+
       const errorParam = encodeURIComponent('oauth_token_exchange_failed');
       res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
       return;
@@ -144,7 +158,22 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
     }
 
     // Redirect to dashboard with success message
-    const redirectUrl = `${process.env.FRONTEND_URL}/dashboard/api-keys?calendar=connected&email=${encodeURIComponent(
+    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!frontendUrl) {
+      console.error('[OAuth] FRONTEND_URL not set, cannot redirect user');
+      res.status(500).json({
+        error: 'Frontend URL configuration missing. Contact administrator.'
+      });
+      return;
+    }
+
+    // Warn in production if using localhost
+    if (frontendUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+      console.error('[OAuth] Frontend URL pointing to localhost in production!');
+    }
+
+    const redirectUrl = `${frontendUrl}/dashboard/api-keys?calendar=connected&email=${encodeURIComponent(
       googleEmail
     )}`;
 
@@ -152,7 +181,22 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error in OAuth callback:', error);
 
-    const redirectUrl = `${process.env.FRONTEND_URL}/dashboard/api-keys?calendar=error&message=${encodeURIComponent(
+    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!frontendUrl) {
+      console.error('[OAuth] FRONTEND_URL not set, cannot redirect user');
+      res.status(500).json({
+        error: 'Frontend URL configuration missing. Contact administrator.'
+      });
+      return;
+    }
+
+    // Warn in production if using localhost
+    if (frontendUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+      console.error('[OAuth] Frontend URL pointing to localhost in production!');
+    }
+
+    const redirectUrl = `${frontendUrl}/dashboard/api-keys?calendar=error&message=${encodeURIComponent(
       error instanceof Error ? error.message : 'Unknown error'
     )}`;
 

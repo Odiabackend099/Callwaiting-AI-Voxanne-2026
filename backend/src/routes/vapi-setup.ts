@@ -16,7 +16,16 @@ const vapiSetupRouter = Router();
 // Fallback to env vars if provided (for backwards compatibility/single tenant dev)
 const ENV_VAPI_PRIVATE_KEY = config.VAPI_PRIVATE_KEY;
 const ENV_VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
-const ENV_WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3001/api/vapi/webhook';
+const ENV_WEBHOOK_URL = process.env.WEBHOOK_URL ||
+  `${process.env.BACKEND_URL || ''}/api/vapi/webhook`;
+
+// Validate webhook URL in production
+if (!ENV_WEBHOOK_URL || ENV_WEBHOOK_URL.includes('localhost')) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('WEBHOOK_URL or BACKEND_URL must be set in production. Vapi cannot reach localhost.');
+  }
+  console.warn('[Vapi] Using localhost webhook URL (development only)');
+}
 
 /**
  * POST /api/vapi/setup/configure-webhook

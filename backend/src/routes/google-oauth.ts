@@ -205,7 +205,20 @@ router.get('/authorize', async (req: Request, res: Response): Promise<void> => {
     });
 
     // Frontend URL for error redirects
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!frontendUrl) {
+      log.error('GoogleOAuth', 'FRONTEND_URL not set, cannot redirect user');
+      return res.status(500).json({
+        error: 'Frontend URL configuration missing. Contact administrator.'
+      });
+    }
+
+    // Warn in production if using localhost
+    if (frontendUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+      log.error('GoogleOAuth', 'Frontend URL pointing to localhost in production!');
+    }
+
     const errorParam = encodeURIComponent('oauth_generation_failed');
 
     // Return JSON or redirect based on request type
@@ -246,7 +259,19 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
     console.log('[DEBUG] State:', state);
 
     // Get frontend URL for redirects
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!frontendUrl) {
+      log.error('GoogleOAuth', 'FRONTEND_URL not set, cannot redirect user');
+      return res.status(500).json({
+        error: 'Frontend URL configuration missing. Contact administrator.'
+      });
+    }
+
+    // Warn in production if using localhost
+    if (frontendUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+      log.error('GoogleOAuth', 'Frontend URL pointing to localhost in production!');
+    }
 
     // DEBUG: Log all query parameters and full URL for diagnosis
     log.info('GoogleOAuth', 'Callback received', {
@@ -365,7 +390,20 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
       stack: error?.stack
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!frontendUrl) {
+      log.error('GoogleOAuth', 'FRONTEND_URL not set, cannot redirect user');
+      return res.status(500).json({
+        error: 'Frontend URL configuration missing. Contact administrator.'
+      });
+    }
+
+    // Warn in production if using localhost
+    if (frontendUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+      log.error('GoogleOAuth', 'Frontend URL pointing to localhost in production!');
+    }
+
     const errorParam = encodeURIComponent('oauth_callback_error');
     res.redirect(`${frontendUrl}/dashboard/api-keys?error=${errorParam}`);
   }

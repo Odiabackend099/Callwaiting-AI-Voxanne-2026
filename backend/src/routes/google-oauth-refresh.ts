@@ -33,11 +33,16 @@ const supabase = createClient(
  * Get OAuth2 client configured with Google credentials
  */
 function getOAuth2Client() {
-  return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID || '',
-    process.env.GOOGLE_CLIENT_SECRET || '',
-    process.env.GOOGLE_REDIRECT_URI || ''
-  );
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ||
+    `${process.env.BACKEND_URL}/api/google-oauth/callback`;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET required for OAuth refresh');
+  }
+
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
 /**
