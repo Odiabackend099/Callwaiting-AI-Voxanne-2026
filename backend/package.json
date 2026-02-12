@@ -40,6 +40,7 @@
     "restart:all": "ts-node scripts/restart-and-configure.ts",
     "test:booking": "ts-node scripts/test-booking-e2e.ts",
     "verify:webhook": "ts-node scripts/verify-webhook.ts",
+    "verify:phase1": "npx tsx src/scripts/verify-phase1.ts",
     "db:encrypt-integrations": "npx tsx src/scripts/encrypt-integrations.ts",
     "test:security": "npx tsx src/scripts/test-guardian-suite.ts",
     "test:full-scope": "npx tsx src/scripts/full-scope-test.ts",

@@ -1,5 +1,7 @@
 import Redis from 'ioredis';
 import { log } from '../services/logger';
+import { isCircuitOpen, recordFailure, recordSuccess } from '../services/safe-call';
+import { sendSlackAlert } from '../services/slack-alerts';
 
 let redisClient: Redis | null = null;
 const connections: Redis[] = [];
@@ -15,7 +17,15 @@ export function initializeRedis(): void {
     redisClient = new Redis(redisUrl, {
       maxRetriesPerRequest: null, // Required for BullMQ
       retryStrategy: (times) => {
-        return Math.min(times * 50, 2000);
+        // Stop retrying if circuit breaker is open
+        if (isCircuitOpen('Redis')) {
+          log.warn('Redis', 'Circuit breaker open - stopping retry attempts');
+          return null; // Stop retrying
+        }
+
+        // Exponential backoff with max 2s delay
+        const delay = Math.min(times * 50, 2000);
+        return delay;
       }
     });
 
@@ -23,14 +33,30 @@ export function initializeRedis(): void {
 
     redisClient.on('connect', () => {
       log.info('Redis', 'Connected to Redis');
+      // Record success to reset circuit breaker
+      recordSuccess('Redis');
     });
 
     redisClient.on('error', (err) => {
-      log.error('Redis', 'Redis error', { error: err.message });
+      log.error('Redis', 'Redis connection error', { error: err.message });
+
+      // Record failure for circuit breaker
+      recordFailure('Redis');
+
+      // Send Slack alert if circuit breaker opens (after 3 failures)
+      if (isCircuitOpen('Redis')) {
+        sendSlackAlert('🔴 Redis Circuit Breaker OPEN', {
+          message: 'Redis connection failed 3 times. Queue operations will fail.',
+          action: 'Check Redis health immediately',
+          nextRetryIn: '30 seconds'
+        }).catch((alertErr) => {
+          log.error('Redis', 'Failed to send Slack alert', { error: alertErr.message });
+        });
+      }
     });
 
     redisClient.on('reconnecting', () => {
-      log.info('Redis', 'Reconnecting to Redis');
+      log.info('Redis', 'Attempting to reconnect to Redis...');
     });
   } catch (error) {
     log.error('Redis', 'Failed to initialize Redis', { error: (error as Error).message });
@@ -56,11 +82,23 @@ export function createRedisConnection(): Redis | null {
   const conn = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    retryStrategy: (times) => Math.min(times * 50, 2000),
+    retryStrategy: (times) => {
+      // Stop retrying if circuit breaker is open
+      if (isCircuitOpen('Redis')) {
+        log.warn('Redis', 'Circuit breaker open - stopping retry attempts');
+        return null;
+      }
+      return Math.min(times * 50, 2000);
+    },
+  });
+
+  conn.on('connect', () => {
+    recordSuccess('Redis');
   });
 
   conn.on('error', (err) => {
     log.error('Redis', 'Connection error', { error: err.message });
+    recordFailure('Redis');
   });
 
   connections.push(conn);

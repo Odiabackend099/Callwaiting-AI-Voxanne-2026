@@ -1,8 +1,29 @@
 import express, { Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { SessionManagementService } from '../services/session-management';
 import { MFAService } from '../services/mfa-service';
 
 const router = express.Router();
+
+// Rate limiting for authentication endpoints to prevent brute force attacks
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: 'Too many authentication attempts. Please try again in 15 minutes.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
+
+// Stricter rate limiting for MFA verification (6-digit codes can be brute forced)
+const mfaLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 3, // 3 code attempts per window
+  message: 'Too many MFA verification attempts. Please try again in 5 minutes.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
 
 /**
  * Get active sessions for current user
@@ -25,7 +46,7 @@ router.get('/sessions', async (req: Request, res: Response) => {
 /**
  * Revoke specific session
  */
-router.delete('/sessions/:sessionId', async (req: Request, res: Response) => {
+router.delete('/sessions/:sessionId', authLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -50,7 +71,7 @@ router.delete('/sessions/:sessionId', async (req: Request, res: Response) => {
 /**
  * Logout from all devices (except current)
  */
-router.post('/sessions/revoke-all', async (req: Request, res: Response) => {
+router.post('/sessions/revoke-all', authLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -111,7 +132,7 @@ router.get('/security/failed-logins', async (req: Request, res: Response) => {
 /**
  * Generate MFA secret for enrollment
  */
-router.post('/mfa/enroll', async (req: Request, res: Response) => {
+router.post('/mfa/enroll', authLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const email = req.user?.email;
@@ -136,7 +157,7 @@ router.post('/mfa/enroll', async (req: Request, res: Response) => {
 /**
  * Verify MFA code during enrollment
  */
-router.post('/mfa/verify-enrollment', async (req: Request, res: Response) => {
+router.post('/mfa/verify-enrollment', authLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const orgId = req.user?.orgId;
@@ -182,7 +203,7 @@ router.post('/mfa/verify-enrollment', async (req: Request, res: Response) => {
 /**
  * Verify MFA code during login
  */
-router.post('/mfa/verify-login', async (req: Request, res: Response) => {
+router.post('/mfa/verify-login', mfaLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const orgId = req.user?.orgId;
