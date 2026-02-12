@@ -12,7 +12,7 @@ import { verifyVapiSignature } from '../utils/vapi-webhook-signature';
 import { AnalyticsService } from '../services/analytics-service';
 import { OutcomeSummaryService } from '../services/outcome-summary';
 import { RAG_CONFIG } from '../config/rag-config';
-import { hasEnoughBalance } from '../services/wallet-service';
+import { hasEnoughBalance, checkBalance } from '../services/wallet-service';
 import { processCallBilling } from '../services/billing-manager';
 
 const vapiWebhookRouter = Router();
@@ -953,7 +953,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
     // Legacy support: if message is a string, it's the user query
     // Modern support: if message is object with type 'assistant-request' OR no type but has 'role'
 
-    // ===== PREPAID BALANCE GATE: Block calls if insufficient credits =====
+    // ===== PHASE 2: BILLING GATE - PREVENT FREE CALL AUTHORIZATION =====
+    // Block calls if organization has insufficient balance for call costs (~$0.70/min)
+    // CRITICAL: This check happens BEFORE returning assistant config to prevent revenue loss.
     if (message && message.type === 'assistant-request') {
       const gateAssistantId = body.assistantId || message.call?.assistantId;
       if (gateAssistantId) {
@@ -965,19 +967,37 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             .maybeSingle();
 
           if (gateAgent?.org_id) {
-            const hasFunds = await hasEnoughBalance(gateAgent.org_id);
-            if (!hasFunds) {
-              log.warn('Vapi-Webhook', 'Call blocked - insufficient credits', {
+            // Get detailed balance information
+            const balance = await checkBalance(gateAgent.org_id);
+            const MIN_BALANCE_FOR_CALL = 79; // 79 pence ≈ $1.00 at $0.70/min rate
+
+            if (!balance || balance.balancePence < MIN_BALANCE_FOR_CALL) {
+              log.warn('Vapi-Webhook', 'Call blocked - insufficient balance', {
                 orgId: gateAgent.org_id,
                 assistantId: gateAssistantId,
+                currentBalance: balance?.balancePence || 0,
+                requiredBalance: MIN_BALANCE_FOR_CALL,
+                deficit: MIN_BALANCE_FOR_CALL - (balance?.balancePence || 0),
               });
-              return res.json({
-                error: 'Insufficient credits. Please top up your account at your Voxanne dashboard.',
+
+              // Return 402 Payment Required (industry standard for billing gates)
+              return res.status(402).json({
+                error: 'Insufficient credits to authorize call',
+                message: 'Please top up your account at your Voxanne dashboard to make calls.',
+                currentBalance: balance?.balancePence || 0,
+                requiredBalance: MIN_BALANCE_FOR_CALL,
+                autoRechargeEnabled: balance?.autoRechargeEnabled || false,
               });
             }
+
+            log.info('Vapi-Webhook', 'Call authorized - sufficient balance', {
+              orgId: gateAgent.org_id,
+              assistantId: gateAssistantId,
+              balancePence: balance.balancePence,
+            });
           }
         } catch (gateErr: any) {
-          // Don't block calls if balance check fails - fail open
+          // Don't block calls if balance check fails - fail open (availability over consistency)
           log.error('Vapi-Webhook', 'Balance gate error (failing open)', {
             error: gateErr?.message,
             assistantId: gateAssistantId,
@@ -985,6 +1005,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         }
       }
     }
+    // ===== END BILLING GATE =====
 
     let userQuery = '';
 

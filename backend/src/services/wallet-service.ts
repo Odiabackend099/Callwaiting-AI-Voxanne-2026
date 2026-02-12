@@ -338,6 +338,91 @@ export async function deductCallCredits(
 }
 
 // ============================================
+// Phone Provisioning Deduction
+// ============================================
+
+/**
+ * Deduct cost for phone number provisioning.
+ *
+ * PHONE PROVISIONING BILLING:
+ * - Fixed cost: 1000 pence ($10.00 at current exchange rate)
+ * - Atomic deduction via direct transaction
+ * - No idempotency key (provisioning handles retries differently)
+ * - Logs to credit_transactions with type 'phone_provisioning'
+ *
+ * @param orgId - Organization ID
+ * @param costPence - Cost in pence (typically 1000 for $10)
+ * @param phoneNumber - Phone number being provisioned (for logging)
+ * @returns DeductionResult with success/failure status
+ */
+export async function deductPhoneProvisioningCost(
+  orgId: string,
+  costPence: number,
+  phoneNumber: string
+): Promise<DeductionResult> {
+  if (costPence <= 0) {
+    return { success: false, error: 'Cost must be positive' };
+  }
+
+  try {
+    // Use a transaction to ensure atomic check + deduct
+    // We'll use the add_wallet_credits RPC with a negative amount
+    const { data: result, error } = await supabase.rpc('add_wallet_credits', {
+      p_org_id: orgId,
+      p_amount_pence: -costPence, // Negative for deduction
+      p_type: 'phone_provisioning',
+      p_stripe_payment_intent_id: null,
+      p_stripe_charge_id: null,
+      p_description: `Phone number provisioning: ${phoneNumber}`,
+      p_created_by: 'system',
+    });
+
+    if (error) {
+      log.error('WalletService', 'Phone provisioning deduction failed', {
+        orgId,
+        phoneNumber,
+        costPence,
+        error: error.message,
+      });
+      return { success: false, error: error.message };
+    }
+
+    const rpcResult = result as any;
+
+    if (!rpcResult?.success) {
+      log.error('WalletService', 'Phone provisioning deduction returned failure', {
+        orgId,
+        phoneNumber,
+        error: rpcResult?.error,
+      });
+      return { success: false, error: rpcResult?.error };
+    }
+
+    log.info('WalletService', 'Phone provisioning cost deducted', {
+      orgId,
+      phoneNumber,
+      costPence,
+      balanceBefore: rpcResult.balance_before,
+      balanceAfter: rpcResult.balance_after,
+    });
+
+    return {
+      success: true,
+      transactionId: rpcResult.transaction_id,
+      balanceBefore: rpcResult.balance_before,
+      balanceAfter: rpcResult.balance_after,
+    };
+  } catch (err) {
+    log.error('WalletService', 'Unexpected error during phone provisioning deduction', {
+      orgId,
+      phoneNumber,
+      error: (err as Error).message,
+    });
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+// ============================================
 // Add Credits (top-up / refund / bonus)
 // ============================================
 

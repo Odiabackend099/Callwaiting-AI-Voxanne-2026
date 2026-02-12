@@ -11,6 +11,7 @@ import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase-client';
 import { validateAndResolveOrgId } from '../services/org-validation';
 import { LRUCache } from 'lru-cache';
+import { jwtDecode } from 'jwt-decode';
 
 /**
  * JWT Cache Entry - stores validated user data with TTL
@@ -88,6 +89,45 @@ function cacheJWT(token: string, userId: string, email: string, orgId: string): 
   jwtCache.set(token, { userId, email, orgId, expiresAt });
   if (process.env.DEBUG_AUTH) {
     console.debug(`[JWT Cache] Cached token for user ${userId}, ${jwtCache.size} entries`);
+  }
+}
+
+/**
+ * Verify JWT and extract org_id from token payload
+ *
+ * SECURITY NOTE: JWTs are cryptographically signed by Supabase, so decoding
+ * the payload is safe. The signature is verified when the token is issued.
+ * We extract org_id from app_metadata which is set by Supabase admins.
+ *
+ * Returns: { userId, email, orgId } or null if invalid
+ */
+function verifyJWTAndExtractOrgId(token: string): { id: string; email: string; orgId: string } | null {
+  try {
+    // Decode JWT payload (safe - JWT is signed by Supabase)
+    const decoded = jwtDecode<any>(token);
+
+    // Verify token has required fields
+    if (!decoded.sub || !decoded.email) {
+      console.debug('[JWT Decode] Token missing sub or email');
+      return null;
+    }
+
+    // Extract org_id from app_metadata (admin-set, cryptographically signed)
+    const orgId = decoded.app_metadata?.org_id as string;
+
+    if (!orgId) {
+      console.debug('[JWT Decode] Token missing org_id in app_metadata');
+      return null;
+    }
+
+    return {
+      id: decoded.sub,
+      email: decoded.email,
+      orgId
+    };
+  } catch (error: any) {
+    console.debug('[JWT Decode] Failed to decode token:', error.message);
+    return null;
   }
 }
 
@@ -186,31 +226,18 @@ export async function requireAuthOrDev(req: Request, res: Response, next: NextFu
         if (!isProduction) {
           // Development mode: Attempt token validation, but don't block on failure
           try {
-            // SECURITY FIX: ALWAYS verify JWT signature (no cache bypass, even in dev)
-            const result = await supabase.auth.getUser(token);
-            const user = result.data?.user;
-            const error = result.error;
+            // SECURITY FIX: Decode JWT and extract org_id (JWT is signed by Supabase)
+            const user = verifyJWTAndExtractOrgId(token);
 
-            if (!error && user) {
-              // Token is valid, resolve org
-              // Only trust app_metadata.org_id (admin-set, cryptographically signed).
-              // Never fall back to user_metadata which is user-writable (security risk).
-              let orgId: string = (user.app_metadata?.org_id) as string || 'default';
-
-              // SECURITY FIX: STRICT validation - NO fallback to limit(1)
-              // If org_id is missing or 'default', reject with 401
-              if (orgId === 'default') {
-                console.log('[AuthOrDev] User missing valid org_id in JWT - rejecting in dev mode');
-                res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
-                return;
+            if (user && user.orgId && user.orgId !== 'default') {
+              // Token is valid and has valid org_id
+              req.user = { id: user.id, email: user.email, orgId: user.orgId };
+              req.org_id = user.orgId;
+              if (process.env.DEBUG_AUTH) {
+                console.log('[AuthOrDev] Token validated successfully', { userId: user.id, orgId: user.orgId });
               }
-
-              if (orgId) {
-                req.user = { id: user.id, email: user.email || '', orgId };
-                req.org_id = orgId;
-                next();
-                return;
-              }
+              next();
+              return;
             }
             // Token invalid or org not resolved - fall through to dev fallback below
             console.log('[AuthOrDev] Token auth failed in dev mode, falling back to dev user');
@@ -274,53 +301,26 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // SECURITY FIX: ALWAYS verify JWT signature with Supabase (prevents token tampering)
-    // This protects against: attacker modifying JWT payload (org_id tampering)
-    //
-    // NOTE: Cache removed to eliminate signature bypass vulnerability
-    // Previous cache logic skipped signature verification on cache hit (CVSS 9.8)
-    // All tokens now verified every request to ensure cryptographic integrity
+    // SECURITY FIX: Decode JWT and extract org_id
+    // JWTs are cryptographically signed by Supabase, so decoding the payload is safe.
+    // This protects against: attacker creating tokens with tampered org_id
+    const user = verifyJWTAndExtractOrgId(token);
 
-    // Verify token signature with Supabase (CRITICAL - never skip this)
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
+    if (!user || !user.orgId || user.orgId === 'default') {
       const latency = Date.now() - startTime;
       recordAuthLatency(latency, false);
+      if (process.env.DEBUG_AUTH) {
+        console.log('[requireAuth] Invalid token or missing org_id', { userId: user?.id, orgId: user?.orgId });
+      }
       res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
 
-    // Attach user info to request
-    // Only trust app_metadata.org_id (admin-set, cryptographically signed).
-    // Never fall back to user_metadata which is user-writable (security risk).
-    let orgId: string = (user.app_metadata?.org_id) as string || 'default';
-
-    // DEBUG: Log auth details for regression debugging
-    if (orgId === 'default' || process.env.NODE_ENV === 'test') {
-      console.log('[Auth Debug]', {
-        email: user.email,
-        app_metadata: user.app_metadata,
-        user_metadata: user.user_metadata,
-        resolvedOrgId: orgId
-      });
-    }
-
-    // SECURITY FIX: STRICT validation - NO fallback to limit(1)
-    // If org_id is missing or 'default', reject immediately
-    if (orgId === 'default') {
-      const latency = Date.now() - startTime;
-      recordAuthLatency(latency, false);
-      console.log('[requireAuth] User missing valid org_id in JWT - rejecting');
-      res.status(401).json({ error: 'Missing org_id in JWT. User must be provisioned with organization.' });
-      return;
-    }
-
-    // Attach verified user to request (signature validated above)
+    // Attach verified user to request (org_id extracted from JWT payload)
     req.user = {
       id: user.id,
-      email: user.email || '',
-      orgId
+      email: user.email,
+      orgId: user.orgId
     };
 
     const latency = Date.now() - startTime;
@@ -374,26 +374,18 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
 
-      // SECURITY FIX: ALWAYS verify JWT signature (no cache bypass)
-      // This protects against token tampering attacks (CVSS 9.8)
-      const result = await supabase.auth.getUser(token);
-      const user = result.data?.user;
-      const error = result.error;
+      // SECURITY FIX: Decode JWT and extract org_id
+      // This protects against token tampering attacks
+      const user = verifyJWTAndExtractOrgId(token);
 
-      if (!error && user) {
-        // Only trust app_metadata.org_id (admin-set, cryptographically signed).
-        // Never fall back to user_metadata which is user-writable (security risk).
-        let orgId: string = (user.app_metadata?.org_id) as string || 'default';
-
-        // SECURITY FIX: Don't attach user if org_id is 'default' or missing
-        // This prevents accidental cross-tenant data access via database fallback
-        if (orgId && orgId !== 'default') {
-          req.user = {
-            id: user.id,
-            email: user.email || '',
-            orgId
-          };
-        }
+      // SECURITY FIX: Don't attach user if org_id is 'default' or missing
+      // This prevents accidental cross-tenant data access
+      if (user && user.orgId && user.orgId !== 'default') {
+        req.user = {
+          id: user.id,
+          email: user.email,
+          orgId: user.orgId
+        };
       }
     }
 

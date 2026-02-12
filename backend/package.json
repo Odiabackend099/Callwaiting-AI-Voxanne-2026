@@ -48,6 +48,7 @@
     "phoenix": "npx tsx src/scripts/sync-vapi-tools.ts",
     "phoenix:dry-run": "npx tsx src/scripts/sync-vapi-tools.ts --dry-run",
     "test:priority6": "npx tsx src/scripts/test-priority6-performance.ts",
+    "test:billing-gates": "npx tsx src/scripts/test-billing-gates.ts",
     "test:email-v2": "npx tsx src/scripts/test-email-service-v2.ts",
     "simulate:simple": "npx ts-node src/scripts/simulate-vapi-call.ts",
     "test:debt-limit": "npx ts-node src/scripts/test-debt-limit.ts",

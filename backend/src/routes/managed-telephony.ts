@@ -23,6 +23,7 @@ import { ManagedTelephonyService } from '../services/managed-telephony-service';
 import { PhoneValidationService } from '../services/phone-validation-service';
 import { supabaseAdmin } from '../config/supabase';
 import { createLogger } from '../services/logger';
+import { checkBalance, deductPhoneProvisioningCost, addCredits } from '../services/wallet-service';
 
 const logger = createLogger('ManagedTelephonyRoutes');
 const router = Router();
@@ -96,6 +97,61 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
 
     logger.info('Validation passed - proceeding with provisioning', { orgId });
 
+    // ===== PHASE 1: BILLING GATE - PREVENT FREE PHONE NUMBER PROVISIONING =====
+    // Phone numbers cost $10.00 (1000 pence). This gate enforces prepaid billing.
+    // CRITICAL: This check happens BEFORE calling Twilio API to prevent revenue loss.
+    const PHONE_NUMBER_COST_PENCE = 1000; // $10.00 = 1000 pence
+
+    // Step 1: Check wallet balance
+    const balance = await checkBalance(orgId);
+    if (!balance || balance.balancePence < PHONE_NUMBER_COST_PENCE) {
+      logger.warn('Provisioning blocked - insufficient balance', {
+        orgId,
+        required: PHONE_NUMBER_COST_PENCE,
+        current: balance?.balancePence || 0,
+      });
+
+      res.status(402).json({
+        error: 'Insufficient funds. $10.00 required to provision phone number.',
+        required: PHONE_NUMBER_COST_PENCE,
+        current: balance?.balancePence || 0,
+        canRetry: true,
+      });
+      return;
+    }
+
+    // Step 2: Deduct balance atomically (BEFORE calling Twilio)
+    // This ensures we're paid before incurring costs
+    const deductResult = await deductPhoneProvisioningCost(
+      orgId,
+      PHONE_NUMBER_COST_PENCE,
+      `${country} ${numberType} ${areaCode || 'any'}`
+    );
+
+    if (!deductResult.success) {
+      logger.error('Provisioning blocked - payment processing failed', {
+        orgId,
+        error: deductResult.error,
+        balanceBefore: deductResult.balanceBefore,
+      });
+
+      res.status(402).json({
+        error: 'Payment processing failed. Please try again or contact support.',
+        details: deductResult.error,
+        canRetry: true,
+      });
+      return;
+    }
+
+    logger.info('Payment processed successfully', {
+      orgId,
+      costPence: PHONE_NUMBER_COST_PENCE,
+      balanceBefore: deductResult.balanceBefore,
+      balanceAfter: deductResult.balanceAfter,
+    });
+
+    // ===== END BILLING GATE =====
+
     // Check if BYOC credentials exist (for warning)
     const { data: existingCred } = await supabaseAdmin
       .from('org_credentials')
@@ -114,6 +170,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     const hasByocCreds = !!existingCred && existingOrg?.telephony_mode === 'byoc';
 
     // Call provisioning service with structured error handling
+    // NOTE: Balance already deducted above. If this fails, we'll need to refund.
     const result = await ManagedTelephonyService.provisionManagedNumber({
       orgId,
       country,
@@ -122,21 +179,49 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     });
 
     if (!result.success) {
-      logger.error('Provisioning failed', {
+      logger.error('Provisioning failed - refunding payment', {
         orgId,
         error: result.error,
         failedStep: result.failedStep,
         canRetry: result.canRetry,
         country,
         numberType,
-        areaCode
+        areaCode,
+        refundAmount: PHONE_NUMBER_COST_PENCE,
       });
+
+      // CRITICAL: Refund the deducted amount since provisioning failed
+      const refundResult = await addCredits(
+        orgId,
+        PHONE_NUMBER_COST_PENCE,
+        'refund',
+        undefined,
+        undefined,
+        `Refund for failed phone provisioning: ${result.error}`,
+        'system'
+      );
+
+      if (!refundResult.success) {
+        logger.error('CRITICAL: Refund failed after provisioning failure', {
+          orgId,
+          refundError: refundResult.error,
+          originalError: result.error,
+        });
+        // Alert ops team - customer was charged but didn't get the service
+      } else {
+        logger.info('Payment refunded successfully', {
+          orgId,
+          refundAmount: PHONE_NUMBER_COST_PENCE,
+          balanceAfter: refundResult.balanceAfter,
+        });
+      }
 
       res.status(400).json({
         error: result.error,
         userMessage: result.userMessage || result.error,
         failedStep: result.failedStep,
-        canRetry: result.canRetry
+        canRetry: result.canRetry,
+        refunded: refundResult.success,
       });
       return;
     }
