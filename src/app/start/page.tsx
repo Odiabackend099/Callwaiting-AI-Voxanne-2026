@@ -135,9 +135,9 @@ function OnboardingForm() {
 
   const handlePhoneBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const phoneValue = e.target.value;
-    if (phoneValue && !isValidPhoneNumber(phoneValue, 'US')) {
+    if (phoneValue && !isValidPhoneNumber(phoneValue)) {
       haptics.warning(); // Warning haptic for validation error
-      setPhoneError('Please enter a valid phone number (e.g., +1 555-123-4567)');
+      setPhoneError('Please enter a valid international phone number (e.g., +1 555-123-4567 or +44 7424 038250)');
     } else {
       setPhoneError('');
     }
@@ -150,9 +150,9 @@ function OnboardingForm() {
     // Validate phone before submitting
     const formElement = e.target as HTMLFormElement;
     const phoneInput = formElement.elements.namedItem('phone') as HTMLInputElement;
-    if (phoneInput.value && !isValidPhoneNumber(phoneInput.value, 'US')) {
+    if (phoneInput.value && !isValidPhoneNumber(phoneInput.value)) {
       haptics.error();
-      setPhoneError('Please enter a valid phone number');
+      setPhoneError('Please enter a valid international phone number');
       showError('Please fix the phone number error before submitting');
       return;
     }
@@ -164,8 +164,8 @@ function OnboardingForm() {
     // Format phone to E.164 if possible
     try {
       const phoneValue = phoneInput.value;
-      if (phoneValue && isValidPhoneNumber(phoneValue, 'US')) {
-        const parsedPhone = parsePhoneNumber(phoneValue, 'US');
+      if (phoneValue && isValidPhoneNumber(phoneValue)) {
+        const parsedPhone = parsePhoneNumber(phoneValue);
         formData.set('phone', parsedPhone.number); // E.164 format
       }
     } catch (error) {
