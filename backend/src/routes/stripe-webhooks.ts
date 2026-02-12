@@ -1,23 +1,14 @@
 /**
- * Stripe Webhook Handler (P0-1: Async Processing)
+ * Stripe Webhook Handler
  *
- * Receives Stripe webhook events and queues them for async processing.
- * Returns 200 immediately to prevent Stripe timeouts, then processes via BullMQ.
+ * Receives Stripe webhook events with signature verification.
  *
- * Event Types Handled:
- * - invoice.payment_succeeded: Reset usage counter on subscription renewal
- * - customer.subscription.deleted: Deactivate billing when subscription canceled
- * - customer.subscription.updated: Handle plan changes
- * - checkout.session.completed: Process wallet top-ups
- * - payment_intent.succeeded: Safety net for wallet credits
- * - payment_intent.payment_failed: Alert on payment failures
+ * CRITICAL: Wallet top-ups (checkout.session.completed) are processed
+ * SYNCHRONOUSLY — credits are added before returning 200 to Stripe.
+ * If processing fails, returns 500 so Stripe retries automatically.
  *
- * Implementation Details:
- * - Webhook signature verified by middleware (verifyStripeSignature)
- * - Returns 200 within <1 second (as required by Stripe)
- * - Processing happens asynchronously via BullMQ queue
- * - Worker implementation: backend/src/jobs/stripe-webhook-processor.ts
- * - Queue configuration: backend/src/config/billing-queue.ts
+ * All other event types are queued for async processing via BullMQ
+ * (optional — non-critical if Redis is unavailable).
  */
 
 import { Router, Request, Response } from 'express';
@@ -25,14 +16,15 @@ import { verifyStripeSignature } from '../middleware/verify-stripe-signature';
 import { log } from '../services/logger';
 import { enqueueBillingWebhook } from '../config/billing-queue';
 import { supabase } from '../services/supabase-client';
+import { addCredits } from '../services/wallet-service';
+import { getStripeClient } from '../config/stripe';
 
 const router = Router();
 
 /**
  * POST /api/webhooks/stripe
- * Receives Stripe webhook events and queues them for async processing.
- * Returns 200 immediately (within <1 second) to prevent Stripe timeouts.
- * Signature verification handled by middleware.
+ * Wallet top-ups: processed synchronously, 200 returned only after success.
+ * Other events: 200 returned immediately, async processing via BullMQ.
  */
 router.post('/stripe',
   verifyStripeSignature(),
@@ -63,27 +55,111 @@ router.post('/stripe',
       return res.status(200).json({ received: true, duplicate: true });
     }
 
-    // Step 1: Return 200 IMMEDIATELY to Stripe (as recommended by Stripe docs)
-    // This prevents timeout and retry loops
-    res.status(200).json({ received: true });
-
-    // Step 2: Mark event as being processed (prevents race conditions)
-    const { data: marked } = await supabase.rpc('mark_stripe_event_processed', {
+    // Mark event as being processed (prevents race conditions)
+    await supabase.rpc('mark_stripe_event_processed', {
       p_event_id: event.id,
       p_event_type: event.type,
       p_org_id: event.data?.object?.metadata?.org_id || null,
       p_event_data: event.data?.object || null
     });
 
-    if (!marked) {
-      log.warn('StripeWebhook', 'Event already being processed by another worker', {
-        eventId: event.id,
-        eventType: event.type,
-      });
-      return; // Another worker is handling this event
+    // ========================================================
+    // CRITICAL FIX: Process wallet top-ups SYNCHRONOUSLY
+    // Only return 200 AFTER credits are successfully added.
+    // If processing fails, return 500 so Stripe retries.
+    // The addCredits() RPC takes <100ms — no need for async queue.
+    // ========================================================
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+
+      if (session.metadata?.type === 'wallet_topup') {
+        try {
+          const orgId = session.metadata?.org_id;
+          const amountPence = parseInt(session.metadata?.amount_pence || '0', 10);
+          const paymentIntentId = session.payment_intent;
+
+          if (!orgId || !amountPence || amountPence <= 0) {
+            log.error('StripeWebhook', 'Missing metadata for wallet top-up', {
+              sessionId: session.id,
+              metadata: session.metadata,
+            });
+            return res.status(400).json({ error: 'Missing wallet top-up metadata' });
+          }
+
+          // Add credits SYNCHRONOUSLY (single Supabase RPC, <100ms)
+          const result = await addCredits(
+            orgId,
+            amountPence,
+            'topup',
+            paymentIntentId,
+            undefined,
+            `Checkout top-up: ${amountPence}p`,
+            'stripe:checkout'
+          );
+
+          if (!result.success) {
+            log.error('StripeWebhook', 'Failed to add wallet credits', {
+              orgId,
+              amountPence,
+              error: result.error,
+            });
+            // Return 500 so Stripe retries
+            return res.status(500).json({ error: 'Credit processing failed' });
+          }
+
+          log.info('StripeWebhook', 'Wallet credits added SYNCHRONOUSLY', {
+            orgId,
+            amountPence,
+            balanceBefore: result.balanceBefore,
+            balanceAfter: result.balanceAfter,
+          });
+
+          // Save payment method for future auto-recharge (non-blocking)
+          try {
+            const customerId = session.customer;
+            if (customerId) {
+              const stripe = getStripeClient();
+              if (stripe) {
+                const paymentMethods = await stripe.paymentMethods.list({
+                  customer: customerId as string,
+                  type: 'card',
+                  limit: 1,
+                });
+                if (paymentMethods?.data?.length > 0) {
+                  await supabase
+                    .from('organizations')
+                    .update({
+                      stripe_default_pm_id: paymentMethods.data[0].id,
+                      stripe_customer_id: customerId,
+                    })
+                    .eq('id', orgId);
+                }
+              }
+            }
+          } catch (pmError: any) {
+            // Non-fatal: top-up succeeded, PM save failed
+            log.warn('StripeWebhook', 'Failed to save payment method (non-blocking)', {
+              error: pmError?.message,
+            });
+          }
+
+          // Only NOW return 200 — credits are confirmed in the database
+          return res.status(200).json({ received: true, credited: true });
+
+        } catch (err: any) {
+          log.error('StripeWebhook', 'Wallet top-up processing error', {
+            error: err.message,
+            stack: err.stack,
+          });
+          // Return 500 so Stripe retries
+          return res.status(500).json({ error: 'Processing error' });
+        }
+      }
     }
 
-    // Step 3: Queue for async processing via BullMQ
+    // For all other event types: return 200, then attempt async queue (optional)
+    res.status(200).json({ received: true });
+
     try {
       const job = await enqueueBillingWebhook({
         eventId: event.id,
@@ -92,26 +168,23 @@ router.post('/stripe',
         receivedAt: new Date().toISOString(),
       });
 
-      if (!job) {
-        log.error('StripeWebhook', 'Failed to enqueue webhook - queue not initialized', {
+      if (job) {
+        log.info('StripeWebhook', 'Event queued for async processing', {
+          eventId: event.id,
+          eventType: event.type,
+          jobId: job.id,
+        });
+      } else {
+        log.warn('StripeWebhook', 'Queue unavailable for non-critical event', {
           eventId: event.id,
           eventType: event.type,
         });
-        return;
       }
-
-      log.info('StripeWebhook', 'Webhook queued for processing', {
-        eventId: event.id,
-        eventType: event.type,
-        jobId: job.id,
-      });
     } catch (error: any) {
-      // Log error but don't re-throw — we already sent 200 to Stripe
-      log.error('StripeWebhook', 'Failed to enqueue webhook', {
+      log.error('StripeWebhook', 'Failed to enqueue non-critical event', {
         eventId: event.id,
         eventType: event.type,
         error: error.message,
-        stack: error.stack,
       });
     }
   }

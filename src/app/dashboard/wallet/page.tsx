@@ -37,7 +37,7 @@ interface WalletData {
 
 interface Transaction {
     id: string;
-    type: 'topup' | 'call_deduction' | 'refund' | 'adjustment' | 'bonus';
+    type: 'topup' | 'call_deduction' | 'refund' | 'adjustment' | 'bonus' | 'phone_provisioning';
     amount_pence: number;
     direction: 'credit' | 'debit';
     balance_after_pence: number;
@@ -69,11 +69,12 @@ function formatDate(iso: string): string {
 }
 
 const TX_META: Record<string, { icon: React.ElementType; label: string; color: string }> = {
-    topup:          { icon: ArrowUpRight,  label: 'Top-Up',       color: 'text-green-600' },
-    call_deduction: { icon: ArrowDownLeft, label: 'Call Charge',  color: 'text-red-500' },
-    refund:         { icon: RefreshCw,     label: 'Refund',       color: 'text-surgical-600' },
-    adjustment:     { icon: CreditCard,    label: 'Adjustment',   color: 'text-obsidian/60' },
-    bonus:          { icon: Plus,          label: 'Bonus',        color: 'text-surgical-600' },
+    topup:              { icon: ArrowUpRight,  label: 'Top-Up',           color: 'text-green-600' },
+    call_deduction:     { icon: ArrowDownLeft, label: 'Call Charge',      color: 'text-red-500' },
+    refund:             { icon: RefreshCw,     label: 'Refund',           color: 'text-surgical-600' },
+    adjustment:         { icon: CreditCard,    label: 'Adjustment',       color: 'text-obsidian/60' },
+    bonus:              { icon: Plus,          label: 'Bonus',            color: 'text-surgical-600' },
+    phone_provisioning: { icon: Phone,         label: 'Phone Purchase',   color: 'text-red-500' },
 };
 
 // ---------------------------------------------------------------------------
@@ -260,10 +261,10 @@ const WalletPageContent = () => {
             {/* Quick Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { icon: TrendingUp,    label: 'Total Top-Ups',   value: summary ? formatPence(summary.total_topped_up_pence) : '-' },
-                    { icon: ArrowDownLeft, label: 'Total Spent',     value: summary ? formatPence(summary.total_spent_pence) : '-' },
-                    { icon: Phone,         label: 'Total Calls',     value: summary ? String(summary.total_calls) : '-' },
-                    { icon: CreditCard,    label: 'Auto-Recharge',   value: wallet ? (wallet.auto_recharge_enabled ? 'On' : 'Off') : '-',
+                    { icon: TrendingUp,    label: 'Total Top-Ups',   value: formatPence(summary?.total_topped_up_pence ?? 0) },
+                    { icon: ArrowDownLeft, label: 'Total Spent',     value: formatPence(summary?.total_spent_pence ?? 0) },
+                    { icon: Phone,         label: 'Total Calls',     value: String(summary?.total_calls ?? 0) },
+                    { icon: CreditCard,    label: 'Auto-Recharge',   value: wallet?.auto_recharge_enabled ? 'On' : 'Off',
                       valueColor: wallet?.auto_recharge_enabled ? 'text-surgical-600' : 'text-obsidian/40' },
                 ].map((card) => {
                     const Icon = card.icon;
@@ -301,6 +302,7 @@ const WalletPageContent = () => {
                             <option value="">All Types</option>
                             <option value="topup">Top-Ups</option>
                             <option value="call_deduction">Call Charges</option>
+                            <option value="phone_provisioning">Phone Purchases</option>
                             <option value="refund">Refunds</option>
                             <option value="adjustment">Adjustments</option>
                             <option value="bonus">Bonuses</option>
