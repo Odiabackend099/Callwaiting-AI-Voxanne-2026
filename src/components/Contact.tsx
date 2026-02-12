@@ -8,8 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-
 export default function Contact() {
     const { warning, error: showErrorToast } = useToast();
     const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
@@ -40,8 +38,8 @@ export default function Contact() {
                 return;
             }
 
-            // Call backend API
-            const response = await fetch(`${BACKEND_URL}/api/contact-form`, {
+            // Call Next.js API route
+            const response = await fetch('/api/contact-form', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

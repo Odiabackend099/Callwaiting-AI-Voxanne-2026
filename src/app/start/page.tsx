@@ -16,8 +16,6 @@ import { NetworkStatus, useNetworkStatus } from '@/components/pwa/NetworkStatus'
 import { queueSubmission, processQueue, getQueuedCount } from '@/lib/offline-queue';
 import { trackEvent } from '@/lib/analytics';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-
 export default function OnboardingPage() {
   return (
     <Suspense fallback={null}>
@@ -49,7 +47,7 @@ function OnboardingForm() {
   const processOfflineQueue = async () => {
     try {
       const result = await processQueue(async (formData) => {
-        const response = await fetch(`${BACKEND_URL}/api/onboarding-intake`, {
+        const response = await fetch('/api/onboarding-intake', {
           method: 'POST',
           body: formData,
         });
@@ -206,9 +204,9 @@ function OnboardingForm() {
 
     // Online submission
     try {
-      console.log('Submitting to:', `${BACKEND_URL}/api/onboarding-intake`);
+      console.log('Submitting to:', '/api/onboarding-intake');
 
-      const response = await fetch(`${BACKEND_URL}/api/onboarding-intake`, {
+      const response = await fetch('/api/onboarding-intake', {
         method: 'POST',
         body: formData,
       });
