@@ -88,7 +88,7 @@ const circuitBreakers = new Map<string, CircuitBreakerState>();
 /**
  * Check if circuit is open
  */
-function isCircuitOpen(serviceName: string): boolean {
+export function isCircuitOpen(serviceName: string): boolean {
   const state = circuitBreakers.get(serviceName);
   if (!state) return false;
 
@@ -116,7 +116,7 @@ function isCircuitOpen(serviceName: string): boolean {
 /**
  * Mark circuit failure
  */
-function recordFailure(serviceName: string): void {
+export function recordFailure(serviceName: string): void {
   let state = circuitBreakers.get(serviceName);
 
   if (!state) {
@@ -140,7 +140,7 @@ function recordFailure(serviceName: string): void {
 /**
  * Reset circuit on success
  */
-function recordSuccess(serviceName: string): void {
+export function recordSuccess(serviceName: string): void {
   const state = circuitBreakers.get(serviceName);
   if (state) {
     state.failures = 0;
