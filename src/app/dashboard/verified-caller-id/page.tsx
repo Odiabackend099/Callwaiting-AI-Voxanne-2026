@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 type VerificationStep = 'input' | 'verify' | 'success';
 
@@ -20,6 +21,8 @@ export default function VerifiedCallerIDPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifiedNumbers, setVerifiedNumbers] = useState<VerifiedNumber[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [numberToDelete, setNumberToDelete] = useState<string | null>(null);
 
   // Load existing verified numbers on mount
   useEffect(() => {
@@ -28,7 +31,7 @@ export default function VerifiedCallerIDPage() {
 
   const fetchVerifiedNumbers = async () => {
     try {
-      const res = await authedBackendFetch('/api/verified-caller-id/list');
+      const res = await authedBackendFetch('/api/verified-caller-id/list') as Response;
       if (res.ok) {
         const data = await res.json();
         setVerifiedNumbers(data.numbers || []);
@@ -50,7 +53,7 @@ export default function VerifiedCallerIDPage() {
           phoneNumber,
           countryCode: 'US'
         })
-      });
+      }) as Response;
 
       const data = await res.json();
 
@@ -78,7 +81,7 @@ export default function VerifiedCallerIDPage() {
           phoneNumber,
           code
         })
-      });
+      }) as Response;
 
       const data = await res.json();
 
@@ -95,21 +98,28 @@ export default function VerifiedCallerIDPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this verified number?')) {
-      return;
-    }
+  const handleDeleteClick = (id: string) => {
+    setNumberToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!numberToDelete) return;
+
+    setShowDeleteConfirm(false);
 
     try {
-      const res = await authedBackendFetch(`/api/verified-caller-id/${id}`, {
+      const res = await authedBackendFetch(`/api/verified-caller-id/${numberToDelete}`, {
         method: 'DELETE'
-      });
+      }) as Response;
 
       if (res.ok) {
         fetchVerifiedNumbers(); // Refresh the list
       }
     } catch (err) {
       console.error('Error deleting verified number:', err);
+    } finally {
+      setNumberToDelete(null);
     }
   };
 
@@ -157,7 +167,7 @@ export default function VerifiedCallerIDPage() {
                       ✓ Active
                     </span>
                     <button
-                      onClick={() => handleDelete(number.id)}
+                      onClick={() => handleDeleteClick(number.id)}
                       className="text-red-600 hover:text-red-800 text-sm font-medium"
                     >
                       Remove
@@ -318,6 +328,21 @@ export default function VerifiedCallerIDPage() {
           </ul>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Remove Verified Number"
+        message="Are you sure you want to remove this verified number? You will need to verify it again if you want to use it in the future."
+        confirmText="Remove"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setNumberToDelete(null);
+        }}
+      />
     </div>
   );
 }

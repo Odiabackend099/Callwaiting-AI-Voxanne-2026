@@ -268,35 +268,48 @@ const CallsPageContent = () => {
         }
     };
 
-    const deleteCall = async (callId: string) => {
-        if (!confirm('Are you sure you want to delete this call?')) return;
+    const deleteCall = (callId: string) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Call',
+            message: 'Are you sure you want to delete this call? This action cannot be undone.',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            onConfirm: async () => {
+                try {
+                    await authedBackendFetch(`/api/calls-dashboard/${callId}`, {
+                        method: 'DELETE',
+                    });
 
-        try {
-            await authedBackendFetch(`/api/calls-dashboard/${callId}`, {
-                method: 'DELETE',
-            });
+                    // Optimistic update or simple revalidation
+                    mutateCalls(
+                        (currentData: any) => ({
+                            ...currentData,
+                            calls: currentData.calls.filter((c: Call) => c.id !== callId),
+                            pagination: {
+                                ...currentData.pagination,
+                                total: currentData.pagination.total - 1
+                            }
+                        }),
+                        false // set to false to not revalidate immediately
+                    );
 
-            // Optimistic update or simple revalidation
-            mutateCalls(
-                (currentData: any) => ({
-                    ...currentData,
-                    calls: currentData.calls.filter((c: Call) => c.id !== callId),
-                    pagination: {
-                        ...currentData.pagination,
-                        total: currentData.pagination.total - 1
-                    }
-                }),
-                false // set to false to not revalidate immediately
-            );
+                    // Trigger actual revalidation as well to be safe
+                    mutateCalls();
+                    mutateAnalytics();
 
-            // Trigger actual revalidation as well to be safe
-            mutateCalls();
-            mutateAnalytics();
+                    setError(null);
 
-            setError(null);
-        } catch (err: any) {
-            setError(err?.message || 'Failed to delete call');
-        }
+                    // Close the dialog after successful deletion
+                    setConfirmDialog({
+                        ...confirmDialog,
+                        isOpen: false
+                    });
+                } catch (err: any) {
+                    setError(err?.message || 'Failed to delete call');
+                }
+            }
+        });
     };
 
     const handlePlayRecordingFromList = async (call: Call) => {

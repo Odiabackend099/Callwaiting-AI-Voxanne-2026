@@ -26,13 +26,13 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint || true
+        run: npm run lint
 
       - name: Check TypeScript types
-        run: npx tsc --noEmit || true
+        run: npx tsc --noEmit
 
       - name: Check Prettier formatting
-        run: npx prettier --check "**/*.{ts,tsx,js,jsx,json,md}" || true
+        run: npx prettier --check "**/*.{ts,tsx,js,jsx,json,md}"
 
   test-backend:
     name: Backend Tests
@@ -111,7 +111,7 @@ jobs:
         run: npm ci
 
       - name: Run frontend tests
-        run: npm test -- --coverage || true
+        run: npm test -- --coverage
         env:
           NODE_ENV: test
 

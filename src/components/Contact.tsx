@@ -6,10 +6,12 @@ import { Mail, Phone, MapPin, Loader2, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
+import { useToast } from "@/hooks/useToast";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export default function Contact() {
+    const { warning, error: showErrorToast } = useToast();
     const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
     const [formRef, setFormRef] = useState<HTMLFormElement | null>(null);
 
@@ -34,7 +36,7 @@ export default function Contact() {
             // Validate required fields
             if (!payload.name || !payload.email || !payload.message) {
                 setStatus("idle");
-                alert('Please fill in all required fields');
+                warning('Please fill in all required fields');
                 return;
             }
 
@@ -61,7 +63,7 @@ export default function Contact() {
         } catch (error) {
             console.error('Contact form submission error:', error);
             setStatus("idle");
-            alert('Failed to send message. Please try again or email support@voxanne.ai directly.');
+            showErrorToast('Failed to send message. Please try again or email support@voxanne.ai directly.');
         }
     };
 

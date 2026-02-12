@@ -32,6 +32,57 @@ const webhookLimiter = rateLimit({
 });
 
 /**
+ * Check if webhook event was already processed (idempotency)
+ * Returns { isDuplicate: true } if already processed
+ * Automatically marks as processed if first time
+ */
+async function checkAndMarkWebhookProcessed(
+  orgId: string,
+  eventId: string,
+  eventType: string,
+  payload: any
+): Promise<{ isDuplicate: boolean; error?: any }> {
+  try {
+    // Check if already processed
+    const { data: alreadyProcessed, error: checkError } = await supabase
+      .rpc('is_vapi_event_processed', {
+        p_org_id: orgId,
+        p_event_id: eventId
+      });
+
+    if (checkError) {
+      log.error('Vapi-Webhook', 'Idempotency check failed', { error: checkError.message });
+      // Fail-open: if check fails, process anyway (prevents data loss)
+      return { isDuplicate: false, error: checkError };
+    }
+
+    if (alreadyProcessed) {
+      log.info('Vapi-Webhook', 'Duplicate webhook detected', { eventId, eventType });
+      return { isDuplicate: true };
+    }
+
+    // Mark as processed
+    const { error: markError } = await supabase
+      .rpc('mark_vapi_event_processed', {
+        p_org_id: orgId,
+        p_event_id: eventId,
+        p_event_type: eventType,
+        p_payload: payload
+      });
+
+    if (markError) {
+      log.error('Vapi-Webhook', 'Failed to mark webhook processed', { error: markError.message });
+      // Continue processing even if marking fails (fail-open)
+    }
+
+    return { isDuplicate: false };
+  } catch (err: any) {
+    log.error('Vapi-Webhook', 'Idempotency error', { error: err.message });
+    return { isDuplicate: false, error: err };
+  }
+}
+
+/**
  * Extract service keywords from call transcript
  * Used to populate lead service_interests from inbound calls
  */
@@ -104,6 +155,55 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       callId: message?.call?.id,
       webhookKeys: Object.keys(body)
     });
+
+    // 2. Idempotency Check (prevent duplicate processing)
+    // Extract event ID from various possible locations
+    const eventId = message?.call?.id || message?.id || body.event?.id || body.id;
+    const eventType = message?.type || body.messageType || body.type || 'unknown';
+
+    if (eventId) {
+      // Try to resolve org_id for idempotency check
+      let orgId: string | null = null;
+
+      // Option 1: From assistant ID
+      const assistantId = message?.call?.assistantId || body.assistantId;
+      if (assistantId) {
+        const { data: agent } = await supabase
+          .from('agents')
+          .select('org_id')
+          .eq('vapi_assistant_id', assistantId)
+          .maybeSingle();
+        orgId = (agent as any)?.org_id ?? null;
+      }
+
+      // Option 2: From call metadata
+      if (!orgId && message?.call?.metadata?.org_id) {
+        orgId = message.call.metadata.org_id;
+      }
+
+      // If we have org_id, check for duplicates
+      if (orgId) {
+        const { isDuplicate } = await checkAndMarkWebhookProcessed(
+          orgId,
+          eventId,
+          eventType,
+          body
+        );
+
+        if (isDuplicate) {
+          log.info('Vapi-Webhook', 'Duplicate webhook ignored', { eventId, eventType, orgId });
+          // Return 200 to prevent Vapi from retrying
+          return res.status(200).json({
+            success: true,
+            message: 'Duplicate webhook ignored',
+            eventId
+          });
+        }
+      } else {
+        log.warn('Vapi-Webhook', 'Unable to resolve org_id for idempotency check', { eventId });
+        // Continue processing (fail-open if we can't determine org)
+      }
+    }
 
     // 2a. Handle Tool Calls (bookClinicAppointment)
     if (body.messageType === 'tool-calls' && body.toolCall) {

@@ -1,174 +1,54 @@
 /**
  * Webhook Events Cleanup Job
- * Runs daily to clean up old processed webhook event records
- *
- * Cleans up:
- * 1. processed_webhook_events older than 24 hours
- * 2. webhook_delivery_log older than 7 days
- *
- * This prevents database bloat from idempotency tracking tables.
+ * Deletes processed_webhook_events older than 7 days
+ * Runs daily at 4 AM UTC
  */
 
 import { supabase } from '../services/supabase-client';
-import { createLogger } from '../services/logger';
-
-const logger = createLogger('WebhookEventsCleanup');
-
-// Configuration
-const PROCESSED_EVENTS_RETENTION_HOURS = 24;
-const DELIVERY_LOG_RETENTION_DAYS = 7;
+import { log } from '../services/logger';
+import * as schedule from 'node-schedule';
 
 /**
- * Main cleanup job
- * Cleans both processed_webhook_events and webhook_delivery_log tables
+ * Execute cleanup of old webhook events
+ * Returns number of records deleted
  */
-export async function runWebhookEventsCleanup(): Promise<void> {
-  const startTime = Date.now();
-  logger.info('Starting webhook events cleanup job');
-
-  let processedEventsDeleted = 0;
-  let deliveryLogDeleted = 0;
-  let errors: string[] = [];
-
+export async function cleanupOldWebhookEvents(): Promise<number> {
   try {
-    // 1. Clean processed_webhook_events older than 24 hours
-    const processedEventsCutoff = new Date(
-      Date.now() - PROCESSED_EVENTS_RETENTION_HOURS * 60 * 60 * 1000
-    ).toISOString();
+    log.info('WebhookCleanup', 'Starting cleanup of old webhook events');
 
-    logger.info('Cleaning processed_webhook_events', {
-      cutoff: processedEventsCutoff,
-      retentionHours: PROCESSED_EVENTS_RETENTION_HOURS
-    });
+    const { data, error } = await supabase
+      .rpc('cleanup_old_processed_webhook_events');
 
-    // Count rows to be deleted first
-    const { count: eventsCount, error: countError } = await supabase
-      .from('processed_webhook_events')
-      .select('*', { count: 'exact', head: true })
-      .lt('received_at', processedEventsCutoff);
-
-    if (countError) {
-      logger.error('Failed to count processed_webhook_events', {
-        error: countError.message
-      });
-      errors.push(`processed_webhook_events count: ${countError.message}`);
-    } else {
-      // Delete the old records
-      const { error: deleteError } = await supabase
-        .from('processed_webhook_events')
-        .delete()
-        .lt('received_at', processedEventsCutoff);
-
-      if (deleteError) {
-        logger.error('Failed to delete processed_webhook_events', {
-          error: deleteError.message
-        });
-        errors.push(`processed_webhook_events delete: ${deleteError.message}`);
-      } else {
-        processedEventsDeleted = eventsCount || 0;
-        logger.info('Cleaned processed_webhook_events', {
-          deletedCount: processedEventsDeleted
-        });
-      }
+    if (error) {
+      log.error('WebhookCleanup', 'Cleanup failed', { error: error.message });
+      return 0;
     }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Exception cleaning processed_webhook_events', { error: errorMessage });
-    errors.push(`processed_webhook_events exception: ${errorMessage}`);
-  }
 
-  try {
-    // 2. Clean webhook_delivery_log older than 7 days
-    const deliveryLogCutoff = new Date(
-      Date.now() - DELIVERY_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    logger.info('Cleaning webhook_delivery_log', {
-      cutoff: deliveryLogCutoff,
-      retentionDays: DELIVERY_LOG_RETENTION_DAYS
+    const deletedCount = data || 0;
+    log.info('WebhookCleanup', 'Cleanup completed', {
+      deletedCount,
+      retention: '7 days'
     });
 
-    // Count rows to be deleted first
-    const { count: deliveryCount, error: countError } = await supabase
-      .from('webhook_delivery_log')
-      .select('*', { count: 'exact', head: true })
-      .lt('created_at', deliveryLogCutoff);
-
-    if (countError) {
-      logger.error('Failed to count webhook_delivery_log', {
-        error: countError.message
-      });
-      errors.push(`webhook_delivery_log count: ${countError.message}`);
-    } else {
-      // Delete the old records
-      const { error: deleteError } = await supabase
-        .from('webhook_delivery_log')
-        .delete()
-        .lt('created_at', deliveryLogCutoff);
-
-      if (deleteError) {
-        logger.error('Failed to delete webhook_delivery_log', {
-          error: deleteError.message
-        });
-        errors.push(`webhook_delivery_log delete: ${deleteError.message}`);
-      } else {
-        deliveryLogDeleted = deliveryCount || 0;
-        logger.info('Cleaned webhook_delivery_log', {
-          deletedCount: deliveryLogDeleted
-        });
-      }
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Exception cleaning webhook_delivery_log', { error: errorMessage });
-    errors.push(`webhook_delivery_log exception: ${errorMessage}`);
-  }
-
-  // Summary
-  const duration = Date.now() - startTime;
-  logger.info('Webhook events cleanup completed', {
-    processedEventsDeleted,
-    deliveryLogDeleted,
-    totalDeleted: processedEventsDeleted + deliveryLogDeleted,
-    durationMs: duration,
-    errors: errors.length > 0 ? errors : undefined
-  });
-
-  // Warn if errors occurred
-  if (errors.length > 0) {
-    logger.warn('Webhook events cleanup had errors', {
-      errorCount: errors.length,
-      errors
-    });
+    return deletedCount;
+  } catch (err: any) {
+    log.error('WebhookCleanup', 'Cleanup error', { error: err.message });
+    return 0;
   }
 }
 
 /**
  * Schedule cleanup job to run daily at 4 AM UTC
- * Runs 1 hour after telephony verification cleanup to stagger load
  */
 export function scheduleWebhookEventsCleanup(): void {
-  // Calculate time until next 4 AM UTC
-  const now = new Date();
-  const next4AM = new Date(now);
-  next4AM.setUTCHours(4, 0, 0, 0);
-
-  if (next4AM <= now) {
-    next4AM.setUTCDate(next4AM.getUTCDate() + 1);
-  }
-
-  const timeUntilNext = next4AM.getTime() - now.getTime();
-
-  logger.info('Scheduling webhook events cleanup', {
-    nextRun: next4AM.toISOString()
+  // Schedule: Daily at 4:00 AM UTC (cron: 0 4 * * *)
+  const job = schedule.scheduleJob('0 4 * * *', async () => {
+    log.info('WebhookCleanup', 'Scheduled cleanup triggered');
+    await cleanupOldWebhookEvents();
   });
 
-  // Schedule first run
-  setTimeout(() => {
-    runWebhookEventsCleanup();
-    // Then run daily
-    setInterval(() => {
-      runWebhookEventsCleanup();
-    }, 24 * 60 * 60 * 1000);
-  }, timeUntilNext);
+  log.info('WebhookCleanup', 'Cleanup job scheduled', {
+    schedule: 'Daily at 4:00 AM UTC',
+    nextRun: job.nextInvocation()?.toISOString()
+  });
 }

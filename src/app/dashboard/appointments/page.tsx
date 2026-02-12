@@ -5,6 +5,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Clock, Phone, AlertCircle, Edit2, X, ChevronLeft, ChevronRight, Search, Filter, MessageCircle, RotateCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 // LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -37,6 +39,7 @@ interface PaginationData {
 const AppointmentsDashboardContent = () => {
     const router = useRouter();
     const { user, loading } = useAuth();
+    const { success, error: showErrorToast } = useToast();
 
     // State management
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -49,6 +52,7 @@ const AppointmentsDashboardContent = () => {
     const [filterDate, setFilterDate] = useState<string>(''); // 'week', 'month', ''
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
     const appointmentsPerPage = 20;
 
@@ -131,7 +135,7 @@ const AppointmentsDashboardContent = () => {
                 method: 'POST'
             });
             setError(null);
-            alert('Reminder SMS sent successfully');
+            success('Reminder SMS sent successfully');
         } catch (err: any) {
             setError(err?.message || 'Failed to send reminder');
         }
@@ -148,23 +152,29 @@ const AppointmentsDashboardContent = () => {
             });
             setShowDetailModal(false);
             await fetchAppointments();
-            alert('Appointment rescheduled successfully');
+            success('Appointment rescheduled successfully');
         } catch (err: any) {
             setError(err?.message || 'Failed to reschedule appointment');
         }
     };
 
-    const handleCancelAppointment = async () => {
-        if (!selectedAppointment || !confirm('Are you sure you want to cancel this appointment?')) return;
+    const handleCancelClick = () => {
+        if (!selectedAppointment) return;
+        setShowCancelConfirm(true);
+    };
+
+    const handleCancelConfirm = async () => {
+        if (!selectedAppointment) return;
 
         try {
             await authedBackendFetch(`/api/appointments/${selectedAppointment.id}`, {
                 method: 'PATCH',
                 body: JSON.stringify({ status: 'cancelled' })
             });
+            setShowCancelConfirm(false);
             setShowDetailModal(false);
             await fetchAppointments();
-            alert('Appointment cancelled');
+            success('Appointment cancelled');
         } catch (err: any) {
             setError(err?.message || 'Failed to cancel appointment');
         }
@@ -536,7 +546,7 @@ const AppointmentsDashboardContent = () => {
                                     )}
                                     {selectedAppointment.status !== 'cancelled' && selectedAppointment.status !== 'completed' && (
                                         <button
-                                            onClick={handleCancelAppointment}
+                                            onClick={handleCancelClick}
                                             className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                                         >
                                             <X className="w-4 h-4" />
@@ -555,6 +565,18 @@ const AppointmentsDashboardContent = () => {
                         </div>
                     )
                 }
+
+                {/* Cancel Confirmation Dialog */}
+                <ConfirmDialog
+                    isOpen={showCancelConfirm}
+                    title="Cancel Appointment"
+                    message="Are you sure you want to cancel this appointment? This action cannot be undone."
+                    confirmText="Cancel Appointment"
+                    cancelText="Keep Appointment"
+                    isDestructive={true}
+                    onConfirm={handleCancelConfirm}
+                    onCancel={() => setShowCancelConfirm(false)}
+                />
             </div>
         </>
     )

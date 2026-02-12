@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, FileText, Mail, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
 
 export const ExitIntentModal = () => {
+    const { error: showErrorToast } = useToast();
     const [isVisible, setIsVisible] = useState(false);
     const [email, setEmail] = useState("");
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -70,7 +72,7 @@ export const ExitIntentModal = () => {
         } catch (error) {
             console.error('Error sending ROI report:', error);
             setIsLoading(false);
-            alert('Failed to send report. Please try again or contact support.');
+            showErrorToast('Failed to send report. Please try again or contact support.');
         }
     };
 

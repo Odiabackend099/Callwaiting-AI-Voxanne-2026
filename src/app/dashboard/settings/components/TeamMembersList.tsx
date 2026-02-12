@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { Plus, Trash2, AlertCircle, CheckCircle, Loader, Shield, User } from 'lucide-react';
 import { InviteForm } from './InviteForm';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface TeamMember {
   id: string;
@@ -24,6 +25,8 @@ export const TeamMembersList: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
 
   // Fetch team members
   const { data: members = [], error: membersError, mutate: mutateMembers, isLoading } = useSWR(
@@ -66,6 +69,19 @@ export const TeamMembersList: React.FC = () => {
     } finally {
       setRemovingMemberId(null);
     }
+  };
+
+  const handleRemoveClick = (member: TeamMember) => {
+    setMemberToRemove(member);
+    setShowRemoveConfirm(true);
+  };
+
+  const handleRemoveConfirm = async () => {
+    if (!memberToRemove) return;
+
+    setShowRemoveConfirm(false);
+    await handleRemoveMember(memberToRemove.id);
+    setMemberToRemove(null);
   };
 
   const handleChangeRole = async (memberId: string, newRole: string) => {
@@ -216,11 +232,7 @@ export const TeamMembersList: React.FC = () => {
                   <td className="px-6 py-4 text-sm">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm(`Remove ${member.email} from the team?`)) {
-                          handleRemoveMember(member.id);
-                        }
-                      }}
+                      onClick={() => handleRemoveClick(member)}
                       disabled={removingMemberId === member.id}
                       className="text-red-600 hover:text-red-700 inline-flex items-center gap-1 disabled:opacity-50"
                     >
@@ -250,6 +262,21 @@ export const TeamMembersList: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Remove Member Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showRemoveConfirm}
+        title="Remove Team Member"
+        message={`Are you sure you want to remove ${memberToRemove?.email} from the team? This action cannot be undone.`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={handleRemoveConfirm}
+        onCancel={() => {
+          setShowRemoveConfirm(false);
+          setMemberToRemove(null);
+        }}
+      />
     </div>
   );
 };

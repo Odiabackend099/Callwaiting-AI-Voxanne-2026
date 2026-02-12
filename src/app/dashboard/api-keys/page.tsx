@@ -5,6 +5,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save, Loader2, Calendar } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 // LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -21,6 +23,7 @@ interface CalendarStatus {
 export default function ApiKeysPage() {
     const router = useRouter();
     const { user, loading } = useAuth();
+    const { error: showErrorToast } = useToast();
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
     const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
     const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
@@ -30,6 +33,7 @@ export default function ApiKeysPage() {
     });
     const [calendarError, setCalendarError] = useState<string | null>(null);
     const [calendarSuccess, setCalendarSuccess] = useState<string | null>(null);
+    const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
     // Form states (reserved for future use)
 
@@ -281,7 +285,24 @@ export default function ApiKeysPage() {
             window.location.href = data.authUrl;
         } catch (error) {
             console.error('Error starting Google OAuth:', error);
-            alert(error instanceof Error ? error.message : 'Failed to start Google Calendar authorization');
+            showErrorToast(error instanceof Error ? error.message : 'Failed to start Google Calendar authorization');
+        } finally {
+            setIsConnectingCalendar(false);
+        }
+    };
+
+    const handleDisconnectCalendar = async () => {
+        setIsConnectingCalendar(true);
+        try {
+            await authedBackendFetch('/api/google-oauth/revoke', {
+                method: 'POST',
+                body: JSON.stringify({ orgId: (user as any)?.app_metadata?.org_id })
+            });
+            await fetchCalendarStatus();
+            setShowDisconnectConfirm(false);
+        } catch (err) {
+            console.error(err);
+            showErrorToast('Failed to disconnect');
         } finally {
             setIsConnectingCalendar(false);
         }
@@ -368,22 +389,7 @@ export default function ApiKeysPage() {
                         <div className="flex gap-2">
                             {calendarStatus.connected && (
                                 <button
-                                    onClick={async () => {
-                                        if (!confirm('Are you sure you want to disconnect Google Calendar?')) return;
-                                        setIsConnectingCalendar(true);
-                                        try {
-                                            await authedBackendFetch('/api/google-oauth/revoke', {
-                                                method: 'POST',
-                                                body: JSON.stringify({ orgId: (user as any)?.app_metadata?.org_id })
-                                            });
-                                            await fetchCalendarStatus();
-                                        } catch (err) {
-                                            console.error(err);
-                                            alert('Failed to disconnect');
-                                        } finally {
-                                            setIsConnectingCalendar(false);
-                                        }
-                                    }}
+                                    onClick={() => setShowDisconnectConfirm(true)}
                                     disabled={isConnectingCalendar}
                                     className="px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 rounded-lg transition-all"
                                 >
@@ -404,6 +410,18 @@ export default function ApiKeysPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Disconnect Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={showDisconnectConfirm}
+                title="Disconnect Google Calendar"
+                message="Are you sure you want to disconnect Google Calendar? You will need to reauthorize to use calendar features again."
+                confirmText="Disconnect"
+                cancelText="Cancel"
+                isDestructive={true}
+                onConfirm={handleDisconnectCalendar}
+                onCancel={() => setShowDisconnectConfirm(false)}
+            />
         </div>
     );
 }

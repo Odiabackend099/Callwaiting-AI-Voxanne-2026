@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Trash2, CheckCircle, AlertCircle, Calendar, Phone, Users, Zap, X, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
 // LeftSidebar removed (now in layout)
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -29,6 +30,7 @@ interface PaginationData {
 const NotificationsCenterContent = () => {
     const router = useRouter();
     const { user, loading } = useAuth();
+    const { success } = useToast();
 
     // State management
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -132,7 +134,7 @@ const NotificationsCenterContent = () => {
                 method: 'POST'
             });
             await fetchNotifications();
-            alert('All notifications marked as read');
+            success('All notifications marked as read');
         } catch (err: any) {
             setError(err?.message || 'Failed to mark all as read');
         }

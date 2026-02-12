@@ -6,12 +6,16 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target, Smartphone, Wallet, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 export default function LeftSidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const { user, signOut } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [showNavConfirm, setShowNavConfirm] = useState(false);
+    const [pendingNavHref, setPendingNavHref] = useState<string>('');
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
     const navSections = useMemo(() => ([
         {
@@ -55,11 +59,10 @@ export default function LeftSidebar() {
             const leavingDashboard = !href.startsWith('/dashboard');
 
             if (isVoiceActive && leavingDashboard) {
-                const ok = window.confirm('A voice session is currently active. Leaving the dashboard may stop the call. Continue?');
-                if (!ok) {
-                    e.preventDefault();
-                    return;
-                }
+                e.preventDefault();
+                setPendingNavHref(href);
+                setShowNavConfirm(true);
+                return;
             }
         } catch {
             // ignore
@@ -68,17 +71,31 @@ export default function LeftSidebar() {
         setMobileOpen(false);
     };
 
-    const handleLogout = () => {
+    const handleNavConfirm = () => {
+        setShowNavConfirm(false);
+        setMobileOpen(false);
+        router.push(pendingNavHref);
+    };
+
+    const handleLogoutClick = () => {
         try {
             const isVoiceActive = typeof window !== 'undefined' && window.sessionStorage.getItem('voice_session_active') === 'true';
             if (isVoiceActive) {
-                const ok = window.confirm('A voice session is currently active. Logging out may stop the call. Continue?');
-                if (!ok) return;
+                setShowLogoutConfirm(true);
+                return;
             }
         } catch {
             // ignore
         }
 
+        // If no voice session, logout immediately
+        signOut();
+        router.push('/login');
+        setMobileOpen(false);
+    };
+
+    const handleLogoutConfirm = () => {
+        setShowLogoutConfirm(false);
         signOut();
         router.push('/login');
         setMobileOpen(false);
@@ -179,7 +196,7 @@ export default function LeftSidebar() {
                     <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium">Prepaid</p>
                 </div>
                 <button
-                    onClick={handleLogout}
+                    onClick={handleLogoutClick}
                     className="w-full px-3 py-2 rounded-lg text-xs font-medium text-obsidian/60 hover:text-obsidian hover:bg-obsidian/5 transition-all flex items-center justify-center gap-2"
                 >
                     <LogOut className="w-3.5 h-3.5" />
@@ -232,6 +249,30 @@ export default function LeftSidebar() {
                     </div>
                 </div>
             )}
+
+            {/* Navigation Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={showNavConfirm}
+                title="Active Voice Session"
+                message="A voice session is currently active. Leaving the dashboard may stop the call. Continue?"
+                confirmText="Continue"
+                cancelText="Stay"
+                isDestructive={true}
+                onConfirm={handleNavConfirm}
+                onCancel={() => setShowNavConfirm(false)}
+            />
+
+            {/* Logout Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={showLogoutConfirm}
+                title="Active Voice Session"
+                message="A voice session is currently active. Logging out may stop the call. Continue?"
+                confirmText="Logout"
+                cancelText="Stay"
+                isDestructive={true}
+                onConfirm={handleLogoutConfirm}
+                onCancel={() => setShowLogoutConfirm(false)}
+            />
         </>
     );
 }

@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { RuleForm } from './components/RuleForm';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
@@ -35,6 +36,8 @@ const EscalationRulesPage = () => {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [ruleToDelete, setRuleToDelete] = useState<EscalationRule | null>(null);
 
     // Fetch escalation rules
     const { data: rulesData, error: rulesError, mutate: mutateRules, isLoading: isRulesLoading } = useSWR(
@@ -104,6 +107,19 @@ const EscalationRulesPage = () => {
             setError(error?.message || 'Error updating rule. Please try again.');
             console.error('Update error:', err);
         }
+    };
+
+    const handleDeleteClick = (rule: EscalationRule) => {
+        setRuleToDelete(rule);
+        setShowDeleteConfirm(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!ruleToDelete) return;
+
+        setShowDeleteConfirm(false);
+        await handleDeleteRule(ruleToDelete.id);
+        setRuleToDelete(null);
     };
 
     const getTriggerLabel = (triggerType: string) => {
@@ -246,11 +262,7 @@ const EscalationRulesPage = () => {
                                                 Edit
                                             </button>
                                             <button
-                                                onClick={() => {
-                                                    if (confirm(`Delete rule "${rule.name}"?`)) {
-                                                        handleDeleteRule(rule.id);
-                                                    }
-                                                }}
+                                                onClick={() => handleDeleteClick(rule)}
                                                 disabled={deletingRuleId === rule.id}
                                                 className="text-red-700 hover:text-red-800 inline-flex items-center gap-1 disabled:opacity-50"
                                             >
@@ -298,6 +310,21 @@ const EscalationRulesPage = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Delete Confirmation Dialog */}
+                <ConfirmDialog
+                    isOpen={showDeleteConfirm}
+                    title="Delete Escalation Rule"
+                    message={`Are you sure you want to delete the rule "${ruleToDelete?.name}"? This action cannot be undone.`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    isDestructive={true}
+                    onConfirm={handleDeleteConfirm}
+                    onCancel={() => {
+                        setShowDeleteConfirm(false);
+                        setRuleToDelete(null);
+                    }}
+                />
             </div>
         </div>
     );

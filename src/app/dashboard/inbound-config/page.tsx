@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
 import { Phone, Save, Loader2, Check, AlertCircle, RefreshCw, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useIntegration } from '@/hooks/useIntegration';
@@ -12,6 +13,7 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 export default function InboundConfigPage() {
     const { user } = useAuth();
     const router = useRouter();
+    const { success: showSuccessToast, error: showErrorToast } = useToast();
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -90,9 +92,9 @@ export default function InboundConfigPage() {
                 timeoutMs: 30000,
                 retries: 1,
             });
-            alert(`Test initiated! ${data?.note || ''}`);
+            showSuccessToast(`Test initiated! ${data?.note || ''}`);
         } catch (err) {
-            alert('Failed to start test');
+            showErrorToast('Failed to start test');
         }
     };
 

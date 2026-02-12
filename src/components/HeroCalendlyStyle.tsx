@@ -4,8 +4,10 @@ import { ShieldCheck, Play, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WorkflowCardsCarousel } from './hero/WorkflowCardsCarousel';
 import { getInboundAgentConfig } from '@/lib/supabaseHelpers';
+import { useToast } from '@/hooks/useToast';
 
 export function HeroCalendlyStyle() {
+    const { info } = useToast();
     const [agentId, setAgentId] = useState<string | null>(null);
     const [isLoadingAgent, setIsLoadingAgent] = useState(true);
 
@@ -29,7 +31,7 @@ export function HeroCalendlyStyle() {
         if (agentId) {
             console.log('Starting demo with Agent ID:', agentId);
             // Here we would initialize the Vapi call
-            alert(`Starting demo with Agent ID: ${agentId}`);
+            info(`Starting demo with Agent ID: ${agentId}`);
         } else {
             console.warn('Agent ID not found');
         }

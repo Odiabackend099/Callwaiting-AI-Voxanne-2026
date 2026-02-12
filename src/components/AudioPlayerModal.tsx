@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Play, Pause, Volume2, VolumeX, Download, X, SkipBack, SkipForward } from 'lucide-react';
 import { useAudioPlayerStore } from '@/store/audioPlayerStore';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { useToast } from '@/hooks/useToast';
 
 interface Call {
   id: string;
@@ -20,6 +21,7 @@ interface AudioPlayerModalProps {
 }
 
 export function AudioPlayerModal({ call, onClose }: AudioPlayerModalProps) {
+  const { error: showErrorToast } = useToast();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,7 +184,7 @@ export function AudioPlayerModal({ call, onClose }: AudioPlayerModalProps) {
       console.log('✅ Download started successfully');
     } catch (error) {
       console.error('❌ Download failed:', error);
-      alert('Failed to download recording. Please try again.');
+      showErrorToast('Failed to download recording. Please try again.');
     } finally {
       setDownloading(false);
     }

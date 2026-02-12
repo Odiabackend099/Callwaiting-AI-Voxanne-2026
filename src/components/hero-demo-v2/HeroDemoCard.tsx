@@ -99,7 +99,6 @@ export default function HeroDemoCard({ isActive, onToggle }: HeroDemoCardProps) 
                         <TranscriptionPanel
                             currentTime={currentTime}
                             isVisible={true}
-                            minimal={true} // New prop for compact mode if needed, or just rely on container size
                         />
                     </div>
 

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
 import {
   Phone,
   Smartphone,
@@ -40,6 +41,7 @@ type VerificationStep = 'input' | 'verify' | 'success';
 
 export default function PhoneSettingsPage() {
   const { user, loading: authLoading } = useAuth();
+  const { error: showErrorToast } = useToast();
   const [status, setStatus] = useState<PhoneSettingsStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export default function PhoneSettingsPage() {
       setConfirmDeleteManaged(false);
       await fetchPhoneSettings();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete number');
+      showErrorToast(err.message || 'Failed to delete number');
     } finally {
       setDeleting(false);
     }
@@ -162,7 +164,7 @@ export default function PhoneSettingsPage() {
       setConfirmDeleteVerified(false);
       await fetchPhoneSettings();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete verified number');
+      showErrorToast(err.message || 'Failed to delete verified number');
     } finally {
       setDeleting(false);
     }

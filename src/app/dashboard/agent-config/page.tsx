@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
 import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
@@ -53,6 +54,7 @@ export default function AgentConfigPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
+    const { success } = useToast();
 
     // Tab navigation with URL param support
     const tabParam = searchParams.get('agent');
@@ -534,7 +536,7 @@ export default function AgentConfigPage() {
             if (result.success) {
                 const status = await authedBackendFetch<InboundStatus>('/api/inbound/status');
                 setInboundStatus(status);
-                alert('Agent successfully assigned to phone number!');
+                success('Agent successfully assigned to phone number!');
             } else {
                 throw new Error(result.error || 'Assignment failed');
             }
@@ -566,7 +568,7 @@ export default function AgentConfigPage() {
             if (result.success) {
                 // Update the original value to reflect the newly assigned number
                 setOriginalOutboundPhoneNumberId(selectedOutboundNumberId);
-                alert('Phone number assigned successfully to outbound agent!');
+                success('Phone number assigned successfully to outbound agent!');
             } else {
                 throw new Error(result.error || 'Assignment failed');
             }

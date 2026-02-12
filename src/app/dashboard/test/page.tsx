@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Mic, Phone, AlertCircle, Loader2, Volume2, Globe, Activity, StopCircle, PlayCircle, MicOff, ArrowDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/useToast';
 import { supabase } from '@/lib/supabase';
 // LeftSidebar removed (now in layout)
 import { useVoiceAgentContext } from '@/contexts/VoiceAgentContext';
@@ -75,6 +76,7 @@ const TestAgentPageContent = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
+    const { error: showErrorToast } = useToast();
 
     // Initialize activeTab and autostart from query params
     const tabParam = searchParams.get('tab');
@@ -355,7 +357,7 @@ const TestAgentPageContent = () => {
             }
         } catch (err) {
             console.error('Phone call failed:', err);
-            alert((err as any).message || 'Failed to start phone call');
+            showErrorToast((err as any).message || 'Failed to start phone call');
         } finally {
             setIsCallingPhone(false);
         }
