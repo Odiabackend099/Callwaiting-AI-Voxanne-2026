@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, CheckCircle2, AlertCircle, FileText, X, Users, Send } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
-import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import Logo from '@/components/Logo';
 import FooterRedesigned from '@/components/FooterRedesigned';
 import { haptics } from '@/lib/haptics';
@@ -135,9 +134,11 @@ function OnboardingForm() {
 
   const handlePhoneBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const phoneValue = e.target.value;
-    if (phoneValue && !isValidPhoneNumber(phoneValue)) {
+    // Use permissive E.164 format validation: + followed by 1-15 digits (spaces, dashes, parentheses allowed)
+    const e164Regex = /^\+[\d\s\-\(\)]{7,19}$/;
+    if (phoneValue && !e164Regex.test(phoneValue)) {
       haptics.warning(); // Warning haptic for validation error
-      setPhoneError('Please enter a valid international phone number (e.g., +1 555-123-4567 or +44 7424 038250)');
+      setPhoneError('Please enter a valid phone number starting with + and country code (e.g., +1 555 123 4567, +44 7700 900000)');
     } else {
       setPhoneError('');
     }
@@ -150,7 +151,8 @@ function OnboardingForm() {
     // Validate phone before submitting
     const formElement = e.target as HTMLFormElement;
     const phoneInput = formElement.elements.namedItem('phone') as HTMLInputElement;
-    if (phoneInput.value && !isValidPhoneNumber(phoneInput.value)) {
+    const e164Regex = /^\+[\d\s\-\(\)]{7,19}$/;
+    if (phoneInput.value && !e164Regex.test(phoneInput.value)) {
       haptics.error();
       setPhoneError('Please enter a valid international phone number');
       showError('Please fix the phone number error before submitting');
@@ -160,17 +162,6 @@ function OnboardingForm() {
     setStatus('loading');
 
     const formData = new FormData(formElement);
-
-    // Format phone to E.164 if possible
-    try {
-      const phoneValue = phoneInput.value;
-      if (phoneValue && isValidPhoneNumber(phoneValue)) {
-        const parsedPhone = parsePhoneNumber(phoneValue);
-        formData.set('phone', parsedPhone.number); // E.164 format
-      }
-    } catch (error) {
-      console.warn('Phone formatting failed, using original value:', error);
-    }
 
     // Append UTM attribution and conversion timing
     const utmSource = searchParams.get('utm_source');
@@ -304,14 +295,14 @@ function OnboardingForm() {
               </label>
               <Input
                 name="website"
-                type="url"
-                placeholder="https://yourcompany.com"
+                type="text"
+                placeholder="yourcompany.com or https://yourcompany.com"
                 disabled={status === 'loading'}
                 className="min-h-[48px] text-base placeholder:text-gray-400"
                 onFocus={() => haptics.light()}
               />
               <p className="text-xs text-gray-500 mt-1">
-                We'll use this to personalize your AI agent's knowledge
+                We&apos;ll use this to personalize your AI agent&apos;s knowledge
               </p>
             </div>
 
@@ -340,10 +331,16 @@ function OnboardingForm() {
                 name="phone"
                 type="tel"
                 required
-                placeholder="+44 7700 900000"
+                placeholder="+1 555 123 4567 or +44 7700 900000"
                 disabled={status === 'loading'}
                 onFocus={() => haptics.light()}
                 onBlur={handlePhoneBlur}
+                onChange={(e) => {
+                  // Clear error when user types to allow re-validation on blur
+                  if (phoneError && e.target.value) {
+                    setPhoneError('');
+                  }
+                }}
                 className={`min-h-[48px] text-base placeholder:text-gray-400 ${phoneError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
               />
               {phoneError && (
@@ -351,26 +348,12 @@ function OnboardingForm() {
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span>
                     {phoneError}
-                    {!phoneError.includes('+1') && (
-                      <button
-                        type="button"
-                        className="ml-2 underline text-blue-600 hover:text-blue-700 min-h-[48px] active:scale-95 transition-transform"
-                        onClick={() => {
-                          haptics.medium();
-                          const phoneInputElem = document.querySelector('input[name="phone"]') as HTMLInputElement;
-                          if (phoneInputElem) {
-                            phoneInputElem.value = '+1 ' + phoneInputElem.value.replace(/^\+1\s*/, '');
-                            phoneInputElem.focus();
-                            setPhoneError('');
-                          }
-                        }}
-                      >
-                        Add +1 prefix
-                      </button>
-                    )}
                   </span>
                 </p>
               )}
+              <p className="text-xs text-gray-500 mt-1">
+                Include country code: +1 for US/Canada, +44 for UK, +61 for Australia. Spaces and dashes are optional.
+              </p>
             </div>
 
             {/* Greeting Script */}
@@ -379,7 +362,7 @@ function OnboardingForm() {
                 Reception Greeting Script *
               </label>
               <Textarea
-                name="greeting_script"
+                name="greetingScript"
                 required
                 rows={4}
                 placeholder="e.g., Thank you for calling [Your Company]. How may I help you today?"
@@ -387,6 +370,8 @@ function OnboardingForm() {
                 className="resize-none text-base placeholder:text-gray-400 min-h-[96px]"
                 onFocus={() => haptics.light()}
               />
+              {/* Hidden additional details field for API compatibility */}
+              <input type="hidden" name="additionalDetails" value="" />
             </div>
 
             {/* Voice Preference */}

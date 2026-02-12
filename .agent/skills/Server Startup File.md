@@ -25,7 +25,7 @@ When the user asks you to start servers, follow this exact procedure:
 
 ```bash
 # Step 1: Set ngrok auth token
-export NGROK_AUTH_TOKEN="35aXl1N52lOGdDE20Mfmr7WY0du_7AZmStxUgVhDNpn5WB7ZU"
+export NGROK_AUTH_TOKEN="39aJOH8lxGRiJ8cTcdRcAYmOkHt_6BEAvR8oJ9XpyQNSbQAPx"
 
 # Step 2: Start the orchestration script (this starts everything)
 cd /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/backend
@@ -67,7 +67,7 @@ sleep 2
 ### Step 2: Set ngrok Auth Token
 
 ```bash
-export NGROK_AUTH_TOKEN="35aXl1N52lOGdDE20Mfmr7WY0du_7AZmStxUgVhDNpn5WB7ZU"
+export NGROK_AUTH_TOKEN="39aJOH8lxGRiJ8cTcdRcAYmOkHt_6BEAvR8oJ9XpyQNSbQAPx"
 ```
 
 **Expected**: Environment variable set (no output)
@@ -307,7 +307,7 @@ pkill -9 -f tsx 2>/dev/null || true
 sleep 2
 
 # 2. Set auth token
-export NGROK_AUTH_TOKEN="35aXl1N52lOGdDE20Mfmr7WY0du_7AZmStxUgVhDNpn5WB7ZU"
+export NGROK_AUTH_TOKEN="39aJOH8lxGRiJ8cTcdRcAYmOkHt_6BEAvR8oJ9XpyQNSbQAPx"
 
 # 3. Start everything (this is the main command)
 cd /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/backend
@@ -327,7 +327,7 @@ npm run startup
 
 ## 🔐 IMPORTANT SECURITY NOTES
 
-- ✅ ngrok auth token is the one provided by user
+- ✅ ngrok auth token: 39aJOH8lxGRiJ8cTcdRcAYmOkHt_6BEAvR8oJ9XpyQNSbQAPx
 - ✅ All credentials come from backend/.env file
 - ✅ Never hardcode credentials in scripts
 - ✅ VAPI_API_KEY is sensitive - keep secure

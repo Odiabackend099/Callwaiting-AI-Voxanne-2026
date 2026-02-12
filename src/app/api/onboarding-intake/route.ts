@@ -15,12 +15,17 @@ export async function POST(request: NextRequest) {
 
     // Extract fields
     const company = formData.get('company') as string;
-    const website = formData.get('website') as string;
+    let website = formData.get('website') as string;
     const phone = formData.get('phone') as string;
     const email = formData.get('email') as string;
     const greetingScript = formData.get('greetingScript') as string;
     const additionalDetails = formData.get('additionalDetails') as string;
     const file = formData.get('file') as File | null;
+
+    // Normalize website URL - add https:// if missing and not empty
+    if (website && !website.match(/^https?:\/\//i)) {
+      website = `https://${website}`;
+    }
 
     // Validate input
     const validatedData = validateOnboardingForm({

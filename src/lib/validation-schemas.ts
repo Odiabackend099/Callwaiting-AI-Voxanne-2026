@@ -17,10 +17,14 @@ export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 
 export const OnboardingFormSchema = z.object({
   company: z.string().min(2, 'Company name is required').max(200),
-  website: z.string().optional().default(''),
-  phone: z.string().min(10, 'Valid phone number is required'),
+  website: z.union([
+    z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*(\.[a-zA-Z0-9-]+)+(\/[a-zA-Z0-9-._~:\/\?#\[\]@!$&'\(\)*+,;%=]*)?$/, 'Please enter a valid website (e.g., yourcompany.com or https://yourcompany.com)'),
+    z.string().url('Please enter a valid URL'),
+    z.literal('')
+  ]).optional().default(''),
+  phone: z.string().min(8, 'Phone number is too short').regex(/^\+[\d\s\-\(\)]{7,19}$/, 'Please enter a valid phone number starting with + and country code (e.g., +1 555 123 4567, +44 7700 900000)'),
   pricingPdfUrl: z.string().optional().default(''),
-  greetingScript: z.string().min(20, 'Greeting script must be at least 20 characters').max(2000),
+  greetingScript: z.string().min(5, 'Greeting script must be at least 5 characters').max(2000),
   additionalDetails: z.string().optional().default(''),
   email: z.string().email('Valid email is required'),
 });
