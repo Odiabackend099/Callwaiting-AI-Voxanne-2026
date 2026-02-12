@@ -98,6 +98,7 @@ import verifiedCallerIdRouter from './routes/verified-caller-id'; // default exp
 import phoneSettingsRouter from './routes/phone-settings'; // default export - Unified Phone Settings (combines inbound + outbound)
 import webhookHealthRouter from './routes/webhook-health'; // default export - Webhook Health Check
 import testErrorRouter from './routes/test-error'; // Test endpoint for exception handling
+import { ensureWebhookEndpoint } from './scripts/setup-stripe-webhooks'; // Automated Stripe webhook setup
 import monitoringRouter from './routes/monitoring'; // default export - System monitoring endpoints
 import toolHealthRouter from './routes/tool-health'; // default export - Tool chain health monitoring
 import smsHealthRouter from './routes/sms-health'; // default export - SMS queue health monitoring
@@ -718,6 +719,12 @@ if (process.env.NODE_ENV !== 'test') {
     initializeDatabase().catch((err) => {
       console.error('Failed to initialize database:', err);
     });
+  });
+
+  // Setup Stripe webhook endpoint automatically (no manual Stripe Dashboard config needed)
+  ensureWebhookEndpoint().catch((err) => {
+    console.warn('Failed to auto-setup Stripe webhook endpoint (non-critical):', err.message);
+    console.warn('You can manually configure webhook endpoint in Stripe Dashboard');
   });
 
   server.listen(PORT, () => {

@@ -663,7 +663,40 @@ export class ManagedTelephonyService {
         .eq('org_id', orgId)
         .eq('inbound_phone_number', phoneNumber);
 
-      log.info('ManagedTelephony', 'Managed number released', { orgId, phone: redactPhone(phoneNumber) });
+      // CRITICAL FIX: Step 5 - Clean up org_credentials (SSOT integrity)
+      // Delete the managed Twilio credential from SSOT table
+      await supabaseAdmin
+        .from('org_credentials')
+        .delete()
+        .eq('org_id', orgId)
+        .eq('provider', 'twilio')
+        .eq('is_managed', true);
+
+      log.info('ManagedTelephony', 'Cleaned up org_credentials (SSOT)', { orgId, provider: 'twilio' });
+
+      // CRITICAL FIX: Step 6 - Unlink agents that were using this phone
+      // Find agents that had this phone configured and reset their vapi_phone_number_id
+      const { data: linkedAgents } = await supabaseAdmin
+        .from('agents')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('vapi_phone_number_id', mnRecord.vapi_phone_id);
+
+      if (linkedAgents && linkedAgents.length > 0) {
+        await supabaseAdmin
+          .from('agents')
+          .update({ vapi_phone_number_id: null })
+          .eq('org_id', orgId)
+          .eq('vapi_phone_number_id', mnRecord.vapi_phone_id);
+
+        log.info('ManagedTelephony', 'Unlinked agents from released phone', {
+          orgId,
+          affectedAgents: linkedAgents.length,
+          vapiPhoneId: mnRecord.vapi_phone_id,
+        });
+      }
+
+      log.info('ManagedTelephony', 'Managed number released (full cleanup complete)', { orgId, phone: redactPhone(phoneNumber) });
 
       return { success: true };
     } catch (err: any) {

@@ -23,13 +23,26 @@ export function verifyStripeSignature() {
     const stripe = getStripeClient();
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
+    // DEBUG LOGGING TO IDENTIFY ROOT CAUSE
+    log.info('StripeSignature', '🔍 DEBUG: Webhook middleware invoked', {
+      hasStripeClient: !!stripe,
+      hasWebhookSecret: !!secret,
+      secretPrefix: secret ? secret.substring(0, 20) + '...' : 'undefined',
+      timestamp: new Date().toISOString(),
+    });
+
     if (!stripe) {
-      log.error('StripeSignature', 'Stripe client not initialized');
+      log.error('StripeSignature', '❌ CRITICAL: Stripe client not initialized');
       return res.status(500).json({ error: 'Billing not configured' });
     }
 
     if (!secret) {
-      log.error('StripeSignature', 'STRIPE_WEBHOOK_SECRET not configured');
+      log.error('StripeSignature', '❌ CRITICAL: STRIPE_WEBHOOK_SECRET not configured in process.env');
+      log.error('StripeSignature', 'Environment check:', {
+        nodeEnv: process.env.NODE_ENV,
+        stripeSecretKeySet: !!process.env.STRIPE_SECRET_KEY,
+        allEnvKeys: Object.keys(process.env).filter(k => k.includes('STRIPE')),
+      });
       return res.status(500).json({ error: 'Server configuration error' });
     }
 

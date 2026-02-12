@@ -136,7 +136,16 @@ const WalletPageContent = () => {
 
     // Handlers
     const handleTopUp = useCallback(async () => {
-        const pence = selectedAmount || Math.round(parseFloat(customAmount) * 100);
+        // CRITICAL FIX: Convert custom USD amount to GBP pence correctly
+        // Preset buttons already have amounts in pence, custom field needs conversion
+        const USD_TO_GBP_RATE = 0.79;
+        let pence = selectedAmount;
+
+        if (!pence && customAmount) {
+            // Convert USD to GBP: $100 * 0.79 * 100 = 7900 pence
+            pence = Math.round(parseFloat(customAmount) * USD_TO_GBP_RATE * 100);
+        }
+
         if (!pence || pence < 1975) { // $25 USD = ~1975 pence at 0.79 rate
             showError('Minimum top-up is $25.00');
             return;
@@ -147,6 +156,15 @@ const WalletPageContent = () => {
                 method: 'POST',
                 body: JSON.stringify({ amount_pence: pence }),
             });
+
+            // CRITICAL FIX: Validate checkout URL before redirect
+            if (!data?.url || typeof data.url !== 'string' || !data.url.startsWith('https://')) {
+                showError('Invalid checkout session. Please try again.');
+                setProcessingTopUp(false);
+                return;
+            }
+
+            // Safe redirect to Stripe Checkout
             window.location.href = data.url;
         } catch (err: any) {
             showError(err?.message || 'Failed to create checkout session');
@@ -495,7 +513,7 @@ const WalletPageContent = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-obsidian mb-1.5">
-                                    Custom amount (min $25)
+                                    Custom amount in USD (min $25)
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
@@ -514,9 +532,14 @@ const WalletPageContent = () => {
                                     />
                                 </div>
                                 {customAmount && parseFloat(customAmount) >= 25 && (
-                                    <p className="text-xs text-obsidian/60 mt-1.5">
-                                        ~{Math.floor((parseFloat(customAmount) * 0.79 * 100) / Math.ceil(70 * 0.79)) * 10} credits
-                                    </p>
+                                    <div className="space-y-1.5 mt-1.5">
+                                        <p className="text-xs text-obsidian/60">
+                                            You'll be charged: £{(parseFloat(customAmount) * 0.79).toFixed(2)} GBP (~${parseFloat(customAmount).toFixed(2)} USD)
+                                        </p>
+                                        <p className="text-xs text-obsidian/60">
+                                            ~{Math.floor((parseFloat(customAmount) * 0.79 * 100) / Math.ceil(70 * 0.79)) * 10} credits
+                                        </p>
+                                    </div>
                                 )}
                             </div>
                         </div>
