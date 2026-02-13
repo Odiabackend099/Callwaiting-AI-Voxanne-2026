@@ -1,3 +1,40 @@
+/**
+ * Verified Caller ID API Routes
+ *
+ * ============================================================================
+ * 🔐 CRITICAL ARCHITECTURE PRINCIPLE
+ * ============================================================================
+ *
+ * ORGANIZATION CREDENTIALS ARE THE SINGLE SOURCE OF TRUTH
+ *
+ * This module handles verified caller IDs for multiple organizations with
+ * different Twilio account types:
+ *
+ * 1. BYOC (Bring Your Own Carrier)
+ *    - Organization provides their own Twilio account credentials
+ *    - Credentials stored in org_credentials table
+ *    - User has full control of their Twilio account
+ *
+ * 2. MANAGED TELEPHONY
+ *    - Platform allocates Twilio numbers to organization
+ *    - Organization credentials stored in org_credentials table
+ *    - User accesses via this API
+ *
+ * Both scenarios retrieve credentials from:
+ *   - IntegrationDecryptor.getTwilioCredentials(orgId)
+ *   - Which queries org_credentials table
+ *   - NEVER uses environment variables (no fallback)
+ *
+ * This ensures:
+ * ✅ Complete credential isolation per organization
+ * ✅ No cross-org credential leakage
+ * ✅ BYOC users use their own accounts
+ * ✅ Managed users use their allocated accounts
+ * ✅ Single source of truth eliminates env var confusion
+ *
+ * ============================================================================
+ */
+
 import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import twilio from 'twilio';
@@ -15,6 +52,26 @@ const supabase = createClient(
 /**
  * POST /api/verified-caller-id/verify
  * Initiate phone number verification via Twilio Caller ID validation
+ *
+ * ✅ CRITICAL ARCHITECTURE: ORGANIZATION CREDENTIALS ARE SINGLE SOURCE OF TRUTH
+ *
+ * This endpoint uses the ORGANIZATION'S STORED CREDENTIALS, not environment variables.
+ * This supports both:
+ * - BYOC (Bring Your Own Carrier): Organization provides their own Twilio account credentials
+ * - Managed Telephony: Organization uses platform-provided managed numbers (stored in org_credentials table)
+ *
+ * Credential retrieval flow:
+ * 1. Extract orgId from authenticated user
+ * 2. Call IntegrationDecryptor.getTwilioCredentials(orgId)
+ * 3. Credentials retrieved from org_credentials table (NOT environment variables)
+ * 4. If credentials not found, error is returned (user must configure in settings)
+ * 5. Credentials are decrypted and used to create Twilio client
+ *
+ * This ensures:
+ * - Each organization's Twilio credentials are completely isolated
+ * - BYOC users use their own credentials
+ * - Managed users use their allocated credentials
+ * - No cross-org credential leakage
  */
 router.post('/verify', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -32,7 +89,9 @@ router.post('/verify', requireAuth, async (req: Request, res: Response) => {
 
     logger.info('verified-caller-id', 'Initiating caller ID verification', { orgId, phoneNumber });
 
-    // Get Twilio credentials for this organization
+    // ✅ CRITICAL: Retrieve ORGANIZATION'S stored Twilio credentials
+    // This supports both BYOC (org's own account) and managed telephony (platform-allocated)
+    // NEVER falls back to environment variables - org_credentials table is the single source of truth
     let credentials;
     try {
       credentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
