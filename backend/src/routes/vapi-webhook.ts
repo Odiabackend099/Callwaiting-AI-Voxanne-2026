@@ -270,6 +270,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             .insert({
               id: appointmentId,
               org_id: orgId,
+              vapi_call_id: body.message?.call?.id || null,  // Golden Record: Link to call
               service_type: serviceType || 'consultation',
               scheduled_at: scheduledTime.toISOString(),
               status: 'confirmed',
@@ -441,6 +442,28 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
       // Return 200 per Vapi docs (they ignore non-200 responses)
       return res.status(200).json({ success: true });
+    }
+
+    // Helper: Extract tool names used during a call from Vapi messages
+    // Golden Record: Surfaces which tools were invoked for analytics
+    function extractToolsUsed(messages: any[]): string[] {
+      if (!messages || !Array.isArray(messages)) return [];
+      const toolNames = new Set<string>();
+      for (const msg of messages) {
+        // Tool call results have the tool name directly
+        if (msg.role === 'tool_call_result' && msg.name) {
+          toolNames.add(msg.name);
+        }
+        // Assistant messages may have toolCalls array
+        if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
+          for (const tc of msg.toolCalls) {
+            if (tc.function?.name) {
+              toolNames.add(tc.function.name);
+            }
+          }
+        }
+      }
+      return Array.from(toolNames);
     }
 
     // Helper: Map Vapi's 52+ endedReason codes to dashboard-friendly status values
@@ -716,6 +739,44 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         return res.status(200).json({ success: true, error: 'Missing call.id' });
       }
 
+      // ========== GOLDEN RECORD EXTRACTION & LOGGING ==========
+      const costCents = Math.ceil((message.cost || 0) * 100);
+      // FIXED: endedReason is in call object, not at message level
+      const endedReason = call?.endedReason || null;
+      // NOTE: tools_used requires message events during the call, not end-of-call-report
+      // The end-of-call-report webhook doesn't include messages array
+      // TODO: Implement collection of tools from during-call message events
+      const toolsUsed = extractToolsUsed(call?.messages || []);
+
+      // DEBUG: Log all Golden Record field extraction
+      const debugLog = {
+        timestamp: new Date().toISOString(),
+        callId: call?.id,
+        extractedCostCents: costCents,
+        extractedEndedReason: endedReason,
+        extractedToolsUsed: toolsUsed,
+        // Actual sources (FIXED):
+        callEndedReason: call?.endedReason,
+        messageCost: message.cost,
+        messageHasMessages: !!call?.messages,
+        messageCount: call?.messages?.length || 0,
+        // Note: tools_used is empty because end-of-call-report doesn't include messages
+        // Messages would need to be collected from message events during the call
+        note: 'tools_used requires during-call message events, not end-of-call-report'
+      };
+
+      log.info('Vapi-Webhook', '🔍 GOLDEN RECORD EXTRACTION DEBUG', debugLog);
+
+      // Also write to file for debugging when logs aren't visible
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const debugPath = path.join(__dirname, '../../golden-record-debug.log');
+        fs.appendFileSync(debugPath, JSON.stringify(debugLog) + '\n');
+      } catch (e) {
+        // Silently ignore file write errors (logging system takes priority)
+      }
+
       // 5. Upsert to unified calls table (creates if not exists, updates if exists)
       const { error: upsertError } = await supabase
         .from('calls')  // ← Changed from 'call_logs' to unified 'calls' table
@@ -744,6 +805,15 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           updated_at: new Date().toISOString(),
           duration_seconds: Math.round(message.durationSeconds || 0),
           status: mapEndedReasonToStatus(message.endedReason), // Map Vapi's 52+ endedReason codes
+
+          // Golden Record: Store cost as integer cents (avoids floating point issues)
+          cost_cents: costCents,
+
+          // Golden Record: Store raw ended_reason for detailed analytics
+          ended_reason: endedReason,
+
+          // Golden Record: Store tools used during the call
+          tools_used: toolsUsed,
 
           // Recording & transcript - check multiple Vapi payload locations
           recording_url: (typeof artifact?.recordingUrl === 'string' ? artifact.recordingUrl : null)
@@ -808,6 +878,81 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           direction: callDirection,
           orgId
         });
+
+        // ========== GOLDEN RECORD: Link appointments to calls ==========
+        // If bookClinicAppointment tool was used, find and link the appointment
+        if (orgId && call?.id) {
+          try {
+            const toolsUsed = extractToolsUsed(call?.messages || []);
+            const bookedDuringCall = toolsUsed.includes('bookClinicAppointment');
+
+            if (bookedDuringCall) {
+              // Find unlinked appointment created during this call's timeframe
+              const callStartTime = call?.createdAt || call?.startedAt;
+              const callEndTime = call?.endedAt || message.endedAt || new Date().toISOString();
+
+              const { data: linkedAppointment, error: linkError } = await supabase
+                .from('appointments')
+                .select('id')
+                .eq('org_id', orgId)
+                .is('call_id', null)  // Not yet linked
+                .gte('created_at', callStartTime)
+                .lte('created_at', callEndTime)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (linkedAppointment && !linkError) {
+                // Fetch the call's database ID for bidirectional linking
+                const { data: callRecord } = await supabase
+                  .from('calls')
+                  .select('id')
+                  .eq('vapi_call_id', call.id)
+                  .maybeSingle();
+
+                if (callRecord) {
+                  // Bidirectional link: calls.appointment_id AND appointments.call_id
+                  const [callUpdate, appointmentUpdate] = await Promise.all([
+                    supabase
+                      .from('calls')
+                      .update({ appointment_id: linkedAppointment.id })
+                      .eq('vapi_call_id', call.id)
+                      .eq('org_id', orgId),
+                    supabase
+                      .from('appointments')
+                      .update({
+                        call_id: callRecord.id,
+                        vapi_call_id: call.id
+                      })
+                      .eq('id', linkedAppointment.id)
+                  ]);
+
+                  if (callUpdate.error || appointmentUpdate.error) {
+                    log.error('Vapi-Webhook', 'Failed to link appointment to call', {
+                      callId: call.id,
+                      appointmentId: linkedAppointment.id,
+                      callError: callUpdate.error?.message,
+                      appointmentError: appointmentUpdate.error?.message
+                    });
+                  } else {
+                    log.info('Vapi-Webhook', '🔗 Appointment linked to call (Golden Record)', {
+                      callId: call.id,
+                      appointmentId: linkedAppointment.id,
+                      orgId
+                    });
+                  }
+                }
+              }
+            }
+          } catch (linkError: any) {
+            // Non-blocking: appointment linking failure doesn't fail webhook processing
+            log.error('Vapi-Webhook', 'Appointment linking failed (non-blocking)', {
+              error: linkError?.message,
+              callId: call?.id,
+              orgId
+            });
+          }
+        }
 
         // FIX 1.5: Queue recording for upload to Supabase Storage (enables playback)
         const recordingUrl = (typeof artifact?.recordingUrl === 'string' ? artifact.recordingUrl : null)
