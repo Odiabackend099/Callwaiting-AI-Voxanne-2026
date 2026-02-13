@@ -23,7 +23,7 @@ import { ManagedTelephonyService } from '../services/managed-telephony-service';
 import { PhoneValidationService } from '../services/phone-validation-service';
 import { supabaseAdmin } from '../config/supabase';
 import { createLogger } from '../services/logger';
-import { checkBalance, deductPhoneProvisioningCost, addCredits } from '../services/wallet-service';
+import { checkBalance, deductPhoneProvisioningCost, addCredits, deductAssetCost } from '../services/wallet-service';
 
 const logger = createLogger('ManagedTelephonyRoutes');
 const router = Router();
@@ -97,57 +97,63 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
 
     logger.info('Validation passed - proceeding with provisioning', { orgId });
 
-    // ===== PHASE 1: BILLING GATE - PREVENT FREE PHONE NUMBER PROVISIONING =====
+    // ===== PHASE 1: ATOMIC BILLING GATE - PREVENT FREE PHONE NUMBER PROVISIONING =====
     // Phone numbers cost $10.00 (1000 pence). This gate enforces prepaid billing.
-    // CRITICAL: This check happens BEFORE calling Twilio API to prevent revenue loss.
+    // CRITICAL FIX (2026-02-14): Uses atomic check_balance_and_deduct_asset_cost() RPC
+    // to eliminate TOCTOU race condition. A single FOR UPDATE lock prevents concurrent
+    // requests from both passing the balance check before either deducts.
     const PHONE_NUMBER_COST_PENCE = 1000; // $10.00 = 1000 pence
 
-    // Step 1: Check wallet balance
-    const balance = await checkBalance(orgId);
-    if (!balance || balance.balancePence < PHONE_NUMBER_COST_PENCE) {
-      logger.warn('Provisioning blocked - insufficient balance', {
+    // Generate idempotency key to prevent duplicate charges on retries
+    const idempotencyKey = `provision-${orgId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    // Atomic check-and-deduct (single RPC, single transaction, row-level lock)
+    const deductResult = await deductAssetCost(
+      orgId,
+      PHONE_NUMBER_COST_PENCE,
+      'phone_number',
+      `Phone provisioning: ${country} ${numberType} ${areaCode || 'any'}`,
+      idempotencyKey
+    );
+
+    if (!deductResult.success) {
+      if (deductResult.duplicate) {
+        logger.warn('Provisioning blocked - duplicate request', {
+          orgId,
+          idempotencyKey,
+        });
+        res.status(409).json({
+          error: 'Duplicate provisioning request detected.',
+          canRetry: false,
+        });
+        return;
+      }
+
+      logger.warn('Provisioning blocked - insufficient balance (atomic check)', {
         orgId,
         required: PHONE_NUMBER_COST_PENCE,
-        current: balance?.balancePence || 0,
+        current: deductResult.balanceBefore,
+        shortfall: deductResult.shortfallPence,
+        error: deductResult.error,
       });
 
       res.status(402).json({
         error: 'Insufficient funds. $10.00 required to provision phone number.',
         required: PHONE_NUMBER_COST_PENCE,
-        current: balance?.balancePence || 0,
+        current: deductResult.balanceBefore,
+        shortfallPence: deductResult.shortfallPence,
         canRetry: true,
       });
       return;
     }
 
-    // Step 2: Deduct balance atomically (BEFORE calling Twilio)
-    // This ensures we're paid before incurring costs
-    const deductResult = await deductPhoneProvisioningCost(
-      orgId,
-      PHONE_NUMBER_COST_PENCE,
-      `${country} ${numberType} ${areaCode || 'any'}`
-    );
-
-    if (!deductResult.success) {
-      logger.error('Provisioning blocked - payment processing failed', {
-        orgId,
-        error: deductResult.error,
-        balanceBefore: deductResult.balanceBefore,
-      });
-
-      res.status(402).json({
-        error: 'Payment processing failed. Please try again or contact support.',
-        details: deductResult.error,
-        canRetry: true,
-      });
-      return;
-    }
-
-    logger.info('Payment processed successfully', {
+    logger.info('Payment processed atomically (TOCTOU-safe)', {
       orgId,
       costPence: PHONE_NUMBER_COST_PENCE,
       balanceBefore: deductResult.balanceBefore,
       balanceAfter: deductResult.balanceAfter,
+      transactionId: deductResult.transactionId,
+      idempotencyKey,
     });
 
     // ===== END BILLING GATE =====

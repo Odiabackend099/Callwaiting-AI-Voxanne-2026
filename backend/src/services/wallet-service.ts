@@ -423,6 +423,118 @@ export async function deductPhoneProvisioningCost(
 }
 
 // ============================================
+// Atomic Asset Cost Deduction (Phase 1 - TOCTOU Fix)
+// ============================================
+
+export interface DeductAssetResult {
+  success: boolean;
+  duplicate: boolean;
+  balanceBefore: number;
+  balanceAfter: number;
+  transactionId?: string;
+  error?: string;
+  shortfallPence?: number;
+}
+
+/**
+ * Atomically check balance and deduct cost for asset purchases.
+ *
+ * CRITICAL FIX (2026-02-14): Replaces the old checkBalance() + deductPhoneProvisioningCost()
+ * pattern which had a TOCTOU race condition allowing double-spending.
+ *
+ * This function uses a single Postgres RPC with FOR UPDATE lock:
+ * 1. Locks the organization row (prevents concurrent reads)
+ * 2. Checks balance >= cost (zero-debt policy for assets)
+ * 3. Deducts atomically
+ * 4. Inserts ledger entry with idempotency protection
+ *
+ * @param orgId - Organization ID
+ * @param costPence - Cost in pence (e.g., 1000 for $10 phone number)
+ * @param assetType - Type: 'phone_number', 'did', 'license', 'phone_provisioning'
+ * @param description - Human-readable description
+ * @param idempotencyKey - Unique key to prevent duplicate charges
+ */
+export async function deductAssetCost(
+  orgId: string,
+  costPence: number,
+  assetType: 'phone_number' | 'did' | 'license' | 'phone_provisioning',
+  description: string,
+  idempotencyKey: string
+): Promise<DeductAssetResult> {
+  const { data, error } = await supabase.rpc('check_balance_and_deduct_asset_cost', {
+    p_org_id: orgId,
+    p_cost_pence: costPence,
+    p_asset_type: assetType,
+    p_description: description,
+    p_idempotency_key: idempotencyKey,
+  });
+
+  if (error) {
+    log.error('WalletService', 'check_balance_and_deduct_asset_cost RPC failed', {
+      error: error.message,
+      orgId,
+      costPence,
+      assetType,
+    });
+    return {
+      success: false,
+      duplicate: false,
+      balanceBefore: 0,
+      balanceAfter: 0,
+      error: error.message,
+    };
+  }
+
+  const result = data as any;
+
+  if (!result?.success) {
+    const isDuplicate = result?.error === 'duplicate_request';
+
+    if (isDuplicate) {
+      log.info('WalletService', 'Duplicate asset deduction detected (idempotent)', {
+        orgId,
+        idempotencyKey,
+      });
+    } else {
+      log.warn('WalletService', 'Asset deduction rejected', {
+        orgId,
+        error: result?.error,
+        balancePence: result?.balance_pence,
+        requiredPence: result?.required_pence,
+        shortfallPence: result?.shortfall_pence,
+      });
+    }
+
+    return {
+      success: false,
+      duplicate: isDuplicate,
+      balanceBefore: result?.balance_pence || 0,
+      balanceAfter: result?.balance_pence || 0,
+      error: result?.error,
+      shortfallPence: result?.shortfall_pence,
+    };
+  }
+
+  log.info('WalletService', 'Asset cost deducted atomically', {
+    orgId,
+    costPence,
+    assetType,
+    idempotencyKey,
+    balanceBefore: result.balance_before_pence,
+    balanceAfter: result.balance_after_pence,
+    transactionId: result.transaction_id,
+  });
+
+  return {
+    success: true,
+    duplicate: false,
+    balanceBefore: result.balance_before_pence,
+    balanceAfter: result.balance_after_pence,
+    transactionId: result.transaction_id,
+  };
+}
+
+// ============================================
 // Add Credits (top-up / refund / bonus)
 // ============================================
 
@@ -507,4 +619,163 @@ export async function getWalletSummary(orgId: string): Promise<any> {
   }
 
   return result;
+}
+
+// ============================================
+// Phase 2: Credit Reservation Pattern
+// ============================================
+
+export interface ReservationResult {
+  success: boolean;
+  duplicate: boolean;
+  reservationId?: string;
+  reservedPence?: number;
+  balancePence?: number;
+  effectiveBalancePence?: number;
+  activeReservationsPence?: number;
+  error?: string;
+}
+
+export interface CommitResult {
+  success: boolean;
+  duplicate: boolean;
+  transactionId?: string;
+  reservedPence?: number;
+  actualCostPence?: number;
+  releasedPence?: number;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  actualMinutes?: number;
+  durationSeconds?: number;
+  error?: string;
+  fallbackToDirectBilling?: boolean;
+}
+
+/**
+ * Reserve credits for an incoming call (authorize phase).
+ * Called at assistant-request webhook to hold estimated cost.
+ */
+export async function reserveCallCredits(
+  orgId: string,
+  callId: string,
+  vapiCallId: string,
+  estimatedMinutes: number = 5
+): Promise<ReservationResult> {
+  const { data, error } = await supabase.rpc('reserve_call_credits', {
+    p_org_id: orgId,
+    p_call_id: callId,
+    p_vapi_call_id: vapiCallId,
+    p_estimated_minutes: estimatedMinutes,
+  });
+
+  if (error) {
+    log.error('WalletService', 'reserve_call_credits RPC failed', {
+      error: error.message, orgId, callId,
+    });
+    return { success: false, duplicate: false, error: error.message };
+  }
+
+  const result = data as any;
+
+  if (!result?.success) {
+    log.warn('WalletService', 'Credit reservation rejected', {
+      orgId, callId, error: result?.error,
+      effectiveBalance: result?.effective_balance_pence,
+    });
+    return {
+      success: false,
+      duplicate: false,
+      balancePence: result?.balance_pence,
+      effectiveBalancePence: result?.effective_balance_pence,
+      error: result?.error,
+    };
+  }
+
+  log.info('WalletService', 'Credits reserved for call', {
+    orgId, callId,
+    reservedPence: result.reserved_pence,
+    reservationId: result.reservation_id,
+    duplicate: result.duplicate,
+  });
+
+  return {
+    success: true,
+    duplicate: result.duplicate || false,
+    reservationId: result.reservation_id,
+    reservedPence: result.reserved_pence,
+    balancePence: result.balance_pence,
+    effectiveBalancePence: result.effective_balance_pence,
+    activeReservationsPence: result.active_reservations_pence,
+  };
+}
+
+/**
+ * Commit reserved credits after call ends (capture phase).
+ * Charges actual usage and releases unused portion.
+ */
+export async function commitReservedCredits(
+  callId: string,
+  actualDurationSeconds: number
+): Promise<CommitResult> {
+  const { data, error } = await supabase.rpc('commit_reserved_credits', {
+    p_call_id: callId,
+    p_actual_duration_seconds: actualDurationSeconds,
+  });
+
+  if (error) {
+    log.error('WalletService', 'commit_reserved_credits RPC failed', {
+      error: error.message, callId,
+    });
+    return { success: false, duplicate: false, error: error.message };
+  }
+
+  const result = data as any;
+
+  if (!result?.success) {
+    log.warn('WalletService', 'Commit failed — fallback to direct billing', {
+      callId, error: result?.error,
+    });
+    return {
+      success: false,
+      duplicate: false,
+      error: result?.error,
+      fallbackToDirectBilling: result?.fallback_to_direct_billing || false,
+    };
+  }
+
+  log.info('WalletService', 'Reserved credits committed', {
+    callId,
+    reserved: result.reserved_pence,
+    actual: result.actual_cost_pence,
+    released: result.released_pence,
+    balanceAfter: result.balance_after_pence,
+  });
+
+  return {
+    success: true,
+    duplicate: result.duplicate || false,
+    transactionId: result.transaction_id,
+    reservedPence: result.reserved_pence,
+    actualCostPence: result.actual_cost_pence,
+    releasedPence: result.released_pence,
+    balanceBefore: result.balance_before_pence,
+    balanceAfter: result.balance_after_pence,
+    actualMinutes: result.actual_minutes,
+    durationSeconds: result.duration_seconds,
+  };
+}
+
+/**
+ * Get active reservation for a call (used by kill switch).
+ */
+export async function getActiveReservation(callId: string) {
+  const { data, error } = await supabase
+    .from('credit_reservations')
+    .select('*')
+    .eq('call_id', callId)
+    .eq('status', 'active')
+    .single();
+
+  if (error || !data) return null;
+  return data;
 }

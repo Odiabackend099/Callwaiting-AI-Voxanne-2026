@@ -64,7 +64,13 @@
     "test:billing-live": "npx tsx src/scripts/comprehensive-billing-audit.ts",
     "test:oauth-config": "npx ts-node src/scripts/test-oauth-config.ts",
     "test:oauth-e2e": "npx ts-node src/scripts/test-oauth-e2e.ts",
-    "verify:oauth-production": "npx ts-node src/scripts/verify-production-oauth.ts"
+    "verify:oauth-production": "npx ts-node src/scripts/verify-production-oauth.ts",
+    "test:prepaid-billing": "vitest src/__tests__/unit/atomic-asset-billing.test.ts src/__tests__/unit/credit-reservation.test.ts",
+    "test:prepaid-billing:e2e": "vitest src/__tests__/integration/prepaid-billing-e2e.test.ts",
+    "test:prepaid-billing:all": "vitest src/__tests__/unit/atomic-asset-billing.test.ts src/__tests__/unit/credit-reservation.test.ts src/__tests__/integration/prepaid-billing-e2e.test.ts",
+    "load-test:billing": "npx tsx src/scripts/load-test-prepaid-billing.ts",
+    "verify:billing-deployment": "npx tsx src/scripts/verify-prepaid-billing-deployment.ts",
+    "verify:kill-switch": "npx tsx src/scripts/test-kill-switch.ts"
   },
   "keywords": [],
   "author": "",

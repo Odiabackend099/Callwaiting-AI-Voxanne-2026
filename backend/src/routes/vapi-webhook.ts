@@ -12,7 +12,7 @@ import { verifyVapiSignature } from '../utils/vapi-webhook-signature';
 import { AnalyticsService } from '../services/analytics-service';
 import { OutcomeSummaryService } from '../services/outcome-summary';
 import { RAG_CONFIG } from '../config/rag-config';
-import { hasEnoughBalance, checkBalance } from '../services/wallet-service';
+import { hasEnoughBalance, checkBalance, reserveCallCredits, commitReservedCredits, getActiveReservation } from '../services/wallet-service';
 import { processCallBilling } from '../services/billing-manager';
 
 const vapiWebhookRouter = Router();
@@ -321,8 +321,8 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             log.info('Vapi-Webhook', 'Google Calendar event created', { appointmentId, calendarEventId });
           } catch (calendarError: any) {
             // Log but don't fail the booking
-            log.warn('Vapi-Webhook', 'Calendar sync skipped', { 
-              appointmentId, 
+            log.warn('Vapi-Webhook', 'Calendar sync skipped', {
+              appointmentId,
               reason: calendarError?.message || 'Calendar not connected'
             });
           }
@@ -484,14 +484,14 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
       // Successful completions
       if (['assistant-ended-call', 'assistant-ended-call-after-message-spoken',
-           'assistant-ended-call-with-hangup-task', 'customer-ended-call',
-           'exceeded-max-duration', 'silence-timed-out'].includes(endedReason)) {
+        'assistant-ended-call-with-hangup-task', 'customer-ended-call',
+        'exceeded-max-duration', 'silence-timed-out'].includes(endedReason)) {
         return 'completed';
       }
 
       // Customer unavailable
       if (['customer-busy', 'customer-did-not-answer',
-           'customer-did-not-give-microphone-permission'].includes(endedReason)) {
+        'customer-did-not-give-microphone-permission'].includes(endedReason)) {
         return 'no-answer';
       }
 
@@ -500,17 +500,17 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
       // Transfers
       if (['assistant-forwarded-call',
-           'assistant-request-returned-forwarding-phone-number'].includes(endedReason)) {
+        'assistant-request-returned-forwarding-phone-number'].includes(endedReason)) {
         return 'transferred';
       }
 
       // System/provider errors (wildcard patterns per Vapi docs)
       if (endedReason.startsWith('call.in-progress.error-') ||
-          endedReason.startsWith('pipeline-error-') ||
-          endedReason.startsWith('call.start.error-') ||
-          ['assistant-error', 'database-error', 'twilio-failed-to-connect-call',
-           'vonage-failed-to-connect-call', 'phone-call-provider-closed-websocket',
-           'unknown-error', 'worker-shutdown'].includes(endedReason)) {
+        endedReason.startsWith('pipeline-error-') ||
+        endedReason.startsWith('call.start.error-') ||
+        ['assistant-error', 'database-error', 'twilio-failed-to-connect-call',
+          'vonage-failed-to-connect-call', 'phone-call-provider-closed-websocket',
+          'unknown-error', 'worker-shutdown'].includes(endedReason)) {
         return 'failed';
       }
 
@@ -592,9 +592,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             callId: call?.id,
             fallbackOrgId,
             source: call?.metadata?.org_id ? 'call.metadata.org_id' :
-                   call?.metadata?.organizationId ? 'call.metadata.organizationId' :
-                   body.org_id ? 'body.org_id' :
-                   body.organizationId ? 'body.organizationId' : 'unknown'
+              call?.metadata?.organizationId ? 'call.metadata.organizationId' :
+                body.org_id ? 'body.org_id' :
+                  body.organizationId ? 'body.organizationId' : 'unknown'
           });
           orgId = fallbackOrgId;
         } else {
@@ -632,11 +632,10 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       });
 
       // 3. Generate outcome + sentiment via GPT-4o (single API call)
-      // Vapi does NOT provide sentiment fields in standard end-of-call-report.
-      // We generate both outcome and sentiment from the transcript using OutcomeSummaryService.
-      let sentimentLabel: string | null = analysis?.structuredData?.sentiment || null;
-      let sentimentScore: number | null = null;
-      let sentimentSummary: string | null = null;
+      // UPDATE 2026-02-14: Prioritize Vapi's native sentiment analysis if available
+      let sentimentLabel: string | null = analysis?.sentiment || analysis?.structuredData?.sentiment || null;
+      let sentimentScore: number | null = analysis?.structuredData?.sentimentScore || null; // Vapi rarely sends score, but check anyway
+      let sentimentSummary: string | null = analysis?.summary || null; // Vapi's summary is usually excellent
       let sentimentUrgency: string | null = null;
       let outcomeShort = analysis?.structuredData?.outcome || 'Call Completed';
       let outcomeDetailed = analysis?.summary || 'Call completed successfully.';
@@ -791,13 +790,31 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       }
 
       // ========== GOLDEN RECORD EXTRACTION & LOGGING ==========
-      const costCents = Math.ceil((message.cost || 0) * 100);
+      // FIXED (2026-02-14): Check multiple locations for cost (message.cost, call.cost, call.costs.total)
+      const rawCost = message.cost ?? call?.cost ?? call?.costs?.total ?? 0;
+      const costCents = Math.ceil(rawCost * 100);
+
       // FIXED: endedReason is in call object, not at message level
       const endedReason = call?.endedReason || null;
-      // NOTE: tools_used requires message events during the call, not end-of-call-report
-      // The end-of-call-report webhook doesn't include messages array
-      // TODO: Implement collection of tools from during-call message events
-      const toolsUsed = extractToolsUsed(call?.messages || []);
+
+      // FIXED (2026-02-14): Collect tools from multiple sources (messages, artifact.messages, analysis.toolCalls)
+      // The end-of-call-report often puts messages in artifact.messages instead of call.messages
+      const allMessages = [
+        ...(call?.messages || []),
+        ...(artifact?.messages || [])
+      ];
+
+      let toolsUsed = extractToolsUsed(allMessages);
+
+      // Also check analysis.toolCalls summary if available (Vapi sometimes sends this)
+      if (analysis?.toolCalls && Array.isArray(analysis.toolCalls)) {
+        for (const tc of analysis.toolCalls) {
+          if (tc.function?.name) toolsUsed.push(tc.function.name);
+        }
+      }
+
+      // Deduplicate tools
+      toolsUsed = Array.from(new Set(toolsUsed));
 
       // DEBUG: Log all Golden Record field extraction
       const debugLog = {
@@ -891,7 +908,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
           // Test call detection — per Vapi docs, call.type === 'webCall' for browser calls
           is_test_call: call?.type === 'webCall' ||
-                        !!(call?.metadata?.is_test_call) || false,
+            !!(call?.metadata?.is_test_call) || false,
 
           // Metadata
           metadata: {
@@ -1121,17 +1138,40 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       // Also run analytics (existing behavior)
       AnalyticsService.processEndOfCall(message);
 
-      // ===== PREPAID BILLING: Deduct credits after call =====
+      // ===== PHASE 2: COMMIT RESERVED CREDITS (Authorize-then-Capture) =====
+      // Try to commit the reservation first; fall back to direct billing if no reservation exists
       if (orgId && call?.id) {
         try {
-          await processCallBilling(
-            orgId,
-            call.id,
-            call.id,
-            Math.round(message.durationSeconds || call?.duration || 0),
-            message.cost || null,
-            call?.costs || null
-          );
+          const duration = Math.round(message.durationSeconds || call?.duration || 0);
+          const commitResult = await commitReservedCredits(call.id, duration);
+
+          if (commitResult.success) {
+            log.info('Vapi-Webhook', 'Call billing committed via reservation', {
+              callId: call.id,
+              orgId,
+              reserved: commitResult.reservedPence,
+              actual: commitResult.actualCostPence,
+              released: commitResult.releasedPence,
+              balanceAfter: commitResult.balanceAfter,
+            });
+          } else if (commitResult.fallbackToDirectBilling) {
+            // No reservation found — fall back to legacy direct billing
+            log.info('Vapi-Webhook', 'No reservation found, falling back to direct billing', {
+              callId: call.id, orgId,
+            });
+            await processCallBilling(
+              orgId,
+              call.id,
+              call.id,
+              duration,
+              message.cost || null,
+              call?.costs || null
+            );
+          } else {
+            log.error('Vapi-Webhook', 'Commit failed unexpectedly', {
+              callId: call.id, orgId, error: commitResult.error,
+            });
+          }
         } catch (billingErr: any) {
           // CRITICAL: Billing failure must NOT block webhook processing
           log.error('Vapi-Webhook', 'Prepaid billing failed (non-blocking)', {
@@ -1149,11 +1189,12 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
     // Legacy support: if message is a string, it's the user query
     // Modern support: if message is object with type 'assistant-request' OR no type but has 'role'
 
-    // ===== PHASE 2: BILLING GATE - PREVENT FREE CALL AUTHORIZATION =====
-    // Block calls if organization has insufficient balance for call costs (~$0.70/min)
-    // CRITICAL: This check happens BEFORE returning assistant config to prevent revenue loss.
+    // ===== PHASE 2: BILLING GATE + CREDIT RESERVATION =====
+    // Reserve credits for estimated call duration (authorize phase).
+    // If reservation fails, fall back to simple balance check.
     if (message && message.type === 'assistant-request') {
       const gateAssistantId = body.assistantId || message.call?.assistantId;
+      const gateCallId = message.call?.id || body.call?.id;
       if (gateAssistantId) {
         try {
           const { data: gateAgent } = await supabase
@@ -1163,38 +1204,68 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             .maybeSingle();
 
           if (gateAgent?.org_id) {
-            // Get detailed balance information
-            const balance = await checkBalance(gateAgent.org_id);
-            const MIN_BALANCE_FOR_CALL = 79; // 79 pence ≈ $1.00 at $0.70/min rate
+            // Try to reserve credits (Phase 2: authorize-then-capture)
+            if (gateCallId) {
+              const reservation = await reserveCallCredits(
+                gateAgent.org_id,
+                gateCallId,
+                gateCallId,
+                5 // Estimate 5 minutes
+              );
 
-            if (!balance || balance.balancePence < MIN_BALANCE_FOR_CALL) {
-              log.warn('Vapi-Webhook', 'Call blocked - insufficient balance', {
+              if (!reservation.success) {
+                log.warn('Vapi-Webhook', 'Call blocked - credit reservation failed', {
+                  orgId: gateAgent.org_id,
+                  assistantId: gateAssistantId,
+                  callId: gateCallId,
+                  error: reservation.error,
+                  effectiveBalance: reservation.effectiveBalancePence,
+                });
+
+                return res.status(402).json({
+                  error: 'Insufficient credits to authorize call',
+                  message: 'Please top up your account at your Voxanne dashboard to make calls.',
+                  currentBalance: reservation.balancePence || 0,
+                  effectiveBalance: reservation.effectiveBalancePence || 0,
+                });
+              }
+
+              log.info('Vapi-Webhook', 'Call authorized - credits reserved', {
                 orgId: gateAgent.org_id,
                 assistantId: gateAssistantId,
-                currentBalance: balance?.balancePence || 0,
-                requiredBalance: MIN_BALANCE_FOR_CALL,
-                deficit: MIN_BALANCE_FOR_CALL - (balance?.balancePence || 0),
+                callId: gateCallId,
+                reservedPence: reservation.reservedPence,
+                effectiveBalance: reservation.effectiveBalancePence,
               });
+            } else {
+              // No callId available — fall back to simple balance check
+              const balance = await checkBalance(gateAgent.org_id);
+              const MIN_BALANCE_FOR_CALL = 79;
 
-              // Return 402 Payment Required (industry standard for billing gates)
-              return res.status(402).json({
-                error: 'Insufficient credits to authorize call',
-                message: 'Please top up your account at your Voxanne dashboard to make calls.',
-                currentBalance: balance?.balancePence || 0,
-                requiredBalance: MIN_BALANCE_FOR_CALL,
-                autoRechargeEnabled: balance?.autoRechargeEnabled || false,
+              if (!balance || balance.balancePence < MIN_BALANCE_FOR_CALL) {
+                log.warn('Vapi-Webhook', 'Call blocked - insufficient balance (fallback check)', {
+                  orgId: gateAgent.org_id,
+                  assistantId: gateAssistantId,
+                  currentBalance: balance?.balancePence || 0,
+                });
+
+                return res.status(402).json({
+                  error: 'Insufficient credits to authorize call',
+                  message: 'Please top up your account at your Voxanne dashboard to make calls.',
+                  currentBalance: balance?.balancePence || 0,
+                  requiredBalance: MIN_BALANCE_FOR_CALL,
+                });
+              }
+
+              log.info('Vapi-Webhook', 'Call authorized - balance check (no reservation)', {
+                orgId: gateAgent.org_id,
+                balancePence: balance.balancePence,
               });
             }
-
-            log.info('Vapi-Webhook', 'Call authorized - sufficient balance', {
-              orgId: gateAgent.org_id,
-              assistantId: gateAssistantId,
-              balancePence: balance.balancePence,
-            });
           }
         } catch (gateErr: any) {
-          // Don't block calls if balance check fails - fail open (availability over consistency)
-          log.error('Vapi-Webhook', 'Balance gate error (failing open)', {
+          // Don't block calls if reservation fails - fail open (availability over consistency)
+          log.error('Vapi-Webhook', 'Billing gate error (failing open)', {
             error: gateErr?.message,
             assistantId: gateAssistantId,
           });
@@ -1266,6 +1337,87 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
   } catch (error: any) {
     log.error('Vapi-Webhook', 'Error processing webhook', { error: error.message });
     return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// Phase 3: Kill Switch - Status Check Endpoint
+// ============================================
+// Vapi calls this endpoint periodically (every 60s via serverMessages)
+// to check if the call should be terminated due to depleted balance.
+
+vapiWebhookRouter.post('/webhook/status-check', webhookLimiter, async (req: Request, res: Response) => {
+  try {
+    const { message } = req.body;
+    const callId = message?.call?.id || req.body.call?.id;
+
+    if (!callId) {
+      return res.json({ endCall: false });
+    }
+
+    // Get active reservation for this call
+    const reservation = await getActiveReservation(callId);
+    if (!reservation) {
+      // No reservation = no kill switch enforcement
+      return res.json({ endCall: false });
+    }
+
+    // Get current balance
+    const balance = await checkBalance(reservation.org_id);
+    if (!balance) {
+      return res.json({ endCall: false });
+    }
+
+    // Calculate effective balance (wallet - all active reservations)
+    const { data: activeReservations } = await supabase
+      .from('credit_reservations')
+      .select('reserved_pence')
+      .eq('org_id', reservation.org_id)
+      .eq('status', 'active');
+
+    const totalReserved = (activeReservations || []).reduce(
+      (sum: number, r: any) => sum + (r.reserved_pence || 0), 0
+    );
+
+    const effectiveBalance = balance.balancePence - totalReserved;
+    const KILL_THRESHOLD = 0; // Terminate at zero
+
+    if (effectiveBalance <= KILL_THRESHOLD) {
+      log.warn('Vapi-Webhook', '🔴 KILL SWITCH ACTIVATED - terminating call', {
+        callId,
+        orgId: reservation.org_id,
+        effectiveBalance,
+        walletBalance: balance.balancePence,
+        totalReserved,
+      });
+
+      return res.json({
+        endCall: true,
+        message: 'Your account balance has been depleted. This call will now end. Please top up your account.',
+      });
+    }
+
+    // Warning threshold: less than 1 minute remaining (49 pence)
+    const WARNING_THRESHOLD = 49;
+    if (effectiveBalance <= WARNING_THRESHOLD) {
+      log.info('Vapi-Webhook', '⚠️ Low balance warning during call', {
+        callId,
+        orgId: reservation.org_id,
+        effectiveBalance,
+        estimatedRemainingSeconds: Math.floor((effectiveBalance / 49) * 60),
+      });
+
+      return res.json({
+        endCall: false,
+        message: 'Warning: Your account balance is running low. This call may end soon.',
+      });
+    }
+
+    return res.json({ endCall: false });
+
+  } catch (error: any) {
+    log.error('Vapi-Webhook', 'Status check error', { error: error.message });
+    return res.json({ endCall: false }); // Fail open
   }
 });
 

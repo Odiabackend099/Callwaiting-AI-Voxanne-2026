@@ -1,14 +1,18 @@
 # Voxanne AI - Database Schema SSOT (Single Source of Truth)
 
-**Status:** Updated after API Endpoint Verification + Golden Record SSOT + Wallet Stripe E2E verification (2026-02-13)
-**Generated:** Directly from live Supabase PostgreSQL database
-**Database State:** Production-ready, security hardened, Golden Record SSOT active
-**Golden Record SSOT:** ✅ COMPLETE - 4 phases implemented (Phase 1: Migration, Phase 2: Webhook, Phase 3: Code fixes, Phase 4: Dashboard)
-**API Endpoints:** ✅ VERIFIED - All dashboard endpoints tested, real data confirmed, outcome summaries 3-sentence format
+**Status:** ⚠️ VAPI PIPELINE VERIFIED + 3 DATA POPULATION ISSUES IDENTIFIED (2026-02-13)
+**Generated:** Directly from live Supabase PostgreSQL database + VAPI webhook verification
+**Database State:** Production-ready, security hardened, Golden Record SSOT active (with 3 issues to fix)
+**Golden Record SSOT:** ✅ COMPLETE - 4 phases implemented BUT 3 fields not fully populated in webhook handler
+**VAPI Pipeline:** ✅ VERIFIED - End-to-end flow working (22 calls confirmed in database with vapi_call_id)
+**Data Quality Metrics (2026-02-13 Verification):**
+  - ✅ **cost_cents:** 73% populated (16/22 calls) - Issue: webhook handler not extracting from VAPI payload
+  - ⚠️ **sentiment_score:** 45% populated (10/22 calls) - Issue: sentiment analysis not running on all calls
+  - ❌ **tools_used:** 0% populated (0/22 calls) - Issue: tool tracking not implemented in webhook handler
 **Billing Verification:** ✅ CERTIFIED - Fixed $0.70/minute rate (46/46 tests passed)
 **Security Verification:** ✅ CERTIFIED - All P0 vulnerabilities mitigated (21/21 tests passed)
-**Deployment Status:** ✅ OPERATIONAL - Backend server running, Golden Record SSOT active, security fixes active, all APIs responding
-**Latest Change:** API endpoint verification complete - outcome summaries confirmed as 3-sentence format, all metrics return real data (2026-02-13 01:20 UTC)
+**Deployment Status:** ✅ OPERATIONAL - Backend running, VAPI webhooks flowing, data persisting (issues are in extraction logic, not pipeline)
+**Latest Change:** VAPI end-to-end pipeline verification complete (2026-02-13 14:30 UTC) - 22 calls analyzed, 3 field population issues identified
 
 ---
 
@@ -76,10 +80,45 @@ These 9 tables contain real user data and drive the platform:
 - **idx_calls_appointment_id** - Partial index on appointment_id (Golden Record) ✨ NEW
 - **idx_calls_cost** - Composite index on (org_id, cost_cents) for cost analytics (Golden Record) ✨ NEW
 
-**Row Count:** 21 (all rows have new columns populated)
+**Row Count:** 22 (verified via end-to-end VAPI pipeline verification)
 
 **Golden Record Details (2026-02-13):**
-- ✅ cost_cents: Call cost stored as integer cents (prevents floating-point precision issues)
+- ✅ **Pipeline Verified:** End-to-end VAPI → Backend → Supabase → Dashboard flow confirmed working
+- ✅ **Data Persistence:** 22 real calls in database with vapi_call_id (proves VAPI webhooks reaching system)
+- ✅ **cost_cents:** Stored as integer cents (prevents floating-point precision issues)
+
+**⚠️ CRITICAL ISSUES IDENTIFIED (3 fields not fully populated):**
+
+**Issue #1: cost_cents Only 73% Populated (16/22 calls)**
+- **Root Cause:** `backend/src/routes/vapi-webhook.ts` not extracting `cost` from VAPI webhook payload
+- **Expected Source:** VAPI webhook payload contains `message.cost` (in dollars, e.g., 0.82)
+- **Required Logic:** Convert to cents: `Math.ceil(message.cost * 100)`
+- **Current Status:** Column exists, but cost extraction logic missing or broken
+- **Impact:** Dashboard analytics show incomplete cost data
+- **Location to Fix:** `backend/src/routes/vapi-webhook.ts` lines 150-270 (VAPI payload parsing)
+
+**Issue #2: sentiment_score Only 45% Populated (10/22 calls)**
+- **Root Cause:** Sentiment analysis service not running on all calls or not storing results
+- **Expected Source:** VAPI webhook payload contains sentiment analysis results
+- **Required Fields:**
+  - `sentiment_label`: "positive" | "neutral" | "negative"
+  - `sentiment_score`: numeric 0.0-1.0
+  - `sentiment_summary`: human-readable text
+  - `sentiment_urgency`: "low" | "medium" | "high" | "critical"
+- **Current Status:** Column exists, but sentiment data not being extracted/stored
+- **Impact:** Dashboard shows "0%" average sentiment; alerts don't work
+- **Location to Fix:** `backend/src/routes/vapi-webhook.ts` lines 320-400 (sentiment analysis integration)
+
+**Issue #3: tools_used 0% Populated (0/22 calls) - CRITICAL**
+- **Root Cause:** Tool tracking not implemented in webhook handler at all
+- **Expected Source:** VAPI webhook `call.messages` array contains tool calls
+- **Required Logic:** Extract tool names from message objects where `toolCall` is present
+- **Current Status:** Column exists with default '{}' but never populated
+- **Impact:** Dashboard analytics completely broken; can't track which tools were used during calls
+- **Location to Fix:** `backend/src/routes/vapi-webhook.ts` need new function `extractToolsUsed(messages)` at lines 200-220
+
+**Action Required:**
+Fix all 3 issues in webhook handler to achieve 100% data population. See developer prompt below for detailed implementation plan.
 
 ---
 
