@@ -132,6 +132,7 @@ import billingReconciliationRouter from './routes/billing-reconciliation'; // de
 import webhookVerificationRouter from './routes/webhook-verification'; // default export - Webhook processing verification
 import calendlyWebhookRouter from './routes/calendly-webhook';
 import contactFormRouter from './routes/contact-form';
+import emailTestingRouter from './routes/email-testing';
 import chatWidgetRouter from './routes/chat-widget';
 import onboardingIntakeRouter from './routes/onboarding-intake';
 import { initializeSmsQueue, shutdownSmsQueue } from './queues/sms-queue';
@@ -335,6 +336,7 @@ app.use('/api/webhook-verification', webhookVerificationRouter); // Webhook proc
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
 app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
 app.use('/api/onboarding-intake', onboardingIntakeRouter); // Onboarding intake form
+app.use('/api/email-testing', emailTestingRouter); // Email testing & verification (DEBUG only)
 app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/internal', internalApiRoutes); // Internal API routes (webhook configuration, etc.)
 app.use('/api/integrations', integrationsApiRouter); // Fetch decrypted credentials

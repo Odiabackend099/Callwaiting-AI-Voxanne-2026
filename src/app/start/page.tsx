@@ -362,7 +362,7 @@ function OnboardingForm() {
                 Reception Greeting Script *
               </label>
               <Textarea
-                name="greetingScript"
+                name="greeting_script"
                 required
                 rows={4}
                 placeholder="e.g., Thank you for calling [Your Company]. How may I help you today?"

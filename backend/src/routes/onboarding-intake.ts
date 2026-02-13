@@ -54,9 +54,34 @@ router.post('/', upload.single('pricing_pdf'), handleMulterError, async (req, re
     } = req.body;
     const file = req.file;
 
+    // Debug logging
+    log.info('OnboardingIntake', 'Form submission received', {
+      bodyKeys: Object.keys(req.body),
+      company: !!company,
+      email: !!email,
+      phone: !!phone,
+      greeting_script: !!greeting_script,
+      filePresent: !!file,
+      contentType: req.headers['content-type'],
+    });
+
     // Validate required fields
     if (!company || !email || !phone || !greeting_script) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      log.warn('OnboardingIntake', 'Validation failed - missing required fields', {
+        company: company || 'MISSING',
+        email: email || 'MISSING',
+        phone: phone || 'MISSING',
+        greeting_script: greeting_script || 'MISSING',
+      });
+      return res.status(400).json({
+        error: 'Missing required fields',
+        received: {
+          company: !!company,
+          email: !!email,
+          phone: !!phone,
+          greeting_script: !!greeting_script,
+        }
+      });
     }
 
     let pdfUrl: string | null = null;
