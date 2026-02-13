@@ -536,6 +536,13 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         resolvedCallerName = inboundCall.contacts.name;
       }
 
+      // DEBUG: Log the actual field values to verify they're being read
+      console.log('🔍 DEBUG: inboundCall fields:', {
+        outcome: inboundCall.outcome,
+        outcome_summary: inboundCall.outcome_summary,
+        sentiment_summary: inboundCall.sentiment_summary
+      });
+
       return res.json({
         id: inboundCall.id,
         phone_number: inboundCall.phone_number || 'Unknown',
@@ -548,6 +555,9 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         transcript,
         sentiment_score: inboundCall.sentiment_score,
         sentiment_label: inboundCall.sentiment_label,
+        sentiment_summary: inboundCall.sentiment_summary,
+        outcome: inboundCall.outcome,
+        outcome_summary: inboundCall.outcome_summary,
         action_items: inboundCall.action_items || [],
         vapi_call_id: inboundCall.vapi_call_id,
         created_at: inboundCall.created_at,
@@ -624,6 +634,8 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         sentiment_label: outboundCall.sentiment_label,
         sentiment_summary: outboundCall.sentiment_summary,
         sentiment_urgency: outboundCall.sentiment_urgency,
+        outcome: outboundCall.outcome,
+        outcome_summary: outboundCall.outcome_summary,
         action_items: outboundCall.action_items || [],
         vapi_call_id: outboundCall.vapi_call_id,
         created_at: outboundCall.created_at,
