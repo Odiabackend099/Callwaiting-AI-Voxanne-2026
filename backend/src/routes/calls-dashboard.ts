@@ -169,7 +169,16 @@ callsRouter.get('/', async (req: Request, res: Response) => {
         sentiment_urgency: sentimentUrgency || null,
         outcome: call.outcome || null,
         outcome_summary: call.outcome_summary || null,
-        call_type: call.call_direction  // For backward compatibility
+        call_type: call.call_direction,  // For backward compatibility
+        // ========== GOLDEN RECORD FIELDS (2026-02-13) ==========
+        cost_cents: call.cost_cents || 0,  // Call cost in integer cents (avoids floating point issues)
+        ended_reason: call.ended_reason || null,  // Raw Vapi endedReason code for analytics
+        tools_used: call.tools_used || [],  // Array of tool names used during call
+        has_appointment: call.has_appointment || false,  // Boolean flag from view
+        appointment_id: call.appointment_id || null,  // Link to appointments table
+        appointment_scheduled_at: call.appointment_scheduled_at || null,  // Appointment date/time
+        appointment_status: call.appointment_status || null,  // Appointment status
+        appointment_service_type: call.appointment_service_type || null  // Service booked
       };
     });
 
@@ -542,7 +551,12 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         action_items: inboundCall.action_items || [],
         vapi_call_id: inboundCall.vapi_call_id,
         created_at: inboundCall.created_at,
-        call_type: 'inbound'
+        call_type: 'inbound',
+        // ========== GOLDEN RECORD FIELDS (2026-02-13) ==========
+        cost_cents: inboundCall.cost_cents || 0,
+        ended_reason: inboundCall.ended_reason || null,
+        tools_used: inboundCall.tools_used || [],
+        appointment_id: inboundCall.appointment_id || null
       });
     }
 
@@ -613,7 +627,12 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
         action_items: outboundCall.action_items || [],
         vapi_call_id: outboundCall.vapi_call_id,
         created_at: outboundCall.created_at,
-        call_type: 'outbound'
+        call_type: 'outbound',
+        // ========== GOLDEN RECORD FIELDS (2026-02-13) ==========
+        cost_cents: outboundCall.cost_cents || 0,
+        ended_reason: outboundCall.ended_reason || null,
+        tools_used: outboundCall.tools_used || [],
+        appointment_id: outboundCall.appointment_id || null
       });
     }
 

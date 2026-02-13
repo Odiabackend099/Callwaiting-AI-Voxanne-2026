@@ -268,7 +268,7 @@ export async function getPendingDeletionStats(): Promise<{
         .lt('deleted_at', cutoffDate.toISOString()),
 
       supabase
-        .from('call_logs')
+        .from('calls')
         .select('id', { count: 'exact', head: true })
         .not('deleted_at', 'is', null)
         .lt('deleted_at', cutoffDate.toISOString()),

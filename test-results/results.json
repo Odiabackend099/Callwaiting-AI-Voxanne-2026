@@ -11,7 +11,7 @@
     "grepInvert": null,
     "maxFailures": 0,
     "metadata": {
-      "actualWorkers": 1
+      "actualWorkers": 2
     },
     "preserveOutput": "always",
     "reporter": [
@@ -49,7 +49,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 2
         },
         "id": "chromium",
         "name": "chromium",
@@ -66,7 +66,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 2
         },
         "id": "firefox",
         "name": "firefox",
@@ -83,7 +83,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 2
         },
         "id": "webkit",
         "name": "webkit",
@@ -100,7 +100,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 2
         },
         "id": "Mobile Chrome",
         "name": "Mobile Chrome",
@@ -117,7 +117,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 2
         },
         "id": "Mobile Safari",
         "name": "Mobile Safari",
@@ -135,30 +135,30 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.57.0",
-    "workers": 1,
+    "workers": 4,
     "webServer": null
   },
   "suites": [
     {
-      "title": "e2e/billing.spec.ts",
-      "file": "e2e/billing.spec.ts",
+      "title": "e2e/stripe-billing.spec.ts",
+      "file": "e2e/stripe-billing.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [],
       "suites": [
         {
-          "title": "Stripe Billing Flow",
-          "file": "e2e/billing.spec.ts",
-          "line": 33,
+          "title": "Stripe Billing E2E Flow",
+          "file": "e2e/stripe-billing.spec.ts",
+          "line": 24,
           "column": 6,
           "specs": [
             {
-              "title": "User can top up wallet and verify balance increase",
+              "title": "Complete Stripe checkout flow and verify wallet balance",
               "ok": false,
               "tags": [],
               "tests": [
                 {
-                  "timeout": 90000,
+                  "timeout": 60000,
                   "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "chromium",
@@ -167,76 +167,71 @@
                     {
                       "workerIndex": 0,
                       "parallelIndex": 0,
-                      "status": "failed",
-                      "duration": 17890,
+                      "status": "timedOut",
+                      "duration": 64389,
                       "error": {
-                        "message": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n",
-                        "stack": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n\n    at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:56:5",
-                        "location": {
-                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                          "column": 14,
-                          "line": 28
-                        },
-                        "snippet": "   at e2e/utils/auth-helpers.ts:28\n\n  26 |\n  27 |   // Wait for login form to be visible\n> 28 |   await page.waitForSelector('input[name=\"email\"]', { timeout: 10000 });\n     |              ^\n  29 |\n  30 |   // Fill in credentials\n  31 |   await page.fill('input[name=\"email\"]', 'test@demo.com');"
+                        "message": "\u001b[31mTest timeout of 60000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 60000ms exceeded.\u001b[39m"
                       },
                       "errors": [
                         {
+                          "message": "\u001b[31mTest timeout of 60000ms exceeded.\u001b[39m"
+                        },
+                        {
                           "location": {
-                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                            "column": 14,
-                            "line": 28
+                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/stripe-billing.spec.ts",
+                            "column": 20,
+                            "line": 56
                           },
-                          "message": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n\n\n   at e2e/utils/auth-helpers.ts:28\n\n  26 |\n  27 |   // Wait for login form to be visible\n> 28 |   await page.waitForSelector('input[name=\"email\"]', { timeout: 10000 });\n     |              ^\n  29 |\n  30 |   // Fill in credentials\n  31 |   await page.fill('input[name=\"email\"]', 'test@demo.com');\n    at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:56:5"
+                          "message": "Error: page.fill: Test timeout of 60000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]')\u001b[22m\n\n\n\u001b[0m \u001b[90m 54 |\u001b[39m\n \u001b[90m 55 |\u001b[39m         \u001b[90m// Fill login credentials - use name attributes as actual page doesn't use type=\"email\"\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 56 |\u001b[39m         \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mfill(\u001b[32m'input[name=\"email\"]'\u001b[39m\u001b[33m,\u001b[39m \u001b[33mTEST_EMAIL\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                    \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 57 |\u001b[39m         \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mfill(\u001b[32m'input[name=\"password\"]'\u001b[39m\u001b[33m,\u001b[39m \u001b[33mTEST_PASSWORD\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 58 |\u001b[39m         \n \u001b[90m 59 |\u001b[39m         \u001b[90m// Wait a moment for any UI to stabilize\u001b[39m\u001b[0m\n\u001b[2m    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/stripe-billing.spec.ts:56:20\u001b[22m"
                         }
                       ],
                       "stdout": [
                         {
-                          "text": "Step 1: Authenticating as test user...\n"
+                          "text": "🚀 Starting Stripe Billing E2E Test...\n"
+                        },
+                        {
+                          "text": "📝 Step 1: Logging in...\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-02-12T21:03:13.460Z",
+                      "startTime": "2026-02-12T22:19:28.135Z",
                       "annotations": [],
                       "attachments": [
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/test-failed-1.png"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/test-failed-1.png"
                         },
                         {
                           "name": "video",
                           "contentType": "video/webm",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/video.webm"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/video.webm"
                         },
                         {
                           "name": "error-context",
                           "contentType": "text/markdown",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/error-context.md"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/error-context.md"
                         }
-                      ],
-                      "errorLocation": {
-                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                        "column": 14,
-                        "line": 28
-                      }
+                      ]
                     }
                   ],
                   "status": "unexpected"
                 }
               ],
-              "id": "e4c62aab4be66f97a738-b9e6bce9196f626d3b64",
-              "file": "e2e/billing.spec.ts",
-              "line": 51,
-              "column": 7
+              "id": "2ffec6e643266aa86e3b-c6f06a0a1cecc8591332",
+              "file": "e2e/stripe-billing.spec.ts",
+              "line": 43,
+              "column": 9
             },
             {
-              "title": "Wallet page displays current balance",
+              "title": "Should handle Stripe payment failure gracefully",
               "ok": false,
               "tags": [],
               "tests": [
                 {
-                  "timeout": 90000,
+                  "timeout": 60000,
                   "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "chromium",
@@ -244,147 +239,61 @@
                   "results": [
                     {
                       "workerIndex": 1,
-                      "parallelIndex": 0,
-                      "status": "failed",
-                      "duration": 13589,
+                      "parallelIndex": 1,
+                      "status": "timedOut",
+                      "duration": 62272,
                       "error": {
-                        "message": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n",
-                        "stack": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n\n    at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:139:5",
-                        "location": {
-                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                          "column": 14,
-                          "line": 28
-                        },
-                        "snippet": "   at e2e/utils/auth-helpers.ts:28\n\n  26 |\n  27 |   // Wait for login form to be visible\n> 28 |   await page.waitForSelector('input[name=\"email\"]', { timeout: 10000 });\n     |              ^\n  29 |\n  30 |   // Fill in credentials\n  31 |   await page.fill('input[name=\"email\"]', 'test@demo.com');"
+                        "message": "\u001b[31mTest timeout of 60000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 60000ms exceeded.\u001b[39m"
                       },
                       "errors": [
                         {
+                          "message": "\u001b[31mTest timeout of 60000ms exceeded.\u001b[39m"
+                        },
+                        {
                           "location": {
-                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                            "column": 14,
-                            "line": 28
+                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/stripe-billing.spec.ts",
+                            "column": 27,
+                            "line": 218
                           },
-                          "message": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n\n\n   at e2e/utils/auth-helpers.ts:28\n\n  26 |\n  27 |   // Wait for login form to be visible\n> 28 |   await page.waitForSelector('input[name=\"email\"]', { timeout: 10000 });\n     |              ^\n  29 |\n  30 |   // Fill in credentials\n  31 |   await page.fill('input[name=\"email\"]', 'test@demo.com');\n    at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:139:5"
+                          "message": "Error: locator.click: Test timeout of 60000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Add Funds\"), button:has-text(\"Top Up\")').first()\u001b[22m\n\n\n\u001b[0m \u001b[90m 216 |\u001b[39m         \u001b[90m// Click Add Funds\u001b[39m\n \u001b[90m 217 |\u001b[39m         \u001b[36mconst\u001b[39m topUpButton \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Add Funds\"), button:has-text(\"Top Up\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 218 |\u001b[39m         \u001b[36mawait\u001b[39m topUpButton\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                           \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 219 |\u001b[39m         \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m2000\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 220 |\u001b[39m\n \u001b[90m 221 |\u001b[39m         \u001b[90m// Use declining test card\u001b[39m\u001b[0m\n\u001b[2m    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/stripe-billing.spec.ts:218:27\u001b[22m"
                         }
                       ],
                       "stdout": [
                         {
-                          "text": "Testing wallet page display...\n"
+                          "text": "🚀 Starting Stripe Payment Failure Test...\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-02-12T21:03:38.748Z",
+                      "startTime": "2026-02-12T22:19:28.153Z",
                       "annotations": [],
                       "attachments": [
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/test-failed-1.png"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/test-failed-1.png"
                         },
                         {
                           "name": "video",
                           "contentType": "video/webm",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/video.webm"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/video.webm"
                         },
                         {
                           "name": "error-context",
                           "contentType": "text/markdown",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/error-context.md"
+                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/error-context.md"
                         }
-                      ],
-                      "errorLocation": {
-                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                        "column": 14,
-                        "line": 28
-                      }
+                      ]
                     }
                   ],
                   "status": "unexpected"
                 }
               ],
-              "id": "e4c62aab4be66f97a738-7e8d4006a3809600aa92",
-              "file": "e2e/billing.spec.ts",
-              "line": 135,
-              "column": 7
-            },
-            {
-              "title": "Add Funds button is visible and clickable",
-              "ok": false,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium",
-                  "projectName": "chromium",
-                  "results": [
-                    {
-                      "workerIndex": 2,
-                      "parallelIndex": 0,
-                      "status": "failed",
-                      "duration": 13769,
-                      "error": {
-                        "message": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n",
-                        "stack": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n\n    at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:154:5",
-                        "location": {
-                          "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                          "column": 14,
-                          "line": 28
-                        },
-                        "snippet": "   at e2e/utils/auth-helpers.ts:28\n\n  26 |\n  27 |   // Wait for login form to be visible\n> 28 |   await page.waitForSelector('input[name=\"email\"]', { timeout: 10000 });\n     |              ^\n  29 |\n  30 |   // Fill in credentials\n  31 |   await page.fill('input[name=\"email\"]', 'test@demo.com');"
-                      },
-                      "errors": [
-                        {
-                          "location": {
-                            "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                            "column": 14,
-                            "line": 28
-                          },
-                          "message": "TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"email\"]') to be visible\u001b[22m\n\n\n   at e2e/utils/auth-helpers.ts:28\n\n  26 |\n  27 |   // Wait for login form to be visible\n> 28 |   await page.waitForSelector('input[name=\"email\"]', { timeout: 10000 });\n     |              ^\n  29 |\n  30 |   // Fill in credentials\n  31 |   await page.fill('input[name=\"email\"]', 'test@demo.com');\n    at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)\n    at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:154:5"
-                        }
-                      ],
-                      "stdout": [
-                        {
-                          "text": "Testing Add Funds button...\n"
-                        }
-                      ],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-02-12T21:03:54.765Z",
-                      "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/test-failed-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/video.webm"
-                        },
-                        {
-                          "name": "error-context",
-                          "contentType": "text/markdown",
-                          "path": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/test-results/e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/error-context.md"
-                        }
-                      ],
-                      "errorLocation": {
-                        "file": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts",
-                        "column": 14,
-                        "line": 28
-                      }
-                    }
-                  ],
-                  "status": "unexpected"
-                }
-              ],
-              "id": "e4c62aab4be66f97a738-d0d77ce7eeb632363b5f",
-              "file": "e2e/billing.spec.ts",
-              "line": 150,
-              "column": 7
+              "id": "2ffec6e643266aa86e3b-f49ec3344bd7e1c73b95",
+              "file": "e2e/stripe-billing.spec.ts",
+              "line": 206,
+              "column": 9
             }
           ]
         }
@@ -393,11 +302,11 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-02-12T21:03:12.444Z",
-    "duration": 57286.034999999996,
+    "startTime": "2026-02-12T22:19:26.543Z",
+    "duration": 68417.791,
     "expected": 0,
     "skipped": 0,
-    "unexpected": 3,
+    "unexpected": 2,
     "flaky": 0
   }
 }

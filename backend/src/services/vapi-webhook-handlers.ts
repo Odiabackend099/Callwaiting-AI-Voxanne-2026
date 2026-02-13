@@ -120,12 +120,12 @@ export async function processEndOfCallReport(event: any, orgId: string): Promise
       status = 'completed';
     }
 
-    // Legacy call_logs write — disabled by default.
+    // Legacy calls write — disabled by default.
     // The canonical write now happens in vapi-webhook.ts → calls table.
     // Set ENABLE_LEGACY_CALL_LOGS=true to re-enable for rollback safety.
     if (process.env.ENABLE_LEGACY_CALL_LOGS === 'true') {
       const { data: callLogData, error: callLogError } = await supabase
-        .from('call_logs')
+        .from('calls')
         .upsert({
           id: callId,
           org_id: orgId,
@@ -154,7 +154,7 @@ export async function processEndOfCallReport(event: any, orgId: string): Promise
         });
 
       if (callLogError) {
-        log.error('VapiWebhookHandlers', `Failed to insert call_logs: ${callLogError.message}`, { callId, orgId });
+        log.error('VapiWebhookHandlers', `Failed to insert calls: ${callLogError.message}`, { callId, orgId });
       } else {
         log.info('VapiWebhookHandlers', `Call log created/updated for call ${callId}`);
       }

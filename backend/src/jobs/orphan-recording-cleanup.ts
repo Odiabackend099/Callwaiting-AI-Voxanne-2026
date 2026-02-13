@@ -4,7 +4,7 @@
  * 
  * An orphaned recording is one where:
  * 1. Recording exists in Supabase Storage (recording_storage_path is set)
- * 2. But call_logs entry has no recording_url (upload failed to complete)
+ * 2. But calls entry has no recording_url (upload failed to complete)
  * 3. Recording is older than 7 days (grace period for retries)
  */
 
@@ -27,7 +27,7 @@ async function detectOrphanedRecordingsForOrg(orgId: string): Promise<OrphanedRe
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: orphans, error } = await supabase
-    .from('call_logs')
+    .from('calls')
     .select('id, recording_storage_path, recording_uploaded_at, created_at, org_id')
     .eq('org_id', orgId)  // CRITICAL: Filter by org_id for tenant isolation
     .not('recording_storage_path', 'is', null)  // Has storage path

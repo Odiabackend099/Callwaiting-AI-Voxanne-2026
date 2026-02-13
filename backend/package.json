@@ -57,7 +57,8 @@
     "test:debt-limit": "npx ts-node src/scripts/test-debt-limit.ts",
     "simulate:full": "npx ts-node src/scripts/simulate-full-lifecycle.ts",
     "validate:hybrid": "tsx src/scripts/validate-hybrid-setup.ts",
-    "audit:ceo-billing": "ts-node src/scripts/audit-ceo-billing.ts"
+    "audit:ceo-billing": "ts-node src/scripts/audit-ceo-billing.ts",
+    "diagnose:golden-record": "npx tsx src/scripts/diagnose-golden-record.ts"
   },
   "keywords": [],
   "author": "",

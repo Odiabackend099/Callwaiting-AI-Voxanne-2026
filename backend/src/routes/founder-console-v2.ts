@@ -4115,7 +4115,7 @@ router.get('/recordings', async (req: Request, res: Response): Promise<void> => 
 
     // Query call logs with recordings
     const { data: recordings } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('id, vapi_call_id, to_number, started_at, duration_seconds, recording_url, transcript')
       .eq('org_id', orgId)
       .not('recording_url', 'is', null)
@@ -4164,7 +4164,7 @@ router.delete('/recordings/:id', async (req: Request, res: Response): Promise<vo
 
     // Get recording with org_id check for ownership verification
     const { data: recording } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('vapi_call_id, recording_url, org_id')
       .eq('id', id)
       .eq('org_id', orgId)
@@ -4177,7 +4177,7 @@ router.delete('/recordings/:id', async (req: Request, res: Response): Promise<vo
 
     // Mark as deleted in our database (soft delete)
     await supabase
-      .from('call_logs')
+      .from('calls')
       .update({ recording_url: null })
       .eq('id', id)
       .eq('org_id', orgId);

@@ -19,13 +19,40 @@ interface AvailableNumber {
   region?: string;
 }
 
-// Country configuration with area code formats
-// ONLY 4 COUNTRIES SUPPORTED - Backend validates these in managed-telephony.ts line 65
+// Country configuration with area code formats and regulatory readiness
+// ONLY 3 COUNTRIES SUPPORTED - Backend validates these in managed-telephony.ts line 65
+// Regulatory Bundle required for GB/CA (Phase 3 - not yet implemented)
 const COUNTRIES = [
-  { code: 'US', name: 'United States', flag: '🇺🇸', areaCodeFormat: '3 digits (e.g., 415, 212)', areaCodeLength: 3 },
-  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', areaCodeFormat: '3-5 digits (e.g., 020, 0161)', areaCodeLength: 5 },
-  { code: 'CA', name: 'Canada', flag: '🇨🇦', areaCodeFormat: '3 digits (e.g., 416, 514)', areaCodeLength: 3 },
-  { code: 'AU', name: 'Australia', flag: '🇦🇺', areaCodeFormat: '1-2 digits (e.g., 02, 07)', areaCodeLength: 2 },
+  {
+    code: 'US',
+    name: 'United States',
+    flag: '🇺🇸',
+    areaCodeFormat: '3 digits (e.g., 415, 212)',
+    areaCodeLength: 3,
+    regulatoryReady: true, // Can purchase immediately
+    approvalDays: null,
+  },
+  {
+    code: 'GB',
+    name: 'United Kingdom',
+    flag: '🇬🇧',
+    areaCodeFormat: '3-5 digits (e.g., 020, 0161)',
+    areaCodeLength: 5,
+    regulatoryReady: false, // Requires Ofcom approval
+    approvalDays: '10-15 days',
+    complianceInfo: 'Requires Companies House registration number and Ofcom approval',
+  },
+  {
+    code: 'CA',
+    name: 'Canada',
+    flag: '🇨🇦',
+    areaCodeFormat: '3 digits (e.g., 416, 514)',
+    areaCodeLength: 3,
+    regulatoryReady: false, // Requires CRTC approval
+    approvalDays: '7-14 days',
+    complianceInfo: 'Requires Canadian Business Registry number and CRTC approval',
+  },
+  // Removed AU (Australia) - not in backend carrier_forwarding_rules table
 ] as const;
 
 export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberModalProps) {
@@ -320,6 +347,35 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                   </p>
                 </div>
 
+                {/* Compliance warning for non-US countries */}
+                {(() => {
+                  const selectedCountry = COUNTRIES.find(c => c.code === country);
+                  return selectedCountry && !selectedCountry.regulatoryReady ? (
+                    <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-yellow-900 mb-1">
+                            ⚠️ Regulatory Approval Required
+                          </p>
+                          <p className="text-sm text-yellow-800 mb-2">
+                            Managed numbers for {selectedCountry.name} require regulatory approval ({selectedCountry.approvalDays}).
+                          </p>
+                          <p className="text-xs text-yellow-700 mb-3">
+                            {selectedCountry.complianceInfo}
+                          </p>
+                          <a
+                            href="/dashboard/telephony"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-yellow-700 hover:text-yellow-800 underline"
+                          >
+                            Use BYOC for immediate setup →
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* Number type selector */}
                 <div>
                   <label className="block text-sm font-medium text-obsidian/70 mb-2">Number Type</label>
@@ -367,14 +423,30 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                 })()}
 
                 {/* Search button */}
-                <button
-                  onClick={searchNumbers}
-                  disabled={loading || hasExistingNumber}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surgical-600 text-white rounded-lg font-medium hover:bg-surgical-700 transition-colors disabled:opacity-50"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                  {loading ? 'Searching...' : 'Search Available Numbers'}
-                </button>
+                {(() => {
+                  const selectedCountry = COUNTRIES.find(c => c.code === country);
+                  const isRegulatoryReady = selectedCountry?.regulatoryReady ?? false;
+                  const isDisabled = loading || hasExistingNumber || !isRegulatoryReady;
+
+                  return (
+                    <button
+                      onClick={searchNumbers}
+                      disabled={isDisabled}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                        isDisabled
+                          ? 'bg-surgical-300 text-white opacity-50 cursor-not-allowed'
+                          : 'bg-surgical-600 text-white hover:bg-surgical-700'
+                      }`}
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      {loading
+                        ? 'Searching...'
+                        : !isRegulatoryReady
+                        ? 'Coming Soon (Requires Compliance)'
+                        : 'Search Available Numbers'}
+                    </button>
+                  );
+                })()}
 
                 {/* Results */}
                 {availableNumbers.length > 0 && (
@@ -416,11 +488,15 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                   </button>
                   <button
                     onClick={provisionNumber}
-                    disabled={provisioning}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-surgical-600 text-white rounded-lg font-medium hover:bg-surgical-700 transition-colors disabled:opacity-50"
+                    disabled={provisioning || country !== 'US'}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                      provisioning || country !== 'US'
+                        ? 'bg-surgical-300 text-white opacity-50 cursor-not-allowed'
+                        : 'bg-surgical-600 text-white hover:bg-surgical-700'
+                    }`}
                   >
                     {provisioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
-                    {provisioning ? 'Provisioning...' : 'Confirm Purchase'}
+                    {provisioning ? 'Provisioning...' : country !== 'US' ? 'US Only' : 'Confirm Purchase'}
                   </button>
                 </div>
               </div>

@@ -1365,10 +1365,10 @@ router.post('/tools/transferCall', async (req, res) => {
             });
         }
 
-        // Log transfer to call_logs (transfer_to, transfer_time, transfer_reason columns exist)
+        // Log transfer to calls (transfer_to, transfer_time, transfer_reason columns exist)
         if (callId) {
             const { error: logError } = await supabaseService
-                .from('call_logs')
+                .from('calls')
                 .update({
                     transfer_to: transferDestination,
                     transfer_time: new Date().toISOString(),
@@ -1378,7 +1378,7 @@ router.post('/tools/transferCall', async (req, res) => {
                 .eq('org_id', orgId);
 
             if (logError) {
-                log.warn('VapiTools', 'Failed to log transfer to call_logs', {
+                log.warn('VapiTools', 'Failed to log transfer to calls', {
                     error: logError.message,
                     callId
                 });
@@ -1491,10 +1491,10 @@ router.post('/tools/endCall', async (req, res) => {
             orgId
         });
 
-        // Log to call_logs if call_id available
+        // Log to calls if call_id available
         if (callId && orgId) {
             const { error: logError } = await supabaseService
-                .from('call_logs')
+                .from('calls')
                 .update({
                     end_reason: reason,
                     ai_summary: summary,
@@ -1504,7 +1504,7 @@ router.post('/tools/endCall', async (req, res) => {
                 .eq('org_id', orgId);
 
             if (logError) {
-                log.warn('VapiTools', 'Failed to log end reason to call_logs', {
+                log.warn('VapiTools', 'Failed to log end reason to calls', {
                     error: logError.message,
                     callId
                 });

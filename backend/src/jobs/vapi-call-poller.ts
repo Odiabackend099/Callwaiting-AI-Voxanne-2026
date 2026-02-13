@@ -89,9 +89,9 @@ export async function pollVapiCalls(): Promise<void> {
           logger.warn('backend', 'Failed to fetch call details (using list data)');
         }
 
-        // Check if call_log already exists for this Vapi call ID
+        // Check if call already exists for this Vapi call ID
         const { data: existing } = await supabase
-          .from('call_logs')
+          .from('calls')
           .select('id, recording_storage_path')
           .eq('vapi_call_id', call.id)
           .maybeSingle();
@@ -99,9 +99,9 @@ export async function pollVapiCalls(): Promise<void> {
         let callLogId = existing?.id;
 
         if (!existing) {
-          // Create call_log entry
+          // Create call entry
           const { data: callLog, error: insertError } = await supabase
-            .from('call_logs')
+            .from('calls')
             .insert({
               vapi_call_id: call.id,
               call_sid: `vapi-${call.id}`, // Generate a synthetic call_sid for Vapi calls
@@ -214,10 +214,10 @@ async function uploadRecordingFromVapi(
       return;
     }
 
-    // Update call_log with recording metadata
+    // Update call with recording metadata
     if (callLogId) {
       const { error: updateError } = await supabase
-        .from('call_logs')
+        .from('calls')
         .update({
           recording_storage_path: storagePath,
           recording_signed_url: signedUrlData?.signedUrl,

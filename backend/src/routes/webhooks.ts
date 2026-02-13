@@ -788,7 +788,7 @@ async function handleCallStarted(event: VapiEvent) {
     // === END PHASE 1: IDENTITY INJECTION ===
 
     // Create call log entry with metadata (including RAG context and org_id)
-    const { error: logError } = await supabase.from('call_logs').upsert({
+    const { error: logError } = await supabase.from('calls').upsert({
       vapi_call_id: call.id,
       lead_id: lead?.id || null,
       org_id: agent.org_id, // CRITICAL FIX: Use agent.org_id directly (always available, never null)
@@ -889,7 +889,7 @@ async function handleCallEnded(event: VapiEvent) {
     // Now safe to fetch and update, since event is marked as processed
     // Fetch call log to check if it's a test call
     const { data: callLog } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('id, lead_id, org_id, metadata')
       .eq('vapi_call_id', call.id)
       .maybeSingle();
@@ -897,7 +897,7 @@ async function handleCallEnded(event: VapiEvent) {
     // Update call log
     // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error } = await supabase
-      .from('call_logs')
+      .from('calls')
       .update({
         status: 'completed',
         ended_at: new Date().toISOString(),
@@ -1281,7 +1281,7 @@ async function handleEndOfCallReport(event: VapiEvent) {
 
     // Get agent and org info from call log
     const { data: callLog } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('agent_id, org_id, lead_id, to_number')
       .eq('vapi_call_id', call.id)
       .single();
@@ -1474,10 +1474,10 @@ async function handleEndOfCallReport(event: VapiEvent) {
       }
     }
 
-    // Update call_logs with final data including recording metadata
+    // Update calls with final data including recording metadata
     // CRITICAL: Include org_id in WHERE clause for multi-tenant isolation
     const { error: callLogsError } = await supabase
-      .from('call_logs')
+      .from('calls')
       .update({
         outcome: 'completed',
         outcome_summary: event.analysis?.summary || 'No summary available', // CRITICAL FIX: Extract Vapi AI analysis summary

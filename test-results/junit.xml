@@ -1,131 +1,87 @@
-<testsuites id="" name="" tests="3" failures="3" skipped="0" errors="0" time="57.286035">
-<testsuite name="e2e/billing.spec.ts" timestamp="2026-02-12T21:03:12.494Z" hostname="chromium" tests="3" failures="3" skipped="0" time="45.248" errors="0">
-<testcase name="Stripe Billing Flow › User can top up wallet and verify balance increase" classname="e2e/billing.spec.ts" time="17.89">
-<failure message="billing.spec.ts:51:7 User can top up wallet and verify balance increase" type="FAILURE">
-<![CDATA[  [chromium] › e2e/billing.spec.ts:51:7 › Stripe Billing Flow › User can top up wallet and verify balance increase 
+<testsuites id="" name="" tests="2" failures="2" skipped="0" errors="0" time="68.417791">
+<testsuite name="e2e/stripe-billing.spec.ts" timestamp="2026-02-12T22:19:26.802Z" hostname="chromium" tests="2" failures="2" skipped="0" time="126.661" errors="0">
+<testcase name="Stripe Billing E2E Flow › Complete Stripe checkout flow and verify wallet balance" classname="e2e/stripe-billing.spec.ts" time="64.389">
+<failure message="stripe-billing.spec.ts:43:9 Complete Stripe checkout flow and verify wallet balance" type="FAILURE">
+<![CDATA[  [chromium] › e2e/stripe-billing.spec.ts:43:9 › Stripe Billing E2E Flow › Complete Stripe checkout flow and verify wallet balance 
 
-    TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
+    Test timeout of 60000ms exceeded.
+
+    Error: page.fill: Test timeout of 60000ms exceeded.
     Call log:
-      - waiting for locator('input[name="email"]') to be visible
+      - waiting for locator('input[name="email"]')
 
 
-       at e2e/utils/auth-helpers.ts:28
-
-      26 |
-      27 |   // Wait for login form to be visible
-    > 28 |   await page.waitForSelector('input[name="email"]', { timeout: 10000 });
-         |              ^
-      29 |
-      30 |   // Fill in credentials
-      31 |   await page.fill('input[name="email"]', 'test@demo.com');
-        at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)
-        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:56:5
+      54 |
+      55 |         // Fill login credentials - use name attributes as actual page doesn't use type="email"
+    > 56 |         await page.fill('input[name="email"]', TEST_EMAIL);
+         |                    ^
+      57 |         await page.fill('input[name="password"]', TEST_PASSWORD);
+      58 |         
+      59 |         // Wait a moment for any UI to stabilize
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/stripe-billing.spec.ts:56:20
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/test-failed-1.png
+    ../test-results/e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/test-failed-1.png
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
     attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/video.webm
+    ../test-results/e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    Error Context: ../test-results/e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/error-context.md
+    Error Context: ../test-results/e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/error-context.md
 ]]>
 </failure>
 <system-out>
-<![CDATA[Step 1: Authenticating as test user...
+<![CDATA[🚀 Starting Stripe Billing E2E Test...
+📝 Step 1: Logging in...
 
-[[ATTACHMENT|e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/test-failed-1.png]]
+[[ATTACHMENT|e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/test-failed-1.png]]
 
-[[ATTACHMENT|e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/video.webm]]
+[[ATTACHMENT|e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/video.webm]]
 
-[[ATTACHMENT|e2e-billing-Stripe-Billing-921d6-and-verify-balance-increase-chromium/error-context.md]]
+[[ATTACHMENT|e2e-stripe-billing-Stripe--01fad-w-and-verify-wallet-balance-chromium/error-context.md]]
 ]]>
 </system-out>
 </testcase>
-<testcase name="Stripe Billing Flow › Wallet page displays current balance" classname="e2e/billing.spec.ts" time="13.589">
-<failure message="billing.spec.ts:135:7 Wallet page displays current balance" type="FAILURE">
-<![CDATA[  [chromium] › e2e/billing.spec.ts:135:7 › Stripe Billing Flow › Wallet page displays current balance 
+<testcase name="Stripe Billing E2E Flow › Should handle Stripe payment failure gracefully" classname="e2e/stripe-billing.spec.ts" time="62.272">
+<failure message="stripe-billing.spec.ts:206:9 Should handle Stripe payment failure gracefully" type="FAILURE">
+<![CDATA[  [chromium] › e2e/stripe-billing.spec.ts:206:9 › Stripe Billing E2E Flow › Should handle Stripe payment failure gracefully 
 
-    TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
     Call log:
-      - waiting for locator('input[name="email"]') to be visible
+      - waiting for locator('button:has-text("Add Funds"), button:has-text("Top Up")').first()
 
 
-       at e2e/utils/auth-helpers.ts:28
-
-      26 |
-      27 |   // Wait for login form to be visible
-    > 28 |   await page.waitForSelector('input[name="email"]', { timeout: 10000 });
-         |              ^
-      29 |
-      30 |   // Fill in credentials
-      31 |   await page.fill('input[name="email"]', 'test@demo.com');
-        at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)
-        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:139:5
+      216 |         // Click Add Funds
+      217 |         const topUpButton = page.locator('button:has-text("Add Funds"), button:has-text("Top Up")').first();
+    > 218 |         await topUpButton.click();
+          |                           ^
+      219 |         await page.waitForTimeout(2000);
+      220 |
+      221 |         // Use declining test card
+        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/stripe-billing.spec.ts:218:27
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/test-failed-1.png
+    ../test-results/e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/test-failed-1.png
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
     attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/video.webm
+    ../test-results/e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    Error Context: ../test-results/e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/error-context.md
+    Error Context: ../test-results/e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/error-context.md
 ]]>
 </failure>
 <system-out>
-<![CDATA[Testing wallet page display...
+<![CDATA[🚀 Starting Stripe Payment Failure Test...
 
-[[ATTACHMENT|e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/test-failed-1.png]]
+[[ATTACHMENT|e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/test-failed-1.png]]
 
-[[ATTACHMENT|e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/video.webm]]
+[[ATTACHMENT|e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/video.webm]]
 
-[[ATTACHMENT|e2e-billing-Stripe-Billing-607b6-ge-displays-current-balance-chromium/error-context.md]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Stripe Billing Flow › Add Funds button is visible and clickable" classname="e2e/billing.spec.ts" time="13.769">
-<failure message="billing.spec.ts:150:7 Add Funds button is visible and clickable" type="FAILURE">
-<![CDATA[  [chromium] › e2e/billing.spec.ts:150:7 › Stripe Billing Flow › Add Funds button is visible and clickable 
-
-    TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.
-    Call log:
-      - waiting for locator('input[name="email"]') to be visible
-
-
-       at e2e/utils/auth-helpers.ts:28
-
-      26 |
-      27 |   // Wait for login form to be visible
-    > 28 |   await page.waitForSelector('input[name="email"]', { timeout: 10000 });
-         |              ^
-      29 |
-      30 |   // Fill in credentials
-      31 |   await page.fill('input[name="email"]', 'test@demo.com');
-        at loginAsTestUser (/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/utils/auth-helpers.ts:28:14)
-        at /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/tests/e2e/billing.spec.ts:154:5
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    Error Context: ../test-results/e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/error-context.md
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing Add Funds button...
-
-[[ATTACHMENT|e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/test-failed-1.png]]
-
-[[ATTACHMENT|e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/video.webm]]
-
-[[ATTACHMENT|e2e-billing-Stripe-Billing-bc762-on-is-visible-and-clickable-chromium/error-context.md]]
+[[ATTACHMENT|e2e-stripe-billing-Stripe--1791c--payment-failure-gracefully-chromium/error-context.md]]
 ]]>
 </system-out>
 </testcase>

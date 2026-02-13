@@ -286,9 +286,9 @@ callsRouter.get('/:callId/recording', async (req: Request, res: Response) => {
   try {
     const { callId } = req.params;
 
-    // Fetch call_logs to get recording_url or storage path
+    // Fetch calls to get recording_url or storage path
     const { data: callLog, error: callError } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('id, recording_url, recording_storage_path, recording_signed_url_expires_at, vapi_call_id')
       .eq('vapi_call_id', callId)
       .maybeSingle();
@@ -364,9 +364,9 @@ callsRouter.post('/:callId/recording/refresh', async (req: Request, res: Respons
   try {
     const { callId } = req.params;
 
-    // Fetch call_logs to get storage path
+    // Fetch calls to get storage path
     const { data: callLog, error: callError } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('recording_storage_path, vapi_call_id')
       .eq('vapi_call_id', callId)
       .maybeSingle();
@@ -392,7 +392,7 @@ callsRouter.post('/:callId/recording/refresh', async (req: Request, res: Respons
     // Update the signed URL in database
     const expiresAt = new Date(Date.now() + 3600000).toISOString();
     await supabase
-      .from('call_logs')
+      .from('calls')
       .update({
         recording_signed_url: signedUrl,
         recording_signed_url_expires_at: expiresAt
@@ -419,7 +419,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     const { limit = 50 } = req.query;
 
     const { data: calls, error } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('*')
       .eq('org_id', orgId)
       .order('created_at', { ascending: false })

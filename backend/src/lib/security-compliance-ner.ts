@@ -308,9 +308,9 @@ export async function storeSensitiveData(
       }
     }
 
-    // 4. Store redacted transcript in call_logs (public safe)
+    // 4. Store redacted transcript in calls (public safe)
     const { error: logError } = await supabase
-      .from("call_logs")
+      .from("calls")
       .update({
         transcript: nerResult.redacted_transcript,
         has_sensitive_data: nerResult.has_sensitive_data,
@@ -491,14 +491,14 @@ export async function generateComplianceReport(
   try {
     // Get statistics
     const { count: totalCalls } = await supabase
-      .from("call_logs")
+      .from("calls")
       .select("*", { count: "exact", head: true })
       .eq("clinic_id", clinic_id)
       .gte("created_at", start_date)
       .lte("created_at", end_date);
 
     const { count: sensitiveCalls } = await supabase
-      .from("call_logs")
+      .from("calls")
       .select("*", { count: "exact", head: true })
       .eq("clinic_id", clinic_id)
       .eq("has_sensitive_data", true)

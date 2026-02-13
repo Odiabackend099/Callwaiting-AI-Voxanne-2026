@@ -9,28 +9,28 @@ const COUNTRIES = [
   {
     code: 'US',
     name: 'United States',
-    flag: '\u{1F1FA}\u{1F1F8}',
+    flag: '🇺🇸',
     description: 'Forward to US local number',
     costInfo: 'Local rate',
   },
   {
     code: 'GB',
     name: 'United Kingdom',
-    flag: '\u{1F1EC}\u{1F1E7}',
+    flag: '🇬🇧',
     description: 'Forward to UK local number',
     costInfo: 'Local rate',
   },
   {
     code: 'NG',
     name: 'Nigeria',
-    flag: '\u{1F1F3}\u{1F1EC}',
+    flag: '🇳🇬',
     description: 'Forward to US number (cost savings)',
-    costInfo: '~\u20A630/min (92% savings)',
+    costInfo: '~₦30/min (92% savings)',
   },
   {
     code: 'TR',
     name: 'Turkey',
-    flag: '\u{1F1F9}\u{1F1F7}',
+    flag: '🇹🇷',
     description: 'Forward to US number (cost savings)',
     costInfo: 'Standard international rate',
   },
@@ -197,6 +197,171 @@ export function CountrySelectionStep({
               <p className="text-xs text-obsidian/60 leading-relaxed">
                 {countryWarning}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regulatory Info Cards (TR/UK/CA) */}
+      {selectedCountry === 'TR' && (
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🇹🇷</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-900 mb-2">
+                Turkey Regulatory Requirements
+              </h4>
+              <ul className="text-sm text-blue-800 space-y-1 mb-3">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>BTK (Turkish Telecom Authority) approval required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Business must have Turkish Tax ID (VKN)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Approval process takes 5-10 business days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span><strong>BYOC recommended</strong> for immediate setup</span>
+                </li>
+              </ul>
+              <p className="text-xs text-blue-700">
+                The BYOC (Bring Your Own Carrier) flow allows you to verify your existing Turkish mobile number and start forwarding calls immediately, without waiting for regulatory approval.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCountry === 'GB' && (
+        <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🇬🇧</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-purple-900 mb-2">
+                United Kingdom Regulatory Requirements
+              </h4>
+              <ul className="text-sm text-purple-800 space-y-1 mb-3">
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-600 mt-0.5">•</span>
+                  <span>Ofcom registration required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-600 mt-0.5">•</span>
+                  <span>Companies House registration number needed</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-600 mt-0.5">•</span>
+                  <span>UK business address verification required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-600 mt-0.5">•</span>
+                  <span>Approval process takes 10-15 business days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-purple-600 mt-0.5">•</span>
+                  <span><strong>BYOC recommended</strong> for immediate setup</span>
+                </li>
+              </ul>
+              <p className="text-xs text-purple-700">
+                BYOC allows you to verify your existing UK mobile number and start forwarding calls immediately, bypassing the regulatory waiting period.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCountry === 'CA' && (
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🇨🇦</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-red-900 mb-2">
+                Canada Regulatory Requirements
+              </h4>
+              <ul className="text-sm text-red-800 space-y-1 mb-3">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-600 mt-0.5">•</span>
+                  <span>CRTC (Canadian Radio-television) approval required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-600 mt-0.5">•</span>
+                  <span>Canadian Business Registry number needed</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-600 mt-0.5">•</span>
+                  <span>CASL (Canada's Anti-Spam Legislation) compliance required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-600 mt-0.5">•</span>
+                  <span>Approval process takes 7-14 business days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-600 mt-0.5">•</span>
+                  <span><strong>BYOC recommended</strong> for immediate setup</span>
+                </li>
+              </ul>
+              <p className="text-xs text-red-700">
+                Use BYOC to verify your existing Canadian mobile number and begin forwarding calls immediately, avoiding the regulatory approval timeline.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCountry === 'US' && (
+        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🇺🇸</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-green-900 mb-2">
+                United States - Ready for Immediate Setup
+              </h4>
+              <ul className="text-sm text-green-800 space-y-1">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-0.5">✓</span>
+                  <span>No additional regulatory approval required</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-0.5">✓</span>
+                  <span>BYOC setup completes in minutes</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-0.5">✓</span>
+                  <span>Works with all major US carriers (AT&T, T-Mobile, Verizon)</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCountry === 'NG' && (
+        <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🇳🇬</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-emerald-900 mb-2">
+                Nigeria - Smart Routing Enabled
+              </h4>
+              <ul className="text-sm text-emerald-800 space-y-1">
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-600 mt-0.5">✓</span>
+                  <span><strong>92% cost savings</strong> via US routing (\u20A630/min vs \u20A6350/min)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-600 mt-0.5">✓</span>
+                  <span>BYOC setup works with Glo, MTN, Airtel, 9mobile</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-600 mt-0.5">✓</span>
+                  <span>Setup completes in minutes</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>

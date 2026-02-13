@@ -232,10 +232,10 @@ contactsRouter.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Contact not found' });
     }
 
-    // Fetch call history
+    // Fetch call history (Golden Record: use unified calls table)
     const { data: calls, error: callsError } = await supabase
-      .from('call_logs')
-      .select('id, phone_number, caller_name, duration_seconds, status, created_at, sentiment_score, sentiment_label')
+      .from('calls')
+      .select('id, phone_number, duration_seconds, status, created_at, sentiment_score, sentiment_label')
       .eq('org_id', orgId)
       .eq('phone_number', contact.phone)
       .order('created_at', { ascending: false })

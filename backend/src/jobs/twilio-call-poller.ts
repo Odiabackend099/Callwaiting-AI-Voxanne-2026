@@ -20,7 +20,7 @@ interface TwilioCall {
 }
 
 /**
- * Poll Twilio for completed calls and create call_logs entries for a specific organization
+ * Poll Twilio for completed calls and create calls entries for a specific organization
  */
 async function pollForOrg(orgId: string): Promise<void> {
   let creds;
@@ -50,7 +50,7 @@ async function pollForOrg(orgId: string): Promise<void> {
       try {
         // Check if call_log already exists
         const { data: existing } = await supabase
-          .from('call_logs')
+          .from('calls')
           .select('id, recording_storage_path')
           .eq('call_sid', call.sid) // OR eq('twilio_call_sid', call.sid) if that's the column name
           .maybeSingle();
@@ -68,7 +68,7 @@ async function pollForOrg(orgId: string): Promise<void> {
           // Actually, let's Stick to the query result: 'twilio_call_sid'.
 
           const { data: callLog, error: insertError } = await supabase
-            .from('call_logs')
+            .from('calls')
             .insert({
               twilio_call_sid: call.sid, // Updated to match schema
               // call_sid: call.sid, // Legacy?
@@ -202,7 +202,7 @@ async function fetchAndUploadRecordingsForCall(
 
     // Update log
     await supabase
-      .from('call_logs')
+      .from('calls')
       .update({
         recording_storage_path: storagePath,
         recording_signed_url: signedUrlData?.signedUrl,

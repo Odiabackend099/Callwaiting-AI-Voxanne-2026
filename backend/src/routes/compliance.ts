@@ -94,7 +94,7 @@ complianceRouter.post('/data-export',
 
         // Call logs (exclude soft-deleted, transcripts are already PHI-redacted)
         supabase
-          .from('call_logs')
+          .from('calls')
           .select('id, to_number, from_number, status, started_at, ended_at, duration_seconds, transcript, sentiment_score, sentiment_label, created_at')
           .eq('org_id', orgId)
           .is('deleted_at', null)
@@ -160,7 +160,7 @@ complianceRouter.post('/data-export',
         },
         organization: orgResult.data,
         contacts: contactsResult.data || [],
-        call_logs: callLogsResult.data || [],
+        calls: callLogsResult.data || [],
         appointments: appointmentsResult.data || [],
         messages: messagesResult.data || [],
         agents: agentsResult.data || [],

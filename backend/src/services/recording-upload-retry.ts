@@ -121,9 +121,9 @@ async function getFailedUploadsForRetry(): Promise<FailedUpload[]> {
  */
 async function retryFailedUpload(failedUpload: FailedUpload): Promise<boolean> {
   try {
-    // Get call_logs to find org_id and call_type
+    // Get calls to find org_id and call_type
     const { data: callLog, error: callError } = await supabase
-      .from('call_logs')
+      .from('calls')
       .select('vapi_call_id, org_id')
       .eq('id', failedUpload.call_id)
       .maybeSingle();
