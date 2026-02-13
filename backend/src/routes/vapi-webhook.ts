@@ -120,6 +120,18 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
   try {
     const nodeEnv = process.env.NODE_ENV || 'development';
     const secret = process.env.VAPI_WEBHOOK_SECRET;
+    const body = req.body;
+
+    // DEBUG - Log COMPLETE webhook payload BEFORE signature verification
+    // This ensures we see all incoming webhooks, even if signature verification fails
+    log.info('Vapi-Webhook', '📨 RAW WEBHOOK RECEIVED', {
+      hasBody: !!body,
+      bodyKeys: Object.keys(body || {}),
+      callId: body?.message?.call?.id || body?.event?.id || 'unknown',
+      messageType: body?.message?.type || body?.messageType || 'unknown',
+      assistantId: body?.message?.call?.assistantId || body?.assistantId || 'unknown',
+      timestamp: new Date().toISOString()
+    });
 
     // 1. Signature Verification
     if (!secret) {
@@ -139,10 +151,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       }
     }
 
-    const body = req.body;
     const message = body.message;
 
-    // DEBUG - Log COMPLETE webhook payload
+    // DEBUG - Log COMPLETE webhook payload (verbose details)
     log.info('Vapi-Webhook', 'RAW WEBHOOK PAYLOAD:', JSON.stringify(body, null, 2));
 
     // DEBUG - Log ALL webhook types
@@ -557,11 +568,51 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       }
 
       if (!orgId) {
-        log.error('Vapi-Webhook', 'Cannot resolve org_id for call', {
+        log.error('Vapi-Webhook', '⚠️ Cannot resolve org_id for call', {
           callId: call?.id,
-          assistantId
+          assistantId,
+          availableFields: {
+            hasCallMetadata: !!call?.metadata,
+            callMetadata: call?.metadata,
+            bodyKeys: Object.keys(body || {})
+          }
         });
-        return res.json({ success: true, received: true });
+
+        // FALLBACK: Try to extract org_id from call metadata or body
+        // This prevents silent failures when agent lookup fails
+        const fallbackOrgId =
+          call?.metadata?.org_id ||
+          call?.metadata?.organizationId ||
+          body.org_id ||
+          body.organizationId ||
+          null;
+
+        if (fallbackOrgId) {
+          log.info('Vapi-Webhook', '✅ Resolved org_id via fallback', {
+            callId: call?.id,
+            fallbackOrgId,
+            source: call?.metadata?.org_id ? 'call.metadata.org_id' :
+                   call?.metadata?.organizationId ? 'call.metadata.organizationId' :
+                   body.org_id ? 'body.org_id' :
+                   body.organizationId ? 'body.organizationId' : 'unknown'
+          });
+          orgId = fallbackOrgId;
+        } else {
+          // LAST RESORT: Return 200 to prevent Vapi retry, but log error for debugging
+          log.error('Vapi-Webhook', '❌ WEBHOOK DROPPED: No org_id found in any location', {
+            callId: call?.id,
+            assistantId,
+            checkedLocations: [
+              'assistant lookup (agents table)',
+              'call.metadata.org_id',
+              'call.metadata.organizationId',
+              'body.org_id',
+              'body.organizationId'
+            ],
+            recommendation: 'Include org_id in call.metadata when creating Vapi assistant or in webhook body'
+          });
+          return res.json({ success: true, received: true });
+        }
       }
 
       // 2. Detect call direction (inbound vs outbound)
