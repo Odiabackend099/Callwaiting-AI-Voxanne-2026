@@ -29,6 +29,24 @@ function getOAuth2Client() {
       console.error(`BACKEND_URL: ${process.env.BACKEND_URL || 'NOT SET'}`);
     }
 
+    // NEW: Validate redirect URI matches BACKEND_URL domain (prevent mismatches)
+    if (process.env.GOOGLE_REDIRECT_URI && process.env.BACKEND_URL) {
+      try {
+        const redirectDomain = new URL(process.env.GOOGLE_REDIRECT_URI).origin;
+        const backendDomain = new URL(process.env.BACKEND_URL).origin;
+
+        if (redirectDomain !== backendDomain) {
+          console.error('[CRITICAL] GOOGLE_REDIRECT_URI and BACKEND_URL have DIFFERENT DOMAINS!');
+          console.error(`This will cause OAuth redirect_uri_mismatch errors in production.`);
+          console.error(`GOOGLE_REDIRECT_URI: ${process.env.GOOGLE_REDIRECT_URI}`);
+          console.error(`BACKEND_URL: ${process.env.BACKEND_URL}`);
+          console.error('FIX: Ensure both environment variables use the same domain.');
+        }
+      } catch (e) {
+        console.warn('[WARNING] Could not validate OAuth redirect URI format');
+      }
+    }
+
     if (!clientId || !clientSecret) {
       throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required');
     }

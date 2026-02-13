@@ -58,7 +58,13 @@
     "simulate:full": "npx ts-node src/scripts/simulate-full-lifecycle.ts",
     "validate:hybrid": "tsx src/scripts/validate-hybrid-setup.ts",
     "audit:ceo-billing": "ts-node src/scripts/audit-ceo-billing.ts",
-    "diagnose:golden-record": "npx tsx src/scripts/diagnose-golden-record.ts"
+    "diagnose:golden-record": "npx tsx src/scripts/diagnose-golden-record.ts",
+    "audit:billing-comprehensive": "npx tsx src/scripts/comprehensive-billing-audit.ts",
+    "audit:billing": "npx tsx src/scripts/comprehensive-billing-audit.ts",
+    "test:billing-live": "npx tsx src/scripts/comprehensive-billing-audit.ts",
+    "test:oauth-config": "npx ts-node src/scripts/test-oauth-config.ts",
+    "test:oauth-e2e": "npx ts-node src/scripts/test-oauth-e2e.ts",
+    "verify:oauth-production": "npx ts-node src/scripts/verify-production-oauth.ts"
   },
   "keywords": [],
   "author": "",
