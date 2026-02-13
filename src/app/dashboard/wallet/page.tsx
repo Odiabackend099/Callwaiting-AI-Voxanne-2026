@@ -13,6 +13,10 @@ import { useToast } from '@/hooks/useToast';
 import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
+const USD_TO_GBP_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_GBP_RATE || '0.79');
+const MIN_TOPUP_PENCE = parseInt(process.env.NEXT_PUBLIC_WALLET_MIN_TOPUP_PENCE || '2500', 10);
+const MIN_TOPUP_USD = MIN_TOPUP_PENCE / 100 / USD_TO_GBP_RATE;
+
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
 // ---------------------------------------------------------------------------
@@ -56,9 +60,12 @@ interface TransactionsResponse {
 
 function formatPence(pence: number): string {
     // Display as USD for customer (internal is still GBP pence)
-    const USD_TO_GBP_RATE = 0.79;
     const usdAmount = (pence / USD_TO_GBP_RATE / 100).toFixed(2);
     return `$${usdAmount}`;
+}
+
+function formatUsdLabelFromPence(pence: number): string {
+    return `$${(pence / 100 / USD_TO_GBP_RATE).toFixed(0)}`;
 }
 
 function formatDate(iso: string): string {
@@ -137,9 +144,7 @@ const WalletPageContent = () => {
 
     // Handlers
     const handleTopUp = useCallback(async () => {
-        // CRITICAL FIX: Convert custom USD amount to GBP pence correctly
-        // Preset buttons already have amounts in pence, custom field needs conversion
-        const USD_TO_GBP_RATE = 0.79;
+        // Convert preset or custom USD amounts to GBP pence
         let pence = selectedAmount;
 
         if (!pence && customAmount) {
@@ -147,8 +152,8 @@ const WalletPageContent = () => {
             pence = Math.round(parseFloat(customAmount) * USD_TO_GBP_RATE * 100);
         }
 
-        if (!pence || pence < 1975) { // $25 USD = ~1975 pence at 0.79 rate
-            showError('Minimum top-up is $25.00');
+        if (!pence || pence < MIN_TOPUP_PENCE) {
+            showError(`Minimum top-up is £${(MIN_TOPUP_PENCE / 100).toFixed(2)} (~$${MIN_TOPUP_USD.toFixed(2)}).`);
             return;
         }
         setProcessingTopUp(true);
@@ -494,11 +499,18 @@ const WalletPageContent = () => {
                             <p className="text-sm text-obsidian/60">Select an amount or enter a custom value</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    { pence: 1975, label: '$25', credits: '350 credits' },
-                                    { pence: 3950, label: '$50', credits: '700 credits' },
-                                    { pence: 7900, label: '$100', credits: '1,400 credits' },
-                                    { pence: 15800, label: '$200', credits: '2,800 credits' }
-                                ].map((option) => (
+                                    { multiplier: 1 },
+                                    { multiplier: 2 },
+                                    { multiplier: 4 },
+                                    { multiplier: 8 }
+                                ].map((preset) => {
+                                    const penceValue = MIN_TOPUP_PENCE * preset.multiplier;
+                                    return {
+                                        pence: penceValue,
+                                        label: `${formatUsdLabelFromPence(penceValue)}`,
+                                        credits: `${Math.floor((penceValue / Math.ceil(70 * USD_TO_GBP_RATE)) * 10).toLocaleString()} credits`
+                                    };
+                                }).map((option) => (
                                     <button
                                         key={option.pence}
                                         onClick={() => { setSelectedAmount(option.pence); setCustomAmount(''); }}
@@ -515,13 +527,13 @@ const WalletPageContent = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-obsidian mb-1.5">
-                                    Custom amount in USD (min $25)
+                                    Custom amount in USD (min ~${MIN_TOPUP_USD.toFixed(0)})
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
                                     <input
                                         type="number"
-                                        min="25"
+                                        min={MIN_TOPUP_USD.toFixed(2)}
                                         step="1"
                                         value={customAmount}
                                         onChange={(e) => {
@@ -533,13 +545,13 @@ const WalletPageContent = () => {
                                         className="w-full pl-8 pr-4 py-2.5 border border-surgical-200 rounded-lg text-sm text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-200"
                                     />
                                 </div>
-                                {customAmount && parseFloat(customAmount) >= 25 && (
+                                {customAmount && parseFloat(customAmount) >= MIN_TOPUP_USD && (
                                     <div className="space-y-1.5 mt-1.5">
                                         <p className="text-xs text-obsidian/60">
-                                            You'll be charged: £{(parseFloat(customAmount) * 0.79).toFixed(2)} GBP (~${parseFloat(customAmount).toFixed(2)} USD)
+                                            You'll be charged: £{(parseFloat(customAmount) * USD_TO_GBP_RATE).toFixed(2)} GBP (~${parseFloat(customAmount).toFixed(2)} USD)
                                         </p>
                                         <p className="text-xs text-obsidian/60">
-                                            ~{Math.floor((parseFloat(customAmount) * 0.79 * 100) / Math.ceil(70 * 0.79)) * 10} credits
+                                            ~{Math.floor((parseFloat(customAmount) * USD_TO_GBP_RATE * 100) / Math.ceil(70 * USD_TO_GBP_RATE)) * 10} credits
                                         </p>
                                     </div>
                                 )}

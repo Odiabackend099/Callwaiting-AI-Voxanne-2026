@@ -1,0 +1,106 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                 STRIPE WEBHOOK TESTING - QUICK START                        ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+STEP 1️⃣  (FIRST TIME ONLY) Authenticate Stripe CLI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  stripe login
+
+  → Browser opens
+  → Click "Authorize"
+  → Return to terminal
+
+  Verify: stripe config --list
+
+
+STEP 2️⃣  Open 3 Terminals
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Terminal 1 (WEBHOOK LISTENER - START FIRST):
+  ─────────────────────────────────────────────────────────
+  cd /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026
+  bash setup-stripe-webhooks.sh
+
+  → Shows: "Ready! You are now listening for Stripe events..."
+  → Keep this running
+
+
+  Terminal 2 (BACKEND - START SECOND):
+  ─────────────────────────────────────────────────────────
+  cd /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026/backend
+  npm run dev
+
+  → Shows: "Server running on port 3001"
+  → Keep this running
+
+
+  Terminal 3 (E2E TEST - START THIRD):
+  ─────────────────────────────────────────────────────────
+  cd /Users/mac/Desktop/Callwaiting-AI-Voxanne-2026
+  npm run dev &
+  sleep 5
+  npm run test:billing:headed
+
+  → Browser opens with test
+  → Watch the payment flow
+  → Check Terminal 1 for webhook events
+
+
+STEP 3️⃣  Watch the Magic Happen
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Terminal 1 (Webhook Listener) will show:
+  ───────────────────────────────────────
+  → charge.succeeded [evt_test_1a2b3c4d5e6f7g8h9i0j]
+  ↳ Forwarding to http://localhost:3001/api/webhooks/stripe
+
+
+  Terminal 2 (Backend) will show:
+  ───────────────────────────────
+  [StripeWebhook] Processing wallet top-up for org: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  [StripeWebhook] Balance updated: +2500 pence
+  [StripeWebhook] Payment method saved
+
+
+STEP 4️⃣  Verify Multi-Tenancy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Test passes when:
+  ✅ Terminal 1: Webhook event received
+  ✅ Terminal 2: Webhook processed with correct org_id
+  ✅ Browser test: Wallet balance increased
+  ✅ Test assertion: balance_after > balance_before
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CURRENT STATUS:
+───────────────
+
+✅ Stripe CLI installed: v1.35.0
+✅ Webhook secret configured: backend/.env (STRIPE_WEBHOOK_SECRET set)
+✅ Setup script created: setup-stripe-webhooks.sh
+⏳ Stripe CLI authentication: Required (run: stripe login)
+
+MANUAL TEST (without E2E):
+─────────────────────────
+
+  Terminal 1:
+  stripe listen --forward-to localhost:3001/api/webhooks/stripe
+
+  Terminal 2:
+  cd backend && npm run dev
+
+  Terminal 3 (test webhook):
+  stripe trigger charge.succeeded
+
+  → Check Terminal 1 for event
+  → Check Terminal 2 for processing logs
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FULL DOCUMENTATION:
+───────────────────
+See: STRIPE_WEBHOOK_SETUP.md

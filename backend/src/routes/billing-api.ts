@@ -492,26 +492,63 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
       .eq('id', orgId)
       .single();
 
-    let customerId = orgData?.stripe_customer_id;
+    const orgName = orgData?.name || undefined;
 
-    if (!customerId) {
+    const createStripeCustomer = async () => {
       const customer = await stripe.customers.create({
         metadata: { org_id: orgId },
-        name: orgData?.name || undefined,
+        name: orgName,
       });
-      customerId = customer.id;
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('organizations')
-        .update({ stripe_customer_id: customerId })
+        .update({ stripe_customer_id: customer.id })
         .eq('id', orgId);
-    }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      if (updateError) {
+        log.warn('BillingAPI', 'Failed to persist new Stripe customer ID', {
+          orgId,
+          error: updateError.message,
+        });
+      }
 
-    // Step 5b: Dual-currency Stripe metadata (CRITICAL - prevents customer confusion)
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
+      return customer.id;
+    };
+
+    let customerId = orgData?.stripe_customer_id || await createStripeCustomer();
+
+    const isMissingCustomerError = (error: any) => {
+      const code = error?.code || error?.raw?.code;
+      const message = error?.message || error?.raw?.message;
+      return code === 'resource_missing' && typeof message === 'string' && message.includes('No such customer');
+    };
+
+    const ensureValidCustomer = async () => {
+      if (!customerId) {
+        customerId = await createStripeCustomer();
+        return customerId;
+      }
+
+      try {
+        await stripe.customers.retrieve(customerId);
+        return customerId;
+      } catch (error: any) {
+        if (isMissingCustomerError(error)) {
+          log.warn('BillingAPI', 'Cached Stripe customer no longer exists, recreating', {
+            orgId,
+            staleCustomerId: customerId,
+          });
+          customerId = await createStripeCustomer();
+          return customerId;
+        }
+        throw error;
+      }
+    };
+
+    customerId = await ensureValidCustomer();
+
+    const createCheckoutSession = async (customer: string) => stripe.checkout.sessions.create({
+      customer,
       client_reference_id: orgId, // CRITICAL: Stripe best practice for reconciliation
       mode: 'payment',
       payment_method_types: ['card'],
@@ -551,6 +588,21 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
         estimated_credits: String(estimated_credits),
       },
     });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    let session;
+    try {
+      // Step 5b: Dual-currency Stripe metadata (CRITICAL - prevents customer confusion)
+      session = await createCheckoutSession(customerId);
+    } catch (error: any) {
+      if (isMissingCustomerError(error)) {
+        customerId = await createStripeCustomer();
+        session = await createCheckoutSession(customerId);
+      } else {
+        throw error;
+      }
+    }
 
     log.info('BillingAPI', 'Wallet top-up checkout session created', {
       orgId,

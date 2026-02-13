@@ -1,10 +1,17 @@
 /**
  * Call Recording Dashboard Routes
  * Handles call list, details, filtering, and export functionality
+ *
+ * SECURITY HARDENING (2026-02-13):
+ * - XSS prevention: search parameters sanitized before interpolation
+ * - UUID validation: all :callId params validated before DB queries
+ * - Path traversal protection: recording paths validated
+ * - Standardized error format with request_id for debugging
  */
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
@@ -18,6 +25,45 @@ import { withTwilioRetry, withResendRetry } from '../services/retry-strategy';
 const callsRouter = Router();
 
 callsRouter.use(requireAuthOrDev);
+
+/**
+ * UUID v4 format regex for parameter validation
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate UUID format to prevent Postgres errors and potential injection
+ * @param id - The string to validate as UUID
+ * @returns true if valid UUID v4 format
+ */
+function isValidUUID(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
+/**
+ * Sanitize search input to prevent injection into Supabase .or() filter strings
+ * Strips all characters except alphanumeric, spaces, hyphens, plus, and parentheses
+ * @param input - Raw search string from user
+ * @returns Sanitized search string safe for filter interpolation
+ */
+function sanitizeSearchInput(input: string): string {
+  // Strip characters that could break out of the .or() filter syntax
+  // Allow: letters, numbers, spaces, +, -, (, ), @ (for phone/email search)
+  return input.replace(/[^a-zA-Z0-9\s+\-()@.]/g, '').trim();
+}
+
+/**
+ * Create a standardized error response with request_id for debugging
+ */
+function errorResponse(res: Response, status: number, error: string, code?: string, details?: Record<string, any>) {
+  const requestId = randomUUID();
+  return res.status(status).json({
+    error,
+    code: code || `ERR_${status}`,
+    request_id: requestId,
+    ...(details ? { details } : {})
+  });
+}
 
 /**
  * Validate phone number in E.164 format
@@ -95,8 +141,12 @@ callsRouter.get('/', async (req: Request, res: Response) => {
 
     // Apply search filter (phone number or resolved caller name from VIEW)
     // FIXED (2026-02-09): Search resolved_caller_name (live from contacts) instead of deprecated caller_name
+    // SECURITY FIX (2026-02-13): Sanitize search input to prevent filter injection/XSS
     if (parsed.search) {
-      query = query.or(`phone_number.ilike.%${parsed.search}%,resolved_caller_name.ilike.%${parsed.search}%`);
+      const sanitizedSearch = sanitizeSearchInput(parsed.search);
+      if (sanitizedSearch.length > 0) {
+        query = query.or(`phone_number.ilike.%${sanitizedSearch}%,resolved_caller_name.ilike.%${sanitizedSearch}%`);
+      }
     }
 
     // Order by created_at descending (newest first)
@@ -194,8 +244,11 @@ callsRouter.get('/', async (req: Request, res: Response) => {
       }
     });
   } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      return errorResponse(res, 400, e.message, 'VALIDATION_ERROR');
+    }
     log.error('Calls', 'GET / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch calls' });
+    return errorResponse(res, 500, e?.message || 'Failed to fetch calls', 'INTERNAL_ERROR');
   }
 });
 
@@ -223,7 +276,7 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
     });
 
     // Compute time window start for fallback query
-    const windowMs = timeWindow === '24h' ? 24*60*60*1000 : timeWindow === '30d' ? 30*24*60*60*1000 : 7*24*60*60*1000;
+    const windowMs = timeWindow === '24h' ? 24 * 60 * 60 * 1000 : timeWindow === '30d' ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
     const windowStart = new Date(Date.now() - windowMs).toISOString();
 
     let totalCalls = 0, completedCalls = 0, callsToday = 0, inboundCalls = 0, outboundCalls = 0, avgDuration = 0, pipelineValue = 0;
@@ -391,9 +444,14 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
 callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!orgId) return errorResponse(res, 401, 'Unauthorized', 'AUTH_REQUIRED');
 
     const { callId } = req.params;
+
+    // SECURITY FIX (2026-02-13): Validate UUID format before DB query
+    if (!isValidUUID(callId)) {
+      return errorResponse(res, 400, 'Invalid call ID format', 'INVALID_UUID', { field: 'callId' });
+    }
 
     // Query unified calls table (contains both inbound and outbound calls post-Phase 6)
     // FIXED (2026-02-02): Removed non-existent recording_path column
@@ -410,17 +468,28 @@ callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) =>
         callId,
         orgId
       });
-      return res.status(500).json({ error: 'Database error' });
+      return errorResponse(res, 500, 'Database error', 'DB_ERROR');
     }
 
     if (!callRecord) {
-      return res.status(404).json({ error: 'Call not found' });
+      return errorResponse(res, 404, 'Call not found', 'CALL_NOT_FOUND');
     }
 
     // Priority 1: Try Supabase storage path (signed URL generation)
     if (callRecord.recording_storage_path) {
+      // SECURITY FIX (2026-02-13): Path traversal protection
+      const storagePath = callRecord.recording_storage_path;
+      if (storagePath.includes('..') || storagePath.includes('\0')) {
+        log.error('Calls', 'PATH TRAVERSAL ATTEMPT detected in recording_storage_path', {
+          callId,
+          orgId,
+          path: storagePath
+        });
+        return errorResponse(res, 400, 'Invalid recording path', 'INVALID_PATH');
+      }
+
       try {
-        const signedUrl = await getSignedRecordingUrl(callRecord.recording_storage_path);
+        const signedUrl = await getSignedRecordingUrl(storagePath);
         if (signedUrl) {
           return res.json({
             recording_url: signedUrl,
@@ -431,7 +500,7 @@ callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) =>
       } catch (e) {
         log.warn('Calls', 'Failed to generate signed URL for storage path', {
           error: (e as any).message,
-          storage_path: callRecord.recording_storage_path
+          storage_path: storagePath
         });
         // Fall through to next option
       }
@@ -491,167 +560,95 @@ callsRouter.get('/:callId/recording-url', async (req: Request, res: Response) =>
 callsRouter.get('/:callId', async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!orgId) return errorResponse(res, 401, 'Unauthorized', 'AUTH_REQUIRED');
 
     const { callId } = req.params;
 
-    // Try to fetch from calls first (inbound calls)
-    // FIXED (2026-02-02): Added LEFT JOIN with contacts table to resolve caller names
-    const { data: inboundCall, error: inboundError } = await supabase
+    // SECURITY FIX (2026-02-13): Validate UUID format before DB query
+    if (!isValidUUID(callId)) {
+      return errorResponse(res, 400, 'Invalid call ID format', 'INVALID_UUID', { field: 'callId' });
+    }
+
+    // UNIFIED QUERY (2026-02-13): Single query for any call type, filtered by org_id
+    const { data: callData, error: callError } = await supabase
       .from('calls')
       .select('*, contacts!contact_id(name)')
       .eq('id', callId)
-      .eq('org_id', orgId)  // CRITICAL FIX: Filter by org_id for tenant isolation
-      .eq('call_type', 'inbound')
-      .single();
+      .eq('org_id', orgId)  // CRITICAL: Tenant isolation
+      .maybeSingle();
 
-    if (inboundCall) {
-      // Format transcript with sentiment
-      // FIXED (2026-02-03): Handle transcript as string or array
-      let transcript: any[] = [];
-      if (Array.isArray(inboundCall.transcript)) {
-        transcript = inboundCall.transcript.map((segment: any) => ({
-          speaker: segment.speaker,
-          text: segment.text,
-          timestamp: segment.timestamp || 0,
-          sentiment: segment.sentiment || 'neutral'
-        }));
-      } else if (typeof inboundCall.transcript === 'string' && inboundCall.transcript) {
-        // If transcript is a plain string, convert to single segment
-        transcript = [{
-          speaker: 'caller',
-          text: inboundCall.transcript,
-          timestamp: 0,
-          sentiment: 'neutral'
-        }];
-      }
-
-      // FIXED (2026-02-02): Resolve caller_name from database or contacts JOIN
-      let resolvedCallerName = 'Unknown Caller';
-      if (inboundCall.caller_name) {
-        // For inbound calls, use existing caller_name from database (populated by caller ID)
-        resolvedCallerName = inboundCall.caller_name;
-      } else if (inboundCall.contacts?.name) {
-        // Fallback to contacts JOIN if caller_name not available
-        resolvedCallerName = inboundCall.contacts.name;
-      }
-
-      // DEBUG: Log the actual field values to verify they're being read
-      console.log('🔍 DEBUG: inboundCall fields:', {
-        outcome: inboundCall.outcome,
-        outcome_summary: inboundCall.outcome_summary,
-        sentiment_summary: inboundCall.sentiment_summary
-      });
-
-      return res.json({
-        id: inboundCall.id,
-        phone_number: inboundCall.phone_number || 'Unknown',
-        caller_name: resolvedCallerName,
-        call_date: inboundCall.created_at,
-        duration_seconds: inboundCall.duration_seconds || 0,
-        status: inboundCall.status || 'completed',
-        recording_url: inboundCall.recording_signed_url,
-        recording_storage_path: inboundCall.recording_storage_path,
-        transcript,
-        sentiment_score: inboundCall.sentiment_score,
-        sentiment_label: inboundCall.sentiment_label,
-        sentiment_summary: inboundCall.sentiment_summary,
-        outcome: inboundCall.outcome,
-        outcome_summary: inboundCall.outcome_summary,
-        action_items: inboundCall.action_items || [],
-        vapi_call_id: inboundCall.vapi_call_id,
-        created_at: inboundCall.created_at,
-        call_type: 'inbound',
-        // ========== GOLDEN RECORD FIELDS (2026-02-13) ==========
-        cost_cents: inboundCall.cost_cents || 0,
-        ended_reason: inboundCall.ended_reason || null,
-        tools_used: inboundCall.tools_used || [],
-        appointment_id: inboundCall.appointment_id || null
-      });
+    if (callError) {
+      log.error('Calls', 'GET /:callId - Database error', { error: callError.message, callId, orgId });
+      return errorResponse(res, 500, 'Database error', 'DB_ERROR');
     }
 
-    // Fall back to calls table (outbound calls)
-    // FIXED (2026-02-02): Added LEFT JOIN with contacts table to resolve caller names
-    const { data: outboundCall, error: outboundError } = await supabase
-      .from('calls')
-      .select('*, contacts!contact_id(name)')
-      .eq('id', callId)
-      .eq('org_id', orgId)
-      .eq('call_type', 'outbound')
-      .not('caller_name', 'ilike', '%demo%')
-      .not('caller_name', 'ilike', '%test%')
-      .not('phone_number', 'ilike', '%test%')
-      .single();
-
-    if (outboundCall) {
-      // Format transcript with sentiment
-      // FIXED (2026-02-03): Handle transcript as string or array
-      let transcript: any[] = [];
-      if (Array.isArray(outboundCall.transcript)) {
-        transcript = outboundCall.transcript.map((segment: any) => ({
-          speaker: segment.speaker,
-          text: segment.text,
-          timestamp: segment.timestamp || 0,
-          sentiment: segment.sentiment || 'neutral'
-        }));
-      } else if (typeof outboundCall.transcript === 'string' && outboundCall.transcript) {
-        // If transcript is a plain string, convert to single segment
-        transcript = [{
-          speaker: 'caller',
-          text: outboundCall.transcript,
-          timestamp: 0,
-          sentiment: 'neutral'
-        }];
-      }
-
-      // Generate signed URL if storage path exists
-      let recordingUrl = outboundCall.recording_url;
-      if (outboundCall.recording_storage_path || outboundCall.recording_path) {
-        const path = outboundCall.recording_storage_path || outboundCall.recording_path;
-        const signed = await getSignedRecordingUrl(path);
-        if (signed) recordingUrl = signed;
-      }
-
-      // FIXED (2026-02-02): Resolve caller_name from contacts table JOIN for outbound calls
-      let resolvedCallerName = 'Unknown Contact';
-      if (outboundCall.contacts?.name) {
-        resolvedCallerName = outboundCall.contacts.name;
-      } else if (outboundCall.caller_name) {
-        // Fallback to existing caller_name if contacts JOIN failed
-        resolvedCallerName = outboundCall.caller_name;
-      }
-
-      return res.json({
-        id: outboundCall.id,
-        phone_number: outboundCall.phone_number,
-        caller_name: resolvedCallerName,
-        call_date: outboundCall.call_date,
-        duration_seconds: outboundCall.duration_seconds,
-        status: outboundCall.status,
-        recording_url: recordingUrl,
-        transcript,
-        sentiment_score: outboundCall.sentiment_score,
-        sentiment_label: outboundCall.sentiment_label,
-        sentiment_summary: outboundCall.sentiment_summary,
-        sentiment_urgency: outboundCall.sentiment_urgency,
-        outcome: outboundCall.outcome,
-        outcome_summary: outboundCall.outcome_summary,
-        action_items: outboundCall.action_items || [],
-        vapi_call_id: outboundCall.vapi_call_id,
-        created_at: outboundCall.created_at,
-        call_type: 'outbound',
-        // ========== GOLDEN RECORD FIELDS (2026-02-13) ==========
-        cost_cents: outboundCall.cost_cents || 0,
-        ended_reason: outboundCall.ended_reason || null,
-        tools_used: outboundCall.tools_used || [],
-        appointment_id: outboundCall.appointment_id || null
-      });
+    if (!callData) {
+      return errorResponse(res, 404, 'Call not found', 'CALL_NOT_FOUND');
     }
 
-    return res.status(404).json({ error: 'Call not found' });
+    // Format transcript with sentiment
+    // Handles both array and string transcript formats gracefully
+    let transcript: any[] = [];
+    if (Array.isArray(callData.transcript)) {
+      transcript = callData.transcript.map((segment: any) => ({
+        speaker: segment.speaker,
+        text: segment.text,
+        timestamp: segment.timestamp || 0,
+        sentiment: segment.sentiment || 'neutral'
+      }));
+    } else if (typeof callData.transcript === 'string' && callData.transcript) {
+      transcript = [{
+        speaker: 'caller',
+        text: callData.transcript,
+        timestamp: 0,
+        sentiment: 'neutral'
+      }];
+    }
+
+    // Resolve caller_name from database or contacts JOIN
+    let resolvedCallerName = 'Unknown Caller';
+    if (callData.caller_name) {
+      resolvedCallerName = callData.caller_name;
+    } else if (callData.contacts?.name) {
+      resolvedCallerName = callData.contacts.name;
+    }
+
+    // Determine call type from call_direction field
+    const callType = callData.call_direction || callData.call_type || 'inbound';
+
+    return res.json({
+      id: callData.id,
+      phone_number: callData.phone_number || 'Unknown',
+      caller_name: resolvedCallerName,
+      call_date: callData.created_at,
+      duration_seconds: callData.duration_seconds || 0,
+      status: callData.status || 'completed',
+      recording_url: callData.recording_signed_url || callData.recording_url,
+      recording_storage_path: callData.recording_storage_path,
+      transcript,
+      sentiment_score: callData.sentiment_score,
+      sentiment_label: callData.sentiment_label,
+      sentiment_summary: callData.sentiment_summary,
+      sentiment_urgency: callData.sentiment_urgency,
+      outcome: callData.outcome,
+      outcome_summary: callData.outcome_summary,
+      action_items: callData.action_items || [],
+      vapi_call_id: callData.vapi_call_id,
+      created_at: callData.created_at,
+      call_type: callType,
+      // ========== GOLDEN RECORD FIELDS (2026-02-13) ==========
+      cost_cents: callData.cost_cents || 0,
+      ended_reason: callData.ended_reason || null,
+      tools_used: callData.tools_used || [],
+      appointment_id: callData.appointment_id || null
+    });
+
   } catch (e: any) {
+    if (e instanceof z.ZodError) {
+      return errorResponse(res, 400, 'Invalid request parameters', 'VALIDATION_ERROR');
+    }
     log.error('Calls', 'GET /:callId - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch call' });
+    return errorResponse(res, 500, 'Failed to fetch call', 'INTERNAL_ERROR');
   }
 });
 
@@ -730,9 +727,14 @@ callsRouter.post('/', async (req: Request, res: Response) => {
 callsRouter.delete('/:callId', async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!orgId) return errorResponse(res, 401, 'Unauthorized', 'AUTH_REQUIRED');
 
     const { callId } = req.params;
+
+    // SECURITY FIX (2026-02-13): Validate UUID format
+    if (!isValidUUID(callId)) {
+      return errorResponse(res, 400, 'Invalid call ID format', 'INVALID_UUID', { field: 'callId' });
+    }
 
     const { error } = await supabase
       .from('calls')
@@ -763,9 +765,14 @@ callsRouter.delete('/:callId', async (req: Request, res: Response) => {
 callsRouter.post('/:callId/followup', rateLimitAction('sms'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!orgId) return errorResponse(res, 401, 'Unauthorized', 'AUTH_REQUIRED');
 
     const { callId } = req.params;
+
+    // SECURITY FIX (2026-02-13): Validate UUID format
+    if (!isValidUUID(callId)) {
+      return errorResponse(res, 400, 'Invalid call ID format', 'INVALID_UUID', { field: 'callId' });
+    }
     const schema = z.object({
       message: z.string().min(1).max(160)
     });
@@ -863,9 +870,14 @@ callsRouter.post('/:callId/followup', rateLimitAction('sms'), async (req: Reques
 callsRouter.post('/:callId/share', rateLimitAction('share'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!orgId) return errorResponse(res, 401, 'Unauthorized', 'AUTH_REQUIRED');
 
     const { callId } = req.params;
+
+    // SECURITY FIX (2026-02-13): Validate UUID format
+    if (!isValidUUID(callId)) {
+      return errorResponse(res, 400, 'Invalid call ID format', 'INVALID_UUID', { field: 'callId' });
+    }
     const schema = z.object({
       email: z.string().email()
     });
@@ -1007,9 +1019,14 @@ This is an automated message. Please do not reply to this email.
 callsRouter.post('/:callId/transcript/export', rateLimitAction('export'), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!orgId) return errorResponse(res, 401, 'Unauthorized', 'AUTH_REQUIRED');
 
     const { callId } = req.params;
+
+    // SECURITY FIX (2026-02-13): Validate UUID format
+    if (!isValidUUID(callId)) {
+      return errorResponse(res, 400, 'Invalid call ID format', 'INVALID_UUID', { field: 'callId' });
+    }
     const schema = z.object({
       format: z.enum(['txt']).default('txt')
     });
@@ -1054,15 +1071,15 @@ callsRouter.post('/:callId/transcript/export', rateLimitAction('export'), async 
     // Format transcript as text with sanitization
     const transcriptText = Array.isArray(callData.transcript)
       ? callData.transcript
-          .map((turn: any) => {
-            // Sanitize speaker name - allow only alphanumeric and spaces
-            const sanitizedSpeaker = (turn.speaker || 'UNKNOWN')
-              .replace(/[^a-zA-Z0-9 ]/g, '')
-              .toUpperCase()
-              .slice(0, 50);
-            return `${sanitizedSpeaker}: ${turn.text}`;
-          })
-          .join('\n')
+        .map((turn: any) => {
+          // Sanitize speaker name - allow only alphanumeric and spaces
+          const sanitizedSpeaker = (turn.speaker || 'UNKNOWN')
+            .replace(/[^a-zA-Z0-9 ]/g, '')
+            .toUpperCase()
+            .slice(0, 50);
+          return `${sanitizedSpeaker}: ${turn.text}`;
+        })
+        .join('\n')
       : String(callData.transcript);
 
     // Sanitize filename - allow only alphanumeric, underscores, and hyphens

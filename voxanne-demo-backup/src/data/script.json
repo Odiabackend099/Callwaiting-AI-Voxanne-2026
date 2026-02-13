@@ -1,0 +1,363 @@
+{
+    "meta": {
+        "version": "1.0",
+        "project": "Voxanne Demo - Auto Transcribed",
+        "assets": {
+            "audio_master": "/audio.mp3"
+        }
+    },
+    "timeline": [
+        {
+            "start_time": 0.0,
+            "end_time": 0.0,
+            "type": "scene_change",
+            "scene_id": "intro_avatar",
+            "description": "Intro Scene",
+            "vad_active": true
+        },
+        {
+            "start_time": 0.0,
+            "end_time": 2.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "We started using an AI receptionist."
+        },
+        {
+            "start_time": 2.0,
+            "end_time": 7.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "I just need some help to answer calls, book appointments, and I was not ready to hire"
+        },
+        {
+            "start_time": 7.0,
+            "end_time": 12.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "full-time receptionist yet, so I thought to give this company a try, they just help MetzBuzz"
+        },
+        {
+            "start_time": 12.0,
+            "end_time": 14.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "and aesthetic practices."
+        },
+        {
+            "start_time": 14.0,
+            "end_time": 20.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "So it took them two weeks to train this AI with all my business information, so I want"
+        },
+        {
+            "start_time": 20.0,
+            "end_time": 22.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "to put it to the test to see how good it is."
+        },
+        {
+            "start_time": 22.0,
+            "end_time": 25.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "And let's just be transparent and see, is this good?"
+        },
+        {
+            "start_time": 26.0,
+            "end_time": 29.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Thank you for choosing one of the shades that exists Lisa."
+        },
+        {
+            "start_time": 29.0,
+            "end_time": 31.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Who do I have the pleasure of speaking with?"
+        },
+        {
+            "start_time": 31.0,
+            "end_time": 32.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Hi Lisa."
+        },
+        {
+            "start_time": 32.0,
+            "end_time": 34.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "This is Aina calling."
+        },
+        {
+            "start_time": 34.0,
+            "end_time": 38.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "May I book an appointment with you today for Botox please?"
+        },
+        {
+            "start_time": 38.0,
+            "end_time": 41.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Hi Anna, I'm happy to help you with that."
+        },
+        {
+            "start_time": 41.0,
+            "end_time": 46.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "When are you looking to book your Botox appointment and what time of day works best for you?"
+        },
+        {
+            "start_time": 46.0,
+            "end_time": 50.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Wait, do you have any specials going on for this month?"
+        },
+        {
+            "start_time": 50.0,
+            "end_time": 54.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Yes, we do have some exciting specials this month."
+        },
+        {
+            "start_time": 54.0,
+            "end_time": 56.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Here are a couple of them."
+        },
+        {
+            "start_time": 56.0,
+            "end_time": 61.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "I once arranged a few of the Durham ultra-access and get 23 units of Botox."
+        },
+        {
+            "start_time": 61.0,
+            "end_time": 63.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Botox is $13.50 for you."
+        },
+        {
+            "start_time": 63.0,
+            "end_time": 65.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Well, how do I know you?"
+        },
+        {
+            "start_time": 65.0,
+            "end_time": 70.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "How do I know your before and after photos are in just good lighting and editing?"
+        },
+        {
+            "start_time": 70.0,
+            "end_time": 72.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "That's a great question Anna."
+        },
+        {
+            "start_time": 72.0,
+            "end_time": 76.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "At Lone Tree aesthetics, we pride ourselves on transparency and real results."
+        },
+        {
+            "start_time": 76.0,
+            "end_time": 83.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Our before and after photos are taken under consistent lighting and angle to ensure they accurately reflect the outcomes of our treatment."
+        },
+        {
+            "start_time": 83.0,
+            "end_time": 88.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "We also encourage clients to come in for free consultation to discuss their goals and pay for the live."
+        },
+        {
+            "start_time": 88.0,
+            "end_time": 94.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Wait, do you guys do payment plans?"
+        },
+        {
+            "start_time": 94.0,
+            "end_time": 97.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Yes, we do offer payment plans through cherry financing."
+        },
+        {
+            "start_time": 97.0,
+            "end_time": 101.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "It allows you to split your payments into smaller manageable amounts."
+        },
+        {
+            "start_time": 101.0,
+            "end_time": 106.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "If you're interested, I can provide more details or help you explore this option during your consultation."
+        },
+        {
+            "start_time": 106.0,
+            "end_time": 109.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Would you like to proceed with Botox appointment?"
+        },
+        {
+            "start_time": 109.0,
+            "end_time": 114.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Well, that's wonderful. Yes, please, I would like to book that appointment. Thank you."
+        },
+        {
+            "start_time": 114.0,
+            "end_time": 116.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "You're very welcome Anna."
+        },
+        {
+            "start_time": 116.0,
+            "end_time": 118.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "What are you looking to book your Botox appointment?"
+        },
+        {
+            "start_time": 118.0,
+            "end_time": 119.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Oh, what have I done?"
+        },
+        {
+            "start_time": 119.0,
+            "end_time": 123.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "Just, I need a couple of minutes here. I'll give you a call back."
+        },
+        {
+            "start_time": 123.0,
+            "end_time": 127.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "I'm so sorry. I just need to go right now."
+        },
+        {
+            "start_time": 127.0,
+            "end_time": 130.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "No problem at all Anna. Feel free to call back whenever you're ready."
+        },
+        {
+            "start_time": 130.0,
+            "end_time": 133.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "I'll be here to assist you. Have a great day."
+        },
+        {
+            "start_time": 133.0,
+            "end_time": 135.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "You too."
+        },
+        {
+            "start_time": 135.0,
+            "end_time": 137.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "How about that?"
+        },
+        {
+            "start_time": 137.0,
+            "end_time": 141.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "She got my specials perfectly."
+        },
+        {
+            "start_time": 141.0,
+            "end_time": 145.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "She got my information there about the photos perfectly as well."
+        },
+        {
+            "start_time": 145.0,
+            "end_time": 149.0,
+            "type": "transcript_event",
+            "speaker_id": "unknown",
+            "speaker_name": "Speaker",
+            "text": "And I love the demeanor, so that was great."
+        }
+    ]
+}

@@ -9,7 +9,7 @@ import { GlassMorphCard } from '@/components/ui/GlassMorphCard';
 import { AmbientOrbs, GradientOrb } from '@/components/ui/AmbientOrbs';
 import { getInboundAgentConfig } from '@/lib/supabaseHelpers';
 import Link from 'next/link';
-import HeroDemoCard from '@/components/hero-demo-v2/HeroDemoCard';
+import RemotionHeroDemo from '@/components/hero-demo/RemotionHeroDemo';
 
 export function HeroCalendlyReplica() {
     const [agentId, setAgentId] = useState<string | null>(null);
@@ -129,10 +129,10 @@ export function HeroCalendlyReplica() {
                         </div>
                     </div>
 
-                    {/* RIGHT COLUMN: Interactive Hero Demo Card */}
+                    {/* RIGHT COLUMN: Interactive Hero Demo Card (Remotion) */}
                     <div className="relative hidden lg:flex items-center justify-center w-full h-full min-h-[600px] z-10 pointer-events-none">
                         <div className="w-[420px] pointer-events-auto transform transition-transform hover:scale-[1.02] duration-500">
-                            <HeroDemoCard
+                            <RemotionHeroDemo
                                 isActive={isInlineDemoActive}
                                 onToggle={() => setIsInlineDemoActive(!isInlineDemoActive)}
                             />

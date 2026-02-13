@@ -1,0 +1,30 @@
+{
+    "name": "voxanne-demo",
+    "version": "1.0.0",
+    "description": "Voxanne AI Video Demo",
+    "main": "index.js",
+    "scripts": {
+        "start": "remotion preview src/index.ts",
+        "build": "remotion render src/index.ts VoxanneDemo out/video.mp4",
+        "upgrade": "remotion upgrade",
+        "test": "eslint src --ext ts,tsx && tsc"
+    },
+    "dependencies": {
+        "react": "^18.0.0",
+        "react-dom": "^18.0.0",
+        "remotion": "latest",
+        "@remotion/player": "latest",
+        "@remotion/cli": "latest",
+        "@remotion/zod-types": "latest",
+        "framer-motion": "^10.12.16",
+        "tailwindcss": "^3.3.2",
+        "autoprefixer": "^10.4.14",
+        "postcss": "^8.4.24"
+    },
+    "devDependencies": {
+        "@types/react": "^18.0.0",
+        "@types/web": "^0.0.86",
+        "typescript": "^5.0.0",
+        "eslint": "^8.0.0"
+    }
+}
