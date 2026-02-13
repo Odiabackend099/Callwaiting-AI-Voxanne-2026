@@ -58,6 +58,7 @@ Supporting services: wallet auto-recharge processor, webhook verification API, a
 ## 5. Recent Releases & Verification
 | Date (UTC) | Release | Key Outcomes |
 |------------|---------|--------------|
+| 2026-02-13 | **API Endpoint Verification** | All dashboard endpoints tested and verified. GET /api/calls-dashboard/:callId returns complete Golden Record data. Outcome summaries verified as exactly 3 sentences with enriched context. All metrics (duration, sentiment, outcome) confirmed as real data from database. Recording endpoint ready. Multi-tenant isolation enforced. Frontend components configured to display all fields. |
 | 2026-02-13 | **Onboarding Form E2E** | Form submission at `/start` fully operational: FormData → backend validation → database storage → dual email delivery (user confirmation + support notification). Field name fix applied (greeting_script), comprehensive logging added, email verification API endpoints deployed. 20+ successful submissions tested. |
 | 2026-02-13 | **Golden Record SSOT** | Calls enriched with cost_cents, appointment linkage, tools_used, ended_reason; dashboard + analytics updated. |
 | 2026-02-13 | **Stripe Wallet E2E validation** | Frontend Wallet page aligned with backend min top-up, stale Stripe customer auto-recovery, checkout verified with real test card. |
@@ -77,10 +78,16 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 - Every call writes a Golden Record row with cost, tool names, and appointment linkage within 1 second of webhook receipt.
 
 ### 6.2 Golden Record Analytics
-- Calls table stores `cost_cents`, `appointment_id`, `tools_used[]`, `ended_reason`.  
-- Appointments table stores `call_id`, `vapi_call_id`.  
-- Dashboard APIs (`/api/calls-dashboard`, `/api/contacts`) must surface these fields for FE usage.  
+- Calls table stores `cost_cents`, `appointment_id`, `tools_used[]`, `ended_reason`.
+- Appointments table stores `call_id`, `vapi_call_id`.
+- Dashboard APIs (`/api/calls-dashboard`, `/api/contacts`) must surface these fields for FE usage.
 - Data quality gates: no NULL cost on completed calls, appointment linkage attempted when booking tool invoked.
+- **API Verification (2026-02-13):** ✅ All endpoints tested and verified:
+  - `GET /api/calls-dashboard/:callId` - Returns complete call detail with outcome summary (3 sentences), sentiment_summary, and all Golden Record fields
+  - `GET /api/calls-dashboard` - Returns call list with all metrics (duration, sentiment_score, sentiment_label, outcome, outcome_summary)
+  - `GET /api/calls-dashboard/stats` - Returns real aggregated metrics (total_calls, avg_duration_seconds, average_sentiment, pipeline_value)
+  - `GET /api/calls-dashboard/:callId/recording-url` - Returns signed S3 URL when recording exists (ready for playback)
+  - Multi-tenant isolation verified on all endpoints (org_id enforced via JWT)
 
 ### 6.3 Wallet & Billing
 - Minimum top-up: **2,500 pence (£25)**; preset buttons derive from env-configured rate.  

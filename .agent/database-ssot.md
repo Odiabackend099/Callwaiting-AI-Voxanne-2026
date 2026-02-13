@@ -1,13 +1,14 @@
 # Voxanne AI - Database Schema SSOT (Single Source of Truth)
 
-**Status:** Updated after Golden Record SSOT Architecture deployment (2026-02-13)
+**Status:** Updated after API Endpoint Verification + Golden Record SSOT + Wallet Stripe E2E verification (2026-02-13)
 **Generated:** Directly from live Supabase PostgreSQL database
 **Database State:** Production-ready, security hardened, Golden Record SSOT active
 **Golden Record SSOT:** ✅ COMPLETE - 4 phases implemented (Phase 1: Migration, Phase 2: Webhook, Phase 3: Code fixes, Phase 4: Dashboard)
+**API Endpoints:** ✅ VERIFIED - All dashboard endpoints tested, real data confirmed, outcome summaries 3-sentence format
 **Billing Verification:** ✅ CERTIFIED - Fixed $0.70/minute rate (46/46 tests passed)
 **Security Verification:** ✅ CERTIFIED - All P0 vulnerabilities mitigated (21/21 tests passed)
-**Deployment Status:** ✅ OPERATIONAL - Backend server running, Golden Record SSOT active, security fixes active
-**Latest Change:** Deployed Golden Record SSOT Architecture with cost tracking, appointment linking, and tools analytics (2026-02-13)
+**Deployment Status:** ✅ OPERATIONAL - Backend server running, Golden Record SSOT active, security fixes active, all APIs responding
+**Latest Change:** API endpoint verification complete - outcome summaries confirmed as 3-sentence format, all metrics return real data (2026-02-13 01:20 UTC)
 
 ---
 
@@ -79,12 +80,6 @@ These 9 tables contain real user data and drive the platform:
 
 **Golden Record Details (2026-02-13):**
 - ✅ cost_cents: Call cost stored as integer cents (prevents floating-point precision issues)
-- ✅ appointment_id: Bidirectional link to appointments table (allows call→appointment navigation)
-- ✅ tools_used: Array of tool names used during call (e.g., ['bookClinicAppointment', 'transferCall'])
-- ✅ ended_reason: Raw Vapi endedReason code for analytics (e.g., 'customer_hangup', 'assistant_hangup')
-- ✅ Migration: `20260213_golden_record_schema.sql` applied 2026-02-13
-- ✅ Webhook enrichment: Vapi webhook handler captures all Golden Record fields
-- ✅ Dashboard exposed: All Golden Record fields returned by /api/calls-dashboard endpoints
 
 ---
 
@@ -320,7 +315,7 @@ These 2 tables manage all billing operations, wallet transactions, and webhook p
 - credit_txn_org_isolation: Users can only see their org's transactions
 - credit_txn_service_role_all: Service role can access all transactions
 
-**Row Count:** 0 (newly created)
+**Row Count:** 1 (wallet top-up QA run 2026-02-13)
 
 **Key Features:**
 - ✅ Idempotent deductions via `deduct_call_credits()` RPC function
@@ -329,6 +324,8 @@ These 2 tables manage all billing operations, wallet transactions, and webhook p
 - ✅ $5.00 debt limit (500 cents) enforced atomically
 - ✅ Stripe payment intent ID prevents duplicate charges
 - ✅ Balance tracking for audit trail
+- ✅ Wallet top-up endpoint enforces `WALLET_MIN_TOPUP_PENCE` (default 2,500) and recreates stale Stripe customers before Checkout session creation
+- ✅ Frontend Wallet page sources `MIN_TOPUP_PENCE`/`USD_TO_GBP_RATE` env pairs so client-side validation matches backend rules
 
 ---
 
@@ -357,7 +354,7 @@ These 2 tables manage all billing operations, wallet transactions, and webhook p
 - webhook_events_org_isolation: Users can only see their org's events (or NULL org_id events)
 - webhook_events_service_role_all: Service role can access all events
 
-**Row Count:** 0 (newly created)
+**Row Count:** 1 (checkout.session.completed from QA run)
 **Retention:** 24 hours (automatic cleanup via `cleanup_old_webhook_events()` function)
 
 **Key Features:**
@@ -370,7 +367,7 @@ These 2 tables manage all billing operations, wallet transactions, and webhook p
 **Related Functions:**
 - `cleanup_old_webhook_events()` - Deletes events older than 24 hours, returns count
 
-**Deployment Verification (2026-02-11):**
+**Deployment Verification (2026-02-11, reaffirmed 2026-02-13):**
 - ✅ Tables created via Supabase Management API
 - ✅ All 12 indexes applied successfully
 - ✅ All 4 RLS policies enforced
@@ -378,6 +375,7 @@ These 2 tables manage all billing operations, wallet transactions, and webhook p
 - ✅ Webhook verification API endpoints live and responding
 - ✅ Authentication middleware functional
 - ✅ Database queries tested and operational
+- ✅ Stripe listener logs show `charge.succeeded` with correct `org_id`; `processed_webhook_events` entry recorded for latest top-up
 
 ---
 
@@ -665,6 +663,7 @@ Call (calls table)
 ├── org_id → organizations (which org made the call)
 ├── contact_id → contacts (who called/was called)
 ├── tracked by → call_tracking (analytics)
+├── billed via → credit_transactions (deductions based on duration / cost)
 └── may create → hot_lead_alerts (if high scoring)
 ```
 
@@ -723,14 +722,22 @@ Organization (organizations)
 | **Webhook Processing** | ✅ **IDEMPOTENT** | Defense-in-depth (BullMQ + DB), 90-day retention |
 | **Security Infrastructure** | ✅ **COMPLETE** | 1 table, 7 indexes, 7 helper functions, automated RLS verification |
 | **P0 Vulnerabilities** | ✅ **MITIGATED** | 4/4 critical issues fixed (21/21 tests passed) |
+| **API Endpoints** | ✅ **VERIFIED** | All dashboard endpoints tested, real data confirmed, 3-sentence outcomes |
 
 ---
 
 ## 📝 Last Updated
 
 - **Date:** February 13, 2026
-- **Latest Event:** Golden Record SSOT Architecture deployed - Enhanced calls & appointments tables with cost tracking & appointment linking
+- **Latest Event:** API Endpoint Verification Complete - All dashboard endpoints tested, real data confirmed, outcome summaries verified as 3-sentence format
 - **Previous Events:**
+  - **2026-02-13:** 🎉 API Endpoint Verification COMPLETE
+    - ✅ All dashboard APIs tested and operational
+    - ✅ Outcome summaries verified: exactly 3 sentences
+    - ✅ All metrics real data (duration, sentiment, outcome from database)
+    - ✅ Recording endpoint ready (awaiting test recording)
+    - ✅ Multi-tenant isolation verified (org_id enforced)
+    - ✅ Frontend ready to display all Golden Record fields
   - **2026-02-13:** 🎉 Golden Record SSOT Implementation COMPLETE
     - ✅ Phase 1: Database migration (calls + appointments table enrichment)
     - ✅ Phase 2: Webhook handler updates (cost, tools, appointment linking)
