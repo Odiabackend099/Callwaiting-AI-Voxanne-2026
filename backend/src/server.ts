@@ -67,6 +67,7 @@ import integrationsStatusRouter from './routes/integrations-status'; // default 
 // import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup'; // DISABLED: orphaned_recordings table deleted
 import { scheduleTelephonyVerificationCleanup } from './jobs/telephony-verification-cleanup';
 import { scheduleWebhookEventsCleanup } from './jobs/webhook-events-cleanup';
+import { scheduleReservationCleanup } from './jobs/reservation-cleanup';
 // import { scheduleRecordingUploadRetry } from './services/recording-upload-retry'; // DISABLED: recording_upload_queue table deleted
 import { scheduleTwilioCallPoller } from './jobs/twilio-call-poller';
 import { scheduleVapiCallPoller } from './jobs/vapi-call-poller';
@@ -796,6 +797,13 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('Webhook events cleanup job scheduled');
     } catch (error: any) {
       console.warn('Failed to schedule webhook events cleanup job:', error.message);
+    }
+
+    try {
+      scheduleReservationCleanup();
+      console.log('Reservation cleanup job scheduled');
+    } catch (error: any) {
+      console.warn('Failed to schedule reservation cleanup job:', error.message);
     }
 
     // DISABLED: recording_upload_queue table deleted in migration 20260209_delete_empty_tables_phase1.sql
