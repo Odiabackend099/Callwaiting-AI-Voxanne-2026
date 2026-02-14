@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     let website = formData.get('website') as string;
     const phone = formData.get('phone') as string;
     const email = formData.get('email') as string;
-    const greetingScript = formData.get('greetingScript') as string;
+    const greetingScript = formData.get('greeting_script') as string;
     const additionalDetails = formData.get('additionalDetails') as string;
     const file = formData.get('file') as File | null;
 
