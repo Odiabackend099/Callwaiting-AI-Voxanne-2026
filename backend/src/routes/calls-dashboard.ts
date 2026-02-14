@@ -434,6 +434,115 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/calls-dashboard/cost-analytics
+ * Return cost aggregation metrics for dashboard
+ * Query params: ?days=30 (default: 30 days)
+ *
+ * Returns:
+ * {
+ *   "totalSpent": "$45.67",
+ *   "totalCalls": 42,
+ *   "avgCostPerCall": "$1.09",
+ *   "maxCostPerCall": "$3.25",
+ *   "minCostPerCall": "$0.45",
+ *   "periodDays": 30
+ * }
+ *
+ * Phase 2: Dashboard Cost Analytics (2026-02-14)
+ */
+callsRouter.get('/cost-analytics', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+
+    const { data, error } = await supabase.rpc('get_cost_analytics', {
+      p_org_id: orgId,
+      p_days: days
+    });
+
+    if (error) {
+      log.error('Calls', 'GET /cost-analytics - RPC error', {
+        error: error.message,
+        orgId
+      });
+      return res.status(500).json({ error: error.message });
+    }
+
+    if (!data) {
+      return res.json({
+        totalSpent: '$0.00',
+        totalCalls: 0,
+        avgCostPerCall: '$0.00',
+        maxCostPerCall: '$0.00',
+        minCostPerCall: '$0.00',
+        periodDays: days
+      });
+    }
+
+    return res.json({
+      totalSpent: `$${(data.total_cost_cents / 100).toFixed(2)}`,
+      totalCalls: data.total_calls,
+      avgCostPerCall: `$${(data.avg_cost_cents / 100).toFixed(2)}`,
+      maxCostPerCall: `$${(data.max_cost_cents / 100).toFixed(2)}`,
+      minCostPerCall: `$${(data.min_cost_cents / 100).toFixed(2)}`,
+      periodDays: data.period_days
+    });
+  } catch (e: any) {
+    log.error('Calls', 'GET /cost-analytics - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to fetch cost analytics' });
+  }
+});
+
+/**
+ * GET /api/calls-dashboard/cost-trend
+ * Return daily cost breakdown for chart visualization
+ * Query params: ?days=30 (default: 30 days)
+ *
+ * Returns array of:
+ * {
+ *   "date": "2026-02-14",
+ *   "cost_cents": 5432,
+ *   "call_count": 12,
+ *   "avg_cost_cents": 452.67
+ * }
+ */
+callsRouter.get('/cost-trend', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+
+    const { data, error } = await supabase.rpc('get_cost_trend', {
+      p_org_id: orgId,
+      p_days: days
+    });
+
+    if (error) {
+      log.error('Calls', 'GET /cost-trend - RPC error', {
+        error: error.message,
+        orgId
+      });
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json(
+      (data || []).map((row: any) => ({
+        date: row.date,
+        costUSD: `$${(row.cost_cents / 100).toFixed(2)}`,
+        callCount: row.call_count,
+        avgCostUSD: `$${(row.avg_cost_cents / 100).toFixed(2)}`
+      }))
+    );
+  } catch (e: any) {
+    log.error('Calls', 'GET /cost-trend - Error', { error: e?.message });
+    return res.status(500).json({ error: e?.message || 'Failed to fetch cost trend' });
+  }
+});
+
+/**
  * GET /api/calls-dashboard/:callId/recording-url
  * Generate signed URL for call recording on-demand (performance optimization)
  * IMPORTANT: Must be defined BEFORE /:callId route (more specific path)
