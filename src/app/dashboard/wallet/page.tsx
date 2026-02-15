@@ -85,64 +85,6 @@ const TX_META: Record<string, { icon: React.ElementType; label: string; color: s
 };
 
 // ---------------------------------------------------------------------------
-// Cost Metrics Component (Phase 2)
-// ---------------------------------------------------------------------------
-
-interface CostAnalyticsData {
-    totalSpent: string;
-    totalCalls: number;
-    avgCostPerCall: string;
-    maxCostPerCall: string;
-    minCostPerCall: string;
-    periodDays: number;
-}
-
-const CostMetricsSection = () => {
-    const { data: costData, isLoading } = useSWR<CostAnalyticsData>(
-        '/api/calls-dashboard/cost-analytics?days=30',
-        fetcher,
-        { revalidateOnFocus: false, revalidateOnReconnect: false }
-    );
-
-    if (isLoading) {
-        return (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="animate-pulse">
-                        <span className="bg-surgical-100 rounded h-6 w-20 inline-block mb-2" />
-                        <span className="bg-surgical-100 rounded h-4 w-24 inline-block" />
-                    </div>
-                ))}
-            </div>
-        );
-    }
-
-    const metrics = [
-        { label: 'Total Spent', value: costData?.totalSpent || '$0.00', icon: ArrowDownLeft },
-        { label: 'Avg Cost/Call', value: costData?.avgCostPerCall || '$0.00', icon: TrendingUp },
-        { label: 'Total Calls', value: String(costData?.totalCalls || 0), icon: Phone },
-        { label: 'Max Cost/Call', value: costData?.maxCostPerCall || '$0.00', icon: ArrowUpRight },
-    ];
-
-    return (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {metrics.map((metric) => {
-                const Icon = metric.icon;
-                return (
-                    <div key={metric.label} className="bg-surgical-50 rounded-lg p-4 border border-surgical-100">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Icon className="w-4 h-4 text-surgical-600" />
-                            <p className="text-xs text-obsidian/60 font-medium">{metric.label}</p>
-                        </div>
-                        <p className="text-xl font-bold text-obsidian">{metric.value}</p>
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
-
-// ---------------------------------------------------------------------------
 // Main Content
 // ---------------------------------------------------------------------------
 
@@ -163,6 +105,11 @@ const WalletPageContent = () => {
 
     const { data: txData, isLoading: txLoading, mutate: mutateTx } =
         useSWR<TransactionsResponse>(user ? `/api/billing/wallet/transactions?${txParams}` : null, fetcher, { revalidateOnFocus: false });
+
+    const { data: costData, isLoading: costLoading } =
+        useSWR<{ totalSpent: string; totalCalls: number; avgCostPerCall: string; maxCostPerCall: string; periodDays: number }>(
+            user ? '/api/calls-dashboard/cost-analytics?days=30' : null, fetcher, { revalidateOnFocus: false }
+        );
 
     // Top-up modal state
     const [showTopUp, setShowTopUp] = useState(false);
@@ -324,13 +271,13 @@ const WalletPageContent = () => {
             {/* Quick Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { icon: TrendingUp,    label: 'Total Top-Ups',   value: formatPence(summary?.total_topped_up_pence ?? 0) },
-                    { icon: ArrowDownLeft, label: 'Total Spent',     value: formatPence(summary?.total_spent_pence ?? 0) },
-                    { icon: Phone,         label: 'Total Calls',     value: String(summary?.total_calls ?? 0) },
-                    { icon: CreditCard,    label: 'Auto-Recharge',   value: wallet?.auto_recharge_enabled ? 'On' : 'Off',
-                      valueColor: wallet?.auto_recharge_enabled ? 'text-surgical-600' : 'text-obsidian/40' },
+                    { icon: ArrowDownLeft, label: 'Total Spent (30d)',  value: costData?.totalSpent || '$0.00' },
+                    { icon: Phone,         label: 'Total Calls (30d)', value: String(costData?.totalCalls || 0) },
+                    { icon: TrendingUp,    label: 'Avg Cost/Call',     value: costData?.avgCostPerCall || '$0.00' },
+                    { icon: ArrowUpRight,  label: 'Total Top-Ups',     value: formatPence(summary?.total_topped_up_pence ?? 0) },
                 ].map((card) => {
                     const Icon = card.icon;
+                    const loading = walletLoading || costLoading;
                     return (
                         <div key={card.label} className="bg-white border border-surgical-200 rounded-xl p-4 hover:shadow-md transition-shadow">
                             <div className="flex items-center gap-2 mb-2">
@@ -338,10 +285,10 @@ const WalletPageContent = () => {
                                     <Icon className="w-4 h-4 text-surgical-600" />
                                 </div>
                             </div>
-                            {walletLoading ? (
+                            {loading ? (
                                 <span className="animate-pulse bg-surgical-100 rounded h-7 w-16 inline-block" />
                             ) : (
-                                <p className={`text-2xl font-bold ${(card as any).valueColor || 'text-obsidian'}`}>
+                                <p className="text-2xl font-bold text-obsidian">
                                     {card.value}
                                 </p>
                             )}
@@ -349,16 +296,6 @@ const WalletPageContent = () => {
                         </div>
                     );
                 })}
-            </div>
-
-            {/* Cost Analytics - Phase 2 (2026-02-14) */}
-            <div className="bg-white border border-surgical-200 rounded-2xl p-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-4">
-                    <TrendingUp className="w-5 h-5 text-surgical-600" />
-                    <h3 className="text-lg font-bold text-obsidian tracking-tight">Cost Analytics (30 days)</h3>
-                </div>
-
-                <CostMetricsSection />
             </div>
 
             {/* Two-Column: Transactions + Auto-Recharge */}

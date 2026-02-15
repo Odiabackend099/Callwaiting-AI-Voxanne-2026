@@ -7,7 +7,7 @@
   - Phase 1 (Atomic Asset Billing): ✅ DEPLOYED - TOCTOU prevention via FOR UPDATE locks
   - Phase 2 (Credit Reservation): ✅ DEPLOYED - Credit holds with 5-minute reservation pattern
   - Phase 3 (Kill Switch): ✅ DEPLOYED - Real-time balance monitoring with automatic termination
-**Billing Verification:** ✅ CERTIFIED - Fixed $0.70/minute rate (46/46 tests passed)
+**Billing Verification:** ✅ CERTIFIED - Fixed 56 pence/minute GBP rate (46/46 tests passed)
 **Prepaid Billing Testing:** ✅ COMPLETE - 11 unit + 10 E2E + 3 load tests (100% passing)
 **Security Verification:** ✅ CERTIFIED - All P0 vulnerabilities mitigated (21/21 tests passed)
 **Deployment Status:** ✅ FULLY OPERATIONAL - All 4 RPC functions deployed, all migrations applied, all tests passing
@@ -138,11 +138,11 @@ All 3 phases now complete and operational. No legacy data population issues rema
 - `email` (text) - Primary contact email
 - `phone` (text, nullable) - Organization phone
 - `website` (text, nullable) - Organization website
-- `plan` (text) - Billing plan: "starter", "professional", "enterprise"
+- `plan` (text) - ⚠️ DEPRECATED: Legacy tiered billing plan column (not used). All customers use pay-as-you-go wallet model.
 - `stripe_customer_id` (text, nullable) - Stripe customer reference
 - `wallet_balance_pence` (integer, nullable) - Prepaid balance in pence
-- `debt_limit_pence` (integer, default 500) - Maximum negative balance allowed ($5.00)
-- `wallet_markup_percent` (integer, default 50) - Legacy column (NOT used in billing calculations)
+- `debt_limit_pence` (integer, default 500) - Maximum negative balance allowed (£5.00 / 500 pence GBP)
+- `wallet_markup_percent` (integer, default 50) - ⚠️ DEPRECATED: Legacy column from tiered pricing era. Not used in billing calculations. Marked for removal in future schema cleanup.
 - `telephony_mode` (text) - "byoc", "managed", or "none"
 - `settings` (jsonb, nullable) - Custom settings
 - `created_at` (timestamp) - Account creation time
@@ -153,9 +153,9 @@ All 3 phases now complete and operational. No legacy data population issues rema
 **Row Count:** 27
 
 **Billing Notes:**
-- ✅ Fixed-rate billing: $0.70/minute (70 cents USD) for all organizations
-- ✅ Debt limit: $5.00 (500 cents) enforced atomically via `deduct_call_credits()` RPC
-- ⚠️ `wallet_markup_percent` column exists but is IGNORED by billing logic (always passes 0 to RPC)
+- ✅ Fixed-rate billing: 56 pence/minute GBP for all organizations (internal rate stored in pence)
+- ✅ Debt limit: £5.00 (500 pence) enforced atomically via `deduct_call_credits()` RPC
+- ⚠️ DEPRECATED: `wallet_markup_percent` column is not used by billing logic (always passes 0 to RPC) - marked for removal
 - ✅ Verification complete: 46/46 tests passed (see `BILLING_VERIFICATION_REPORT.md`)
 
 ---
@@ -328,12 +328,12 @@ These 3 tables manage all prepaid billing operations, wallet transactions, credi
 **Key Features:**
 - ✅ Idempotent deductions via `deduct_call_credits()` RPC function
 - ✅ Postgres advisory locks prevent race conditions during call billing
-- ✅ Fixed $0.70/minute rate enforced at application layer
-- ✅ $5.00 debt limit (500 cents) enforced atomically
+- ✅ Fixed 56 pence/minute GBP rate enforced at application layer
+- ✅ £5.00 debt limit (500 pence) enforced atomically
 - ✅ Stripe payment intent ID prevents duplicate charges
 - ✅ Balance tracking for audit trail
 - ✅ Wallet top-up endpoint enforces `WALLET_MIN_TOPUP_PENCE` (default 2,500) and recreates stale Stripe customers before Checkout session creation
-- ✅ Frontend Wallet page sources `MIN_TOPUP_PENCE`/`USD_TO_GBP_RATE` env pairs so client-side validation matches backend rules
+- ✅ Frontend Wallet page uses `MIN_TOPUP_PENCE` env var to set minimum top-up (£25 = 2,500 pence) and currency display
 
 ---
 
@@ -420,15 +420,15 @@ These 3 tables manage all prepaid billing operations, wallet transactions, credi
 
 **Business Logic:**
 - ✅ **Reservation Phase:** `reserve_call_credits()` RPC creates active reservation when call starts
-  - Holds estimated 5-minute cost (350 pence ≈ $2.50 at $0.70/min)
-  - Effective balance = wallet_balance - sum(active reservations)
+  - Holds estimated 5-minute cost (280 pence at 56 pence/min GBP)
+  - Blocks further calls if effective balance (wallet - active holds) ≤ 0
 - ✅ **Commitment Phase:** `commit_reserved_credits()` RPC updates status and committed_pence when call ends
-  - Commits actual cost: duration_seconds × $0.70/min rate
-  - Releases unused credits back to wallet
+  - Commits actual cost: duration_seconds × 56 pence/min rate
+  - Releases unused credits back to wallet (reserved_pence - committed_pence)
 - ✅ **Expiration Phase:** `cleanup_expired_reservations()` RPC auto-expires calls older than 60 minutes
-  - Prevents indefinite holds on abandoned calls
-- ✅ **Kill Switch Integration:** Real-time balance calculated as wallet_balance - sum(reserved - committed)
-  - Automatic call termination when effective balance ≤ 0
+  - Prevents indefinite holds on abandoned calls, releases credits back to wallet
+- ✅ **Kill Switch Integration:** Real-time balance calculated as wallet_balance - sum(reserved_pence for status = 'active')
+  - Automatic call termination when effective balance ≤ 0 (no credit to continue call)
 
 **Related RPC Functions:**
 1. `reserve_call_credits(p_org_id, p_call_id, p_vapi_call_id, p_estimated_minutes)` → JSONB
@@ -786,9 +786,9 @@ Organization (organizations)
 | **Multi-Tenancy** | ✅ Secure | RLS policies enforced + automated verification |
 | **Backup Strategy** | ✅ 7-day PITR | Daily Supabase backups |
 | **Security** | ✅ **HARDENED** | P0 vulnerabilities mitigated (95+/100 score) |
-| **Billing System** | ✅ **CERTIFIED** | Fixed $0.70/min rate, 46/46 tests passed |
+| **Billing System** | ✅ **CERTIFIED** | Fixed 56 pence/min GBP rate, 46/46 tests passed |
 | **Billing Infrastructure** | ✅ **COMPLETE** | 2 tables, 12 indexes, 4 RLS policies, 1 cleanup function |
-| **Debt Limit** | ✅ **ENFORCED** | $5.00 max debt, atomic RPC enforcement |
+| **Debt Limit** | ✅ **ENFORCED** | £5.00 (500 pence) max debt, atomic RPC enforcement |
 | **Webhook Processing** | ✅ **IDEMPOTENT** | Defense-in-depth (BullMQ + DB), 90-day retention |
 | **Security Infrastructure** | ✅ **COMPLETE** | 1 table, 7 indexes, 7 helper functions, automated RLS verification |
 | **P0 Vulnerabilities** | ✅ **MITIGATED** | 4/4 critical issues fixed (21/21 tests passed) |

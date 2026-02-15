@@ -23,18 +23,23 @@ export default function OnboardingPage() {
   );
 }
 
+// Field validation rules: which fields are required
+const REQUIRED_FIELDS = new Set(['company', 'email', 'phone', 'greeting_script']);
+const OPTIONAL_FIELDS = new Set(['website', 'pricing_pdf']);
+
 function OnboardingForm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
-  const [phoneError, setPhoneError] = useState<string>('');
-  const [fileError, setFileError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string>('');
   const [queuedCount, setQueuedCount] = useState(0);
+
   const { error: showError, warning, success: showSuccess } = useToast();
   const isOnline = useNetworkStatus();
   const searchParams = useSearchParams();
   const [startTime] = useState(() => Date.now());
 
-  // Check offline queue on mount and when coming back online
+  // Auto-process offline queue when coming back online
   useEffect(() => {
     async function checkQueue() {
       const count = await getQueuedCount();
@@ -42,6 +47,39 @@ function OnboardingForm() {
     }
     checkQueue();
   }, [isOnline]);
+
+  useEffect(() => {
+    if (isOnline && queuedCount > 0) {
+      processOfflineQueue();
+    }
+  }, [isOnline, queuedCount]);
+
+  // Track form view for analytics
+  useEffect(() => {
+    trackEvent('form_view', { page: 'start' });
+    const source = searchParams.get('utm_source');
+    if (source) {
+      trackEvent('utm_landing', {
+        utm_source: source,
+        utm_medium: searchParams.get('utm_medium') || '',
+        utm_campaign: searchParams.get('utm_campaign') || '',
+      });
+    }
+  }, [searchParams]);
+
+  // Track abandon if user leaves without submitting
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (status !== 'success') {
+        trackEvent('form_abandon', {
+          page: 'start',
+          time_on_page: Math.round((Date.now() - startTime) / 1000),
+        });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [status, startTime]);
 
   const processOfflineQueue = async () => {
     try {
@@ -64,7 +102,6 @@ function OnboardingForm() {
         showError(`⚠️ ${result.failed} submission(s) failed. Please contact support.`, 5000);
       }
 
-      // Update queue count
       const count = await getQueuedCount();
       setQueuedCount(count);
     } catch (error) {
@@ -72,59 +109,23 @@ function OnboardingForm() {
     }
   };
 
-  // Auto-process queue when coming back online
-  useEffect(() => {
-    if (isOnline && queuedCount > 0) {
-      processOfflineQueue();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOnline, queuedCount]);
-
-  // Track form view and UTM attribution
-  useEffect(() => {
-    trackEvent('form_view', { page: 'start' });
-
-    const source = searchParams.get('utm_source');
-    if (source) {
-      trackEvent('utm_landing', {
-        utm_source: source,
-        utm_medium: searchParams.get('utm_medium') || '',
-        utm_campaign: searchParams.get('utm_campaign') || '',
-      });
-    }
-  }, [searchParams]);
-
-  // Track drop-off if user leaves before submitting
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (status !== 'success') {
-        trackEvent('form_abandon', {
-          page: 'start',
-          time_on_page: Math.round((Date.now() - startTime) / 1000),
-        });
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [status, startTime]);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    haptics.light(); // Haptic feedback on file selection
+    haptics.light();
     const file = e.target.files?.[0];
+
     if (file) {
       const maxSize = 10 * 1024 * 1024; // 10MB
       if (file.size > maxSize) {
-        haptics.error(); // Error haptic
-        setFileError('File must be under 10MB');
-        warning('PDF file is too large. Please select a file under 10MB.', 4000);
+        haptics.error();
+        setFileError('PDF file must be under 10MB');
+        warning('File is too large. Maximum size is 10MB.', 4000);
         e.target.value = '';
         setSelectedFile(null);
       } else {
-        haptics.success(); // Success haptic
+        haptics.success();
         setFileError('');
         setSelectedFile(file);
 
-        // Network-aware upload message
         if (!isOnline) {
           warning('File selected. Will upload when connection is restored.', 3000);
         }
@@ -132,38 +133,84 @@ function OnboardingForm() {
     }
   };
 
-  const handlePhoneBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const phoneValue = e.target.value;
-    // Use permissive E.164 format validation: + followed by 1-15 digits (spaces, dashes, parentheses allowed)
+  const validatePhoneNumber = (phone: string): boolean => {
+    if (!phone) return false; // Required field
+    // E.164 format: + followed by 1-15 digits (spaces, dashes, parentheses allowed)
     const e164Regex = /^\+[\d\s\-\(\)]{7,19}$/;
-    if (phoneValue && !e164Regex.test(phoneValue)) {
-      haptics.warning(); // Warning haptic for validation error
-      setPhoneError('Please enter a valid phone number starting with + and country code (e.g., +1 555 123 4567, +44 7700 900000)');
-    } else {
-      setPhoneError('');
-    }
+    return e164Regex.test(phone);
+  };
+
+  const validateEmail = (email: string): boolean => {
+    if (!email) return false; // Required field
+    // Simple but effective email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateWebsite = (website: string): boolean => {
+    if (!website) return true; // Optional field - empty is valid
+    // Basic website validation
+    const websiteRegex = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+    return websiteRegex.test(website);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    haptics.medium(); // Haptic feedback on form submission
+    haptics.medium();
 
-    // Validate phone before submitting
+    // Clear previous errors
+    setFieldErrors({});
+
     const formElement = e.target as HTMLFormElement;
-    const phoneInput = formElement.elements.namedItem('phone') as HTMLInputElement;
-    const e164Regex = /^\+[\d\s\-\(\)]{7,19}$/;
-    if (phoneInput.value && !e164Regex.test(phoneInput.value)) {
+    const formData = new FormData(formElement);
+
+    // Client-side validation before submitting
+    const companyName = (formElement.elements.namedItem('company') as HTMLInputElement)?.value || '';
+    const email = (formElement.elements.namedItem('email') as HTMLInputElement)?.value || '';
+    const phone = (formElement.elements.namedItem('phone') as HTMLInputElement)?.value || '';
+    const greetingScript = (formElement.elements.namedItem('greeting_script') as HTMLTextAreaElement)?.value || '';
+    const website = (formElement.elements.namedItem('website') as HTMLInputElement)?.value || '';
+
+    const errors: Record<string, string> = {};
+
+    // Validate required fields
+    if (!companyName.trim()) {
+      errors.company = 'Company name is required';
+    }
+
+    if (!email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!validateEmail(email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!phone.trim()) {
+      errors.phone = 'Phone number is required';
+    } else if (!validatePhoneNumber(phone)) {
+      errors.phone = 'Please enter a valid international phone number (e.g., +1 555 123 4567)';
+    }
+
+    if (!greetingScript.trim()) {
+      errors.greeting_script = 'Reception greeting script is required';
+    }
+
+    // Validate optional fields only if provided
+    if (website && !validateWebsite(website)) {
+      errors.website = 'Please enter a valid website (e.g., yourcompany.com or https://yourcompany.com)';
+    }
+
+    // Show client-side validation errors
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       haptics.error();
-      setPhoneError('Please enter a valid international phone number');
-      showError('Please fix the phone number error before submitting');
+      const firstError = Object.entries(errors)[0];
+      showError(`${firstError[0]}: ${firstError[1]}`, 5000);
       return;
     }
 
     setStatus('loading');
 
-    const formData = new FormData(formElement);
-
-    // Append UTM attribution and conversion timing
+    // Append UTM and metadata
     const utmSource = searchParams.get('utm_source');
     if (utmSource) formData.set('utm_source', utmSource);
     const utmMedium = searchParams.get('utm_medium');
@@ -174,7 +221,7 @@ function OnboardingForm() {
     if (planParam) formData.set('plan', planParam);
     formData.set('time_to_complete_seconds', String(Math.round((Date.now() - startTime) / 1000)));
 
-    // If offline, queue submission for later
+    // Handle offline submission
     if (!isOnline) {
       try {
         await queueSubmission(formData);
@@ -193,28 +240,52 @@ function OnboardingForm() {
       }
     }
 
-    // Online submission
+    // Handle online submission
     try {
-      console.log('Submitting to:', '/api/onboarding-intake');
-
       const response = await fetch('/api/onboarding-intake', {
         method: 'POST',
         body: formData,
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Response error:', errorText);
-        throw new Error(`API error: ${response.status}`);
+
+        try {
+          const errorData = JSON.parse(errorText);
+
+          // Handle field-specific errors from API
+          if (errorData.details && Array.isArray(errorData.details)) {
+            const apiErrors: Record<string, string> = {};
+            errorData.details.forEach((detail: { field: string; message: string }) => {
+              apiErrors[detail.field] = detail.message;
+            });
+            setFieldErrors(apiErrors);
+
+            const firstError = errorData.details[0];
+            if (firstError) {
+              haptics.error();
+              showError(`${firstError.field}: ${firstError.message}`, 5000);
+            }
+          } else if (errorData.error) {
+            // Handle general API error
+            haptics.error();
+            showError(errorData.error, 5000);
+          } else {
+            throw new Error(`API error: ${response.status}`);
+          }
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+          haptics.error();
+          showError('An error occurred. Please try again or contact support.', 5000);
+        }
+
+        setStatus('idle');
+        return;
       }
 
       const result = await response.json();
-      console.log('Success result:', result);
 
-      haptics.success(); // Success haptic
+      haptics.success();
       trackEvent('form_submit_success', {
         page: 'start',
         time_to_complete: Math.round((Date.now() - startTime) / 1000),
@@ -222,31 +293,20 @@ function OnboardingForm() {
         plan: searchParams.get('plan') || 'payg',
       });
       setStatus('success');
-      // Don't reset form - keep success message visible
-      // User can refresh page to submit again if needed
-
     } catch (error) {
       console.error('Submission error:', error);
-      haptics.error(); // Error haptic
+      haptics.error();
       setStatus('idle');
-      showError('Failed to submit. Please email support@voxanne.ai directly.', 5000);
+      showError('Failed to submit form. Please try again or contact support@voxanne.ai', 5000);
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-slate-100">
-      {/* Network Status Banner */}
       <NetworkStatus />
 
-      {/* Navigation Bar */}
       <nav className="p-6 flex justify-between items-center max-w-7xl mx-auto w-full bg-white">
-        <Logo
-          variant="icon-blue"
-          size="lg"
-          href="/"
-          priority
-        />
-
+        <Logo variant="icon-blue" size="lg" href="/" priority />
         <Link
           href="/"
           className="text-blue-600 hover:text-blue-700 transition-colors text-sm font-medium min-h-[48px] flex items-center active:scale-95 transition-transform"
@@ -256,7 +316,6 @@ function OnboardingForm() {
         </Link>
       </nav>
 
-      {/* Main Content */}
       <main className="flex-grow flex items-center justify-center px-4 py-12">
         <div className="max-w-2xl w-full">
           <div className="text-center mb-8">
@@ -269,13 +328,11 @@ function OnboardingForm() {
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 space-y-6">
-
-            {/* Company Name */}
+            {/* Company Name - REQUIRED */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Company Name *
+                Company Name <span className="text-red-600">*</span>
               </label>
               <Input
                 autoFocus
@@ -283,33 +340,64 @@ function OnboardingForm() {
                 required
                 placeholder="e.g., Your Clinic Name"
                 disabled={status === 'loading'}
-                className="min-h-[48px] text-base placeholder:text-gray-400"
+                className={`min-h-[48px] text-base placeholder:text-gray-400 ${
+                  fieldErrors.company ? 'border-red-500 focus-visible:ring-red-500' : ''
+                }`}
                 onFocus={() => haptics.light()}
+                onChange={() => {
+                  if (fieldErrors.company) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.company;
+                    setFieldErrors(newErrors);
+                  }
+                }}
               />
+              {fieldErrors.company && (
+                <div className="flex items-start gap-2 mt-1 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{fieldErrors.company}</span>
+                </div>
+              )}
             </div>
 
-            {/* Company Website */}
+            {/* Company Website - OPTIONAL */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Company Website (Optional)
+                Company Website <span className="text-gray-500 text-xs font-normal">(Optional)</span>
               </label>
               <Input
                 name="website"
                 type="text"
                 placeholder="yourcompany.com or https://yourcompany.com"
                 disabled={status === 'loading'}
-                className="min-h-[48px] text-base placeholder:text-gray-400"
+                className={`min-h-[48px] text-base placeholder:text-gray-400 ${
+                  fieldErrors.website ? 'border-red-500 focus-visible:ring-red-500' : ''
+                }`}
                 onFocus={() => haptics.light()}
+                onChange={() => {
+                  if (fieldErrors.website) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.website;
+                    setFieldErrors(newErrors);
+                  }
+                }}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                We&apos;ll use this to personalize your AI agent&apos;s knowledge
-              </p>
+              {fieldErrors.website ? (
+                <div className="flex items-start gap-2 mt-1 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{fieldErrors.website}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">
+                  We&apos;ll use this to personalize your AI agent&apos;s knowledge
+                </p>
+              )}
             </div>
 
-            {/* Email */}
+            {/* Email - REQUIRED */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Your Email *
+                Your Email <span className="text-red-600">*</span>
               </label>
               <Input
                 name="email"
@@ -317,15 +405,30 @@ function OnboardingForm() {
                 required
                 placeholder="your.email@company.com"
                 disabled={status === 'loading'}
-                className="min-h-[48px] text-base placeholder:text-gray-400"
+                className={`min-h-[48px] text-base placeholder:text-gray-400 ${
+                  fieldErrors.email ? 'border-red-500 focus-visible:ring-red-500' : ''
+                }`}
                 onFocus={() => haptics.light()}
+                onChange={() => {
+                  if (fieldErrors.email) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.email;
+                    setFieldErrors(newErrors);
+                  }
+                }}
               />
+              {fieldErrors.email && (
+                <div className="flex items-start gap-2 mt-1 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{fieldErrors.email}</span>
+                </div>
+              )}
             </div>
 
-            {/* Phone */}
+            {/* Phone - REQUIRED */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number *
+                Phone Number <span className="text-red-600">*</span>
               </label>
               <Input
                 name="phone"
@@ -333,33 +436,35 @@ function OnboardingForm() {
                 required
                 placeholder="+1 555 123 4567 or +44 7700 900000"
                 disabled={status === 'loading'}
+                className={`min-h-[48px] text-base placeholder:text-gray-400 ${
+                  fieldErrors.phone ? 'border-red-500 focus-visible:ring-red-500' : ''
+                }`}
                 onFocus={() => haptics.light()}
-                onBlur={handlePhoneBlur}
-                onChange={(e) => {
-                  // Clear error when user types to allow re-validation on blur
-                  if (phoneError && e.target.value) {
-                    setPhoneError('');
+                onChange={() => {
+                  if (fieldErrors.phone) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.phone;
+                    setFieldErrors(newErrors);
                   }
                 }}
-                className={`min-h-[48px] text-base placeholder:text-gray-400 ${phoneError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
               />
-              {phoneError && (
-                <p className="text-sm text-red-600 flex items-start gap-2 mt-1">
+              {fieldErrors.phone && (
+                <div className="flex items-start gap-2 mt-1 text-sm text-red-600">
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <span>
-                    {phoneError}
-                  </span>
+                  <span>{fieldErrors.phone}</span>
+                </div>
+              )}
+              {!fieldErrors.phone && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Include country code: +1 for US/Canada, +44 for UK, +61 for Australia. Spaces and dashes are optional.
                 </p>
               )}
-              <p className="text-xs text-gray-500 mt-1">
-                Include country code: +1 for US/Canada, +44 for UK, +61 for Australia. Spaces and dashes are optional.
-              </p>
             </div>
 
-            {/* Greeting Script */}
+            {/* Greeting Script - REQUIRED */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reception Greeting Script *
+                Reception Greeting Script <span className="text-red-600">*</span>
               </label>
               <Textarea
                 name="greeting_script"
@@ -367,17 +472,32 @@ function OnboardingForm() {
                 rows={4}
                 placeholder="e.g., Thank you for calling [Your Company]. How may I help you today?"
                 disabled={status === 'loading'}
-                className="resize-none text-base placeholder:text-gray-400 min-h-[96px]"
+                className={`resize-none text-base placeholder:text-gray-400 min-h-[96px] ${
+                  fieldErrors.greeting_script ? 'border-red-500 focus-visible:ring-red-500' : ''
+                }`}
                 onFocus={() => haptics.light()}
+                onChange={() => {
+                  if (fieldErrors.greeting_script) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.greeting_script;
+                    setFieldErrors(newErrors);
+                  }
+                }}
               />
-              {/* Hidden additional details field for API compatibility */}
+              {fieldErrors.greeting_script && (
+                <div className="flex items-start gap-2 mt-1 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{fieldErrors.greeting_script}</span>
+                </div>
+              )}
+              {/* Hidden field required by backend validation */}
               <input type="hidden" name="additionalDetails" value="" />
             </div>
 
-            {/* Voice Preference */}
+            {/* Voice Preference - OPTIONAL */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Preferred Voice Type
+                Preferred Voice Type <span className="text-gray-500 text-xs font-normal">(Optional)</span>
               </label>
               <select
                 name="voice_preference"
@@ -386,6 +506,7 @@ function OnboardingForm() {
                 onFocus={() => haptics.light()}
                 onChange={() => haptics.light()}
               >
+                <option value="">Select a voice type</option>
                 <option value="AI (Neutral)">AI (Neutral) - Natural, balanced tone</option>
                 <option value="Male Voice">Male Voice - Professional male voice</option>
                 <option value="Female Voice">Female Voice - Professional female voice</option>
@@ -395,10 +516,10 @@ function OnboardingForm() {
               </p>
             </div>
 
-            {/* File Upload */}
+            {/* File Upload - OPTIONAL */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Pricing/Menu PDF (Optional)
+                Pricing/Menu PDF <span className="text-gray-500 text-xs font-normal">(Optional)</span>
               </label>
               <input
                 type="file"
@@ -416,7 +537,7 @@ function OnboardingForm() {
                   ${fileError ? 'border border-red-500 rounded-md' : ''}`}
               />
               {fileError ? (
-                <p className="text-sm text-red-600 flex items-start gap-2 mt-1">
+                <div className="flex items-start gap-2 mt-1 text-sm text-red-600">
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span>
                     {fileError}
@@ -436,14 +557,13 @@ function OnboardingForm() {
                       Choose another file
                     </button>
                   </span>
-                </p>
+                </div>
               ) : (
                 <p className="text-xs text-gray-500 mt-1">
                   PDF only, max 10MB
                 </p>
               )}
 
-              {/* File Preview */}
               {selectedFile && !fileError && (
                 <div className="mt-2 p-3 bg-blue-50 rounded-lg flex items-center gap-3 border border-blue-200">
                   <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
@@ -480,7 +600,7 @@ function OnboardingForm() {
               </span>
             </div>
 
-            {/* Submit Button or Success Message */}
+            {/* Submit Button or Success */}
             {status === 'success' ? (
               <div className="text-center space-y-4">
                 <div className="flex items-center justify-center">
@@ -493,11 +613,7 @@ function OnboardingForm() {
                   Check your email for next steps. Our team will configure your AI agent within 24 hours.
                 </p>
                 <div className="pt-4">
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto min-h-[48px]"
-                    asChild
-                  >
+                  <Button variant="outline" className="w-full sm:w-auto min-h-[48px]" asChild>
                     <a
                       href="https://calendly.com/austyneguale/30min"
                       target="_blank"
@@ -516,7 +632,7 @@ function OnboardingForm() {
               <>
                 <Button
                   type="submit"
-                  disabled={status === 'loading' || !!phoneError || !!fileError}
+                  disabled={status === 'loading' || !!fileError}
                   className="w-full relative min-h-[48px] active:scale-95 transition-transform"
                 >
                   {status === 'loading' ? (
@@ -532,7 +648,6 @@ function OnboardingForm() {
                   )}
                 </Button>
 
-                {/* Offline Queue Indicator */}
                 {queuedCount > 0 && (
                   <div className="mt-2 text-center text-sm text-amber-600 flex items-center justify-center gap-2">
                     <AlertCircle className="h-4 w-4" />
@@ -543,7 +658,6 @@ function OnboardingForm() {
                 )}
               </>
             )}
-
           </form>
 
           {/* Trust Badges */}
@@ -551,11 +665,9 @@ function OnboardingForm() {
             <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span>
             Secure • Human Verified • 24-Hour Setup
           </div>
-
         </div>
       </main>
 
-      {/* Footer */}
       <FooterRedesigned disableAnimations={true} />
     </div>
   );

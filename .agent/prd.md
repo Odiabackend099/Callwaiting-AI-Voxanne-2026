@@ -25,7 +25,7 @@ It intentionally removes legacy tiered pricing, stale troubleshooting notes, and
 | Target user | Healthcare practices that need an AI assistant to qualify leads, book appointments, and route calls |
 | Core value prop | End-to-end automation from inbound call → appointment → billing, with auditable Golden Record data |
 | Deployment | Frontend (Next.js / Vercel) + Backend (Node/Express on port 3001) + Supabase (Postgres + Auth) + Stripe + Twilio + Vapi |
-| Pricing model | Pay-as-you-go wallet. Customers top up from **£25** (2,500 pence). Calls billed at **$0.70/min (≈56p/min)**. |
+| Pricing model | Pay-as-you-go wallet. Customers top up from **£25** (2,500 pence). Calls billed at **56 pence/min GBP** (fixed rate). |
 
 ---
 
@@ -100,8 +100,8 @@ It intentionally removes legacy tiered pricing, stale troubleshooting notes, and
    - **Phase 1 (Atomic Asset Billing):** Eliminates TOCTOU race conditions via atomic RPC with FOR UPDATE row locks + idempotency keys
    - **Phase 2 (Credit Reservation):** Authorize-then-capture pattern with 5-minute holds on call costs, automatic credit release
    - **Phase 3 (Kill Switch):** Real-time balance monitoring every 60 seconds, automatic call termination when balance reaches zero
-   - **Enforcement:** Zero-debt for assets, $5.00 max debt for calls, all-or-nothing atomic transactions
-4. **Wallet Billing** – Stripe Checkout top-ups, auto-recharge, credit ledger, webhook verification, and fixed-rate per-minute deductions ($0.70/min).
+   - **Enforcement:** Zero-debt for assets, £5.00 (500 pence) max debt for calls, all-or-nothing atomic transactions
+4. **Wallet Billing** – Stripe Checkout top-ups (£25 minimum), auto-recharge, credit ledger, webhook verification, and fixed-rate per-minute deductions (56 pence/min GBP).
 5. **Managed Telephony** – Purchase Twilio subaccount numbers, surface in Agent Config, enforce one-number-per-org, support manual AI Forwarding.
 6. **Dashboards & Leads** – Production dashboards for call stats, sentiment, lead enrichment, conversion tracking, and Geo/SEO telemetry.
 7. **Onboarding Form** – Intake form at `/start` collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support team. Stores submissions in `onboarding_submissions` table with full audit trail.
@@ -168,7 +168,7 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 - Stripe Checkout sessions include `client_reference_id = orgId` and metadata (org, amount, credits).  
 - Stripe webhooks processed async via BullMQ; wallet credits are idempotent per `stripe_payment_intent_id`.  
 - Auto-recharge saves payment method (setup_future_usage). Job dedup key `recharge-${orgId}` prevents double charges.  
-- Wallet deductions use fixed `RATE_PER_MINUTE_USD_CENTS = 70` and convert to GBP pence with `USD_TO_GBP_RATE`.
+- Wallet deductions use fixed rate of 56 pence/min GBP (stored in database as integer pence values).
 
 ### 6.4 Telephony & AI Forwarding
 - Managed number provisioning purchases via Twilio subaccounts and **must import into Vapi using subaccount credentials**.  
@@ -247,8 +247,7 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 5. Expand AI Forwarding carrier library beyond current presets.
 6. Build monitoring dashboard for prepaid billing metrics (reservation hold duration, kill switch triggers, credit release efficiency).
 7. Add automated regression testing around prepaid billing race conditions.
-8. Evaluate retirement of `wallet_markup_percent` column once dynamic pricing roadmap defined.
-9. Add Slack alerts for high-priority prepaid billing events (reservation failures, kill switch activation).
+8. Add Slack alerts for high-priority prepaid billing events (reservation failures, kill switch activation).
 
 ---
 

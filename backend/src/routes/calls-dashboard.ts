@@ -456,21 +456,26 @@ callsRouter.get('/cost-analytics', async (req: Request, res: Response) => {
     if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
 
     const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
 
-    const { data, error } = await supabase.rpc('get_cost_analytics', {
-      p_org_id: orgId,
-      p_days: days
-    });
+    // Query calls table directly — cost_cents is stored per call
+    const { data: calls, error } = await supabase
+      .from('calls')
+      .select('cost_cents')
+      .eq('org_id', orgId)
+      .gte('created_at', since.toISOString())
+      .not('cost_cents', 'is', null);
 
     if (error) {
-      log.error('Calls', 'GET /cost-analytics - RPC error', {
+      log.error('Calls', 'GET /cost-analytics - query error', {
         error: error.message,
         orgId
       });
       return res.status(500).json({ error: error.message });
     }
 
-    if (!data) {
+    if (!calls || calls.length === 0) {
       return res.json({
         totalSpent: '$0.00',
         totalCalls: 0,
@@ -481,64 +486,23 @@ callsRouter.get('/cost-analytics', async (req: Request, res: Response) => {
       });
     }
 
+    const costs = calls.map((c: any) => Number(c.cost_cents) || 0);
+    const totalCents = costs.reduce((sum: number, c: number) => sum + c, 0);
+    const avgCents = totalCents / costs.length;
+    const maxCents = Math.max(...costs);
+    const minCents = Math.min(...costs);
+
     return res.json({
-      totalSpent: `$${(data.total_cost_cents / 100).toFixed(2)}`,
-      totalCalls: data.total_calls,
-      avgCostPerCall: `$${(data.avg_cost_cents / 100).toFixed(2)}`,
-      maxCostPerCall: `$${(data.max_cost_cents / 100).toFixed(2)}`,
-      minCostPerCall: `$${(data.min_cost_cents / 100).toFixed(2)}`,
-      periodDays: data.period_days
+      totalSpent: `$${(totalCents / 100).toFixed(2)}`,
+      totalCalls: costs.length,
+      avgCostPerCall: `$${(avgCents / 100).toFixed(2)}`,
+      maxCostPerCall: `$${(maxCents / 100).toFixed(2)}`,
+      minCostPerCall: `$${(minCents / 100).toFixed(2)}`,
+      periodDays: days
     });
   } catch (e: any) {
     log.error('Calls', 'GET /cost-analytics - Error', { error: e?.message });
     return res.status(500).json({ error: e?.message || 'Failed to fetch cost analytics' });
-  }
-});
-
-/**
- * GET /api/calls-dashboard/cost-trend
- * Return daily cost breakdown for chart visualization
- * Query params: ?days=30 (default: 30 days)
- *
- * Returns array of:
- * {
- *   "date": "2026-02-14",
- *   "cost_cents": 5432,
- *   "call_count": 12,
- *   "avg_cost_cents": 452.67
- * }
- */
-callsRouter.get('/cost-trend', async (req: Request, res: Response) => {
-  try {
-    const orgId = req.user?.orgId;
-    if (!orgId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
-
-    const { data, error } = await supabase.rpc('get_cost_trend', {
-      p_org_id: orgId,
-      p_days: days
-    });
-
-    if (error) {
-      log.error('Calls', 'GET /cost-trend - RPC error', {
-        error: error.message,
-        orgId
-      });
-      return res.status(500).json({ error: error.message });
-    }
-
-    return res.json(
-      (data || []).map((row: any) => ({
-        date: row.date,
-        costUSD: `$${(row.cost_cents / 100).toFixed(2)}`,
-        callCount: row.call_count,
-        avgCostUSD: `$${(row.avg_cost_cents / 100).toFixed(2)}`
-      }))
-    );
-  } catch (e: any) {
-    log.error('Calls', 'GET /cost-trend - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch cost trend' });
   }
 });
 
