@@ -1,7 +1,13 @@
 import axios from 'axios';
 
-const vapiKey = 'b22e1e1e-17f3-447e-8a6a-a9f6d4a8e3cc';
-const assistantId = 'bee0ecd5-4f32-43f0-ac1a-81e2b3c26f13';
+const vapiKey = process.env.VAPI_PRIVATE_KEY;
+const assistantId = process.env.VAPI_ASSISTANT_ID || 'bee0ecd5-4f32-43f0-ac1a-81e2b3c26f13';
+
+if (!vapiKey) {
+  console.error('❌ Error: VAPI_PRIVATE_KEY environment variable is not set');
+  console.error('   Please add VAPI_PRIVATE_KEY to your .env file');
+  process.exit(1);
+}
 
 async function checkWebhook() {
   try {

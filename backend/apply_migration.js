@@ -1,9 +1,16 @@
 const { createClient } = require("@supabase/supabase-js");
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config();
 
-const url = "https://lbjymlodxprzqgtyqtcq.supabase.co";
-const serviceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxianltbG9keHByenFndHlxdGNxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzM0OTUzMSwiZXhwIjoyMDc4OTI1NTMxfQ.5B2bBOUgXw2qC6QpIkU2DNZiqMW20y8MzgLQ56LEtFA";
+const url = process.env.SUPABASE_URL || "https://lbjymlodxprzqgtyqtcq.supabase.co";
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!serviceKey) {
+  console.error("❌ Error: SUPABASE_SERVICE_ROLE_KEY environment variable is not set");
+  console.error("   Please add SUPABASE_SERVICE_ROLE_KEY to your .env file");
+  process.exit(1);
+}
 
 const supabase = createClient(url, serviceKey);
 
