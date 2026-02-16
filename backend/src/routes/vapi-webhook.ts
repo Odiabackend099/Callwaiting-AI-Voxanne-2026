@@ -616,12 +616,17 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       }
 
       // 2. Detect call direction (inbound vs outbound)
-      // Inbound: call.type === 'inboundPhoneCall' OR no assistant overrides
-      // Outbound: call.type === 'webCall' AND assistantOverrides present
+      // Must match call.started handler logic (line 397) exactly.
+      // Vapi call.type values: 'inboundPhoneCall', 'outboundPhoneCall', 'webCall'
+      // - 'outboundPhoneCall' = outbound (phone calls initiated by our system)
+      // - 'webCall' with assistantOverrides = outbound (browser-initiated test calls)
+      // - Everything else (inboundPhoneCall, webCall without overrides) = inbound
       const callDirection: 'inbound' | 'outbound' =
-        call?.type === 'webCall' && call?.assistantOverrides
+        call?.type === 'outboundPhoneCall'
           ? 'outbound'
-          : 'inbound';
+          : (call?.type === 'webCall' && call?.assistantOverrides)
+            ? 'outbound'
+            : 'inbound';
 
       log.info('Vapi-Webhook', 'Call direction detected', {
         callId: call?.id,
@@ -641,9 +646,39 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       let outcomeDetailed = analysis?.summary || 'Call completed successfully.';
 
       try {
-        if (artifact?.transcript) {
+        // Primary: use artifact.transcript if available
+        // Fallback: reconstruct transcript from messages (artifact.messages or call.messages)
+        let transcriptForAnalysis = artifact?.transcript || null;
+
+        if (!transcriptForAnalysis) {
+          // Reconstruct transcript from messages array when Vapi omits artifact.transcript
+          const messagesSource = artifact?.messages || call?.messages || [];
+          if (Array.isArray(messagesSource) && messagesSource.length > 0) {
+            const transcriptParts: string[] = [];
+            for (const msg of messagesSource) {
+              if (msg.role === 'user' && msg.message) {
+                transcriptParts.push(`Caller: ${msg.message}`);
+              } else if (msg.role === 'assistant' && msg.message) {
+                transcriptParts.push(`Assistant: ${msg.message}`);
+              } else if (msg.content && typeof msg.content === 'string') {
+                const speaker = msg.role === 'user' ? 'Caller' : 'Assistant';
+                transcriptParts.push(`${speaker}: ${msg.content}`);
+              }
+            }
+            if (transcriptParts.length > 0) {
+              transcriptForAnalysis = transcriptParts.join('\n');
+              log.info('Vapi-Webhook', 'Transcript reconstructed from messages', {
+                callId: call?.id,
+                messageCount: messagesSource.length,
+                transcriptLength: transcriptForAnalysis.length
+              });
+            }
+          }
+        }
+
+        if (transcriptForAnalysis && transcriptForAnalysis.trim().length >= 10) {
           const outcomeSummary = await OutcomeSummaryService.generateOutcomeSummary(
-            artifact.transcript,
+            transcriptForAnalysis,
             sentimentLabel || undefined
           );
           outcomeShort = outcomeSummary.shortOutcome;
@@ -658,7 +693,15 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
             shortOutcome: outcomeShort,
             sentimentLabel,
             sentimentScore,
-            summaryLength: outcomeDetailed.length
+            summaryLength: outcomeDetailed.length,
+            transcriptSource: artifact?.transcript ? 'artifact.transcript' : 'reconstructed-from-messages'
+          });
+        } else {
+          log.warn('Vapi-Webhook', 'No transcript available for sentiment analysis', {
+            callId: call?.id,
+            hasArtifactTranscript: !!artifact?.transcript,
+            hasArtifactMessages: !!(artifact?.messages?.length),
+            hasCallMessages: !!(call?.messages?.length)
           });
         }
       } catch (summaryError: any) {
@@ -947,11 +990,42 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           orgId
         });
 
+        // ========== RECORDING URL DIAGNOSTICS ==========
+        const resolvedRecordingUrl =
+          (typeof artifact?.recordingUrl === 'string' ? artifact.recordingUrl : null)
+          || (typeof artifact?.recording === 'string' ? artifact.recording : null)
+          || (typeof message?.recordingUrl === 'string' ? message.recordingUrl : null);
+
+        if (!resolvedRecordingUrl) {
+          log.warn('Vapi-Webhook', '🎙️ No recording URL found in webhook payload', {
+            callId: call?.id,
+            orgId,
+            direction: callDirection,
+            duration: Math.round(message.durationSeconds || 0),
+            checkedLocations: {
+              'artifact.recordingUrl': typeof artifact?.recordingUrl,
+              'artifact.recording': typeof artifact?.recording,
+              'message.recordingUrl': typeof message?.recordingUrl
+            },
+            endedReason: message.endedReason
+          });
+        } else {
+          log.info('Vapi-Webhook', '🎙️ Recording URL found', {
+            callId: call?.id,
+            orgId,
+            urlSource: artifact?.recordingUrl ? 'artifact.recordingUrl' :
+              artifact?.recording ? 'artifact.recording' : 'message.recordingUrl',
+            urlLength: resolvedRecordingUrl.length
+          });
+        }
+
         // ========== GOLDEN RECORD: Link appointments to calls ==========
         // If bookClinicAppointment tool was used, find and link the appointment
+        // NOTE: Uses outer-scope `toolsUsed` (extracted at lines ~800-817 from all sources:
+        // call.messages + artifact.messages + analysis.toolCalls). DO NOT re-extract
+        // from call.messages alone — it is often empty in end-of-call-report payloads.
         if (orgId && call?.id) {
           try {
-            const toolsUsed = extractToolsUsed(call?.messages || []);
             const bookedDuringCall = toolsUsed.includes('bookClinicAppointment');
 
             if (bookedDuringCall) {
