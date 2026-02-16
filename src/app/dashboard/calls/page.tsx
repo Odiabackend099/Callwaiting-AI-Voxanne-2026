@@ -397,9 +397,13 @@ const CallsPageContent = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">
-                                                {call.outcome_summary || call.sentiment_summary ? (
+                                                {call.outcome_summary ? (
                                                     <p className="text-xs text-obsidian/70 line-clamp-2 leading-relaxed max-w-xs">
-                                                        {call.outcome_summary || call.sentiment_summary}
+                                                        {call.outcome_summary}
+                                                    </p>
+                                                ) : call.sentiment_summary ? (
+                                                    <p className="text-xs text-obsidian/60 line-clamp-2 leading-relaxed max-w-xs italic">
+                                                        {call.sentiment_summary}
                                                     </p>
                                                 ) : (
                                                     <span className="text-xs text-obsidian/40">&mdash;</span>
@@ -408,19 +412,14 @@ const CallsPageContent = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-1">
                                                     {/* Play / Download */}
-                                                    {call.has_recording && call.recording_status === 'completed' ? (
+                                                    {call.has_recording ? (
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDownloadRecording(call); }}
+                                                            onClick={(e) => { e.stopPropagation(); fetchCallDetail(call.id); }}
                                                             className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
-                                                            title="Download recording"
+                                                            title="Play recording"
                                                         >
-                                                            <Download className="w-4 h-4 text-surgical-600" />
+                                                            <Play className="w-4 h-4 text-surgical-600" />
                                                         </button>
-                                                    ) : call.recording_status === 'processing' ? (
-                                                        <div className="flex items-center gap-1 px-2">
-                                                            <div className="w-3 h-3 border-2 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
-                                                            <span className="text-xs text-surgical-600">Processing</span>
-                                                        </div>
                                                     ) : (
                                                         <span className="text-xs text-obsidian/40 px-2">&mdash;</span>
                                                     )}
@@ -507,8 +506,17 @@ const CallsPageContent = () => {
                         {/* Header */}
                         <div className="sticky top-0 bg-white border-b border-surgical-200 px-6 py-4 flex items-center justify-between">
                             <div>
-                                <h2 className="text-2xl font-bold text-obsidian">{selectedCall.caller_name}</h2>
-                                <p className="text-sm text-obsidian/60">{selectedCall.phone_number} &bull; {formatDateTime(selectedCall.call_date)}</p>
+                                <h2 className="text-2xl font-bold text-obsidian">
+                                    {selectedCall.caller_name}
+                                    {selectedCall.phone_number && selectedCall.caller_name !== selectedCall.phone_number && (
+                                        <span className="text-lg text-obsidian/60 font-normal ml-2">
+                                            ({selectedCall.phone_number})
+                                        </span>
+                                    )}
+                                </h2>
+                                <p className="text-sm text-obsidian/60">
+                                    {selectedCall.call_type === 'outbound' ? '📞 Outbound' : '📲 Inbound'} &bull; {formatDateTime(selectedCall.call_date)}
+                                </p>
                             </div>
                             <button onClick={() => setShowDetailModal(false)} className="p-2 hover:bg-surgical-50 rounded-lg transition-colors">
                                 <X className="w-6 h-6 text-obsidian/60" />
@@ -528,7 +536,25 @@ const CallsPageContent = () => {
                                 </div>
                                 <div>
                                     <p className="text-xs text-obsidian/60 font-medium uppercase">Sentiment</p>
-                                    <p className="text-lg font-bold text-obsidian capitalize">{selectedCall.sentiment_label || 'N/A'}</p>
+                                    <p className="text-lg font-bold text-obsidian capitalize">
+                                        {selectedCall.sentiment_label || 'neutral'}
+                                        {selectedCall.sentiment_score !== null && selectedCall.sentiment_score !== undefined && (
+                                            <span className="text-sm text-obsidian/60 font-normal ml-1">
+                                                ({Math.round(selectedCall.sentiment_score * 100)}%)
+                                            </span>
+                                        )}
+                                    </p>
+                                    {selectedCall.sentiment_urgency && selectedCall.sentiment_urgency !== 'low' && (
+                                        <p className="text-xs text-obsidian/60 mt-1">
+                                            <span className={`px-2 py-0.5 rounded-full ${
+                                                selectedCall.sentiment_urgency === 'critical' ? 'bg-red-100 text-red-700' :
+                                                selectedCall.sentiment_urgency === 'high' ? 'bg-orange-100 text-orange-700' :
+                                                'bg-yellow-100 text-yellow-700'
+                                            }`}>
+                                                {selectedCall.sentiment_urgency} urgency
+                                            </span>
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="text-xs text-obsidian/60 font-medium uppercase">Recording</p>
@@ -536,10 +562,18 @@ const CallsPageContent = () => {
                                 </div>
                             </div>
 
-                            {/* Clinical Summary */}
-                            {selectedCall.sentiment_summary && (
+                            {/* Outcome Summary (Vapi Primary Source) */}
+                            {selectedCall.outcome_summary && (
                                 <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
-                                    <p className="text-sm font-bold text-obsidian mb-2">Clinical Summary</p>
+                                    <p className="text-sm font-bold text-obsidian mb-2">📋 Outcome Summary</p>
+                                    <p className="text-sm text-obsidian/70 leading-relaxed">{selectedCall.outcome_summary}</p>
+                                </div>
+                            )}
+
+                            {/* Sentiment Analysis (if different from outcome) */}
+                            {selectedCall.sentiment_summary && selectedCall.sentiment_summary !== selectedCall.outcome_summary && (
+                                <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
+                                    <p className="text-sm font-bold text-obsidian mb-2">💭 Sentiment Analysis</p>
                                     <p className="text-sm text-obsidian/70 leading-relaxed">{selectedCall.sentiment_summary}</p>
                                 </div>
                             )}

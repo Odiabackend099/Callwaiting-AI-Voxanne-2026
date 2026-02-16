@@ -14,10 +14,17 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch recording URL if not provided
+  // Set audio source or fetch recording URL
   React.useEffect(() => {
-    if (recordingUrl) return;
+    // If recordingUrl is provided, set it directly
+    if (recordingUrl) {
+      if (audioRef.current) {
+        audioRef.current.src = recordingUrl;
+      }
+      return;
+    }
 
+    // Otherwise, fetch from API
     const fetchRecordingUrl = async () => {
       try {
         setLoading(true);
@@ -27,8 +34,10 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
           throw new Error('Failed to fetch recording');
         }
         const data = await response.json();
-        if (audioRef.current) {
+        if (audioRef.current && data.recording_url) {
           audioRef.current.src = data.recording_url;
+        } else {
+          setError('No recording URL available');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load recording');
@@ -111,7 +120,17 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+            onError={(e) => {
+              console.error('Audio playback error:', e);
+              setError('Failed to play recording. The audio file may be corrupted or in an unsupported format.');
+              setIsPlaying(false);
+            }}
+            onLoadedMetadata={() => {
+              // Clear any previous errors once audio loads successfully
+              setError(null);
+            }}
             className="w-full"
+            crossOrigin="anonymous"
           />
           <input
             type="range"

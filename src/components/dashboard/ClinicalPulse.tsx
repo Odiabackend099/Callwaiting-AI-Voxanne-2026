@@ -1,6 +1,6 @@
 import React from 'react';
 import useSWR from 'swr';
-import { Phone, Clock, AlertCircle } from 'lucide-react';
+import { Phone, Clock, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
@@ -79,8 +79,11 @@ export default function ClinicalPulse() {
                         {isLoading ? <span className="animate-pulse bg-surgical-200/30 rounded h-10 w-20 inline-block" /> : safeStats.total_calls}
                     </h3>
                     <div className="flex items-center gap-2 text-xs font-medium text-obsidian/60 mt-3">
-                        <span className="text-surgical-600 bg-surgical-600/10 px-2 py-1 rounded-full font-semibold border border-surgical-600/20">
-                            {safeStats.total_calls > 0 ? Math.round((safeStats.inbound_calls / safeStats.total_calls) * 100) : 0}% Inbound
+                        <span className="text-surgical-600 bg-surgical-600/10 px-2 py-1 rounded-full font-semibold border border-surgical-600/20 flex items-center gap-1">
+                            <ArrowDownRight className="w-3 h-3" /> {safeStats.inbound_calls} Inbound
+                        </span>
+                        <span className="text-surgical-500 bg-surgical-500/10 px-2 py-1 rounded-full font-semibold border border-surgical-500/20 flex items-center gap-1">
+                            <ArrowUpRight className="w-3 h-3" /> {safeStats.outbound_calls} Outbound
                         </span>
                     </div>
                 </div>

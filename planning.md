@@ -1,102 +1,338 @@
-# Final Hardening Sprint — Mariah Protocol Gaps (Planning)
+# Call Logs Dashboard Fixes - Planning Document
 
-## Problem Statement
-We need to close 3 demo-critical gaps identified in the Mariah Protocol gap analysis, without regressing existing certified flows:
+**Date:** 2026-02-16
+**Principle:** 3-Step Coding Principle
+**Status:** Planning Phase
 
-1. **Latency masking (filler phrase)**: prevent dead air during 1.5–3s calendar operations.
-2. **Phantom booking rollback**: if Google Calendar write succeeds but the booking transaction fails afterward, automatically delete the created Google event.
-3. **Alternative slots verification**: ensure that when a requested slot is busy, the system reliably returns **3 alternative times**, with an automated test to prevent regression.
+---
 
-## Scope / Non-Goals
-- In scope: prompt text updates + server-side booking rollback logic + integration test coverage.
-- Out of scope (explicitly deferred): hybrid telephony deployment, AMD, KB confidence thresholds, caller personalization logic changes.
+## Issues Identified
 
-## Inputs / Outputs / Constraints
-### Inputs
-- Existing prompts:
-  - `backend/src/config/system-prompts.ts`
-  - `backend/src/services/super-system-prompt.ts`
-- Booking handler:
-  - `backend/src/routes/vapi-tools-routes.ts` (`/tools/bookClinicAppointment`)
-- Calendar integration:
-  - `backend/src/services/calendar-integration.ts`
-- Integration test suite:
-  - `backend/src/__tests__/integration/mariah-protocol.test.ts`
+### PRIMARY Issues (User Priority)
+1. **Sentiment displaying hardcoded "neutral"** - All calls show "neutral" instead of real Vapi sentiment data
+2. **Outcome summary not from Vapi** - Should use Vapi's `analysis.summary`, not GPT-4o
+3. **Contact display incomplete** - Should show both name AND phone number extracted properly
 
-### Outputs
-- **Prompt behavior**: allow exactly one short filler phrase before calling availability tool, while still enforcing tool usage and zero-hallucination.
-- **Booking behavior**: calendar event is deleted if created and a subsequent critical step fails.
-- **Test**: automated test that asserts 3 alternative slots are produced for a busy requested slot.
+### SECONDARY Issues
+4. **Recording playback not working** - Play button opens modal but doesn't play audio
+5. **Total volume accuracy** - Ensure inbound/outbound counts are accurate
+6. **Action buttons** - Send reminder and Reschedule functionality
 
-### Constraints / Invariants
-- Do not weaken existing guardrails:
-  - must not hallucinate times
-  - must call tools in correct order
-  - must not introduce new long pauses/timeouts
-- Keep changes localized and low-risk.
-- Do not add/remove comments unless necessary (prefer minimal edits).
+---
 
-## Implementation Phases
+## Root Cause Analysis
 
-### Phase 1 — Latency Masking (Prompt)
-**Goal**: remove the explicit prohibition of a filler phrase and replace with a controlled, single filler phrase that does not delay tool calling.
+### Issue 1: Hardcoded "neutral" Sentiment
 
-- Update `backend/src/config/system-prompts.ts`
-  - Replace the “DO NOT say \"Let me check\"” instruction with:
-    - allow one short phrase (e.g., “Let me check the schedule for you…”) and then immediately call `check_availability`.
-- Update `backend/src/services/super-system-prompt.ts`
-  - Clarify that the filler phrase is permitted but must be followed immediately by the tool call.
+**Investigation:**
+- Webhook handler (lines 675-710 in `vapi-webhook.ts`) extracts sentiment from `analysis` object:
+  - `analysis?.sentiment` → `sentimentLabel`
+  - `analysis?.structuredData?.sentimentScore` → `sentimentScore`
+  - `analysis?.summary` → `sentimentSummary`
+  - `analysis?.structuredData?.sentimentUrgency` → `sentimentUrgency`
+- Falls back to defaults: 'neutral', 0.5, summary text, 'low' (lines 693-697)
 
-**Acceptance Criteria**:
-- Prompt text no longer forbids filler phrases.
-- Prompt explicitly instructs “say X, then immediately call tool”.
+**Root Cause:**
+- Vapi's `analysisPlan` was JUST added to Vapi assistants (2026-02-16)
+- Existing calls in database have NULL sentiment fields
+- Frontend may be showing these NULL values as "neutral"
 
-### Phase 2 — Phantom Booking Rollback (Calendar Compensating Action)
-**Goal**: implement compensating delete for a calendar event created during booking if a subsequent critical failure occurs.
+**Data Flow:**
+```
+Vapi Call → Webhook → analysis.structuredData.sentimentScore
+                    → analysis.sentiment
+                    → analysis.summary
+                    → analysis.structuredData.sentimentUrgency
+          → Database (sentiment_score, sentiment_label, sentiment_summary, sentiment_urgency)
+          → API /api/calls-dashboard
+          → Frontend page.tsx
+```
 
-Current reality in code:
-- `/tools/bookClinicAppointment` creates the DB booking via `book_appointment_atomic` **first**, then creates a calendar event in a best-effort block.
+### Issue 2: Outcome Summary Source
 
-Plan:
-- Refactor booking handler to capture calendar event id if created.
-- Persist the calendar event id onto the appointment record (if schema supports it) OR at minimum include it in logs.
-- Add `deleteCalendarEvent(orgId, eventId)` to `calendar-integration.ts` if missing.
-- Add rollback flow:
-  - if calendar event created AND a later step throws (e.g., appointment update/persist fails), attempt delete.
+**Current State:**
+- Line 682-683: `outcomeShort = analysis?.structuredData?.shortOutcome`
+- Line 683: `outcomeDetailed = analysis?.summary`
+- Lines 711-758: GPT-4o fallback ONLY if `analysis?.summary` is missing
 
-**Acceptance Criteria**:
-- If the post-booking calendar persist step fails, we attempt rollback deletion.
-- Rollback failure is logged but does not crash the server.
+**Root Cause:**
+- The webhook IS using Vapi data as PRIMARY source (correct)
+- GPT-4o is only a fallback when Vapi data is missing
+- User may be seeing old calls (pre-analysisPlan) that have NULL outcome_summary
 
-### Phase 3 — Alternative Slots Integration Test
-**Goal**: add a deterministic test ensuring 3 alternatives are produced when the requested slot is busy.
+### Issue 3: Contact Display
 
-Plan:
-- Extend `backend/src/__tests__/integration/mariah-protocol.test.ts`:
-  - Pre-book a specific time slot in `appointments` for the test org.
-  - Exercise the availability path and assert:
-    - requested slot is unavailable
-    - 3 alternatives are returned (format validated)
+**Current State:**
+- Frontend (line 505 in `calls/page.tsx`): `{selectedCall.caller_name}`
+- Frontend (line 506): `{selectedCall.phone_number}`
+- Backend (lines 683-688 in `calls-dashboard.ts`): Resolves caller_name from DB or contacts JOIN
 
-**Acceptance Criteria**:
-- Test fails if alternatives are not length 3.
-- Test cleans up its inserted records.
+**Problem:**
+- Display only shows caller_name, not BOTH name and phone
+- Phone number is on separate line with bullet separator
 
-### Phase 4 — Regression Verification
-**Goal**: ensure no regressions.
+### Issue 4: Recording Playback
 
-Verification steps (commands to run locally):
-- `npm run test:unit`
-- `npm run test:integration -- mariah-protocol`
-- `npx tsc --noEmit`
+**Current State:**
+- Line 414 (calls/page.tsx): Play button calls `fetchCallDetail(call.id)`
+- Line 543-548: `<RecordingPlayer callId={selectedCall.id} recordingUrl={selectedCall.recording_url} />`
+- Backend (line 700 in `calls-dashboard.ts`): `recording_url: callData.recording_signed_url || callData.recording_url`
 
-**Acceptance Criteria**:
-- All tests pass.
-- No new TypeScript errors introduced by these changes.
+**Likely Issues:**
+1. `recording_url` might be NULL or invalid
+2. `RecordingPlayer` component may not be handling the URL correctly
+3. Signed URL might have expired
 
-## Open Questions (Must Resolve Before Phase 2/3)
-1. In `/tools/bookClinicAppointment`, do we currently store any calendar event id on the appointment row? (Initial grep suggests **no**.)
-2. What is the canonical “alternatives” shape we want from the busy-slot scenario? (Current `/tools/calendar/check` returns `alternatives` as alternative days, not “3 times”.)
-3. Which path is actually used in production when a slot is busy: availability tool or booking RPC conflict response?
+---
 
-Once we confirm (1)-(3), we can implement Phase 2 and Phase 3 safely.
+## Solution Design
+
+### Phase 1: Fix Sentiment Display (PRIMARY)
+
+**Goal:** Show real Vapi sentiment data, not hardcoded "neutral"
+
+**Changes Required:**
+
+1. **Verify Vapi analysisPlan is working:**
+   - Make a test call to trigger Vapi webhook
+   - Check logs for "Vapi native analysis extracted"
+   - Verify `analysis.structuredData` contains sentimentScore, sentimentUrgency, shortOutcome
+
+2. **Frontend: Show sentiment properly**
+   - File: `src/app/dashboard/calls/page.tsx`
+   - Current: Line 526 shows `{selectedCall.sentiment_label || 'N/A'}`
+   - Issue: May not be showing sentiment_score or urgency
+   - Fix: Display all 4 sentiment fields properly:
+     ```typescript
+     Sentiment: {sentiment_label} ({(sentiment_score * 100).toFixed(0)}%)
+     Urgency: {sentiment_urgency}
+     Summary: {sentiment_summary}
+     ```
+
+3. **Backend: Ensure defaults are applied**
+   - Lines 693-697 in `vapi-webhook.ts` already apply defaults
+   - No changes needed
+
+**Testing:**
+- Make new test call with analysisPlan enabled
+- Check database for non-NULL sentiment fields
+- Verify frontend displays all 4 sentiment fields
+
+---
+
+### Phase 2: Fix Outcome Summary (PRIMARY)
+
+**Goal:** Ensure outcome_summary comes from Vapi, not GPT-4o
+
+**Current State:** Already correct! Lines 682-683 use Vapi as primary source.
+
+**Changes Required:**
+
+1. **Frontend: Display outcome_summary prominently**
+   - File: `src/app/dashboard/calls/page.tsx`
+   - Current: Line 400-406 shows `call.outcome_summary || call.sentiment_summary`
+   - Problem: May be showing sentiment_summary as fallback
+   - Fix: Show ONLY `outcome_summary` (Vapi's `analysis.summary`)
+
+2. **Call Detail Modal:**
+   - Line 535-540 shows "Clinical Summary" with `sentiment_summary`
+   - Should show "Outcome Summary" with `outcome_summary`
+   - Add second section for sentiment details
+
+**Testing:**
+- Make test call
+- Verify `analysis.summary` is populated by Vapi
+- Check database `outcome_summary` column
+- Verify frontend shows Vapi's summary, not GPT-4o
+
+---
+
+### Phase 3: Fix Contact Display (PRIMARY)
+
+**Goal:** Show both contact name AND phone number extracted properly
+
+**Changes Required:**
+
+1. **Call Detail Modal Header:**
+   - File: `src/app/dashboard/calls/page.tsx`
+   - Line 505: Currently shows `{selectedCall.caller_name}`
+   - Line 506: Shows `{selectedCall.phone_number}` with bullet separator
+   - Fix: Format as "John Smith (+1234567890)" or "John Smith • +1234567890"
+
+2. **Extract from database properly:**
+   - Backend already provides both fields (lines 695-696 in `calls-dashboard.ts`)
+   - No backend changes needed
+
+**Implementation:**
+```typescript
+// Line 505-506 replacement:
+<h2 className="text-2xl font-bold text-obsidian">
+  {selectedCall.caller_name}
+  {selectedCall.phone_number && selectedCall.caller_name !== selectedCall.phone_number && (
+    <span className="text-lg text-obsidian/60 font-normal ml-2">
+      ({selectedCall.phone_number})
+    </span>
+  )}
+</h2>
+<p className="text-sm text-obsidian/60">{formatDateTime(selectedCall.call_date)}</p>
+```
+
+---
+
+### Phase 4: Fix Recording Playback (SECONDARY)
+
+**Goal:** Recording actually plays when Play button clicked
+
+**Investigation Needed:**
+1. Check `RecordingPlayer` component implementation
+2. Verify recording URL is signed and valid
+3. Test audio element playback
+
+**Files to Check:**
+- `src/components/RecordingPlayer.tsx`
+- Backend endpoint: `/api/calls-dashboard/:callId/recording-url`
+
+**Likely Fixes:**
+1. RecordingPlayer: Ensure it handles `recordingUrl` prop correctly
+2. Backend: Check if signed URL generation is working
+3. Frontend: Add error handling for playback failures
+
+---
+
+### Phase 5: Verify Total Volume Accuracy (SECONDARY)
+
+**Current State:**
+- `ClinicalPulse.tsx` already fixed to show separate inbound/outbound counts
+- Backend API `/api/analytics/summary` provides the counts
+
+**Verification:**
+- Check if counts match database reality
+- Query: `SELECT call_direction, COUNT(*) FROM calls WHERE org_id = 'demo-org' GROUP BY call_direction`
+
+---
+
+### Phase 6: Action Buttons (DEFERRED)
+
+**Send Reminder & Reschedule:**
+- User marked as lower priority
+- Defer to Phase 6
+- Focus on sentiment, outcome, contacts first
+
+---
+
+## Implementation Order
+
+1. ✅ **Phase 1:** Fix Sentiment Display (30 min)
+   - Test Vapi analysisPlan with new call
+   - Update frontend to show all 4 sentiment fields
+   - Verify database fields populated
+
+2. ✅ **Phase 2:** Fix Outcome Summary (20 min)
+   - Update frontend to show `outcome_summary` prominently
+   - Separate outcome from sentiment in modal
+   - Verify Vapi source
+
+3. ✅ **Phase 3:** Fix Contact Display (15 min)
+   - Format name + phone in modal header
+   - Ensure proper extraction from backend
+
+4. ⏳ **Phase 4:** Fix Recording Playback (30 min)
+   - Investigate RecordingPlayer component
+   - Fix audio playback
+   - Add error handling
+
+5. ⏳ **Phase 5:** Verify Total Volume (10 min)
+   - Query database for actual counts
+   - Compare with dashboard display
+
+6. ⏳ **Phase 6:** Action Buttons (deferred)
+
+---
+
+## Success Criteria
+
+### Phase 1 (Sentiment)
+- ✅ New test call shows real sentiment data (not "neutral" default)
+- ✅ Frontend displays: label, score %, urgency, summary
+- ✅ Database has non-NULL sentiment fields
+
+### Phase 2 (Outcome)
+- ✅ Outcome summary comes from Vapi `analysis.summary`
+- ✅ Displayed prominently in call detail modal
+- ✅ Separate from sentiment display
+
+### Phase 3 (Contacts)
+- ✅ Modal header shows "John Smith (+1234567890)"
+- ✅ Name and phone properly extracted
+- ✅ Handles edge cases (phone-only, name-only)
+
+### Phase 4 (Recording)
+- ✅ Play button actually plays audio
+- ✅ Audio controls work (play/pause/seek)
+- ✅ Error handling for missing/invalid URLs
+
+---
+
+## Database Schema Reference
+
+**Calls Table (Relevant Columns):**
+```sql
+-- From: backend/supabase/migrations/20260213_golden_record_schema.sql
+sentiment_label TEXT              -- 'positive', 'neutral', 'negative'
+sentiment_score NUMERIC(3,2)      -- 0.0 to 1.0
+sentiment_summary TEXT            -- Human-readable summary
+sentiment_urgency TEXT            -- 'low', 'medium', 'high', 'critical'
+outcome TEXT                      -- Short outcome (1-2 words)
+outcome_summary TEXT              -- Detailed outcome (from Vapi analysis.summary)
+phone_number TEXT                 -- E.164 format
+caller_name TEXT                  -- DEPRECATED (use calls_with_caller_names view)
+recording_url TEXT                -- Vapi recording URL
+recording_signed_url TEXT         -- Supabase signed URL (if uploaded)
+```
+
+**Vapi analysisPlan Structure:**
+```typescript
+analysisPlan: {
+  summaryPrompt: string,          // Instructs Vapi how to summarize
+  structuredDataPrompt: string,   // Instructs extraction
+  structuredDataSchema: {
+    sentimentScore: number,       // 0.0-1.0
+    sentimentUrgency: string,     // enum: low/medium/high/critical
+    shortOutcome: string,         // 1-2 words
+    appointmentBooked: boolean,
+    serviceDiscussed: string
+  },
+  successEvaluationPrompt: string,
+  successEvaluationRubric: 'PassFail'
+}
+```
+
+---
+
+## Risk Assessment
+
+**Low Risk:**
+- Phase 1-3: Frontend display changes only
+- No database migrations
+- No breaking changes to API
+
+**Medium Risk:**
+- Phase 4: Recording playback involves external URLs
+- May require CORS or signed URL fixes
+
+**High Risk:**
+- None
+
+---
+
+## Next Steps
+
+1. Execute Phase 1: Fix sentiment display
+2. Make test call to populate real Vapi data
+3. Verify dashboard shows correct data
+4. Execute Phase 2 & 3 sequentially
+5. Test with demo.com organization
+
+---
+
+**Status:** ✅ PLANNING COMPLETE - Ready for execution

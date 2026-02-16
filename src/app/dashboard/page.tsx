@@ -168,8 +168,8 @@ export default function CallWaitingAIDashboard() {
                                                     {event.type === 'call_completed' && event.metadata && (
                                                         <>
                                                             <div className="text-xs text-obsidian/60">
-                                                                <span className="font-medium">Sentiment:</span> {event.metadata.sentiment_label || event.metadata.sentiment || 'Unknown'}
-                                                                {event.metadata.sentiment_urgency && ` • ${event.metadata.sentiment_urgency} urgency`}
+                                                                <span className="font-medium">Sentiment:</span> {event.metadata.sentiment_label || 'neutral'}
+                                                                {event.metadata.sentiment_urgency && event.metadata.sentiment_urgency !== 'low' && ` • ${event.metadata.sentiment_urgency} urgency`}
                                                             </div>
                                                             {event.metadata.sentiment_summary && (
                                                                 <p className="text-xs text-obsidian/60 line-clamp-2">
