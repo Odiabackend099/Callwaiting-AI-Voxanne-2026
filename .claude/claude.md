@@ -2433,7 +2433,7 @@ Create runbook:
    ```
 5. Verify production works:
    ```bash
-   curl -X POST https://api.voxanne.ai/api/health/vapi
+   curl -X POST https://voxanneai.onrender.com/api/health/vapi
    # Expected: {"status":"ok","vapi_connection":true}
    ```
 6. Revoke old key in Vapi dashboard
@@ -2591,17 +2591,17 @@ Setup external monitoring:
 
 **Monitors:**
 1. API Health Check
-   - URL: https://api.voxanne.ai/health
+   - URL: https://voxanneai.onrender.com/health
    - Interval: 5 minutes
    - Alert if down for 2 consecutive checks (10 minutes)
 
 2. Frontend Availability
-   - URL: https://app.voxanne.ai
+   - URL: https://voxanne.ai
    - Interval: 5 minutes
    - Alert if HTTP status != 200
 
 3. Database Connectivity
-   - URL: https://api.voxanne.ai/health/database
+   - URL: https://voxanneai.onrender.com/health/database
    - Interval: 5 minutes
    - Alert if response time > 1000ms
 

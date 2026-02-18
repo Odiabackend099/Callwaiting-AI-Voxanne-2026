@@ -16,11 +16,26 @@ import { Scene9_CallLogs } from './scenes/Scene9_CallLogs';
 import { Scene10_HotLeads } from './scenes/Scene10_HotLeads';
 import { Scene11_AppointmentsBooked } from './scenes/Scene11_AppointmentsBooked';
 import { Scene12_CTA } from './scenes/Scene12_CTA';
+import { TestimonialVideo } from './scenes/TestimonialVideo';
 import './styles.css';
 
 export const Root: React.FC = () => {
   return (
     <>
+      {/* ═══════════════════════════════════════════════════════════════════
+          TESTIMONIAL VIDEO — "The Immersive Overlay"
+          Portrait 9:16 | 02:28 | Social Proof + Technical Excellence
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Composition
+        id="VoxanneTestimonial"
+        component={TestimonialVideo}
+        durationInFrames={4440}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
       {/* Individual Scene Compositions (for scene-by-scene rendering) */}
       <Composition
         id="Scene0A"

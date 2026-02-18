@@ -8,42 +8,6 @@ export async function getCurrentUser() {
     return user;
 }
 
-// Helper to get user settings
-export async function getUserSettings(userId: string) {
-    const { data, error } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', userId)
-        .limit(1);
-
-    if (error) {
-        console.error('Supabase error:', JSON.stringify(error, null, 2));
-        throw error;
-    }
-
-    return data?.[0] || null;
-}
-
-// Helper to save user settings
-export async function saveUserSettings(userId: string, settings: {
-    business_name?: string;
-    system_prompt?: string;
-    voice_personality?: 'professional' | 'friendly' | 'casual';
-}) {
-    const { data, error } = await supabase
-        .from('user_settings')
-        .upsert({
-            user_id: userId,
-            ...settings,
-            updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
-    return data;
-}
-
 // Helper to get knowledge base documents
 // Updated to use backend API instead of direct Supabase query
 export async function getKnowledgeBase(userId: string) {

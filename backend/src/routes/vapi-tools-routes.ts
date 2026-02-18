@@ -1365,6 +1365,39 @@ router.post('/tools/transferCall', async (req, res) => {
             });
         }
 
+        // Loop prevention: Reject if transfer destination matches any of the org's AI inbound numbers
+        // This prevents infinite loops where AI transfers to its own number
+        const { data: orgInboundNumbers } = await supabaseService
+            .from('managed_phone_numbers')
+            .select('phone_number')
+            .eq('org_id', orgId);
+
+        const { data: orgCredNumbers } = await supabaseService
+            .from('org_credentials')
+            .select('phone_number')
+            .eq('org_id', orgId)
+            .eq('provider', 'twilio');
+
+        const allOrgNumbers = [
+            ...(orgInboundNumbers || []).map((n: any) => n.phone_number),
+            ...(orgCredNumbers || []).map((n: any) => n.phone_number),
+        ].filter(Boolean);
+
+        if (allOrgNumbers.includes(transferDestination)) {
+            log.warn('VapiTools', 'Transfer loop prevented - destination matches org inbound number', {
+                orgId,
+                transferDestination,
+                orgNumbers: allOrgNumbers
+            });
+
+            return res.json({
+                toolResult: {
+                    content: JSON.stringify({ success: false, error: 'Transfer loop prevented' })
+                },
+                speech: 'I apologize, but I\'m unable to transfer your call at this time. Can I take a message or help you with something else?'
+            });
+        }
+
         // Log transfer to calls (transfer_to, transfer_time, transfer_reason columns exist)
         if (callId) {
             const { error: logError } = await supabaseService

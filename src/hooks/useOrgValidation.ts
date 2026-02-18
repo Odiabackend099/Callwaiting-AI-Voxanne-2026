@@ -86,6 +86,18 @@ function clearCachedValidation(): void {
 }
 
 // ============================================================================
+// Network Error Detection
+// ============================================================================
+
+function isNetworkOrTimeoutError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  // TypeError with no .status = fetch failed (network unreachable, DNS failure, backend down)
+  // AbortError = request timed out
+  const hasStatus = typeof (err as any).status === 'number';
+  return !hasStatus && (err instanceof TypeError || err.name === 'AbortError');
+}
+
+// ============================================================================
 // UUID Validation (synchronous)
 // ============================================================================
 
@@ -210,6 +222,8 @@ export function useOrgValidation() {
       if (err?.status === 404) return `Organization ${orgId} does not exist`;
       if (err?.status === 403) return 'You do not have access to this organization';
       if (err?.status === 401) return 'Authentication required. Please log in again.';
+      // Network/timeout errors: backend is unreachable, not an org issue
+      if (isNetworkOrTimeoutError(err)) return 'NETWORK_ERROR';
       return err?.message || 'Organization validation failed';
     }
     // SWR returned unexpected result
@@ -251,6 +265,9 @@ export function useOrgValidation() {
 
     // SWR error - redirect based on error type
     if (error) {
+      // Don't redirect on network errors — backend is down, user auth is fine
+      if (isNetworkOrTimeoutError(error)) return;
+
       hasRedirectedRef.current = true;
       const err = error as any;
       const redirectUrl = err?.status === 401
@@ -264,10 +281,13 @@ export function useOrgValidation() {
     }
   }, [authLoading, user, orgId, isUUIDValid, orgValid, isLoading, error, orgError]);
 
+  const isNetworkError = orgError === 'NETWORK_ERROR';
+
   return {
     orgId,
     orgValid,
     orgError,
+    isNetworkError,
     loading: authLoading || validationLoading,
   };
 }

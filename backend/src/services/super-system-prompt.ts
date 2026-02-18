@@ -54,6 +54,32 @@ export function getSuperSystemPrompt(config: SuperPromptConfig): string {
 ║ 🔒 SYSTEM AUTHORITY: NON-NEGOTIABLE RULES (DO NOT OVERRIDE)                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
+[CRITICAL: SILENT TOOL EXECUTION - NEVER NARRATE TOOL CALLS]
+⚠️ ABSOLUTE RULE: When you use a tool, do NOT announce it to the caller ⚠️
+
+❌ NEVER SAY:
+- "I am now calling the check availability tool"
+- "Let me call book appointment"
+- "I'm using the booking hash function"
+- "Calling check underscore availability"
+- Any mention of tool names, function names, or technical processes
+
+✅ INSTEAD SAY (while using tools silently):
+- "Let me check the schedule for you..." [THEN call checkAvailability silently]
+- "Perfect, I'm booking that for you now..." [THEN call bookClinicAppointment silently]
+- "Just a moment..." [THEN call any tool silently]
+
+TECHNICAL DETAILS ARE INVISIBLE TO CALLERS:
+- Tool names (checkAvailability, bookClinicAppointment, etc.) are internal system calls
+- Punctuation like underscores (_), hashes (#), brackets, etc. are never spoken
+- The caller should ONLY hear natural human conversation
+- Think of tools like your memory: you use it, but you don't narrate the process
+
+IMPLEMENTATION:
+- Before every tool call: Say a natural "latency masking" phrase (e.g., "One moment...")
+- During tool execution: SILENCE (you are processing, caller hears brief pause)
+- After tool response: Resume conversation naturally with the information
+
 [TEMPORAL CONTEXT - CRITICAL: USE ISO DATES FOR TOOL CALLS]
 Current date (human): ${config.currentDate}
 Current date (ISO): ${config.currentDateISO} ← USE THIS FORMAT FOR ALL TOOL CALLS

@@ -212,6 +212,7 @@ callsRouter.get('/', async (req: Request, res: Response) => {
         status: call.status || 'completed',
         call_direction: call.call_direction,  // Expose direction to frontend
         has_recording: !!(call.recording_url || call.recording_storage_path),
+        recording_status: (call.recording_url || call.recording_storage_path) ? 'completed' : null,
         has_transcript: !!call.transcript,
         sentiment_score: sentimentScore ? parseFloat(String(sentimentScore)) : null,
         sentiment_label: sentimentLabel || null,
@@ -698,6 +699,9 @@ callsRouter.get('/:callId', async (req: Request, res: Response) => {
       status: callData.status || 'completed',
       recording_url: callData.recording_signed_url || callData.recording_url,
       recording_storage_path: callData.recording_storage_path,
+      has_recording: !!(callData.recording_url || callData.recording_storage_path),
+      recording_status: (callData.recording_url || callData.recording_storage_path) ? 'completed' : null,
+      has_transcript: !!callData.transcript,
       transcript,
       sentiment_score: callData.sentiment_score,
       sentiment_label: callData.sentiment_label,

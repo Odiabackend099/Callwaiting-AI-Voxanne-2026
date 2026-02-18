@@ -9,11 +9,13 @@ interface WebSocketEvent {
 
 interface DashboardWebSocketContextValue {
     isConnected: boolean;
+    backendAvailable: boolean;
     subscribe: (eventType: string, callback: (data: WebSocketEvent) => void) => () => void;
 }
 
 const DashboardWebSocketContext = createContext<DashboardWebSocketContextValue>({
     isConnected: false,
+    backendAvailable: true,
     subscribe: () => () => {},
 });
 
@@ -26,6 +28,7 @@ const BASE_RECONNECT_DELAY = 2000;
 
 export function DashboardWebSocketProvider({ children }: { children: React.ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);
+    const [backendAvailable, setBackendAvailable] = useState(true);
     const wsRef = useRef<WebSocket | null>(null);
     const subscribersRef = useRef<Map<string, Set<(data: WebSocketEvent) => void>>>(new Map());
     const reconnectAttemptsRef = useRef(0);
@@ -72,6 +75,7 @@ export function DashboardWebSocketProvider({ children }: { children: React.React
             ws.onopen = () => {
                 if (!mountedRef.current) return;
                 setIsConnected(true);
+                setBackendAvailable(true);
                 reconnectAttemptsRef.current = 0;
             };
 
@@ -100,6 +104,8 @@ export function DashboardWebSocketProvider({ children }: { children: React.React
                     const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current);
                     reconnectAttemptsRef.current++;
                     reconnectTimerRef.current = setTimeout(connect, delay);
+                } else {
+                    setBackendAvailable(false);
                 }
             };
         } catch (err) {
@@ -143,7 +149,7 @@ export function DashboardWebSocketProvider({ children }: { children: React.React
     }, []);
 
     return (
-        <DashboardWebSocketContext.Provider value={{ isConnected, subscribe }}>
+        <DashboardWebSocketContext.Provider value={{ isConnected, backendAvailable, subscribe }}>
             {children}
         </DashboardWebSocketContext.Provider>
     );

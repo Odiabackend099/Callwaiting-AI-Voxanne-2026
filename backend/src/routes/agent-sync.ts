@@ -295,7 +295,24 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             },
             firstMessage: inboundConfig.first_message,
             language: inboundConfig.language,
-            maxDurationSeconds: inboundConfig.max_call_duration
+            maxDurationSeconds: inboundConfig.max_call_duration,
+            analysisPlan: {
+              summaryPrompt: 'You are a clinical call analyst for a healthcare AI receptionist. Summarize this call in 2-3 sentences, focusing on: what the caller wanted, what actions were taken (appointment booked, information provided, etc.), and the outcome. Be specific about services discussed and any scheduling details.',
+              structuredDataPrompt: 'Extract the following from the call transcript. For sentiment, consider the caller\'s tone, satisfaction level, and emotional state throughout the conversation.',
+              structuredDataSchema: {
+                type: 'object',
+                properties: {
+                  sentimentScore: { type: 'number', description: 'Caller sentiment score from 0.0 (very negative) to 1.0 (very positive)' },
+                  sentimentUrgency: { type: 'string', enum: ['low', 'medium', 'high', 'critical'], description: 'Call urgency: critical if urgent medical need, high if time-sensitive, medium for standard, low for informational' },
+                  shortOutcome: { type: 'string', description: 'Brief 1-3 word outcome like: Booking Confirmed, Information Provided, Follow-up Scheduled, Caller Frustrated, Call Dropped' },
+                  appointmentBooked: { type: 'boolean', description: 'Whether an appointment was successfully booked during this call' },
+                  serviceDiscussed: { type: 'string', description: 'The main service or topic discussed (e.g., Botox, consultation, teeth cleaning)' }
+                },
+                required: ['sentimentScore', 'sentimentUrgency', 'shortOutcome', 'appointmentBooked']
+              },
+              successEvaluationPrompt: 'Evaluate if this call achieved its goal. A call is successful if: the caller got the information they needed, OR an appointment was booked, OR they were properly directed to the right resource. A call fails if: the caller was frustrated, the AI could not help, tools failed, or the caller hung up without resolution.',
+              successEvaluationRubric: 'PassFail' as any
+            }
           });
 
           log.info('AgentSync', 'Updated inbound Vapi assistant', {
@@ -326,7 +343,24 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             },
             firstMessage: outboundConfig.first_message,
             language: outboundConfig.language,
-            maxDurationSeconds: outboundConfig.max_call_duration
+            maxDurationSeconds: outboundConfig.max_call_duration,
+            analysisPlan: {
+              summaryPrompt: 'You are a clinical call analyst for a healthcare AI receptionist. Summarize this call in 2-3 sentences, focusing on: what the caller wanted, what actions were taken (appointment booked, information provided, etc.), and the outcome. Be specific about services discussed and any scheduling details.',
+              structuredDataPrompt: 'Extract the following from the call transcript. For sentiment, consider the caller\'s tone, satisfaction level, and emotional state throughout the conversation.',
+              structuredDataSchema: {
+                type: 'object',
+                properties: {
+                  sentimentScore: { type: 'number', description: 'Caller sentiment score from 0.0 (very negative) to 1.0 (very positive)' },
+                  sentimentUrgency: { type: 'string', enum: ['low', 'medium', 'high', 'critical'], description: 'Call urgency: critical if urgent medical need, high if time-sensitive, medium for standard, low for informational' },
+                  shortOutcome: { type: 'string', description: 'Brief 1-3 word outcome like: Booking Confirmed, Information Provided, Follow-up Scheduled, Caller Frustrated, Call Dropped' },
+                  appointmentBooked: { type: 'boolean', description: 'Whether an appointment was successfully booked during this call' },
+                  serviceDiscussed: { type: 'string', description: 'The main service or topic discussed (e.g., Botox, consultation, teeth cleaning)' }
+                },
+                required: ['sentimentScore', 'sentimentUrgency', 'shortOutcome', 'appointmentBooked']
+              },
+              successEvaluationPrompt: 'Evaluate if this call achieved its goal. A call is successful if: the caller got the information they needed, OR an appointment was booked, OR they were properly directed to the right resource. A call fails if: the caller was frustrated, the AI could not help, tools failed, or the caller hung up without resolution.',
+              successEvaluationRubric: 'PassFail' as any
+            }
           });
 
           log.info('AgentSync', 'Updated outbound Vapi assistant', {

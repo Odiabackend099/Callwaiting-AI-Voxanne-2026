@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
  * ```
  */
 export function OrgErrorBoundary({ children }: { children: React.ReactNode }) {
-  const { orgId, orgValid, orgError, loading } = useOrgValidation();
+  const { orgId, orgValid, orgError, isNetworkError, loading } = useOrgValidation();
   const { signOut } = useAuth();
 
   // Track if we've ever successfully rendered children
@@ -63,6 +63,49 @@ export function OrgErrorBoundary({ children }: { children: React.ReactNode }) {
   // Show children optimistically if conditions met
   if (shouldShowChildren) {
     return children;
+  }
+
+  // Show network error state: backend is unreachable, but user's auth is fine
+  if (!loading && isNetworkError) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-clinical-bg">
+        <div className="max-w-md w-full mx-auto px-6 text-center">
+          <div className="mb-6">
+            <div className="w-16 h-16 mx-auto bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4m0 4h.01" />
+              </svg>
+            </div>
+          </div>
+
+          <h1 className="text-2xl font-semibold text-obsidian mb-3 tracking-tight">Service Unavailable</h1>
+
+          <p className="text-sm text-obsidian/70 mb-6 leading-relaxed tracking-tight">
+            Unable to connect to the backend server. Your account is fine &mdash; the server may be starting up or temporarily unavailable.
+          </p>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-xl transition-all shadow-sm tracking-tight"
+            >
+              Retry Connection
+            </button>
+
+            <button
+              onClick={() => signOut()}
+              className="w-full px-4 py-3 bg-white hover:bg-gray-50 border border-surgical-200 text-obsidian/60 font-medium rounded-xl transition-all tracking-tight text-sm"
+            >
+              Sign Out
+            </button>
+          </div>
+
+          <p className="text-xs text-obsidian/40 mt-6 tracking-tight">
+            Error ID: NETWORK_ERROR
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // Show error state ONLY if validation definitively failed (not loading, has error)

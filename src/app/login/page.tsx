@@ -5,19 +5,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import FadeIn from "@/components/ui/FadeIn";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+const ERROR_MESSAGES: Record<string, string> = {
+    'no_org': 'Your account does not have an organization assigned. Please contact your administrator.',
+    'no_org_id': 'Your account does not have an organization assigned. Please contact your administrator.',
+    'invalid_org_id': 'Your organization ID is invalid. Please contact your administrator.',
+    'validation_failed': 'Organization validation failed. Please try signing in again.',
+};
+
+function LoginContent() {
     const [showPassword, setShowPassword] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    const errorCode = searchParams.get('error');
+    const queryError = errorCode
+        ? (ERROR_MESSAGES[errorCode] || `Authentication error: ${errorCode}`)
+        : null;
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -93,6 +106,11 @@ export default function LoginPage() {
                     </div>
 
                     <form onSubmit={handleSignIn} className="space-y-6">
+                        {queryError && !error && (
+                            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+                                {queryError}
+                            </div>
+                        )}
                         {error && (
                             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
                                 {error}
@@ -258,5 +276,17 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center h-screen bg-white">
+                <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     );
 }

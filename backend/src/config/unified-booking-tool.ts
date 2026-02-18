@@ -30,13 +30,15 @@ export const UNIFIED_BOOKING_TOOL = {
           type: 'string',
           description: 'The full name of the patient.'
         },
-        patientEmail: {
-          type: 'string',
-          description: 'The patient\'s email address for confirmation.'
-        },
         patientPhone: {
           type: 'string',
-          description: 'The patient\'s phone number for SMS reminders (optional, but recommended).'
+          description: 'The patient\'s mobile phone number in E.164 format (e.g., +14155551234). REQUIRED for SMS appointment confirmation.',
+          pattern: '^\\+[1-9]\\d{1,14}$'
+        },
+        patientEmail: {
+          type: 'string',
+          description: 'The patient\'s email address (optional). Only collect if the patient volunteers it.',
+          format: 'email'
         },
         serviceType: {
           type: 'string',
@@ -52,7 +54,7 @@ export const UNIFIED_BOOKING_TOOL = {
           maximum: 240
         }
       },
-      required: ['appointmentDate', 'appointmentTime', 'patientName', 'patientEmail']
+      required: ['appointmentDate', 'appointmentTime', 'patientName', 'patientPhone']
     }
   },
   async: true
@@ -79,16 +81,26 @@ export function validateBookingRequest(data: any): { valid: boolean; error?: str
   if (!data.appointmentDate) return { valid: false, error: 'appointmentDate required' };
   if (!data.appointmentTime) return { valid: false, error: 'appointmentTime required' };
   if (!data.patientName) return { valid: false, error: 'patientName required' };
-  if (!data.patientEmail) return { valid: false, error: 'patientEmail required' };
+  if (!data.patientPhone) return { valid: false, error: 'patientPhone required' };
 
-  // Validate date format
+  // Validate date format (YYYY-MM-DD)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data.appointmentDate)) {
     return { valid: false, error: 'appointmentDate must be YYYY-MM-DD format' };
   }
 
-  // Validate time format
+  // Validate time format (HH:MM 24-hour)
   if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(data.appointmentTime)) {
     return { valid: false, error: 'appointmentTime must be HH:MM format' };
+  }
+
+  // Validate phone format (E.164)
+  if (!/^\+[1-9]\d{1,14}$/.test(data.patientPhone)) {
+    return { valid: false, error: 'patientPhone must be E.164 format (e.g., +14155551234)' };
+  }
+
+  // Validate email format if provided (optional)
+  if (data.patientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.patientEmail)) {
+    return { valid: false, error: 'patientEmail must be valid email format' };
   }
 
   return { valid: true };

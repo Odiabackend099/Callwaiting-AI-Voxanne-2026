@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import {
@@ -20,6 +20,15 @@ import { BuyNumberModal } from '@/components/dashboard/BuyNumberModal';
 import CarrierForwardingInstructions from './components/CarrierForwardingInstructions';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
+interface ForwardingConfig {
+  forwardingType: 'total_ai' | 'safety_net';
+  carrier: string;
+  status: string;
+  ringTimeSeconds: number;
+  activationCode: string;
+  deactivationCode: string;
+}
+
 interface PhoneSettingsStatus {
   inbound: {
     hasManagedNumber: boolean;
@@ -27,21 +36,66 @@ interface PhoneSettingsStatus {
     managedNumberStatus: string | null;
     vapiPhoneId: string | null;
     countryCode: string | null;
+    forwardingConfig: ForwardingConfig | null;
   };
   outbound: {
     hasVerifiedNumber: boolean;
     verifiedNumber: string | null;
     verifiedAt: string | null;
     verifiedId: string | null;
+    vapiLinked: boolean;
+    pendingVerification?: {
+      phoneNumber: string;
+      createdAt: string;
+      id: string;
+    } | null;
   };
   mode: 'managed' | 'byoc' | 'none';
 }
 
 type VerificationStep = 'input' | 'verify' | 'success';
 
+function detectCountryCode(phone: string): string {
+  if (phone.startsWith('+234')) return 'NG';
+  if (phone.startsWith('+44')) return 'GB';
+  if (phone.startsWith('+1')) return 'US';
+  if (phone.startsWith('+90')) return 'TR';
+  if (phone.startsWith('+91')) return 'IN';
+  if (phone.startsWith('+61')) return 'AU';
+  if (phone.startsWith('+49')) return 'DE';
+  if (phone.startsWith('+33')) return 'FR';
+  if (phone.startsWith('+81')) return 'JP';
+  if (phone.startsWith('+86')) return 'CN';
+  if (phone.startsWith('+55')) return 'BR';
+  if (phone.startsWith('+27')) return 'ZA';
+  if (phone.startsWith('+254')) return 'KE';
+  if (phone.startsWith('+971')) return 'AE';
+  return 'US';
+}
+
+function getCountryName(code: string): string {
+  const countryNames: Record<string, string> = {
+    'NG': 'Nigeria',
+    'GB': 'United Kingdom',
+    'US': 'United States',
+    'TR': 'Turkey',
+    'IN': 'India',
+    'AU': 'Australia',
+    'DE': 'Germany',
+    'FR': 'France',
+    'JP': 'Japan',
+    'CN': 'China',
+    'BR': 'Brazil',
+    'ZA': 'South Africa',
+    'KE': 'Kenya',
+    'AE': 'UAE'
+  };
+  return countryNames[code] || code;
+}
+
 export default function PhoneSettingsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { error: showErrorToast } = useToast();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
   const [status, setStatus] = useState<PhoneSettingsStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +109,12 @@ export default function PhoneSettingsPage() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
+  const [isValidPhoneFormat, setIsValidPhoneFormat] = useState(false);
+
+  // Auto-recovery: prevent double-attempts on re-render
+  const autoRecoveryAttempted = useRef(false);
+  const [recovering, setRecovering] = useState(false);
 
   // Advanced section
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -69,12 +129,59 @@ export default function PhoneSettingsPage() {
     fetchPhoneSettings();
   }, []);
 
+  // Real-time country detection (Stripe pattern)
+  useEffect(() => {
+    if (phoneNumber.startsWith('+') && phoneNumber.length >= 4) {
+      const countryCode = detectCountryCode(phoneNumber);
+      setDetectedCountry(countryCode);
+      // Basic validation: must start with + and have at least 10 digits
+      const isValid = /^\+\d{10,15}$/.test(phoneNumber);
+      setIsValidPhoneFormat(isValid);
+    } else {
+      setDetectedCountry(null);
+      setIsValidPhoneFormat(false);
+    }
+  }, [phoneNumber]);
+
   const fetchPhoneSettings = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await authedBackendFetch<PhoneSettingsStatus>('/api/phone-settings/status');
       setStatus(data);
+
+      // Auto-recovery: if there's a pending verification and no verified number,
+      // restore the verify step so the user can complete setup.
+      // This handles the "navigated away before clicking confirm" scenario.
+      if (
+        data.outbound.pendingVerification &&
+        !data.outbound.hasVerifiedNumber &&
+        !autoRecoveryAttempted.current
+      ) {
+        autoRecoveryAttempted.current = true;
+        const pendingPhone = data.outbound.pendingVerification.phoneNumber;
+        setPhoneNumber(pendingPhone);
+        setRecovering(true);
+
+        // Try auto-confirming (user may have already entered code on phone)
+        try {
+          await authedBackendFetch('/api/verified-caller-id/confirm', {
+            method: 'POST',
+            body: JSON.stringify({ phoneNumber: pendingPhone })
+          });
+          // Auto-confirmed! Twilio had it verified.
+          setVerificationStep('success');
+          showSuccessToast('Your number was verified! Setup completed automatically.', 3000);
+          // Re-fetch to get the verified state
+          const refreshed = await authedBackendFetch<PhoneSettingsStatus>('/api/phone-settings/status');
+          setStatus(refreshed);
+        } catch {
+          // Not yet verified in Twilio — show the verify step so user can complete
+          setVerificationStep('verify');
+        } finally {
+          setRecovering(false);
+        }
+      }
     } catch (err: any) {
       console.error('Failed to fetch phone settings:', err);
       setError(err.message || 'Failed to load phone settings');
@@ -89,16 +196,32 @@ export default function PhoneSettingsPage() {
     setVerificationError(null);
 
     try {
-      await authedBackendFetch('/api/verified-caller-id/verify', {
+      const response: any = await authedBackendFetch('/api/verified-caller-id/verify', {
         method: 'POST',
         body: JSON.stringify({
           phoneNumber,
-          countryCode: 'US'
+          countryCode: detectCountryCode(phoneNumber)
         })
       });
+
+      // Auto-verified path: number was already verified in Twilio
+      if (response.verified) {
+        showSuccessToast(`${phoneNumber} is already verified!`, 3000);
+        setVerificationStep('success');
+        await fetchPhoneSettings();
+        return;
+      }
+
+      // CRITICAL: Capture the validation code from Twilio
+      if (response.validationCode) {
+        setVerificationCode(response.validationCode);
+      }
+
+      // Immediate success feedback (ChatGPT pattern)
+      showSuccessToast(`Calling ${phoneNumber} now...`, 2000);
       setVerificationStep('verify');
     } catch (err: any) {
-      setVerificationError(err.message || 'Failed to send verification call');
+      setVerificationError(err.message || 'Failed to send verification call. Check that your phone number is correct and try again.');
     } finally {
       setVerifying(false);
     }
@@ -111,26 +234,35 @@ export default function PhoneSettingsPage() {
     try {
       await authedBackendFetch('/api/verified-caller-id/confirm', {
         method: 'POST',
-        body: JSON.stringify({
-          phoneNumber,
-          code: verificationCode
-        })
+        body: JSON.stringify({ phoneNumber })
       });
       setVerificationStep('success');
       // Refresh status to show the new verified number
       await fetchPhoneSettings();
     } catch (err: any) {
-      setVerificationError(err.message || 'Verification failed. Please check the code.');
+      setVerificationError(err.message || 'Verification not yet complete. Wait 30 seconds after entering the code on your phone, then click "Verify & Complete Setup" again.');
     } finally {
       setVerifying(false);
     }
   };
 
-  const resetVerification = () => {
+  const resetVerification = async () => {
+    // Clean up the pending DB record so it doesn't linger
+    if (phoneNumber) {
+      try {
+        await authedBackendFetch('/api/verified-caller-id', {
+          method: 'DELETE',
+          body: JSON.stringify({ phoneNumber })
+        });
+      } catch {
+        // Best-effort cleanup — don't block the UI reset
+      }
+    }
     setVerificationStep('input');
     setPhoneNumber('');
     setVerificationCode('');
     setVerificationError(null);
+    autoRecoveryAttempted.current = false;
   };
 
   // Delete handlers
@@ -145,6 +277,9 @@ export default function PhoneSettingsPage() {
       );
       setConfirmDeleteManaged(false);
       await fetchPhoneSettings();
+
+      // Success confirmation (Stripe pattern)
+      showSuccessToast(`${status.inbound.managedNumber} successfully deleted`, 3000);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to delete number');
     } finally {
@@ -153,16 +288,19 @@ export default function PhoneSettingsPage() {
   };
 
   const handleDeleteVerified = async () => {
-    if (!status?.outbound.verifiedId) return;
+    if (!status?.outbound.verifiedNumber) return;
 
     try {
       setDeleting(true);
-      await authedBackendFetch(
-        `/api/verified-caller-id/${status.outbound.verifiedId}`,
-        { method: 'DELETE' }
-      );
+      await authedBackendFetch('/api/verified-caller-id', {
+        method: 'DELETE',
+        body: JSON.stringify({ phoneNumber: status.outbound.verifiedNumber })
+      });
       setConfirmDeleteVerified(false);
       await fetchPhoneSettings();
+
+      // Success confirmation (Stripe pattern)
+      showSuccessToast(`${status.outbound.verifiedNumber} successfully deleted`, 3000);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to delete verified number');
     } finally {
@@ -170,10 +308,15 @@ export default function PhoneSettingsPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || loading || recovering) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-surgical-600" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-surgical-600 mx-auto" />
+          {recovering && (
+            <p className="text-sm text-obsidian/60 mt-3">Checking pending verification...</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -190,7 +333,7 @@ export default function PhoneSettingsPage() {
             Phone Settings
           </h1>
           <p className="text-obsidian/60">
-            Manage your inbound AI number and outbound caller ID
+            Configure how you <strong>receive</strong> calls (inbound) and how customers <strong>see</strong> your calls (outbound)
           </p>
         </div>
       </div>
@@ -218,14 +361,32 @@ export default function PhoneSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LANE 1: INBOUND - AI Phone Number */}
         <div className="bg-white border border-surgical-200 rounded-xl p-6">
+          {/* PROMINENT INBOUND HEADER */}
+          <div className="mb-6 pb-4 border-b border-surgical-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <Smartphone className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-obsidian">
+                    Inbound Calls
+                  </h2>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold uppercase tracking-wide">
+                    Receive
+                  </span>
+                </div>
+                <p className="text-sm text-obsidian/60 mt-1">
+                  Forward calls TO your AI receptionist
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 mb-4">
-            <Smartphone className="w-5 h-5 text-surgical-600" />
-            <h2 className="text-lg font-semibold text-obsidian">
+            <h3 className="text-base font-semibold text-obsidian">
               Your AI Phone Number
-            </h2>
-            <span className="text-xs bg-surgical-50 text-surgical-600 px-2 py-1 rounded-full font-medium">
-              Inbound
-            </span>
+            </h3>
           </div>
 
           {status?.inbound.hasManagedNumber ? (
@@ -236,16 +397,30 @@ export default function PhoneSettingsPage() {
                   <p className="text-2xl font-mono font-bold text-surgical-600">
                     {status.inbound.managedNumber}
                   </p>
-                  <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
-                    Active
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {status.inbound.forwardingConfig ? (
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                        status.inbound.forwardingConfig.forwardingType === 'total_ai'
+                          ? 'bg-surgical-50 text-surgical-700 border border-surgical-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                        {status.inbound.forwardingConfig.forwardingType === 'total_ai' ? 'Full AI' : 'Safety Net'}
+                      </span>
+                    ) : null}
+                    <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
+                      Active
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-obsidian/60">
                   {status.inbound.countryCode} • Managed by Voxanne
                 </p>
               </div>
 
-              <CarrierForwardingInstructions managedNumber={status.inbound.managedNumber!} />
+              <CarrierForwardingInstructions
+                managedNumber={status.inbound.managedNumber!}
+                savedConfig={status.inbound.forwardingConfig}
+              />
 
               <button
                 onClick={() => setConfirmDeleteManaged(true)}
@@ -275,7 +450,7 @@ export default function PhoneSettingsPage() {
                 Buy AI Number
               </button>
               <p className="text-xs text-obsidian/60 mt-3">
-                $1.50/month + usage-based pricing
+                £1.50/month + usage-based pricing
               </p>
             </div>
           )}
@@ -283,14 +458,32 @@ export default function PhoneSettingsPage() {
 
         {/* LANE 2: OUTBOUND - Verified Caller ID */}
         <div className="bg-white border border-surgical-200 rounded-xl p-6">
+          {/* PROMINENT OUTBOUND HEADER */}
+          <div className="mb-6 pb-4 border-b border-surgical-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <Phone className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-obsidian">
+                    Outbound Calls
+                  </h2>
+                  <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold uppercase tracking-wide">
+                    Make
+                  </span>
+                </div>
+                <p className="text-sm text-obsidian/60 mt-1">
+                  Set what customers SEE when AI calls them
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 mb-4">
-            <Phone className="w-5 h-5 text-surgical-600" />
-            <h2 className="text-lg font-semibold text-obsidian">
+            <h3 className="text-base font-semibold text-obsidian">
               Your Outbound Caller ID
-            </h2>
-            <span className="text-xs bg-surgical-50 text-surgical-600 px-2 py-1 rounded-full font-medium">
-              Outbound
-            </span>
+            </h3>
           </div>
 
           {status?.outbound.hasVerifiedNumber && verificationStep !== 'success' ? (
@@ -308,10 +501,16 @@ export default function PhoneSettingsPage() {
                 </p>
               </div>
 
-              <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
-                <p className="text-sm text-obsidian">
-                  When your AI makes outbound calls, customers see <strong>{status.outbound.verifiedNumber}</strong> on their caller ID.
-                </p>
+              <div className={`border rounded-lg p-4 ${status.outbound.vapiLinked ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                {status.outbound.vapiLinked ? (
+                  <p className="text-sm text-green-800">
+                    <strong>Ready for outbound calls.</strong> When your AI calls customers, they see <strong>{status.outbound.verifiedNumber}</strong>.
+                  </p>
+                ) : (
+                  <p className="text-sm text-yellow-800">
+                    <strong>Linking to call system...</strong> This usually completes within a few seconds. Refresh the page if this persists.
+                  </p>
+                )}
               </div>
 
               <button
@@ -327,29 +526,60 @@ export default function PhoneSettingsPage() {
             <div className="space-y-4">
               {verificationStep === 'input' && (
                 <>
-                  <div className="text-center py-4">
-                    <p className="text-sm text-obsidian/60 mb-4">
-                      Verify your business phone number to use it as caller ID for outbound AI calls.
+                  {/* Value proposition */}
+                  <div className="space-y-3">
+                    <p className="text-sm text-obsidian">
+                      When your AI calls customers, they'll see this number on their caller ID.
                     </p>
+
+                    <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-medium text-obsidian">Why this matters:</p>
+                      <ul className="text-xs text-obsidian/70 space-y-1">
+                        <li>• Customers recognize YOUR number (not "Unknown")</li>
+                        <li>• Higher answer rates (people trust known numbers)</li>
+                        <li>• Professional appearance</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div>
+
+                  {/* Input field - Progressive disclosure: show detailed steps only when needed (step 2) */}
+                  <div className="border-t border-surgical-200 pt-4">
                     <label className="block text-sm font-medium text-obsidian mb-2">
-                      Business Phone Number
+                      Your Business Phone Number
                     </label>
-                    <input
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="+15551234567"
-                      className="w-full px-4 py-2 border border-surgical-200 rounded-lg focus:ring-2 focus:ring-surgical-500 focus:border-surgical-500 outline-none font-mono"
-                    />
-                    <p className="text-xs text-obsidian/60 mt-1">E.164 format (e.g., +15551234567)</p>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        placeholder="+1234567890"
+                        className={`w-full px-4 py-2 pr-12 border rounded-lg focus:ring-2 focus:ring-surgical-500 outline-none font-mono transition-colors ${
+                          isValidPhoneFormat
+                            ? 'border-green-500 focus:border-green-500'
+                            : 'border-surgical-200 focus:border-surgical-500'
+                        }`}
+                      />
+                      {isValidPhoneFormat && detectedCountry && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        </div>
+                      )}
+                    </div>
+                    {isValidPhoneFormat && detectedCountry ? (
+                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                        ✓ Valid {getCountryName(detectedCountry)} number detected
+                      </p>
+                    ) : (
+                      <p className="text-xs text-obsidian/60 mt-1">Must include country code: +1 (US), +234 (Nigeria), +44 (UK), +91 (India), etc.</p>
+                    )}
                   </div>
+
                   {verificationError && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
                       {verificationError}
                     </div>
                   )}
+
                   <button
                     onClick={handleSendVerification}
                     disabled={!phoneNumber || verifying}
@@ -363,7 +593,7 @@ export default function PhoneSettingsPage() {
                     ) : (
                       <>
                         <Phone className="w-4 h-4" />
-                        Send Verification Call
+                        Start Verification
                       </>
                     )}
                   </button>
@@ -372,32 +602,96 @@ export default function PhoneSettingsPage() {
 
               {verificationStep === 'verify' && (
                 <>
+                  {/* Status header — different message if recovered from navigation */}
+                  <div className={`border rounded-lg p-3 ${verificationCode ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                    {verificationCode ? (
+                      <>
+                        <p className="text-sm font-medium text-green-900 mb-1">
+                          Verification call sent!
+                        </p>
+                        <p className="text-xs text-green-700">
+                          Calling: {phoneNumber}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-amber-900 mb-1">
+                          Verification in progress for {phoneNumber}
+                        </p>
+                        <p className="text-xs text-amber-700">
+                          If you already entered the code on your phone, click "Verify & Complete Setup" below.
+                          Otherwise, click "Resend" to get a new verification call.
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {/* VALIDATION CODE DISPLAY - CRITICAL */}
+                  {verificationCode && (
+                    <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-6 text-center">
+                      <p className="text-sm font-medium text-blue-900 mb-3">
+                        🔑 Your Verification Code
+                      </p>
+                      <div className="bg-white border-2 border-blue-400 rounded-lg p-4 mb-3">
+                        <p className="text-4xl font-bold text-blue-600 tracking-widest font-mono">
+                          {verificationCode}
+                        </p>
+                      </div>
+                      <p className="text-xs text-blue-700">
+                        Enter this code on your phone keypad when Twilio calls
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Phone will ring notice */}
                   <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
-                    <p className="text-sm text-obsidian font-medium mb-1">
-                      We're calling {phoneNumber}
+                    <p className="text-sm text-obsidian font-medium mb-2">
+                      📞 Your phone will ring in ~30 seconds
                     </p>
+
+                    <div className="space-y-3 mt-3">
+                      <p className="text-xs font-medium text-obsidian">What to do next:</p>
+
+                      <div className="space-y-2 text-xs text-obsidian/70">
+                        <div className="flex gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-surgical-100 text-surgical-700 flex items-center justify-center text-xs font-bold">1</span>
+                          <p className="pt-0.5">Answer the call from Twilio (+14157234000)</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-surgical-100 text-surgical-700 flex items-center justify-center text-xs font-bold">2</span>
+                          <p className="pt-0.5">Automated voice will ask: "Please enter your verification code"</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-surgical-100 text-surgical-700 flex items-center justify-center text-xs font-bold">3</span>
+                          <p className="pt-0.5">Enter the code shown above using your phone's keypad<br/><span className="text-obsidian/50">(Enter it on your PHONE, not on this screen)</span></p>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-surgical-100 text-surgical-700 flex items-center justify-center text-xs font-bold">4</span>
+                          <p className="pt-0.5">Once you've entered it, click "Verify & Complete Setup" below</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Troubleshooting */}
+                  <div className="text-center">
                     <p className="text-xs text-obsidian/60">
-                      Answer the call and enter the 6-digit code you hear below.
+                      ⏱️ Call not received after 2 minutes?
                     </p>
+                    <button
+                      onClick={handleSendVerification}
+                      className="text-xs text-surgical-600 hover:text-surgical-700 font-medium mt-1"
+                    >
+                      Resend Verification Call
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-obsidian mb-2">
-                      Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="000000"
-                      className="w-full px-4 py-3 border border-surgical-200 rounded-lg focus:ring-2 focus:ring-surgical-500 focus:border-surgical-500 outline-none font-mono text-2xl text-center tracking-widest"
-                      maxLength={6}
-                    />
-                  </div>
+
                   {verificationError && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
                       {verificationError}
                     </div>
                   )}
+
                   <div className="flex gap-2">
                     <button
                       onClick={resetVerification}
@@ -407,16 +701,19 @@ export default function PhoneSettingsPage() {
                     </button>
                     <button
                       onClick={handleConfirmVerification}
-                      disabled={verificationCode.length !== 6 || verifying}
+                      disabled={verifying}
                       className="flex-1 px-4 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {verifying ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Verifying...
+                          Checking...
                         </>
                       ) : (
-                        'Confirm Code'
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Verify & Complete Setup
+                        </>
                       )}
                     </button>
                   </div>
@@ -424,22 +721,46 @@ export default function PhoneSettingsPage() {
               )}
 
               {verificationStep === 'success' && (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 rounded-full bg-green-50 mx-auto flex items-center justify-center mb-4 border border-green-200">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
+                <div className="space-y-4">
+                  {/* Success header */}
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 rounded-full bg-green-50 mx-auto flex items-center justify-center mb-3 border border-green-200">
+                      <CheckCircle className="w-8 h-8 text-green-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-obsidian mb-2">
+                      🎉 Verification Complete!
+                    </h3>
+                    <p className="text-sm text-green-700 font-medium">
+                      Your caller ID is now set to: {phoneNumber}
+                    </p>
                   </div>
-                  <h3 className="text-lg font-semibold text-obsidian mb-2">
-                    Verification Successful!
-                  </h3>
-                  <p className="text-sm text-obsidian/60 mb-4">
-                    Your business number is now verified for outbound calls.
-                  </p>
+
+                  {/* What this means */}
+                  <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4 space-y-3">
+                    <p className="text-xs font-medium text-obsidian">What this means:</p>
+
+                    <div className="space-y-2 text-xs text-obsidian/70">
+                      <div className="flex gap-2">
+                        <span className="text-green-600">✓</span>
+                        <p>When your AI calls customers, they see YOUR business number</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-green-600">✓</span>
+                        <p>No more "Unknown Number" or random phone numbers</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-green-600">✓</span>
+                        <p>Higher answer rates = more conversations</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <button
                     onClick={() => {
                       resetVerification();
                       fetchPhoneSettings();
                     }}
-                    className="px-4 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium"
+                    className="w-full px-4 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium"
                   >
                     Done
                   </button>
@@ -536,7 +857,7 @@ export default function PhoneSettingsPage() {
               Remove Verified Number?
             </h3>
             <p className="text-sm text-obsidian/60 mb-4">
-              This will remove {status?.outbound.verifiedNumber} from outbound calls.
+              This will remove {status?.outbound.verifiedNumber} from Twilio, disconnect it from outbound calls, and allow you to verify a different number.
             </p>
             <div className="flex gap-3">
               <button

@@ -106,6 +106,7 @@ import smsHealthRouter from './routes/sms-health'; // default export - SMS queue
 import complianceRouter from './routes/compliance'; // default export - GDPR/HIPAA compliance endpoints
 import agentDiagnosticsRouter from './routes/agent-diagnostics'; // default export - Agent configuration diagnostics
 import circuitBreakerDebugRouter from './routes/circuit-breaker-debug'; // default export - Circuit breaker diagnostics and SMS troubleshooting
+import billingDebugRouter from './routes/billing-debug'; // default export - Billing pipeline diagnostics (Phase 1 fix)
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
   initializeWebhookQueue,
@@ -329,6 +330,7 @@ app.use('/api/monitoring', smsHealthRouter); // SMS queue health (GET /api/monit
 app.use('/api/debug', circuitBreakerDebugRouter); // Circuit breaker diagnostics and SMS troubleshooting
 app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
 app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
+app.use('/api/billing-debug', billingDebugRouter); // Billing pipeline diagnostics (inspect call billing status)
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
 app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)

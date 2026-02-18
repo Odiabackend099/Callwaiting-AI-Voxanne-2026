@@ -24,7 +24,7 @@ appointmentsRouter.use(requireAuthOrDev);
  * Transform appointment data to match frontend expectations
  * Flattens nested contacts object and renames scheduled_at → scheduled_time
  */
-function transformAppointment(apt: any) {
+function transformAppointment(apt: any, linkedCall?: any) {
   return {
     id: apt.id,
     service_type: apt.service_type,
@@ -40,7 +40,15 @@ function transformAppointment(apt: any) {
     notes: apt.notes,
     created_at: apt.created_at,
     updated_at: apt.updated_at,
-    deleted_at: apt.deleted_at
+    deleted_at: apt.deleted_at,
+    // Call-linked data (from Golden Record)
+    call_id: apt.call_id || linkedCall?.id || null,
+    outcome_summary: linkedCall?.outcome_summary || null,
+    sentiment_label: linkedCall?.sentiment_label || null,
+    sentiment_score: linkedCall?.sentiment_score || null,
+    has_recording: !!(linkedCall?.recording_url || linkedCall?.recording_storage_path),
+    call_direction: linkedCall?.call_direction || null,
+    call_duration_seconds: linkedCall?.duration_seconds || null,
   };
 }
 
@@ -75,7 +83,7 @@ appointmentsRouter.get('/', async (req: Request, res: Response) => {
     const schema = z.object({
       page: z.coerce.number().int().positive().default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
-      status: z.enum(['confirmed', 'scheduled', 'completed', 'cancelled']).optional(),
+      status: z.enum(['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show']).optional(),
       contact_id: z.string().uuid().optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional()
@@ -115,7 +123,33 @@ appointmentsRouter.get('/', async (req: Request, res: Response) => {
       return res.status(500).json({ error: error.message });
     }
 
-    const transformedAppointments = (data || []).map(transformAppointment);
+    // Batch-fetch linked call data for appointments (Golden Record enrichment)
+    const appointmentIds = (data || []).map((a: any) => a.id).filter(Boolean);
+    const callsByAppointment = new Map<string, any>();
+
+    if (appointmentIds.length > 0) {
+      const { data: linkedCalls, error: linkedCallsError } = await supabase
+        .from('calls')
+        .select('id, appointment_id, outcome_summary, sentiment_label, sentiment_score, recording_url, recording_storage_path, call_direction, duration_seconds')
+        .eq('org_id', orgId)
+        .in('appointment_id', appointmentIds);
+
+      if (linkedCallsError) {
+        log.error('Appointments', 'Failed to fetch linked calls for Golden Record enrichment', {
+          orgId,
+          appointmentCount: appointmentIds.length,
+          error: linkedCallsError.message
+        });
+      }
+
+      (linkedCalls || []).forEach((c: any) => {
+        if (c.appointment_id) callsByAppointment.set(c.appointment_id, c);
+      });
+    }
+
+    const transformedAppointments = (data || []).map((apt: any) =>
+      transformAppointment(apt, callsByAppointment.get(apt.id))
+    );
 
     return res.json({
       appointments: transformedAppointments,
@@ -172,8 +206,6 @@ appointmentsRouter.post('/', async (req: Request, res: Response) => {
         service_type: parsed.serviceType,
         scheduled_at: parsed.scheduledAt,
         duration_minutes: parsed.duration_minutes,
-        contact_phone: parsed.contactPhone,
-        customer_name: parsed.customerName,
         contact_id: parsed.contact_id || null,
         status: 'confirmed',
         confirmation_sent: false,
@@ -250,9 +282,10 @@ appointmentsRouter.patch('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const schema = z.object({
-      status: z.enum(['scheduled', 'completed', 'cancelled']).optional(),
+      status: z.enum(['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show']).optional(),
       notes: z.string().optional(),
-      confirmationSent: z.boolean().optional()
+      confirmationSent: z.boolean().optional(),
+      scheduled_at: z.string().datetime().optional()
     });
 
     const parsed = schema.parse(req.body);
@@ -275,6 +308,7 @@ appointmentsRouter.patch('/:id', async (req: Request, res: Response) => {
         ...(parsed.status !== undefined ? { status: parsed.status } : {}),
         ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
         ...(parsed.confirmationSent !== undefined ? { confirmation_sent: parsed.confirmationSent } : {}),
+        ...(parsed.scheduled_at !== undefined ? { scheduled_at: parsed.scheduled_at } : {}),
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -366,7 +400,7 @@ appointmentsRouter.get('/available-slots', async (req: Request, res: Response) =
       .eq('org_id', orgId)
       .gte('scheduled_at', dateStart + 'T00:00:00Z')
       .lt('scheduled_at', dateEnd + 'T00:00:00Z')
-      .eq('status', 'scheduled');
+      .in('status', ['pending', 'confirmed', 'in_progress']);
 
     if (error) {
       log.error('Appointments', 'GET /available-slots - Database error', { orgId, date: parsed.date, error: error.message });

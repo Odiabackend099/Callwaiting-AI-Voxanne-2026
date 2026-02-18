@@ -7,6 +7,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Activity, Phone, Bot, Zap, LogOut, Key, BookOpen, Menu, X, Users, Settings, Bell, Target, Smartphone, Wallet, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import useSWR from 'swr';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 export default function LeftSidebar() {
     const pathname = usePathname();
@@ -16,6 +18,24 @@ export default function LeftSidebar() {
     const [showNavConfirm, setShowNavConfirm] = useState(false);
     const [pendingNavHref, setPendingNavHref] = useState<string>('');
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+    // Fetch wallet balance for navigation indicator (single source of truth with wallet page)
+    const { data: walletData } = useSWR<{
+        balance_pence: number;
+        balance_formatted: string;
+        low_balance_pence: number;
+        is_low_balance: boolean;
+        auto_recharge_enabled: boolean;
+        has_payment_method: boolean;
+    }>(
+        user ? '/api/billing/wallet' : null,
+        authedBackendFetch,
+        {
+            refreshInterval: 5000, // Refresh every 5 seconds for real-time updates
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true
+        }
+    );
 
     const navSections = useMemo(() => ([
         {
@@ -121,7 +141,7 @@ export default function LeftSidebar() {
                 </div>
             </div>
 
-            <nav className="flex-1 px-3 space-y-6 overflow-y-auto custom-scrollbar">
+            <nav className="flex-1 px-3 space-y-3 overflow-y-auto custom-scrollbar">
                 {navSections.map((section) => (
                     <div key={section.label}>
                         <h3 className="px-3 py-2 text-xs font-semibold text-obsidian/50 uppercase tracking-wider">
@@ -139,7 +159,7 @@ export default function LeftSidebar() {
                                         key={item.href}
                                         href={item.href}
                                         onClick={(e) => handleLinkClick(e, item.href)}
-                                        className={`group relative w-full px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all duration-200 font-semibold text-sm text-left ${isActive
+                                        className={`group relative w-full px-3 py-1.5 rounded-lg flex items-center gap-3 transition-all duration-200 font-semibold text-sm text-left ${isActive
                                             ? 'text-surgical-600 bg-gradient-to-r from-surgical-600/10 to-transparent border-l-4 border-surgical-600 shadow-sm'
                                             : 'text-obsidian/60 hover:text-obsidian hover:bg-surgical-200/10'
                                             }`}
@@ -171,7 +191,7 @@ export default function LeftSidebar() {
                                     key={item.href}
                                     href={item.href}
                                     onClick={(e) => handleLinkClick(e, item.href)}
-                                    className={`group relative w-full px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all duration-200 font-semibold text-sm text-left ${isActive
+                                    className={`group relative w-full px-3 py-1.5 rounded-lg flex items-center gap-3 transition-all duration-200 font-semibold text-sm text-left ${isActive
                                         ? 'text-surgical-600 bg-gradient-to-r from-surgical-600/10 to-transparent border-l-4 border-surgical-600 shadow-sm'
                                         : 'text-obsidian/60 hover:text-obsidian hover:bg-surgical-200/10'
                                         }`}
@@ -189,12 +209,80 @@ export default function LeftSidebar() {
             </nav>
 
             <div className="p-4 space-y-1">
-                <div className="px-3 py-2.5 rounded-lg border border-surgical-200 bg-white mb-2 shadow-sm">
+                <div className="px-3 py-2 rounded-lg border border-surgical-200 bg-white mb-1.5 shadow-sm">
                     <p className="text-xs font-semibold text-obsidian truncate tracking-tight">
                         {user?.email}
                     </p>
                     <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium">Prepaid</p>
                 </div>
+
+                {/* Balance Indicator - Circular Ring (Real-time, shared with wallet page) */}
+                <Link
+                    href="/dashboard/wallet"
+                    className="w-full px-3 py-2 rounded-lg border border-surgical-200 bg-white mb-1.5 shadow-sm hover:border-surgical-300 hover:shadow transition-all flex items-center justify-between gap-3 group"
+                >
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[10px] text-obsidian/60 uppercase tracking-wider font-medium mb-0.5">Balance</p>
+                        <p className="text-sm font-bold text-obsidian truncate tracking-tight">
+                            {walletData?.balance_pence != null
+                                ? `£${(walletData.balance_pence / 100).toFixed(2)}`
+                                : '£--.--'}
+                        </p>
+                    </div>
+
+                    {/* Circular Progress Ring */}
+                    <div className="relative flex-shrink-0">
+                        <svg className="w-11 h-11 -rotate-90" viewBox="0 0 36 36">
+                            {/* Background circle */}
+                            <circle
+                                cx="18"
+                                cy="18"
+                                r="15.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                className="text-surgical-100"
+                            />
+                            {/* Progress circle */}
+                            <circle
+                                cx="18"
+                                cy="18"
+                                r="15.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                className={
+                                    walletData?.balance_pence == null
+                                        ? 'text-surgical-200'
+                                        : walletData.balance_pence < 79
+                                        ? 'text-red-500'
+                                        : walletData.balance_pence < 500
+                                        ? 'text-amber-500'
+                                        : 'text-surgical-600'
+                                }
+                                strokeDasharray={`${
+                                    walletData?.balance_pence != null
+                                        ? Math.min(100, (walletData.balance_pence / 1000) * 100)
+                                        : 0
+                                } 100`}
+                            />
+                        </svg>
+                        {/* Center icon */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Wallet className={`w-4 h-4 ${
+                                walletData?.balance_pence == null
+                                    ? 'text-surgical-300'
+                                    : walletData.balance_pence < 79
+                                    ? 'text-red-500'
+                                    : walletData.balance_pence < 500
+                                    ? 'text-amber-500'
+                                    : 'text-surgical-600'
+                            } group-hover:scale-110 transition-transform`} />
+                        </div>
+                    </div>
+                </Link>
+
                 <button
                     onClick={handleLogoutClick}
                     className="w-full px-3 py-2 rounded-lg text-xs font-medium text-obsidian/60 hover:text-obsidian hover:bg-obsidian/5 transition-all flex items-center justify-center gap-2"

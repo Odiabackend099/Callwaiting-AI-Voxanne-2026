@@ -49,7 +49,7 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
     // Get verified caller ID status (Lane 2: Outbound)
     const { data: verifiedNumbers, error: verifiedError } = await supabaseAdmin
       .from('verified_caller_ids')
-      .select('id, phone_number, status, verified_at')
+      .select('id, phone_number, status, verified_at, vapi_phone_number_id')
       .eq('org_id', orgId)
       .eq('status', 'verified')
       .order('verified_at', { ascending: false })
@@ -62,6 +62,70 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
     const hasVerifiedNumber = verifiedNumbers && verifiedNumbers.length > 0;
     const verifiedNumber = hasVerifiedNumber ? verifiedNumbers[0] : null;
 
+    // Check for pending verification (recovery for navigate-away scenario)
+    // Only returned when there's no verified number — allows frontend to auto-recover
+    let pendingVerification: { phoneNumber: string; createdAt: string; id: string } | null = null;
+    if (!hasVerifiedNumber) {
+      try {
+        const { data: pendingRecords } = await supabaseAdmin
+          .from('verified_caller_ids')
+          .select('id, phone_number, created_at')
+          .eq('org_id', orgId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (pendingRecords && pendingRecords.length > 0) {
+          const pending = pendingRecords[0];
+          const ageMs = Date.now() - new Date(pending.created_at).getTime();
+          const MAX_PENDING_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+          if (ageMs < MAX_PENDING_AGE_MS) {
+            pendingVerification = {
+              phoneNumber: pending.phone_number,
+              createdAt: pending.created_at,
+              id: pending.id,
+            };
+          } else {
+            // Auto-cleanup stale pending records (older than 30 min)
+            await supabaseAdmin
+              .from('verified_caller_ids')
+              .delete()
+              .eq('id', pending.id)
+              .eq('org_id', orgId);
+            logger.info('Auto-cleaned stale pending verification', { orgId, id: pending.id });
+          }
+        }
+      } catch {
+        // Best-effort — pending check is non-critical
+      }
+    }
+
+    // Get forwarding configuration (if any)
+    let forwardingConfig = null;
+    try {
+      const { data: fwdConfig } = await supabaseAdmin
+        .from('hybrid_forwarding_configs')
+        .select('forwarding_type, carrier, status, ring_time_seconds, generated_activation_code, generated_deactivation_code')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fwdConfig) {
+        forwardingConfig = {
+          forwardingType: fwdConfig.forwarding_type,
+          carrier: fwdConfig.carrier,
+          status: fwdConfig.status,
+          ringTimeSeconds: fwdConfig.ring_time_seconds,
+          activationCode: fwdConfig.generated_activation_code,
+          deactivationCode: fwdConfig.generated_deactivation_code,
+        };
+      }
+    } catch {
+      // Best-effort — forwarding config is non-critical
+    }
+
     // Return combined response
     res.json({
       inbound: {
@@ -70,12 +134,15 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
         managedNumberStatus: managedNumber?.status || null,
         vapiPhoneId: managedNumber?.vapiPhoneId || null,
         countryCode: managedNumber?.countryCode || null,
+        forwardingConfig,
       },
       outbound: {
         hasVerifiedNumber,
         verifiedNumber: verifiedNumber?.phone_number || null,
         verifiedAt: verifiedNumber?.verified_at || null,
         verifiedId: verifiedNumber?.id || null,
+        vapiLinked: !!verifiedNumber?.vapi_phone_number_id,
+        pendingVerification,
       },
       mode: managedStatus.mode,
     });

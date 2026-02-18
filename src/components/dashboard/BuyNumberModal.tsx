@@ -38,9 +38,8 @@ const COUNTRIES = [
     flag: '🇬🇧',
     areaCodeFormat: '3-5 digits (e.g., 020, 0161)',
     areaCodeLength: 5,
-    regulatoryReady: false, // Requires Ofcom approval
-    approvalDays: '10-15 days',
-    complianceInfo: 'Requires Companies House registration number and Ofcom approval',
+    regulatoryReady: true, // Twilio handles Ofcom compliance
+    approvalDays: null,
   },
   {
     code: 'CA',
@@ -192,7 +191,7 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
     }
   };
 
-  // Pre-flight check: Check if org has existing phone number
+  // Pre-flight check: Check if org has existing phone number AND sufficient balance
   const checkExistingNumber = async () => {
     try {
       setLoading(true);
@@ -223,6 +222,26 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
       } else {
         setHasExistingNumber(false);
         setExistingNumberInfo(null);
+      }
+
+      // Balance pre-check: £10.00 (1000 pence) required for phone number
+      try {
+        const wallet = await authedBackendFetch<any>('/api/billing/wallet');
+        const balancePence = wallet?.balance_pence || 0;
+        if (balancePence < 1000) {
+          const balanceGBP = (balancePence / 100).toFixed(2);
+          const shortfall = ((1000 - balancePence) / 100).toFixed(2);
+          const balanceMsg = `Insufficient balance (£${balanceGBP}). £10.00 required to buy a number (£${shortfall} more needed). Please top up your wallet first.`;
+          setError(balanceMsg);
+          setErrorDetails({
+            message: balanceMsg,
+            canRetry: false,
+            failedStep: 'validation'
+          });
+          setHasExistingNumber(true); // Reuse flag to block search button
+        }
+      } catch {
+        // Non-blocking: if wallet check fails, backend will catch at purchase time
       }
     } catch (err: any) {
       console.error('Failed to check existing number:', err);
@@ -308,7 +327,7 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                           onClick={() => {
                             onClose();
                             window.location.href = existingNumberInfo.type === 'managed'
-                              ? '/dashboard/telephony#managed-numbers'
+                              ? '/dashboard/phone-settings'
                               : '/dashboard/inbound-config#integrations';
                           }}
                           className="text-sm font-medium text-yellow-700 hover:text-yellow-800 underline"
@@ -365,7 +384,7 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                             {selectedCountry.complianceInfo}
                           </p>
                           <a
-                            href="/dashboard/telephony"
+                            href="/dashboard/inbound-config"
                             className="inline-flex items-center gap-1 text-sm font-medium text-yellow-700 hover:text-yellow-800 underline"
                           >
                             Use BYOC for immediate setup →
@@ -476,7 +495,7 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                 <div className="text-center py-4">
                   <p className="text-sm text-obsidian/60 mb-2">You are about to purchase:</p>
                   <p className="text-2xl font-mono font-bold text-obsidian">{selectedNumber}</p>
-                  <p className="text-sm text-obsidian/50 mt-2">$1.50/month + usage</p>
+                  <p className="text-sm text-obsidian/50 mt-2">£1.50/month + usage</p>
                 </div>
 
                 <div className="flex gap-3">
@@ -488,15 +507,15 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                   </button>
                   <button
                     onClick={provisionNumber}
-                    disabled={provisioning || country !== 'US'}
+                    disabled={provisioning}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                      provisioning || country !== 'US'
+                      provisioning
                         ? 'bg-surgical-300 text-white opacity-50 cursor-not-allowed'
                         : 'bg-surgical-600 text-white hover:bg-surgical-700'
                     }`}
                   >
                     {provisioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
-                    {provisioning ? 'Provisioning...' : country !== 'US' ? 'US Only' : 'Confirm Purchase'}
+                    {provisioning ? 'Provisioning...' : 'Confirm Purchase'}
                   </button>
                 </div>
               </div>

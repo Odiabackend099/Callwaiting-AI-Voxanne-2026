@@ -17,19 +17,41 @@ import { log } from './logger';
  */
 const BOOKING_TOOL_ANCHOR = `
 ## BOOKING TOOL INSTRUCTIONS (CRITICAL - DO NOT IGNORE)
-When a customer wants to book an appointment:
-1. Collect required info: date, time, name, email
-2. Convert natural dates ("next Tuesday") to YYYY-MM-DD format
-3. Call the bookClinicAppointment tool IMMEDIATELY after confirming details
-4. Do NOT ask for confirmation twice
-5. If booking fails, offer alternative times or escalate
 
-Tool parameters:
-- appointmentDate: YYYY-MM-DD format
-- appointmentTime: HH:MM (24-hour format, e.g., 14:30)
-- patientName: Customer full name
-- patientEmail: Customer email
-- patientPhone: (optional) Phone number
+🔇 SILENT EXECUTION RULE:
+NEVER announce that you are using a tool. The caller should only hear natural conversation.
+❌ Don't say: "Let me call the booking tool" or "I'm using check availability"
+✅ Do say: "Let me check the schedule..." (then use tool silently)
+
+When a customer wants to book an appointment:
+1. Collect required info IN THIS ORDER:
+   a) Date and time (convert "next Tuesday" to YYYY-MM-DD format)
+   b) Full name
+   c) MOBILE PHONE NUMBER (for SMS confirmation) ← PRIORITY
+   d) Email (optional, only if caller volunteers it)
+
+2. CHECK AVAILABILITY FIRST (mandatory):
+   - Call checkAvailability tool (silently)
+   - Wait for response showing available slots
+   - Offer 2-3 specific times from results
+
+3. BOOK APPOINTMENT (only after availability confirmed):
+   - Repeat back: "So that's [DATE] at [TIME], correct?"
+   - Wait for confirmation
+   - Call bookClinicAppointment tool IMMEDIATELY (silently)
+   - Parameters:
+     * appointmentDate: YYYY-MM-DD format
+     * appointmentTime: HH:MM (24-hour format, e.g., 14:30)
+     * patientName: Full name
+     * patientPhone: Mobile number (REQUIRED for SMS)
+     * patientEmail: (optional) Email if provided
+
+4. ERROR HANDLING:
+   - If booking fails with "slot_unavailable": Return to step 2
+   - If tool unavailable: Collect info and transfer to human agent
+   - Never proceed to step 3 without completing step 2
+
+CRITICAL: All tool calls are SILENT operations. Caller only hears your natural responses.
 `;
 
 /**

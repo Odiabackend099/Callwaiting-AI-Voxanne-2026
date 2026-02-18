@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, Phone, AlertCircle, Edit2, X, ChevronLeft, ChevronRight, Search, Filter, MessageCircle, RotateCw } from 'lucide-react';
+import { Calendar, Clock, Phone, AlertCircle, Edit2, X, ChevronLeft, ChevronRight, Search, Filter, MessageCircle, RotateCw, Download, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -17,11 +17,19 @@ interface Appointment {
     service_type: string;
     scheduled_time: string;
     duration_minutes: number;
-    status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
     notes?: string;
     location?: string;
     is_virtual?: boolean;
     created_at: string;
+    // Call-linked data (Golden Record)
+    call_id?: string;
+    outcome_summary?: string;
+    sentiment_label?: string;
+    sentiment_score?: number;
+    has_recording?: boolean;
+    call_direction?: 'inbound' | 'outbound';
+    call_duration_seconds?: number;
 }
 
 interface AppointmentDetail extends Appointment {
@@ -148,7 +156,7 @@ const AppointmentsDashboardContent = () => {
         try {
             await authedBackendFetch(`/api/appointments/${selectedAppointment.id}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ scheduled_time: newTime })
+                body: JSON.stringify({ scheduled_at: newTime })
             });
             setShowDetailModal(false);
             await fetchAppointments();
@@ -197,10 +205,14 @@ const AppointmentsDashboardContent = () => {
                 return 'bg-surgical-50 text-surgical-600 border-surgical-200';
             case 'confirmed':
                 return 'bg-green-50 text-green-700 border-green-200';
+            case 'in_progress':
+                return 'bg-blue-50 text-blue-700 border-blue-200';
             case 'completed':
                 return 'bg-surgical-50 text-obsidian/60 border-surgical-200';
             case 'cancelled':
                 return 'bg-red-50 text-red-700 border-red-200';
+            case 'no_show':
+                return 'bg-yellow-50 text-yellow-700 border-yellow-200';
             default:
                 return 'bg-surgical-50 text-obsidian/60 border-surgical-200';
         }
@@ -212,9 +224,13 @@ const AppointmentsDashboardContent = () => {
                 return '';
             case 'confirmed':
                 return '';
+            case 'in_progress':
+                return '';
             case 'completed':
                 return '';
             case 'cancelled':
+                return '';
+            case 'no_show':
                 return '';
             default:
                 return '';
@@ -279,8 +295,10 @@ const AppointmentsDashboardContent = () => {
                         <option value="">All Status</option>
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
+                        <option value="in_progress">In Progress</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
+                        <option value="no_show">No Show</option>
                     </select>
 
                     <select
@@ -316,13 +334,14 @@ const AppointmentsDashboardContent = () => {
                                     <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Contact</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Duration</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Status</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Outcome</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-obsidian/60 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-surgical-200">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center">
+                                        <td colSpan={7} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-3">
                                                 <div className="w-8 h-8 border-4 border-surgical-200 border-t-surgical-600 rounded-full animate-spin" />
                                                 <p className="text-obsidian/60">Loading appointments...</p>
@@ -331,7 +350,7 @@ const AppointmentsDashboardContent = () => {
                                     </tr>
                                 ) : appointments.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center">
+                                        <td colSpan={7} className="px-6 py-12 text-center">
                                             <Calendar className="w-12 h-12 text-obsidian/40 mx-auto mb-4" />
                                             <p className="text-obsidian/60">No appointments scheduled</p>
                                         </td>
@@ -366,22 +385,59 @@ const AppointmentsDashboardContent = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadgeColor(apt.status)}`}>
-                                                    {getStatusIcon(apt.status)}
-                                                    {apt.status.charAt(0).toUpperCase() + apt.status.slice(1)}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadgeColor(apt.status)}`}>
+                                                        {getStatusIcon(apt.status)}
+                                                        {apt.status.charAt(0).toUpperCase() + apt.status.slice(1)}
+                                                    </span>
+                                                    {apt.call_direction && (
+                                                        <span className="inline-flex items-center gap-1 text-xs text-obsidian/50">
+                                                            {apt.call_direction === 'inbound' ? <PhoneIncoming className="w-3 h-3" /> : <PhoneOutgoing className="w-3 h-3" />}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {apt.outcome_summary ? (
+                                                    <p className="text-xs text-obsidian/70 line-clamp-2 leading-relaxed max-w-xs">
+                                                        {apt.outcome_summary}
+                                                    </p>
+                                                ) : (
+                                                    <span className="text-xs text-obsidian/40">&mdash;</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        fetchAppointmentDetail(apt.id);
-                                                    }}
-                                                    className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
-                                                    title="Edit"
-                                                >
-                                                    <Edit2 className="w-4 h-4 text-surgical-600" />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    {apt.has_recording && apt.call_id && (
+                                                        <button
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                try {
+                                                                    const data = await authedBackendFetch<any>(`/api/calls-dashboard/${apt.call_id}/recording-url`);
+                                                                    if (data?.recording_url) {
+                                                                        window.open(data.recording_url, '_blank');
+                                                                    }
+                                                                } catch (err) {
+                                                                    console.error('Failed to get recording URL:', err);
+                                                                }
+                                                            }}
+                                                            className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
+                                                            title="Download recording"
+                                                        >
+                                                            <Download className="w-4 h-4 text-surgical-600" />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            fetchAppointmentDetail(apt.id);
+                                                        }}
+                                                        className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit2 className="w-4 h-4 text-surgical-600" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -526,7 +582,7 @@ const AppointmentsDashboardContent = () => {
 
                                 {/* Modal Footer */}
                                 <div className="border-t border-surgical-200 px-6 py-4 flex items-center justify-end gap-3">
-                                    {selectedAppointment.status === 'pending' && (
+                                    {(selectedAppointment.status === 'pending' || selectedAppointment.status === 'confirmed') && (
                                         <>
                                             <button
                                                 onClick={handleReschedule}

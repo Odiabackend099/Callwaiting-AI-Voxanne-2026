@@ -336,6 +336,11 @@ export default function AgentConfigPage() {
                 setOriginalOutboundConfig(outboundConfig);
             }
 
+            // Warn if tools failed to sync (agent saved but tools not registered)
+            if (result?.toolsSynced === false) {
+                setError('Agent saved, but tools failed to sync to Vapi. Please try saving again. If the issue persists, contact support.');
+            }
+
             setSaveSuccess(true);
 
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -354,6 +359,19 @@ export default function AgentConfigPage() {
 
     const handleTestInbound = async () => {
         setError(null);
+
+        // Pre-flight balance check: Minimum 79 pence required for a test call
+        try {
+            const wallet = await authedBackendFetch<any>('/api/billing/wallet');
+            if ((wallet?.balance_pence || 0) < 79) {
+                const balanceGBP = ((wallet?.balance_pence || 0) / 100).toFixed(2);
+                setError(`Insufficient balance (£${balanceGBP}). Minimum £0.79 required for test calls. Please top up your wallet first.`);
+                return;
+            }
+        } catch {
+            // Non-blocking: if wallet check fails, let the webhook handle it
+        }
+
         const inboundError = validateAgentConfig(inboundConfig, 'inbound');
         if (inboundError) {
             setError(inboundError);
@@ -405,6 +423,19 @@ export default function AgentConfigPage() {
     const handleTestOutbound = async () => {
         try {
             setError(null);
+
+            // Pre-flight balance check: Minimum 79 pence required for a test call
+            try {
+                const wallet = await authedBackendFetch<any>('/api/billing/wallet');
+                if ((wallet?.balance_pence || 0) < 79) {
+                    const balanceGBP = ((wallet?.balance_pence || 0) / 100).toFixed(2);
+                    setError(`Insufficient balance (£${balanceGBP}). Minimum £0.79 required for test calls. Please top up your wallet first.`);
+                    return;
+                }
+            } catch {
+                // Non-blocking: if wallet check fails, let the webhook handle it
+            }
+
             const outboundError = validateAgentConfig(outboundConfig, 'outbound');
             if (outboundError) {
                 setError(outboundError);

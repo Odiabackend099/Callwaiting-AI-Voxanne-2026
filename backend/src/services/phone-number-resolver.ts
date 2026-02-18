@@ -5,13 +5,15 @@
  * This is the single correct way to resolve a Vapi phone number ID for outbound calls.
  * Raw phone strings like "+12125551234" are NOT valid Vapi phoneNumberIds — only UUIDs are.
  *
- * Resolution strategy:
- *   0. (NEW) Check managed_phone_numbers for an active number with vapi_phone_id set
- *      → If found, return immediately (short-circuit — no credential lookup, no Vapi API call)
- *   1. Get org's Twilio phone number from org_credentials (SSOT for credentials)
- *   2. List all Vapi phone numbers and find a match
- *   3. Fall back to first available Vapi phone number
- *   4. Return null if no phone numbers exist at all
+ * Resolution strategy (highest priority first):
+ *   0. Check verified_caller_ids for a verified number with vapi_phone_number_id set
+ *      → Explicit user choice for outbound caller ID — highest priority
+ *   1. Check managed_phone_numbers for an active number with vapi_phone_id set
+ *      → Short-circuit for managed orgs
+ *   2. Get org's Twilio phone number from org_credentials (SSOT for credentials)
+ *   3. List all Vapi phone numbers and find a match
+ *   4. Fall back to first available Vapi phone number
+ *   5. Return null if no phone numbers exist at all
  *
  * When resolved, the caller should store the phone number ID back to the agents table
  * so subsequent calls skip the resolution step.
@@ -43,7 +45,31 @@ async function resolveOrgPhoneNumberIdInner(
   vapiApiKey: string
 ): Promise<{ phoneNumberId: string | null; callerNumber?: string }> {
   try {
-    // Step 0: Check managed_phone_numbers for an active number with vapi_phone_id
+    // Step 0: Check verified_caller_ids for org's verified number with Vapi ID
+    // This is highest priority — user explicitly verified this number for outbound calls
+    try {
+      const { data: verifiedCaller } = await supabaseAdmin
+        .from('verified_caller_ids')
+        .select('vapi_phone_number_id, phone_number')
+        .eq('org_id', orgId)
+        .eq('status', 'verified')
+        .not('vapi_phone_number_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+
+      if (verifiedCaller?.vapi_phone_number_id) {
+        logger.info('Resolved verified caller ID (Step 0 — user-configured)', {
+          orgId,
+          vapiPhoneNumberId: verifiedCaller.vapi_phone_number_id,
+          phoneLast4: verifiedCaller.phone_number?.slice(-4),
+        });
+        return { phoneNumberId: verifiedCaller.vapi_phone_number_id, callerNumber: verifiedCaller.phone_number };
+      }
+    } catch {
+      // Best-effort; fall through to managed numbers
+    }
+
+    // Step 1: Check managed_phone_numbers for an active number with vapi_phone_id
     // Short-circuits the entire BYOC resolution chain for managed orgs
     try {
       const { data: managedNumber } = await supabaseAdmin
@@ -56,7 +82,7 @@ async function resolveOrgPhoneNumberIdInner(
         .maybeSingle();
 
       if (managedNumber?.vapi_phone_id) {
-        logger.info('Resolved managed phone number (Step 0 short-circuit)', {
+        logger.info('Resolved managed phone number (Step 1 short-circuit)', {
           orgId,
           vapiPhoneNumberId: managedNumber.vapi_phone_id,
           phoneLast4: managedNumber.phone_number?.slice(-4),
@@ -64,10 +90,10 @@ async function resolveOrgPhoneNumberIdInner(
         return { phoneNumberId: managedNumber.vapi_phone_id, callerNumber: managedNumber.phone_number };
       }
     } catch {
-      // Step 0 is best-effort; fall through to BYOC chain
+      // Step 1 is best-effort; fall through to BYOC chain
     }
 
-    // Step 1: Get org's Twilio phone number from org_credentials (SSOT for credentials)
+    // Step 2: Get org's Twilio phone number from org_credentials (SSOT for credentials)
     let twilioPhoneNumber: string | undefined;
     try {
       const twilioCreds = await IntegrationDecryptor.getTwilioCredentials(orgId);
@@ -80,7 +106,7 @@ async function resolveOrgPhoneNumberIdInner(
       logger.info('No Twilio credentials in org_credentials for org, will try Vapi phone list', { orgId });
     }
 
-    // Step 2: List all Vapi phone numbers and find a match
+    // Step 3: List all Vapi phone numbers and find a match
     const vapiClient = new VapiClient(vapiApiKey);
     const vapiNumbers = await vapiClient.listPhoneNumbers();
 
@@ -89,7 +115,7 @@ async function resolveOrgPhoneNumberIdInner(
       return { phoneNumberId: null };
     }
 
-    // Step 3: Try to match org's Twilio number against Vapi phone list
+    // Step 4: Try to match org's Twilio number against Vapi phone list
     if (twilioPhoneNumber) {
       const matched = vapiNumbers.find(
         (n: any) => n.number === twilioPhoneNumber || n.number === twilioPhoneNumber?.replace(/\s/g, '')
@@ -104,7 +130,7 @@ async function resolveOrgPhoneNumberIdInner(
       }
     }
 
-    // Step 4: Fall back to first available Vapi number
+    // Step 5: Fall back to first available Vapi number
     const fallback = vapiNumbers[0];
     logger.info('Using first available Vapi phone number as fallback', {
       orgId,

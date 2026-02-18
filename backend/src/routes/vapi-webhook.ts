@@ -124,7 +124,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
     // DEBUG - Log COMPLETE webhook payload BEFORE signature verification
     // This ensures we see all incoming webhooks, even if signature verification fails
+    const billingTraceId = `billing_${Date.now()}_${(body?.message?.call?.id || body?.event?.id || 'unknown').slice(0, 8)}`;
     log.info('Vapi-Webhook', '📨 RAW WEBHOOK RECEIVED', {
+      billingTraceId,
       hasBody: !!body,
       bodyKeys: Object.keys(body || {}),
       callId: body?.message?.call?.id || body?.event?.id || 'unknown',
@@ -132,6 +134,7 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       assistantId: body?.message?.call?.assistantId || body?.assistantId || 'unknown',
       timestamp: new Date().toISOString()
     });
+    log.info('Vapi-Webhook', '🔍 BILLING TRACE START', { billingTraceId, eventType: body?.message?.type || body?.messageType || 'unknown' });
 
     // 1. Signature Verification
     if (!secret) {
@@ -220,6 +223,29 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
     if (body.messageType === 'tool-calls' && body.toolCall) {
       const { function: toolFunction } = body.toolCall;
       const toolName = toolFunction?.name;
+
+      // Track tool usage in calls table (Change 3: persists tool names for end-of-call linkage)
+      const toolCallVapiId = body.message?.call?.id || body.call?.id;
+      if (toolName && toolCallVapiId) {
+        try {
+          const { data: existingCall } = await supabase
+            .from('calls')
+            .select('tools_used')
+            .eq('vapi_call_id', toolCallVapiId)
+            .maybeSingle();
+
+          const currentTools: string[] = existingCall?.tools_used || [];
+          if (!currentTools.includes(toolName)) {
+            await supabase
+              .from('calls')
+              .update({ tools_used: [...currentTools, toolName] })
+              .eq('vapi_call_id', toolCallVapiId);
+            log.info('Vapi-Webhook', 'Tool usage tracked', { callId: toolCallVapiId, toolName, totalTools: currentTools.length + 1 });
+          }
+        } catch (trackError: any) {
+          log.warn('Vapi-Webhook', 'Failed to track tool usage (non-blocking)', { error: trackError?.message, toolName });
+        }
+      }
 
       if (toolName === 'bookClinicAppointment') {
         log.info('Vapi-Webhook', 'Processing bookClinicAppointment tool call', {
@@ -398,7 +424,9 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       const phoneNumber = call.customer?.number || null;
 
       // Enrich caller name from contacts table, fall back to Vapi caller ID or phone number
-      let callerName = call.customer?.name || phoneNumber || 'Unknown Caller';
+      // Don't store phone number as caller_name - it's already in phone_number/from_number columns.
+      // The Golden Record view resolves display names via: contact name → phone_number → "Unknown"
+      let callerName = call.customer?.name || 'Unknown Caller';
       if (phoneNumber && orgId) {
         const { data: contact } = await supabase
           .from('contacts')
@@ -568,7 +596,8 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       }
 
       if (!orgId) {
-        log.error('Vapi-Webhook', '⚠️ Cannot resolve org_id for call', {
+        log.error('Vapi-Webhook', '❌ BILLING BLOCKED: Cannot resolve org_id for call', {
+          billingTraceId,
           callId: call?.id,
           assistantId,
           availableFields: {
@@ -613,6 +642,13 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           });
           return res.json({ success: true, received: true });
         }
+      } else {
+        log.info('Vapi-Webhook', '✅ org_id resolved successfully', {
+          billingTraceId,
+          orgId,
+          callId: call?.id,
+          source: 'agent lookup or fallback'
+        });
       }
 
       // 2. Detect call direction (inbound vs outbound)
@@ -636,85 +672,89 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         orgId
       });
 
-      // 3. Generate outcome + sentiment via GPT-4o (single API call)
-      // UPDATE 2026-02-14: Prioritize Vapi's native sentiment analysis if available
-      let sentimentLabel: string | null = analysis?.sentiment || analysis?.structuredData?.sentiment || null;
-      let sentimentScore: number | null = analysis?.structuredData?.sentimentScore || null; // Vapi rarely sends score, but check anyway
-      let sentimentSummary: string | null = analysis?.summary || null; // Vapi's summary is usually excellent
-      let sentimentUrgency: string | null = null;
-      let outcomeShort = analysis?.structuredData?.outcome || 'Call Completed';
-      let outcomeDetailed = analysis?.summary || 'Call completed successfully.';
+      // 3. Extract sentiment + outcome from Vapi's NATIVE analysis (PRIMARY source)
+      // UPDATE 2026-02-16: Vapi native analysis is PRIMARY. GPT-4o is optional fallback only.
+      // Vapi's analysisPlan (configured in agent-sync.ts) provides: summary, sentiment, structuredData
+      let sentimentLabel: string | null = analysis?.sentiment || null;
+      let sentimentScore: number | null = analysis?.structuredData?.sentimentScore ?? null;
+      let sentimentSummary: string | null = analysis?.summary || null;
+      let sentimentUrgency: string | null = analysis?.structuredData?.sentimentUrgency || null;
+      let outcomeShort: string = analysis?.structuredData?.shortOutcome || 'Call Completed';
+      let outcomeDetailed: string = analysis?.summary || 'Call completed successfully.';
+      const appointmentBookedByVapi: boolean = analysis?.structuredData?.appointmentBooked === true;
+      const successEvaluation: string | null = analysis?.successEvaluation || null;
 
-      try {
-        // Primary: use artifact.transcript if available
-        // Fallback: reconstruct transcript from messages (artifact.messages or call.messages)
-        let transcriptForAnalysis = artifact?.transcript || null;
+      // Map Vapi sentiment label to numeric score if structuredData didn't provide one
+      if (sentimentScore === null && sentimentLabel) {
+        sentimentScore = sentimentLabel === 'positive' ? 0.8 :
+                         sentimentLabel === 'negative' ? 0.2 : 0.5;
+      }
 
-        if (!transcriptForAnalysis) {
-          // Reconstruct transcript from messages array when Vapi omits artifact.transcript
-          const messagesSource = artifact?.messages || call?.messages || [];
-          if (Array.isArray(messagesSource) && messagesSource.length > 0) {
-            const transcriptParts: string[] = [];
-            for (const msg of messagesSource) {
-              if (msg.role === 'user' && msg.message) {
-                transcriptParts.push(`Caller: ${msg.message}`);
-              } else if (msg.role === 'assistant' && msg.message) {
-                transcriptParts.push(`Assistant: ${msg.message}`);
-              } else if (msg.content && typeof msg.content === 'string') {
-                const speaker = msg.role === 'user' ? 'Caller' : 'Assistant';
-                transcriptParts.push(`${speaker}: ${msg.content}`);
+      // Ensure all fields have values (SSOT compliance — no NULLs in critical fields)
+      if (!sentimentLabel) sentimentLabel = 'neutral';
+      if (sentimentScore === null) sentimentScore = 0.5;
+      if (!sentimentSummary) sentimentSummary = outcomeDetailed;
+      if (!sentimentUrgency) sentimentUrgency = 'low';
+
+      log.info('Vapi-Webhook', 'Vapi native analysis extracted', {
+        callId: call?.id,
+        sentimentLabel,
+        sentimentScore,
+        outcomeShort,
+        hasSummary: !!analysis?.summary,
+        hasStructuredData: !!analysis?.structuredData,
+        successEvaluation,
+        appointmentBookedByVapi,
+        source: 'vapi-native'
+      });
+
+      // OPTIONAL: Enhance with GPT-4o ONLY if Vapi summary is missing and OpenAI key is available
+      // This is a FALLBACK — Vapi native analysis is the primary source
+      if (!analysis?.summary && process.env.OPENAI_API_KEY) {
+        try {
+          let transcriptForAnalysis = artifact?.transcript || null;
+
+          if (!transcriptForAnalysis) {
+            const messagesSource = artifact?.messages || call?.messages || [];
+            if (Array.isArray(messagesSource) && messagesSource.length > 0) {
+              const transcriptParts: string[] = [];
+              for (const msg of messagesSource) {
+                if (msg.role === 'user' && msg.message) {
+                  transcriptParts.push(`Caller: ${msg.message}`);
+                } else if (msg.role === 'assistant' && msg.message) {
+                  transcriptParts.push(`Assistant: ${msg.message}`);
+                } else if (msg.content && typeof msg.content === 'string') {
+                  const speaker = msg.role === 'user' ? 'Caller' : 'Assistant';
+                  transcriptParts.push(`${speaker}: ${msg.content}`);
+                }
               }
-            }
-            if (transcriptParts.length > 0) {
-              transcriptForAnalysis = transcriptParts.join('\n');
-              log.info('Vapi-Webhook', 'Transcript reconstructed from messages', {
-                callId: call?.id,
-                messageCount: messagesSource.length,
-                transcriptLength: transcriptForAnalysis.length
-              });
+              if (transcriptParts.length > 0) transcriptForAnalysis = transcriptParts.join('\n');
             }
           }
-        }
 
-        if (transcriptForAnalysis && transcriptForAnalysis.trim().length >= 10) {
-          const outcomeSummary = await OutcomeSummaryService.generateOutcomeSummary(
-            transcriptForAnalysis,
-            sentimentLabel || undefined
-          );
-          outcomeShort = outcomeSummary.shortOutcome;
-          outcomeDetailed = outcomeSummary.detailedSummary;
-          sentimentLabel = outcomeSummary.sentimentLabel;
-          sentimentScore = outcomeSummary.sentimentScore;
-          sentimentSummary = outcomeSummary.sentimentSummary;
-          sentimentUrgency = outcomeSummary.sentimentUrgency;
+          if (transcriptForAnalysis && transcriptForAnalysis.trim().length >= 10) {
+            const outcomeSummary = await OutcomeSummaryService.generateOutcomeSummary(
+              transcriptForAnalysis,
+              sentimentLabel || undefined
+            );
+            outcomeShort = outcomeSummary.shortOutcome;
+            outcomeDetailed = outcomeSummary.detailedSummary;
+            sentimentLabel = outcomeSummary.sentimentLabel;
+            sentimentScore = outcomeSummary.sentimentScore;
+            sentimentSummary = outcomeSummary.sentimentSummary;
+            sentimentUrgency = outcomeSummary.sentimentUrgency;
 
-          log.info('Vapi-Webhook', 'Outcome + sentiment generated', {
-            callId: call?.id,
-            shortOutcome: outcomeShort,
-            sentimentLabel,
-            sentimentScore,
-            summaryLength: outcomeDetailed.length,
-            transcriptSource: artifact?.transcript ? 'artifact.transcript' : 'reconstructed-from-messages'
-          });
-        } else {
-          log.warn('Vapi-Webhook', 'No transcript available for sentiment analysis', {
-            callId: call?.id,
-            hasArtifactTranscript: !!artifact?.transcript,
-            hasArtifactMessages: !!(artifact?.messages?.length),
-            hasCallMessages: !!(call?.messages?.length)
+            log.info('Vapi-Webhook', 'GPT-4o enhancement applied (Vapi summary was missing)', {
+              callId: call?.id, source: 'gpt-4o-enhancement'
+            });
+          }
+        } catch (summaryError: any) {
+          // GPT-4o failed — that's fine, we already have Vapi native analysis values
+          log.warn('Vapi-Webhook', 'GPT-4o enhancement failed (using Vapi native — no data loss)', {
+            error: summaryError.message,
+            callId: call?.id
           });
         }
-      } catch (summaryError: any) {
-        log.error('Vapi-Webhook', 'Failed to generate outcome/sentiment - using neutral defaults', {
-          error: summaryError.message,
-          callId: call?.id
-        });
-
-        // Fallback to neutral sentiment to prevent NULL values (SSOT compliance)
-        sentimentLabel = 'neutral';
-        sentimentScore = 0.5;
-        sentimentSummary = 'Sentiment analysis unavailable';
-        sentimentUrgency = 'low';
       }
 
       // ========== CONTACT LOOKUP/AUTO-CREATION (Strategic SSOT Fix 2026-02-09) ==========
@@ -858,6 +898,28 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
 
       // Deduplicate tools
       toolsUsed = Array.from(new Set(toolsUsed));
+
+      // Change 5: Also read tools tracked during the call by the function-call handler (Change 3)
+      if (call?.id) {
+        try {
+          const { data: existingCallData } = await supabase
+            .from('calls')
+            .select('tools_used')
+            .eq('vapi_call_id', call.id)
+            .maybeSingle();
+
+          if (existingCallData?.tools_used?.length) {
+            toolsUsed = Array.from(new Set([...toolsUsed, ...existingCallData.tools_used]));
+            log.info('Vapi-Webhook', 'Merged tools from DB (tracked during call)', {
+              callId: call.id,
+              dbTools: existingCallData.tools_used,
+              mergedTools: toolsUsed
+            });
+          }
+        } catch (toolReadError: any) {
+          log.warn('Vapi-Webhook', 'Failed to read DB tools (non-blocking)', { error: toolReadError?.message });
+        }
+      }
 
       // DEBUG: Log all Golden Record field extraction
       const debugLog = {
@@ -1020,71 +1082,71 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
         }
 
         // ========== GOLDEN RECORD: Link appointments to calls ==========
-        // If bookClinicAppointment tool was used, find and link the appointment
-        // NOTE: Uses outer-scope `toolsUsed` (extracted at lines ~800-817 from all sources:
-        // call.messages + artifact.messages + analysis.toolCalls). DO NOT re-extract
-        // from call.messages alone — it is often empty in end-of-call-report payloads.
+        // ALWAYS search for unlinked appointments created during this call's timeframe
+        // Change 4: Removed tool detection gate — toolsUsed was always empty in end-of-call-report.
+        // The time-window + org_id + unlinked constraints are sufficient for correct linkage.
+        // Also uses appointmentBookedByVapi from Vapi's native structuredData as additional signal.
         if (orgId && call?.id) {
           try {
-            const bookedDuringCall = toolsUsed.includes('bookClinicAppointment');
+            const callStartTime = call?.createdAt || call?.startedAt;
+            const callEndTime = call?.endedAt || message.endedAt || new Date().toISOString();
 
-            if (bookedDuringCall) {
-              // Find unlinked appointment created during this call's timeframe
-              const callStartTime = call?.createdAt || call?.startedAt;
-              const callEndTime = call?.endedAt || message.endedAt || new Date().toISOString();
+            const { data: linkedAppointment, error: linkError } = await supabase
+              .from('appointments')
+              .select('id')
+              .eq('org_id', orgId)
+              .is('call_id', null)  // Not yet linked
+              .gte('created_at', callStartTime)
+              .lte('created_at', callEndTime)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-              const { data: linkedAppointment, error: linkError } = await supabase
-                .from('appointments')
+            if (linkedAppointment && !linkError) {
+              // Fetch the call's database ID for bidirectional linking
+              const { data: callRecord } = await supabase
+                .from('calls')
                 .select('id')
-                .eq('org_id', orgId)
-                .is('call_id', null)  // Not yet linked
-                .gte('created_at', callStartTime)
-                .lte('created_at', callEndTime)
-                .order('created_at', { ascending: false })
-                .limit(1)
+                .eq('vapi_call_id', call.id)
                 .maybeSingle();
 
-              if (linkedAppointment && !linkError) {
-                // Fetch the call's database ID for bidirectional linking
-                const { data: callRecord } = await supabase
-                  .from('calls')
-                  .select('id')
-                  .eq('vapi_call_id', call.id)
-                  .maybeSingle();
+              if (callRecord) {
+                // Bidirectional link: calls.appointment_id AND appointments.call_id
+                const [callUpdate, appointmentUpdate] = await Promise.all([
+                  supabase
+                    .from('calls')
+                    .update({ appointment_id: linkedAppointment.id })
+                    .eq('vapi_call_id', call.id)
+                    .eq('org_id', orgId),
+                  supabase
+                    .from('appointments')
+                    .update({
+                      call_id: callRecord.id,
+                      vapi_call_id: call.id
+                    })
+                    .eq('id', linkedAppointment.id)
+                ]);
 
-                if (callRecord) {
-                  // Bidirectional link: calls.appointment_id AND appointments.call_id
-                  const [callUpdate, appointmentUpdate] = await Promise.all([
-                    supabase
-                      .from('calls')
-                      .update({ appointment_id: linkedAppointment.id })
-                      .eq('vapi_call_id', call.id)
-                      .eq('org_id', orgId),
-                    supabase
-                      .from('appointments')
-                      .update({
-                        call_id: callRecord.id,
-                        vapi_call_id: call.id
-                      })
-                      .eq('id', linkedAppointment.id)
-                  ]);
-
-                  if (callUpdate.error || appointmentUpdate.error) {
-                    log.error('Vapi-Webhook', 'Failed to link appointment to call', {
-                      callId: call.id,
-                      appointmentId: linkedAppointment.id,
-                      callError: callUpdate.error?.message,
-                      appointmentError: appointmentUpdate.error?.message
-                    });
-                  } else {
-                    log.info('Vapi-Webhook', '🔗 Appointment linked to call (Golden Record)', {
-                      callId: call.id,
-                      appointmentId: linkedAppointment.id,
-                      orgId
-                    });
-                  }
+                if (callUpdate.error || appointmentUpdate.error) {
+                  log.error('Vapi-Webhook', 'Failed to link appointment to call', {
+                    callId: call.id,
+                    appointmentId: linkedAppointment.id,
+                    callError: callUpdate.error?.message,
+                    appointmentError: appointmentUpdate.error?.message
+                  });
+                } else {
+                  log.info('Vapi-Webhook', 'Appointment linked to call (Golden Record)', {
+                    callId: call.id,
+                    appointmentId: linkedAppointment.id,
+                    orgId,
+                    appointmentBookedByVapi
+                  });
                 }
               }
+            } else {
+              log.info('Vapi-Webhook', 'No unlinked appointment found during call timeframe', {
+                callId: call.id, orgId, callStartTime, callEndTime, appointmentBookedByVapi
+              });
             }
           } catch (linkError: any) {
             // Non-blocking: appointment linking failure doesn't fail webhook processing
@@ -1217,21 +1279,46 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
       if (orgId && call?.id) {
         try {
           const duration = Math.round(message.durationSeconds || call?.duration || 0);
+          log.info('Vapi-Webhook', '📊 Call duration extracted for billing', {
+            billingTraceId,
+            duration,
+            source: message.durationSeconds ? 'message.durationSeconds' : (call?.duration ? 'call.duration' : 'default_zero'),
+            callId: call.id,
+            orgId
+          });
+
+          if (duration <= 0) {
+            log.warn('Vapi-Webhook', '⚠️ BILLING SKIPPED: Zero duration detected', {
+              billingTraceId,
+              orgId,
+              callId: call.id,
+              durationSeconds: duration,
+              reason: 'Duration is zero or negative'
+            });
+          }
+
           const commitResult = await commitReservedCredits(call.id, duration);
 
           if (commitResult.success) {
-            log.info('Vapi-Webhook', 'Call billing committed via reservation', {
+            log.info('Vapi-Webhook', '💰 CREDITS DEDUCTED via reservation commit', {
+              billingTraceId,
               callId: call.id,
               orgId,
-              reserved: commitResult.reservedPence,
-              actual: commitResult.actualCostPence,
-              released: commitResult.releasedPence,
+              reservedPence: commitResult.reservedPence,
+              actualCostPence: commitResult.actualCostPence,
+              releasedPence: commitResult.releasedPence,
+              balanceBefore: commitResult.balanceBefore,
               balanceAfter: commitResult.balanceAfter,
+              duration
             });
           } else if (commitResult.fallbackToDirectBilling) {
             // No reservation found — fall back to legacy direct billing
-            log.info('Vapi-Webhook', 'No reservation found, falling back to direct billing', {
-              callId: call.id, orgId,
+            log.info('Vapi-Webhook', '🔄 FALLBACK: Direct billing triggered', {
+              billingTraceId,
+              callId: call.id,
+              orgId,
+              reason: 'no_reservation_found',
+              duration
             });
             await processCallBilling(
               orgId,
@@ -1241,6 +1328,12 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
               message.cost || null,
               call?.costs || null
             );
+            log.info('Vapi-Webhook', '💰 CREDITS DEDUCTED via direct billing (fallback)', {
+              billingTraceId,
+              callId: call.id,
+              orgId,
+              duration
+            });
           } else {
             log.error('Vapi-Webhook', 'Commit failed unexpectedly', {
               callId: call.id, orgId, error: commitResult.error,
@@ -1248,11 +1341,23 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
           }
         } catch (billingErr: any) {
           // CRITICAL: Billing failure must NOT block webhook processing
-          log.error('Vapi-Webhook', 'Prepaid billing failed (non-blocking)', {
+          log.error('Vapi-Webhook', '❌ BILLING FAILED (non-blocking)', {
+            billingTraceId,
             error: billingErr?.message,
+            stack: billingErr?.stack,
             callId: call.id,
             orgId,
+            duration,
+            vapiCallId: message.call?.id,
+            failureContext: {
+              hadOrgId: !!orgId,
+              hadCallId: !!call?.id,
+              duration: duration,
+              commitResultAvailable: false
+            }
           });
+          // TODO: Send alert to monitoring system (Sentry, Slack, etc.)
+          // await sendBillingFailureAlert({ orgId, callId: call.id, error: billingErr });
         }
       }
 

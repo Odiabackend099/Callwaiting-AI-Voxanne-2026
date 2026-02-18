@@ -12,12 +12,12 @@ const partners = [
 
 export function TrustBarSimple() {
     return (
-        <section className="bg-white py-12 border-y border-slate-100 overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6 mb-8 text-center">
-                <h2 className="text-2xl font-bold text-obsidian mb-2">
+        <section className="bg-white py-14 border-y border-surgical-200/50 overflow-hidden">
+            <div className="section-container mb-8 text-center">
+                <h2 className="text-sm font-medium text-obsidian/40 uppercase tracking-widest mb-2">
                     Trusted Integrations
                 </h2>
-                <p className="text-sm text-obsidian/60">
+                <p className="text-sm text-obsidian/50">
                     Seamlessly connects with the tools you already use
                 </p>
             </div>

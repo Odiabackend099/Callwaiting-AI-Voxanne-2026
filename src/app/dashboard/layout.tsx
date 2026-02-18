@@ -6,6 +6,7 @@ import { VoiceAgentProvider } from '@/contexts/VoiceAgentContext';
 import { DashboardWebSocketProvider } from '@/contexts/DashboardWebSocketContext';
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import CommandPalette from '@/components/dashboard/CommandPalette';
+import { BackendStatusBanner } from '@/components/dashboard/BackendStatusBanner';
 
 export const metadata: Metadata = {
     title: "Voxanne AI - Voice Agent Dashboard",
@@ -42,6 +43,7 @@ export default async function DashboardLayout({
                         <div className="flex-1 md:ml-72 flex flex-col h-full overflow-hidden relative">
                             {/* Command Palette */}
                             <CommandPalette />
+                            <BackendStatusBanner />
 
                             <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-4 pr-4 pb-4 bg-clinical-bg">
                                 {children}

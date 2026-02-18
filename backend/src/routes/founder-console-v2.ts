@@ -624,20 +624,8 @@ async function loadOrganization(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    const { data: org, error } = await supabase
-      .from('organizations')
-      .select('id, name')
-      .limit(1)
-      .single();
-
-    if (error || !org) {
-      logger.warn('Organization not found', { requestId: req.requestId, error: error?.message });
-      // Don't fail - some endpoints may not require org
-      req.org = undefined;
-    } else {
-      req.org = org as Organization;
-    }
-
+    // No orgId available — do not guess. Fail closed.
+    req.org = undefined;
     next();
   } catch (err) {
     logger.error('Failed to load organization', { requestId: req.requestId, error: (err as Error).message });
@@ -830,26 +818,6 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   const resolvedFirstMessage = agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE;
   const resolvedMaxDurationSeconds = agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION;
 
-  // CRITICAL DEBUG: Log system prompt resolution
-  console.log('[SYSTEM_PROMPT_DEBUG] System prompt resolution in ensureAssistantSynced', {
-    agentId,
-    agentName: agent.name,
-    fromDatabase: {
-      system_prompt: agent.system_prompt ? `"${agent.system_prompt.substring(0, 50)}..."` : 'NULL',
-      voice: agent.voice,
-      voice_provider: agent.voice_provider,
-      first_message: agent.first_message ? `"${agent.first_message.substring(0, 30)}..."` : 'NULL'
-    },
-    resolved: {
-      systemPrompt: `"${resolvedSystemPrompt.substring(0, 50)}..."`,
-      voiceId: resolvedVoiceId,
-      voiceProvider: resolvedVoiceProvider,
-      language: resolvedLanguage,
-      firstMessage: `"${resolvedFirstMessage.substring(0, 30)}..."`
-    },
-    isUsingDefault: !agent.system_prompt
-  });
-
   // NOTE: Vapi expects assistant payload shape with model/voice/transcriber.
   // Using non-standard keys like systemPrompt/voiceId/serverUrl can cause 400 Bad Request.
   // MODERN APPROACH: Tools are registered separately by ToolSyncService, not embedded here
@@ -918,7 +886,24 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
         firstMessage: assistantCreatePayload.firstMessage,
         maxDurationSeconds: assistantCreatePayload.maxDurationSeconds,
         serverUrl: assistantCreatePayload.serverUrl,
-        serverMessages: assistantCreatePayload.serverMessages
+        serverMessages: assistantCreatePayload.serverMessages,
+        analysisPlan: {
+          summaryPrompt: 'You are a clinical call analyst for a healthcare AI receptionist. Summarize this call in 2-3 sentences, focusing on: what the caller wanted, what actions were taken (appointment booked, information provided, etc.), and the outcome. Be specific about services discussed and any scheduling details.',
+          structuredDataPrompt: 'Extract the following from the call transcript. For sentiment, consider the caller\'s tone, satisfaction level, and emotional state throughout the conversation.',
+          structuredDataSchema: {
+            type: 'object' as const,
+            properties: {
+              sentimentScore: { type: 'number' as const, description: 'Caller sentiment score from 0.0 (very negative) to 1.0 (very positive)' },
+              sentimentUrgency: { type: 'string' as const, enum: ['low', 'medium', 'high', 'critical'], description: 'Call urgency: critical if urgent medical need, high if time-sensitive, medium for standard, low for informational' },
+              shortOutcome: { type: 'string' as const, description: 'Brief 1-3 word outcome like: Booking Confirmed, Information Provided, Follow-up Scheduled, Caller Frustrated, Call Dropped' },
+              appointmentBooked: { type: 'boolean' as const, description: 'Whether an appointment was successfully booked during this call' },
+              serviceDiscussed: { type: 'string' as const, description: 'The main service or topic discussed (e.g., Botox, consultation, teeth cleaning)' }
+            },
+            required: ['sentimentScore', 'sentimentUrgency', 'shortOutcome', 'appointmentBooked']
+          },
+          successEvaluationPrompt: 'Evaluate if this call achieved its goal. A call is successful if: the caller got the information they needed, OR an appointment was booked, OR they were properly directed to the right resource. A call fails if: the caller was frustrated, the AI could not help, tools failed, or the caller hung up without resolution.',
+          successEvaluationRubric: 'PassFail' as any
+        }
       };
 
       // CRITICAL DEBUG: Log the update payload before sending to VAPI
@@ -2242,32 +2227,6 @@ router.post(
       const outboundPayload = buildUpdatePayload(outbound, 'outbound');
 
       // CRITICAL DEBUG: Log what was built AND what was rejected
-      console.log('\n=== AGENT SAVE DEBUG ===');
-      console.log('Inbound received:', JSON.stringify(inbound, null, 2));
-      console.log('Inbound payload built:', JSON.stringify(inboundPayload, null, 2));
-
-      if (inbound && !inboundPayload) {
-        console.log('⚠️ WARNING: Inbound config provided but payload is NULL');
-        console.log('Possible reasons:');
-        console.log('- All fields were undefined/null/empty');
-        console.log('- Voice validation failed (invalid voiceId)');
-        console.log('- Language validation failed (invalid language)');
-        console.log('- Field name mismatch (check camelCase vs snake_case)');
-      }
-
-      console.log('Outbound received:', JSON.stringify(outbound, null, 2));
-      console.log('Outbound payload built:', JSON.stringify(outboundPayload, null, 2));
-
-      if (outbound && !outboundPayload) {
-        console.log('⚠️ WARNING: Outbound config provided but payload is NULL');
-        console.log('Possible reasons:');
-        console.log('- All fields were undefined/null/empty');
-        console.log('- Voice validation failed (invalid voiceId)');
-        console.log('- Language validation failed (invalid language)');
-        console.log('- Field name mismatch (check camelCase vs snake_case)');
-      }
-
-      console.log('=== END DEBUG ===\n');
       logger.info('Payloads built for agent update', {
         requestId,
         inboundReceived: Boolean(inbound),
@@ -2689,6 +2648,8 @@ router.post(
           agents: agentDetailsVerified
         });
 
+        const allToolsSynced = syncResults.every((r: any) => r.toolsSynced !== false);
+
         res.status(200).json({
           success: true,
           syncedAgentIds: agentIdsToSync,
@@ -2700,6 +2661,7 @@ router.post(
           message: `Agent configuration saved and synced to Vapi. ${agentIdsToSync.length} assistant(s) updated.`,
           voiceSynced: true,
           knowledgeBaseSynced: true,
+          toolsSynced: allToolsSynced,
           agentDetails: agentDetailsVerified,
           requestId
         });
@@ -3771,7 +3733,24 @@ router.post(
             maxDurationSeconds: activeConfig.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION,
             language: activeConfig.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE,
             // Ensure we receive async failure reports
-            serverMessages: ['function-call', 'hangup', 'status-update', 'end-of-call-report', 'transcript']
+            serverMessages: ['function-call', 'hangup', 'status-update', 'end-of-call-report', 'transcript'],
+            analysisPlan: {
+              summaryPrompt: 'You are a clinical call analyst for a healthcare AI receptionist. Summarize this call in 2-3 sentences, focusing on: what the caller wanted, what actions were taken (appointment booked, information provided, etc.), and the outcome. Be specific about services discussed and any scheduling details.',
+              structuredDataPrompt: 'Extract the following from the call transcript. For sentiment, consider the caller\'s tone, satisfaction level, and emotional state throughout the conversation.',
+              structuredDataSchema: {
+                type: 'object',
+                properties: {
+                  sentimentScore: { type: 'number', description: 'Caller sentiment score from 0.0 (very negative) to 1.0 (very positive)' },
+                  sentimentUrgency: { type: 'string', enum: ['low', 'medium', 'high', 'critical'], description: 'Call urgency: critical if urgent medical need, high if time-sensitive, medium for standard, low for informational' },
+                  shortOutcome: { type: 'string', description: 'Brief 1-3 word outcome like: Booking Confirmed, Information Provided, Follow-up Scheduled, Caller Frustrated, Call Dropped' },
+                  appointmentBooked: { type: 'boolean', description: 'Whether an appointment was successfully booked during this call' },
+                  serviceDiscussed: { type: 'string', description: 'The main service or topic discussed (e.g., Botox, consultation, teeth cleaning)' }
+                },
+                required: ['sentimentScore', 'sentimentUrgency', 'shortOutcome', 'appointmentBooked']
+              },
+              successEvaluationPrompt: 'Evaluate if this call achieved its goal. A call is successful if: the caller got the information they needed, OR an appointment was booked, OR they were properly directed to the right resource. A call fails if: the caller was frustrated, the AI could not help, tools failed, or the caller hung up without resolution.',
+              successEvaluationRubric: 'PassFail' as any
+            }
           });
 
           // Update the agent record with the assistant ID

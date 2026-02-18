@@ -9,6 +9,7 @@ import twilio from 'twilio';
 import bcrypt from 'bcrypt';
 import { supabase } from './supabase-client';
 import { IntegrationDecryptor } from './integration-decryptor';
+import { ManagedTelephonyService } from './managed-telephony-service';
 import { generateOTP } from '../utils/otp-utils';
 import { generateForwardingCodes, CarrierCodeConfig } from './gsm-code-generator';
 import type { TwilioClient } from '../types/telephony-types';
@@ -167,7 +168,7 @@ export class TelephonyService {
     }
 
     // Get Twilio credentials
-    const twilioCredentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
+    const twilioCredentials = await IntegrationDecryptor.getEffectiveTwilioCredentials(orgId);
     if (!twilioCredentials) {
       throw new Error('Twilio credentials not configured. Please set up Twilio integration first.');
     }
@@ -189,7 +190,72 @@ export class TelephonyService {
     } catch (twilioError) {
       const errorMessage = twilioError instanceof Error ? twilioError.message : 'Unknown Twilio error';
 
-      // Provide helpful guidance for common Twilio errors
+      // Extract Twilio error code if available
+      const twilioErrorCode = (twilioError as any)?.code || null;
+
+      // Handle Geo Permissions error (Error Code 13227)
+      if (twilioErrorCode === 13227 || errorMessage.includes('International Permission') || errorMessage.includes('geo-permissions')) {
+        // For managed orgs: auto-fix by enabling Geo Permissions inheritance from master
+        const { data: orgData } = await supabase
+          .from('organizations')
+          .select('telephony_mode')
+          .eq('id', orgId)
+          .single();
+
+        if (orgData?.telephony_mode === 'managed') {
+          logger.info('Auto-fixing Geo Permissions for managed org', { orgId, phoneNumber });
+
+          const inheritResult = await ManagedTelephonyService.enableGeoPermissionInheritance(
+            twilioCredentials.accountSid,
+            twilioCredentials.authToken
+          );
+
+          if (inheritResult.success) {
+            // Wait for Twilio to propagate the inheritance
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            // Retry the validation request once
+            try {
+              validationRequest = await twilioClient.validationRequests.create({
+                phoneNumber,
+                friendlyName: friendlyName || `Voxanne Verified: ${phoneNumber}`
+              });
+              logger.info('Validation retry succeeded after enabling Geo Permissions inheritance', { orgId, phoneNumber });
+              // Break out of catch block - validation succeeded on retry
+            } catch (retryError) {
+              const retryMsg = retryError instanceof Error ? retryError.message : 'Unknown error';
+              logger.error('Validation retry failed after enabling inheritance', { orgId, error: retryMsg });
+              throw new Error(
+                `Geo Permissions were auto-enabled but the call still failed. ` +
+                `This may be a propagation delay. Please wait 5 minutes and try again.\n\n` +
+                `Twilio Error: ${retryMsg}`
+              );
+            }
+          } else {
+            throw new Error(
+              `Failed to auto-enable Geo Permissions: ${inheritResult.error}\n\n` +
+              `Please contact support or try again later.`
+            );
+          }
+        } else {
+          // BYOC orgs: show manual instructions (they manage their own Twilio)
+          const countryMatch = phoneNumber.match(/^\+(\d{1,3})/);
+          const countryCode = countryMatch ? countryMatch[1] : 'this country';
+
+          throw new Error(
+            `Twilio Geo Permissions required for calling ${phoneNumber}.\n\n` +
+            `Your Twilio account needs permission to call country code +${countryCode}.\n\n` +
+            `To fix this:\n` +
+            `1. Visit: https://www.twilio.com/console/voice/calls/geo-permissions\n` +
+            `2. Enable the country under "Low Risk" or "High Risk" tab\n` +
+            `3. Wait 5-10 minutes for changes to propagate\n` +
+            `4. Try verification again\n\n` +
+            `Twilio Error: ${errorMessage}`
+          );
+        }
+      }
+
+      // Provide helpful guidance for trial account errors
       if (errorMessage.includes('trial') || errorMessage.includes('not supported on trial account')) {
         throw new Error(
           `Twilio trial account limitation: ${errorMessage}\n\n` +
@@ -218,7 +284,15 @@ export class TelephonyService {
       .single();
 
     if (insertError) {
-      throw new Error('Failed to store verification record');
+      logger.error('Failed to store verification record', {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+        orgId,
+        phoneNumber
+      });
+      throw new Error(`Failed to store verification record: ${insertError.message}`);
     }
 
     return {
@@ -291,7 +365,7 @@ export class TelephonyService {
     }
 
     // Get Twilio credentials
-    const twilioCredentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
+    const twilioCredentials = await IntegrationDecryptor.getEffectiveTwilioCredentials(orgId);
     if (!twilioCredentials) {
       throw new Error('Twilio credentials not found');
     }
@@ -423,6 +497,26 @@ export class TelephonyService {
 
     const twilioForwardingNumber = integration.config.phoneNumber;
 
+    // Loop prevention: Reject if user's verified number IS the AI inbound number
+    // This would create an infinite call loop (calls forward to AI, AI routes back)
+    if (verifiedNumber.phone_number === twilioForwardingNumber) {
+      throw new Error(
+        'Cannot forward calls to the same number. Your verified number matches your AI inbound number, which would create an infinite loop.'
+      );
+    }
+
+    // Also check against managed phone numbers for the org
+    const { data: managedNumbers } = await supabase
+      .from('managed_phone_numbers')
+      .select('phone_number')
+      .eq('org_id', orgId);
+
+    if (managedNumbers?.some(mn => mn.phone_number === verifiedNumber.phone_number)) {
+      throw new Error(
+        'Cannot forward calls from a managed AI number to itself. Please use a different phone number.'
+      );
+    }
+
     // Generate GSM codes
     const codeConfig: CarrierCodeConfig = {
       carrier: carrier as any,
@@ -543,7 +637,7 @@ export class TelephonyService {
     // Remove from Twilio if we have the SID
     if (verification.twilio_caller_id_sid) {
       try {
-        const twilioCredentials = await IntegrationDecryptor.getTwilioCredentials(orgId);
+        const twilioCredentials = await IntegrationDecryptor.getEffectiveTwilioCredentials(orgId);
         if (twilioCredentials) {
           const twilioClient = twilio(twilioCredentials.accountSid, twilioCredentials.authToken);
           await twilioClient.outgoingCallerIds(verification.twilio_caller_id_sid).remove();

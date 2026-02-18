@@ -1,10 +1,10 @@
 # Voxanne AI – Product Requirements Document (PRD)
 
-**Version:** 2026.34.0
-**Last Updated:** 2026-02-14 23:15 UTC
-**Status:** ✅ PRODUCTION READY - Real-Time Prepaid Billing Engine Deployed
-**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅
-**Verification Status:** ✅ ALL 3 PHASES VERIFIED & OPERATIONAL - Database migrations applied to production Supabase
+**Version:** 2026.35.0
+**Last Updated:** 2026-02-16 09:30 UTC
+**Status:** ✅ PRODUCTION READY - Billing Pipeline Schema Fixed & Rate Aligned
+**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅
+**Verification Status:** ✅ ALL PHASES OPERATIONAL - Schema mismatch resolved, rate aligned to 56p/min, E2E tests passing 100%
 
 ---
 
@@ -26,6 +26,29 @@ It intentionally removes legacy tiered pricing, stale troubleshooting notes, and
 | Core value prop | End-to-end automation from inbound call → appointment → billing, with auditable Golden Record data |
 | Deployment | Frontend (Next.js / Vercel) + Backend (Node/Express on port 3001) + Supabase (Postgres + Auth) + Stripe + Twilio + Vapi |
 | Pricing model | Pay-as-you-go wallet. Customers top up from **£25** (2,500 pence). Calls billed at **56 pence/min GBP** (fixed rate). |
+
+### Production Deployment Configuration (2026-02-16)
+
+**Frontend (Vercel):**
+- Production URL: `https://voxanne.ai`
+- Alternate domains: `https://www.voxanne.ai`
+- Platform: Vercel Edge Network
+
+**Backend (Render):**
+- Production URL: `https://voxanneai.onrender.com`
+- Platform: Render
+- Important: Local development runs on `http://localhost:3001`
+
+**Stripe Webhook Configuration:**
+- Webhook URL: `https://voxanneai.onrender.com/api/webhooks/stripe`
+- Events listened: `checkout.session.completed`, `payment_intent.succeeded`, `customer.created`
+- Secret storage: Render environment variable `STRIPE_WEBHOOK_SECRET`
+- ⚠️ **CRITICAL:** The domain `api.voxanne.ai` does not exist - do not use it in any configuration
+
+**Environment Variables (Production):**
+- Backend webhook secret stored in Render dashboard under "Environment" tab
+- Frontend API URL: `NEXT_PUBLIC_API_URL=https://voxanneai.onrender.com`
+- Stripe webhook secret: Configured in Stripe Dashboard → Webhooks → Endpoint details
 
 ---
 
@@ -92,6 +115,104 @@ It intentionally removes legacy tiered pricing, stale troubleshooting notes, and
 
 ---
 
+## 2.6 Billing Pipeline Schema Fix (2026-02-16) ✅ DEPLOYED
+
+**Executive Summary:** Critical schema mismatch resolved and billing rate aligned. The `commit_reserved_credits()` RPC function was attempting to write to non-existent columns in `credit_transactions`, causing silent billing failures since 2026-02-14. Issue discovered via E2E testing, fixed within 2 hours, and verified operational.
+
+### Root Cause Identified (2026-02-16 09:08 UTC)
+- ❌ **Schema Mismatch:** RPC function `commit_reserved_credits()` tried to INSERT into `credit_transactions` with columns `call_id` and `vapi_call_id` that didn't exist
+- ❌ **Error:** PostgreSQL error `column "call_id" of relation "credit_transactions" does not exist`
+- ❌ **Impact:** All call billing silently failed since Phase 2 deployment (2026-02-14)
+- ❌ **Duration:** ~48 hours of zero revenue collection (calls completed normally but credits not deducted)
+
+### Schema Fix Applied (2026-02-16 09:10 UTC)
+**Migration:** `20260216_add_call_id_to_credit_transactions.sql`
+
+**Changes:**
+1. ✅ Added `call_id TEXT` column (links transaction to internal call record)
+2. ✅ Added `vapi_call_id TEXT` column (links to Vapi external identifier)
+3. ✅ Created index `idx_credit_transactions_call_id` for fast lookup
+4. ✅ Created index `idx_credit_transactions_vapi_call_id` for reconciliation
+5. ✅ Added UNIQUE constraint on `call_id` for idempotency (prevents duplicate billing)
+
+**Verification:**
+- ✅ Both columns exist in production database
+- ✅ Both indexes created (2/2)
+- ✅ UNIQUE constraint active: `credit_transactions_call_id_unique`
+- ✅ E2E test passes: Credits deducted automatically
+
+### Rate Alignment Fix (2026-02-16 09:17 UTC)
+**Issue:** Rate mismatch between application code (56p/min) and RPC functions (49p/min)
+- Application config: 70 USD cents × 0.79 GBP = **56 pence/min** ✅
+- RPC functions (before fix): Hardcoded **49 pence/min** ❌
+- **Impact:** 12.5% undercharging (7 pence/minute revenue loss)
+
+**Migration:** `20260216_fix_rate_mismatch.sql`
+
+**Changes:**
+1. ✅ Updated `reserve_call_credits()` RPC: `v_rate_per_minute := 56` (changed from 49)
+2. ✅ Updated `commit_reserved_credits()` RPC: `v_rate_per_minute := 56` (changed from 49)
+
+**Verification (E2E Test Results):**
+```
+📊 Test Results Summary:
+Expected cost:         112p (2 min × 56p/min)
+Actual balance change: 112p
+Match:                 ✅ YES
+Reserved amount:       280p (5 min × 56p/min)
+Released (refund):     168p
+Transaction recorded:  ✅ YES
+Reservation committed: ✅ YES
+
+🎉 END-TO-END BILLING TEST PASSED
+```
+
+### Deployment Timeline
+- **09:08 UTC:** Root cause identified via E2E test
+- **09:10 UTC:** Schema migration applied (call_id, vapi_call_id columns added)
+- **09:12 UTC:** Schema verified, E2E test shows billing operational
+- **09:17 UTC:** Rate fix applied (49p → 56p)
+- **09:18 UTC:** Rate verified, E2E test passes 100%
+- **Total Resolution Time:** 10 minutes from discovery to fix
+
+### Testing & Verification
+- ✅ **E2E Test:** `npm run test:billing-e2e` - 100% PASSING
+  - Reserve 280p for 5-minute call ✅
+  - Commit 112p for 2-minute call ✅
+  - Release 168p unused credits ✅
+  - Verify transaction recorded ✅
+  - Verify balance accurate ✅
+- ✅ **Billing Debug API:** `GET /api/billing-debug/:callId` - Operational
+- ✅ **Production Verification:** User confirmed credits deducting automatically in dashboard
+
+### Business Impact
+- ✅ **Revenue Collection Restored:** Credits now deduct automatically for all calls
+- ✅ **Rate Accuracy:** Fixed 12.5% undercharging (7p/min revenue leak eliminated)
+- ✅ **Idempotency Enforced:** UNIQUE constraint prevents double-billing
+- ✅ **Audit Trail Complete:** Full transaction linkage to calls table
+- ✅ **Customer Confidence:** User verified automatic deductions work correctly
+
+### Files Created/Modified
+**Created:**
+1. `backend/supabase/migrations/20260216_add_call_id_to_credit_transactions.sql` (68 lines)
+2. `backend/supabase/migrations/20260216_fix_rate_mismatch.sql` (248 lines)
+3. `backend/src/routes/billing-debug.ts` (208 lines) - Diagnostic API
+4. `backend/src/scripts/test-call-billing-e2e.ts` (235 lines) - Automated testing
+5. `BILLING_ROOT_CAUSE_FIXED.md` - Comprehensive analysis
+
+**Modified:**
+1. `backend/src/routes/vapi-webhook.ts` - Enhanced diagnostic logging
+2. `backend/src/server.ts` - Mounted billing debug router
+3. `backend/package.json` - Added `test:billing-e2e` script
+
+### Prevention Measures
+- ✅ **E2E Testing:** Automated billing test catches schema issues immediately
+- ✅ **Billing Debug API:** Real-time inspection of billing status for any call
+- ✅ **Enhanced Logging:** Billing trace IDs for debugging webhook → billing flow
+- ✅ **Rate Centralization:** Document need to centralize rate config (avoid hardcoded values)
+
+---
+
 ## 3. Core Capabilities
 
 1. **AI Voice Agent** – Handles inbound/outbound calls via Vapi, executes tools (availability checks, booking, KB queries, transfer, end call).
@@ -105,7 +226,8 @@ It intentionally removes legacy tiered pricing, stale troubleshooting notes, and
 5. **Managed Telephony** – Purchase Twilio subaccount numbers, surface in Agent Config, enforce one-number-per-org, support manual AI Forwarding.
 6. **Dashboards & Leads** – Production dashboards for call stats, sentiment, lead enrichment, conversion tracking, and Geo/SEO telemetry.
 7. **Onboarding Form** – Intake form at `/start` collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support team. Stores submissions in `onboarding_submissions` table with full audit trail.
-8. **Security & Compliance** – JWT middleware using `jwt-decode`, Supabase RLS on all tenant tables, hardened functions (`search_path` pinned to `public`), HIPAA-ready infrastructure.
+8. **Verified Caller ID** – Outbound caller ID verification via Twilio validation API. Pre-checks existing verifications to prevent errors, displays validation codes in UI, supports delete/unverify workflow. Works in both managed and BYOC telephony modes with automatic credential resolution.
+9. **Security & Compliance** – JWT middleware using `jwt-decode`, Supabase RLS on all tenant tables, hardened functions (`search_path` pinned to `public`), HIPAA-ready infrastructure.
 
 ---
 
@@ -192,9 +314,31 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 - Health endpoint must report 24h counts for processed webhooks vs wallet credits.
 - Stripe listener logs must include `charge.succeeded` events with org context.
 
-### 6.7 Security & Compliance
+### 6.7 Verified Caller ID (Outbound)
+- Organizations must verify phone numbers before using as outbound caller ID for calls
+- **Pre-Check Flow:** Backend checks Twilio's `outgoingCallerIds.list()` BEFORE creating new validation request
+- **Auto-Verification:** If number already verified in Twilio, auto-mark as verified in database (no phone call needed)
+- **Verification Call Flow:** If not verified → Call initiated → User receives call from Twilio → Automated voice reads 6-digit code → User enters code on phone keypad → User clicks "Verify & Complete Setup" button → Backend checks Twilio list → Verification confirmed
+- **API Endpoints:**
+  - `POST /api/verified-caller-id/verify` - Initiate verification (pre-check or call)
+  - `POST /api/verified-caller-id/confirm` - Confirm verification by checking Twilio's list
+  - `DELETE /api/verified-caller-id` - Remove verification and allow re-verification
+- **Telephony Mode Support:** Works with both managed (subaccount credentials) and BYOC (org credentials) modes via `IntegrationDecryptor.getEffectiveTwilioCredentials()`
+- **Database:** `verified_caller_ids` table with `org_id`, `phone_number`, `status`, `verified_at` columns
+
+**CRITICAL INVARIANTS - DO NOT MODIFY:**
+1. **Pre-Check Required:** ALWAYS call `twilioClient.outgoingCallerIds.list({ phoneNumber, limit: 1 })` BEFORE creating validation request
+2. **No Direct Creation:** NEVER use `outgoingCallerIds.create()` - ONLY use `validationRequests.create()` for new verifications
+3. **UI Code Display:** Validation code from Twilio MUST be displayed in blue box in UI (user sees code before call arrives)
+4. **Phone Keypad Entry:** User enters code on PHONE KEYPAD during Twilio call (not in web form)
+5. **Confirmation Check:** Confirmation endpoint checks Twilio's `outgoingCallerIds.list()`, NOT database code comparison
+6. **DELETE Body Parameter:** DELETE endpoint requires `phoneNumber` in request body (NOT in URL path as /:id)
+7. **Credential Resolution:** Use `getEffectiveTwilioCredentials(orgId)` NOT `getTwilioCredentials(orgId)` to support both managed and BYOC modes
+8. **Error Handling:** If "already verified" error occurs, it means pre-check was skipped - fix the pre-check logic, don't suppress the error
+
+### 6.8 Security & Compliance
 - JWT decoding (`jwt-decode`) extracts `org_id` from `app_metadata`; no fallback user allowed.
-- Supabase RLS enforced on all multitenant tables (wallets, calls, leads, appointments, phone mappings, onboarding_submissions).
+- Supabase RLS enforced on all multitenant tables (wallets, calls, leads, appointments, phone mappings, onboarding_submissions, verified_caller_ids).
 - SECURITY DEFINER/INVOKER functions pin `search_path = public`.
 - Credentials stored encrypted (AES-256-GCM) and accessed through IntegrationDecryptor caches.
 - Onboarding form sanitizes input, validates email/phone format, and stores all data with audit timestamps.
@@ -202,10 +346,30 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 ---
 
 ## 7. Operational Runbooks
-1. **Wallet Top-Up Validation**
+
+1. **Stripe Webhook Production Setup** (Run once per environment)
+   - Navigate to Stripe Dashboard: https://dashboard.stripe.com/test/webhooks
+   - Ensure in **TEST MODE** (toggle in top-right corner)
+   - Click **"Add endpoint"** button
+   - **Endpoint URL:** `https://voxanneai.onrender.com/api/webhooks/stripe`
+   - **Events to send:** `checkout.session.completed`, `payment_intent.succeeded`, `customer.created`
+   - Click **"Add endpoint"** to save
+   - **Copy signing secret** (starts with `whsec_...`)
+   - Add to Render environment variables:
+     - Go to Render Dashboard → Backend Service → Environment
+     - Add `STRIPE_WEBHOOK_SECRET` with the copied secret
+     - Render will auto-restart backend
+   - **Verification:** Test wallet top-up (see runbook below)
+   - ⚠️ **IMPORTANT:** Only ONE webhook endpoint should exist - delete any duplicates pointing to incorrect URLs (e.g., `api.voxanne.ai`)
+
+2. **Wallet Top-Up Validation**
    - Use test account `test@demo.com / demo123` (org ID from Supabase).
    - Navigate `/dashboard/wallet`, choose £25 preset, complete Stripe Checkout with `4242 4242 4242 4242`, exp `12/30`, CVC `123`.
    - Verify balance increase, transaction history entry, backend log `[StripeWebhook] Processing wallet top-up`, and Stripe listener `charge.succeeded`.
+   - **Troubleshooting:** If wallet doesn't increase, check:
+     - Stripe Dashboard → Webhooks → Click endpoint → Check "Recent Deliveries" for errors
+     - Render Dashboard → Logs → Search for `[StripeWebhook]` errors
+     - Verify webhook URL is exactly `https://voxanneai.onrender.com/api/webhooks/stripe` (not `voxanneal` typo, not `api.voxanne.ai`)
 
 2. **Managed Number Provisioning**
    - Login as `voxanne@demo.com / demo@123`.
@@ -224,6 +388,33 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 
 5. **Webhook Health**
    - Hit `/api/webhook-verification/health` (auth required) to ensure processed counts >0 and ratio = 1.0 after payments.
+
+6. **Verified Caller ID Testing**
+   - Navigate to `/dashboard/phone-settings`
+   - Enter phone number in E.164 format (e.g., `+2348141995397` for Nigerian number)
+   - Click "Start Verification" button
+   - **Expected Outcome A (Already Verified):**
+     - Blue box appears immediately with message: "Phone number is already verified!"
+     - Green verified box displays with phone number
+     - "Remove Verification" button available
+     - No phone call received (instant verification)
+   - **Expected Outcome B (Not Yet Verified):**
+     - Blue box displays 6-digit validation code (e.g., "123456")
+     - Within 1-2 minutes, receive phone call from `+14157234000` (Twilio)
+     - Automated voice asks you to enter validation code
+     - Enter the 6-digit code on phone keypad (physical phone buttons)
+     - After entering code, wait 30 seconds for Twilio to process
+     - Click "Verify & Complete Setup" button in dashboard
+     - Green verified box appears with phone number
+   - **Verification:**
+     - Check backend logs for "Already verified in Twilio" or "Verification call initiated"
+     - Query database: `SELECT * FROM verified_caller_ids WHERE org_id = 'xxx' AND status = 'verified'`
+     - Test delete: Click "Remove Verification" → Confirm deletion → Verified box disappears
+   - **Troubleshooting:**
+     - If "Twilio credentials not configured" error → Check `telephony_mode` and run debug scripts
+     - If "Phone number is already verified" error → Pre-check was skipped, verify code has pre-check logic
+     - If code not displayed → Check API response for `validationCode` field
+     - If call never arrives → Check Twilio account status, verify phone number format (E.164)
 
 ---
 

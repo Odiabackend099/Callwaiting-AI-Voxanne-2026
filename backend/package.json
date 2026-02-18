@@ -42,6 +42,7 @@
     "startup": "ts-node scripts/startup-orchestration.ts",
     "restart:all": "ts-node scripts/restart-and-configure.ts",
     "test:booking": "ts-node scripts/test-booking-e2e.ts",
+    "test:billing-e2e": "ts-node src/scripts/test-call-billing-e2e.ts",
     "verify:webhook": "ts-node scripts/verify-webhook.ts",
     "verify:phase1": "npx tsx src/scripts/verify-phase1.ts",
     "db:encrypt-integrations": "npx tsx src/scripts/encrypt-integrations.ts",

@@ -2,9 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Player, PlayerRef } from '@remotion/player';
-import { VoxanneDemo } from '../../remotion/Composition';
-import { Play, Pause } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -14,19 +12,20 @@ interface RemotionHeroDemoProps {
 }
 
 export default function RemotionHeroDemo({ isActive, onToggle }: RemotionHeroDemoProps) {
-    const playerRef = useRef<PlayerRef>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
 
     // Auto-play/pause based on active state
     useEffect(() => {
         if (isActive) {
-            playerRef.current?.play();
+            // Attempt autoplay with catch for browser policies
+            videoRef.current?.play().catch(e => console.log('Autoplay prevented:', e));
         } else {
-            playerRef.current?.pause();
+            videoRef.current?.pause();
         }
     }, [isActive]);
 
     return (
-        <div className="relative w-full h-[400px] bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden flex flex-col group">
+        <div className="relative w-full aspect-[9/16] h-auto bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden flex flex-col group">
 
             {/* IDLE STATE: "Watch Demo" Cover */}
             <AnimatePresence>
@@ -49,21 +48,15 @@ export default function RemotionHeroDemo({ isActive, onToggle }: RemotionHeroDem
                 )}
             </AnimatePresence>
 
-            {/* ACTIVE STATE: Remotion Player */}
+            {/* ACTIVE STATE: Optimized MP4 Video */}
             <div className={cn("absolute inset-0 transition-opacity duration-500", isActive ? "opacity-100" : "opacity-0 pointer-events-none")}>
-                <Player
-                    ref={playerRef}
-                    component={VoxanneDemo}
-                    durationInFrames={148 * 30}
-                    compositionWidth={1920}
-                    compositionHeight={1080}
-                    fps={30}
-                    controls
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                    }}
-                    inputProps={{}}
+                <video
+                    ref={videoRef}
+                    src="/demo/voxanne-testimonial.mp4"
+                    className="w-full h-full object-cover"
+                    controls={true}
+                    playsInline
+                    loop
                 />
             </div>
 

@@ -56,14 +56,8 @@ export default function FooterRedesigned({ disableAnimations = false }: FooterRe
     };
 
     return (
-        <footer className="relative bg-deep-obsidian text-pure-white overflow-hidden">
-            {/* Background Elements */}
-            <div className="absolute inset-0 pointer-events-none opacity-10">
-                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-clinical-blue rounded-full blur-[100px]" />
-                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-sky-mist rounded-full blur-[80px]" />
-            </div>
-
-            <div className="container relative z-10 mx-auto px-4 md:px-6">
+        <footer className="relative bg-obsidian text-white overflow-hidden">
+            <div className="section-container relative z-10">
                 {/* Main Footer Content */}
                 <div className="py-16 md:py-20 grid md:grid-cols-5 gap-12">
                     {/* Brand Section */}
@@ -122,7 +116,7 @@ export default function FooterRedesigned({ disableAnimations = false }: FooterRe
                                     viewport: { once: true }
                                 })}
                             >
-                                <h3 className="font-bold text-pure-white mb-4">{category}</h3>
+                                <h3 className="font-semibold text-white text-sm uppercase tracking-widest mb-4">{category}</h3>
                                 <ul className="space-y-3">
                                     {links.map((link: any) => (
                                         <li key={link.href}>

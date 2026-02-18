@@ -15,7 +15,7 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 const USD_TO_GBP_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_GBP_RATE || '0.79');
 const MIN_TOPUP_PENCE = parseInt(process.env.NEXT_PUBLIC_WALLET_MIN_TOPUP_PENCE || '2500', 10);
-const MIN_TOPUP_USD = MIN_TOPUP_PENCE / 100 / USD_TO_GBP_RATE;
+const MIN_TOPUP_GBP = MIN_TOPUP_PENCE / 100; // £25.00
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
 
@@ -59,13 +59,13 @@ interface TransactionsResponse {
 // ---------------------------------------------------------------------------
 
 function formatPence(pence: number): string {
-    // Display as USD for customer (internal is still GBP pence)
-    const usdAmount = (pence / USD_TO_GBP_RATE / 100).toFixed(2);
-    return `$${usdAmount}`;
+    // Display in GBP (pounds) - UK primary market
+    const gbpAmount = (pence / 100).toFixed(2);
+    return `£${gbpAmount}`;
 }
 
-function formatUsdLabelFromPence(pence: number): string {
-    return `$${(pence / 100 / USD_TO_GBP_RATE).toFixed(0)}`;
+function formatGbpLabelFromPence(pence: number): string {
+    return `£${(pence / 100).toFixed(0)}`;
 }
 
 function formatDate(iso: string): string {
@@ -149,16 +149,16 @@ const WalletPageContent = () => {
 
     // Handlers
     const handleTopUp = useCallback(async () => {
-        // Convert preset or custom USD amounts to GBP pence
+        // Convert preset or custom GBP amounts to pence
         let pence = selectedAmount;
 
         if (!pence && customAmount) {
-            // Convert USD to GBP: $100 * 0.79 * 100 = 7900 pence
-            pence = Math.round(parseFloat(customAmount) * USD_TO_GBP_RATE * 100);
+            // Convert GBP to pence: £25 * 100 = 2500 pence
+            pence = Math.round(parseFloat(customAmount) * 100);
         }
 
         if (!pence || pence < MIN_TOPUP_PENCE) {
-            showError(`Minimum top-up is £${(MIN_TOPUP_PENCE / 100).toFixed(2)} (~$${MIN_TOPUP_USD.toFixed(2)}).`);
+            showError(`Minimum top-up is £${(MIN_TOPUP_PENCE / 100).toFixed(2)}.`);
             return;
         }
         setProcessingTopUp(true);
@@ -232,7 +232,7 @@ const WalletPageContent = () => {
                                 Current Balance
                             </p>
                             <span className="px-2.5 py-1 bg-white/20 text-white rounded-full text-xs font-bold">
-                                $0.70/minute (10 credits/min)
+                                £0.56/minute
                             </span>
                         </div>
                         {walletLoading ? (
@@ -240,7 +240,7 @@ const WalletPageContent = () => {
                         ) : (
                             <>
                                 <p className="text-5xl font-bold text-white tracking-tight">
-                                    {wallet ? formatPence(wallet.balance_pence) : '$0.00'}
+                                    {wallet ? formatPence(wallet.balance_pence) : '£0.00'}
                                 </p>
                                 {wallet && wallet.balance_pence > 0 && (
                                     <p className="text-sm text-white/60 mt-2">
@@ -271,9 +271,9 @@ const WalletPageContent = () => {
             {/* Quick Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { icon: ArrowDownLeft, label: 'Total Spent (30d)',  value: costData?.totalSpent || '$0.00' },
+                    { icon: ArrowDownLeft, label: 'Total Spent (30d)',  value: costData?.totalSpent || '£0.00' },
                     { icon: Phone,         label: 'Total Calls (30d)', value: String(costData?.totalCalls || 0) },
-                    { icon: TrendingUp,    label: 'Avg Cost/Call',     value: costData?.avgCostPerCall || '$0.00' },
+                    { icon: TrendingUp,    label: 'Avg Cost/Call',     value: costData?.avgCostPerCall || '£0.00' },
                     { icon: ArrowUpRight,  label: 'Total Top-Ups',     value: formatPence(summary?.total_topped_up_pence ?? 0) },
                 ].map((card) => {
                     const Icon = card.icon;
@@ -439,7 +439,7 @@ const WalletPageContent = () => {
                                         Recharge when balance falls below
                                     </label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">£</span>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -455,7 +455,7 @@ const WalletPageContent = () => {
                                         Recharge amount
                                     </label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">£</span>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -512,8 +512,7 @@ const WalletPageContent = () => {
                                     const penceValue = MIN_TOPUP_PENCE * preset.multiplier;
                                     return {
                                         pence: penceValue,
-                                        label: `${formatUsdLabelFromPence(penceValue)}`,
-                                        credits: `${Math.floor((penceValue / Math.ceil(70 * USD_TO_GBP_RATE)) * 10).toLocaleString()} credits`
+                                        label: `${formatGbpLabelFromPence(penceValue)}`
                                     };
                                 }).map((option) => (
                                     <button
@@ -526,19 +525,18 @@ const WalletPageContent = () => {
                                             }`}
                                     >
                                         <div className="font-bold text-lg">{option.label}</div>
-                                        <div className="text-xs text-obsidian/60 mt-1">{option.credits}</div>
                                     </button>
                                 ))}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-obsidian mb-1.5">
-                                    Custom amount in USD (min ~${MIN_TOPUP_USD.toFixed(0)})
+                                    Custom amount in GBP (min £{MIN_TOPUP_GBP.toFixed(0)})
                                 </label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">$</span>
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian/40 font-medium">£</span>
                                     <input
                                         type="number"
-                                        min={MIN_TOPUP_USD.toFixed(2)}
+                                        min={MIN_TOPUP_GBP.toFixed(2)}
                                         step="1"
                                         value={customAmount}
                                         onChange={(e) => {
@@ -550,13 +548,10 @@ const WalletPageContent = () => {
                                         className="w-full pl-8 pr-4 py-2.5 border border-surgical-200 rounded-lg text-sm text-obsidian focus:outline-none focus:ring-2 focus:ring-surgical-200"
                                     />
                                 </div>
-                                {customAmount && parseFloat(customAmount) >= MIN_TOPUP_USD && (
+                                {customAmount && parseFloat(customAmount) >= MIN_TOPUP_GBP && (
                                     <div className="space-y-1.5 mt-1.5">
                                         <p className="text-xs text-obsidian/60">
-                                            You'll be charged: £{(parseFloat(customAmount) * USD_TO_GBP_RATE).toFixed(2)} GBP (~${parseFloat(customAmount).toFixed(2)} USD)
-                                        </p>
-                                        <p className="text-xs text-obsidian/60">
-                                            ~{Math.floor((parseFloat(customAmount) * USD_TO_GBP_RATE * 100) / Math.ceil(70 * USD_TO_GBP_RATE)) * 10} credits
+                                            You'll be charged: £{parseFloat(customAmount).toFixed(2)} GBP via Stripe
                                         </p>
                                     </div>
                                 )}
@@ -564,7 +559,7 @@ const WalletPageContent = () => {
                         </div>
                         <div className="px-6 py-4 border-t border-surgical-200">
                             <p className="text-xs text-obsidian/60 mb-3 text-center">
-                                💡 You'll be charged in GBP (British Pounds). USD amounts are approximate based on current exchange rate.
+                                💡 Payments processed securely via Stripe in GBP (British Pounds)
                             </p>
                             <div className="flex justify-end gap-3">
                                 <button

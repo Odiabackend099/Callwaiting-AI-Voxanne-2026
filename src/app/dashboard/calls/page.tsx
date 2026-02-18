@@ -77,6 +77,11 @@ const CallsPageContent = () => {
         onConfirm: () => { }
     });
 
+    // SMS modal state
+    const [showSmsModal, setShowSmsModal] = useState(false);
+    const [smsCallId, setSmsCallId] = useState<string | null>(null);
+    const [smsMessage, setSmsMessage] = useState('');
+
     // Inbound/Outbound tabs
     const tabParam = searchParams.get('tab');
     const initialTab = (tabParam === 'inbound' || tabParam === 'outbound') ? tabParam : 'inbound';
@@ -177,6 +182,25 @@ const CallsPageContent = () => {
                 }
             }
         });
+    };
+
+    const handleSendSms = async () => {
+        if (!smsCallId || !smsMessage.trim()) return;
+        try {
+            setLoadingAction(`sms-${smsCallId}`);
+            await authedBackendFetch(`/api/calls-dashboard/${smsCallId}/followup`, {
+                method: 'POST',
+                body: JSON.stringify({ message: smsMessage })
+            });
+            success('Follow-up SMS sent');
+            setShowSmsModal(false);
+            setSmsMessage('');
+            setSmsCallId(null);
+        } catch (err: any) {
+            showError(err?.message || 'Failed to send SMS');
+        } finally {
+            setLoadingAction(null);
+        }
     };
 
     const handleDownloadRecording = async (call: Call | CallDetail) => {
@@ -426,23 +450,10 @@ const CallsPageContent = () => {
                                                     {/* SMS */}
                                                     {call.phone_number ? (
                                                         <button
-                                                            onClick={async (e) => {
+                                                            onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                const message = prompt('Enter follow-up message (max 160 chars):');
-                                                                if (!message) return;
-                                                                if (message.length > 160) { warning('Message too long (max 160 characters)'); return; }
-                                                                try {
-                                                                    setLoadingAction(`sms-${call.id}`);
-                                                                    await authedBackendFetch(`/api/calls-dashboard/${call.id}/followup`, {
-                                                                        method: 'POST',
-                                                                        body: JSON.stringify({ message })
-                                                                    });
-                                                                    success('Follow-up SMS sent');
-                                                                } catch (err: any) {
-                                                                    showError(err?.message || 'Failed to send SMS');
-                                                                } finally {
-                                                                    setLoadingAction(null);
-                                                                }
+                                                                setSmsCallId(call.id);
+                                                                setShowSmsModal(true);
                                                             }}
                                                             className="p-2 hover:bg-surgical-50 rounded-lg transition-colors"
                                                             title="Send follow-up SMS"
@@ -702,6 +713,43 @@ const CallsPageContent = () => {
                                 ) : (
                                     <><Mail className="w-4 h-4" /> Send Follow-up</>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SMS Modal */}
+            {showSmsModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
+                        <h3 className="text-lg font-semibold text-obsidian mb-4">Send Follow-Up Message</h3>
+                        <textarea
+                            value={smsMessage}
+                            onChange={(e) => setSmsMessage(e.target.value.slice(0, 160))}
+                            placeholder="Enter message (max 160 characters)"
+                            className="w-full border border-surgical-200 rounded-lg p-3 mb-2 focus:outline-none focus:ring-2 focus:ring-surgical-500"
+                            rows={4}
+                            autoFocus
+                        />
+                        <p className="text-sm text-obsidian/60 mb-4">{smsMessage.length}/160 characters</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowSmsModal(false);
+                                    setSmsMessage('');
+                                    setSmsCallId(null);
+                                }}
+                                className="px-4 py-2 rounded-lg border border-surgical-200 text-sm font-medium text-obsidian/70 hover:bg-surgical-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSendSms}
+                                disabled={!smsMessage.trim() || loadingAction?.startsWith('sms')}
+                                className="px-4 py-2 rounded-lg bg-surgical-600 hover:bg-surgical-700 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                            >
+                                {loadingAction?.startsWith('sms') ? 'Sending...' : 'Send SMS'}
                             </button>
                         </div>
                     </div>

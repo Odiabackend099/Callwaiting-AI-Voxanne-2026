@@ -328,17 +328,23 @@ integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res:
 
     // 3. Update Database
     if (role === 'inbound') {
-      // Update inbound_agent_config or user_phone_numbers for inbound
+      // Update integrations table so /api/inbound/status reads the assigned number
       if (phoneNumber) {
         const { error: dbUpdateError } = await supabase
-          .from('user_phone_numbers')
+          .from('integrations')
           .upsert({
             org_id: orgId,
-            phone_number: phoneNumber,
-            vapi_phone_id: phoneId,
-            assigned_agent_id: agent.id,
-            vapi_synced_at: new Date().toISOString()
-          }, { onConflict: 'phone_number, org_id' });
+            provider: 'twilio_inbound',
+            config: {
+              phoneNumber,
+              vapiPhoneNumberId: phoneId,
+              assignedAgentId: agent.id,
+              status: 'active',
+              activatedAt: new Date().toISOString(),
+              vapiApiKeyLast4Used: config.VAPI_PRIVATE_KEY?.slice(-4) || null
+            },
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'org_id,provider' });
 
         if (dbUpdateError) {
           log.warn('integrations', 'DB update failed after Vapi sync', { error: dbUpdateError.message });

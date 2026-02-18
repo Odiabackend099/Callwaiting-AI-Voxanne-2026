@@ -95,6 +95,47 @@ function getMasterCredentials(): { sid: string; token: string } {
 export class ManagedTelephonyService {
 
   /**
+   * Enable Geo Permissions inheritance from master account on a subaccount.
+   * This allows the subaccount to automatically inherit all dialing permissions
+   * (country-level calling restrictions) from the master Twilio project.
+   *
+   * Without this, subaccounts start with default permissions (US only) and
+   * calls to international numbers fail with Error 13227.
+   *
+   * @see https://www.twilio.com/docs/voice/api/dialingpermissions-settings-resource
+   */
+  static async enableGeoPermissionInheritance(
+    subAccountSid: string,
+    subAuthToken: string
+  ): Promise<{ success: boolean; alreadyEnabled?: boolean; error?: string }> {
+    try {
+      const subClient = twilio(subAccountSid, subAuthToken);
+
+      // Check current inheritance state
+      const settings = await subClient.voice.v1.dialingPermissions.settings().fetch();
+
+      if (settings.dialingPermissionsInheritance) {
+        log.info('ManagedTelephony', 'Geo Permissions inheritance already enabled', { subAccountSid });
+        return { success: true, alreadyEnabled: true };
+      }
+
+      // Enable inheritance from master
+      await subClient.voice.v1.dialingPermissions.settings().update({
+        dialingPermissionsInheritance: true
+      });
+
+      log.info('ManagedTelephony', 'Geo Permissions inheritance enabled', { subAccountSid });
+      return { success: true, alreadyEnabled: false };
+    } catch (err: any) {
+      log.error('ManagedTelephony', 'Failed to enable Geo Permissions inheritance', {
+        subAccountSid,
+        error: err.message
+      });
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
    * Create a Twilio subaccount for an organization.
    * Each managed org gets exactly one subaccount (enforced by DB unique constraint).
    */
@@ -129,6 +170,10 @@ export class ManagedTelephonyService {
       const subaccount = await masterClient.api.v2010.accounts.create({
         friendlyName,
       });
+
+      // Enable Geo Permissions inheritance from master account
+      // This ensures the subaccount can call any country the master can
+      await this.enableGeoPermissionInheritance(subaccount.sid, subaccount.authToken);
 
       // Encrypt and store the subaccount auth token
       const encryptedToken = EncryptionService.encrypt(subaccount.authToken);

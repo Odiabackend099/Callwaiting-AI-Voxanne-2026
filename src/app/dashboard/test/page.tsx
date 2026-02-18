@@ -192,6 +192,11 @@ const TestAgentPageContent = () => {
             stopRecording();
             await stopCall();
         } else {
+            // Pre-check: ensure inbound agent is configured before attempting call
+            if (!inboundStatus?.configured) {
+                setOutboundConfigError('Please configure an inbound agent in Agent Configuration before testing.');
+                return;
+            }
             setCallInitiating(true);
             try {
                 await startCall();
@@ -364,24 +369,33 @@ const TestAgentPageContent = () => {
     };
 
     const handleEndPhoneCall = async () => {
-        if (outboundWsRef.current) {
-            outboundWsRef.current.close();
-            outboundWsRef.current = null;
-        }
-
-        // Fetch call summary
-        if (outboundTrackingId) {
-            try {
-                const summary = await authedBackendFetch<any>(`/api/founder-console/calls/${outboundTrackingId}/state`);
-                setCallSummary(summary);
-            } catch (err) {
-                console.error('Failed to fetch call summary:', err);
+        try {
+            // Close WebSocket connection
+            if (outboundWsRef.current) {
+                outboundWsRef.current.close();
+                outboundWsRef.current = null;
             }
-        }
 
-        setOutboundTrackingId(null);
-        setOutboundConnected(false);
-        setWsConnectionStatus('disconnected');
+            // Fetch call summary
+            if (outboundTrackingId) {
+                try {
+                    const summary = await authedBackendFetch<any>(`/api/founder-console/calls/${outboundTrackingId}/state`);
+                    setCallSummary(summary);
+                } catch (err) {
+                    console.error('Failed to fetch call summary:', err);
+                    // Set empty summary on error so UI doesn't get stuck
+                    setCallSummary({ status: 'ended', trackingId: outboundTrackingId });
+                }
+            }
+        } catch (error) {
+            console.error('Error ending call:', error);
+        } finally {
+            // CRITICAL FIX: Always reset call state, even on error
+            setOutboundTrackingId(null);
+            setOutboundTranscripts([]);
+            setOutboundConnected(false);
+            setWsConnectionStatus('disconnected');
+        }
     };
 
     // Connect to main WebSocket for live call transcripts

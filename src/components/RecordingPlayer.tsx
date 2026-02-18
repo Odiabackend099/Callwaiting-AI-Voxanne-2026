@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Play, Pause, Download, Volume2 } from 'lucide-react';
+import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
 interface RecordingPlayerProps {
   callId: string;
@@ -29,11 +30,9 @@ export function RecordingPlayer({ callId, recordingUrl, duration }: RecordingPla
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/api/calls-dashboard/${callId}/recording-url`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch recording');
-        }
-        const data = await response.json();
+        const data = await authedBackendFetch<{ recording_url: string }>(
+          `/api/calls-dashboard/${callId}/recording-url`
+        );
         if (audioRef.current && data.recording_url) {
           audioRef.current.src = data.recording_url;
         } else {
