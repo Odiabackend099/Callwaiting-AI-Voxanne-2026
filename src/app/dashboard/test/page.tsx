@@ -240,8 +240,9 @@ const TestAgentPageContent = () => {
         return (await supabase.auth.getSession()).data.session?.access_token;
     };
 
-    // Load outbound agent config before making phone calls
+    // Load inbound status on mount (needed by both web and phone tabs)
     useEffect(() => {
+        if (!user) return;
         const loadInboundStatus = async () => {
             try {
                 const data = await authedBackendFetch<any>('/api/inbound/status');
@@ -254,7 +255,11 @@ const TestAgentPageContent = () => {
                 setInboundStatus(null);
             }
         };
+        loadInboundStatus();
+    }, [user]);
 
+    // Load outbound agent config before making phone calls
+    useEffect(() => {
         const loadOutboundConfig = async () => {
             // Always fetch fresh config - stale cache can block the UI with
             // outdated "missing fields" errors after the user fixes config.
@@ -316,7 +321,6 @@ const TestAgentPageContent = () => {
         };
 
         if (activeTab === 'phone' && user) {
-            loadInboundStatus();
             loadOutboundConfig();
         }
     }, [activeTab, user]);
