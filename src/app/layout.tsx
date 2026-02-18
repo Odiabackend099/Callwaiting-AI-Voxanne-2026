@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
 import JsonLd from "@/components/JsonLd";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -9,18 +9,11 @@ import { CookieConsentBanner } from "@/components/cookie-consent/CookieConsentBa
 import { GoogleAnalyticsLoader } from "@/components/GoogleAnalyticsLoader";
 import VoxanneChatWidget from "@/components/VoxanneChatWidget";
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-sans",
   display: "swap",
-  weight: ['400', '500', '600', '700'], // Only load needed weights for performance
-});
-
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-plus-jakarta",
-  display: "swap",
-  weight: ['400', '500', '600', '700'], // Only load needed weights for performance
+  weight: ['300', '400', '500', '600', '700'],
 });
 
 export const metadata: Metadata = {
@@ -106,7 +99,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`} suppressHydrationWarning>
+    <html lang="en" className={outfit.variable} suppressHydrationWarning>
       <body
         className="antialiased font-sans min-h-screen bg-background text-foreground"
         suppressHydrationWarning

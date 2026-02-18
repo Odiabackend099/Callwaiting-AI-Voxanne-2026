@@ -35,7 +35,19 @@ const config: Config = {
                 "clinical-bg": "#F0F9FF",      // Main app background
                 "clinical-surface": "#FFFFFF",  // Card backgrounds
                 "clinical-border": "#BFDBFE",   // Border color
-                // Legacy colors removed - use surgical palette only
+                // Fix orphan color references (474 broken classes)
+                "sterile-wash": "#F0F9FF",
+                "deep-obsidian": "#020412",
+                "surgical-blue": "#1D4ED8",
+                "clinical-blue": "#3B82F6",
+                "sky-mist": "#BFDBFE",
+                "pure-white": "#FFFFFF",
+                "cream": "#F0F9FF",
+                "warm-gray": "#F7F8FA",
+                navy: {
+                    800: "#0A1628",
+                    900: "#020412",
+                },
                 // Shadcn/UI color system
                 background: "hsl(var(--background))",
                 foreground: "hsl(var(--foreground))",
@@ -85,7 +97,7 @@ const config: Config = {
                 full: "9999px", // Pill-shaped buttons
             },
             fontFamily: {
-                sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+                sans: ["var(--font-sans)", "system-ui", "sans-serif"],
             },
             fontSize: {
                 xs: ["0.75rem", { lineHeight: "1rem" }],
@@ -124,10 +136,24 @@ const config: Config = {
                     "0%": { transform: "translateX(-100%)" },
                     "100%": { transform: "translateX(100%)" },
                 },
+                typing: {
+                    "0%": { width: "0" },
+                    "100%": { width: "100%" },
+                },
+                blink: {
+                    "50%": { borderColor: "transparent" },
+                },
+                marquee: {
+                    "0%": { transform: "translateX(0)" },
+                    "100%": { transform: "translateX(-50%)" },
+                },
             },
             animation: {
                 "gradient-x": "gradient-x 3s ease infinite",
                 "shimmer": "shimmer 2s infinite",
+                typing: "typing 2s steps(40, end)",
+                blink: "blink .75s step-end infinite",
+                marquee: "marquee 30s linear infinite",
             },
         },
     },

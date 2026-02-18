@@ -28,12 +28,12 @@ export default function NavbarRedesigned() {
 
     return (
         <nav
-            className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled
-                ? "bg-surgical-50/95 backdrop-blur-md shadow-sm border-b border-surgical-200"
-                : "bg-transparent"
+            className={`fixed top-0 w-full z-50 transition-all duration-700 ease-in-out ${isScrolled
+                ? "bg-white/97 backdrop-blur-md border-b border-surgical-200/50 py-3"
+                : "bg-transparent py-6"
                 }`}
         >
-            <div className="container mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
+            <div className="section-container flex items-center justify-between">
                 {/* ✅ UPDATED: Use icon-only logo variant (Netflix-style) - Brand/3.png */}
                 <Logo
                     variant="icon-blue"
@@ -45,13 +45,12 @@ export default function NavbarRedesigned() {
                 />
 
                 {/* Desktop Navigation */}
-                <div className="hidden md:flex items-center gap-8">
+                <div className="hidden md:flex items-center gap-10">
                     {navItems.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`text-sm font-medium transition-colors hover:text-surgical-600 ${isScrolled ? "text-obsidian/70" : "text-obsidian/70"
-                                }`}
+                            className="nav-link-premium text-[0.9375rem] font-medium text-obsidian/70 hover:text-obsidian transition-colors duration-300 tracking-wide"
                         >
                             {item.label}
                         </Link>
@@ -59,16 +58,16 @@ export default function NavbarRedesigned() {
                 </div>
 
                 {/* Desktop CTA */}
-                <div className="hidden md:flex items-center gap-4">
+                <div className="hidden md:flex items-center gap-6">
                     <Link
                         href="/login"
-                        className="text-sm font-medium text-obsidian/70 hover:text-obsidian transition-colors"
+                        className="nav-link-premium text-[0.9375rem] font-medium text-obsidian/70 hover:text-obsidian transition-colors duration-300"
                     >
                         Sign In
                     </Link>
                     <Link href="/start" className="inline-block">
                         <button
-                            className="px-6 py-2 bg-surgical-600 text-white font-semibold rounded-lg hover:bg-surgical-700 transition-all duration-300 hover:shadow-lg"
+                            className="btn-fill px-8 py-2.5 bg-surgical-600 text-white font-semibold rounded-lg hover:text-white transition-all duration-500 text-sm tracking-wide uppercase"
                         >
                             Book Demo
                         </button>

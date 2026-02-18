@@ -45,14 +45,14 @@ const faqs = [
 
 export default function FAQ() {
     return (
-        <section id="faq" className="py-24 bg-white">
-            <div className="max-w-3xl mx-auto px-6">
+        <section id="faq" className="py-32 bg-white">
+            <div className="section-container max-w-3xl">
                 <FadeIn>
-                    <div className="text-center mb-16">
-                        <h2 className="text-3xl font-bold text-obsidian tracking-tight mb-4">
-                            Frequently Asked Questions
+                    <div className="text-center mb-20">
+                        <h2 className="font-sans font-bold text-4xl md:text-5xl text-obsidian tracking-tight mb-5">
+                            Frequently Asked <span className="font-sans font-semibold">Questions</span>
                         </h2>
-                        <p className="text-lg text-obsidian/70">
+                        <p className="text-lg text-obsidian/50">
                             Everything you need to know about Voxanne AI.
                         </p>
                     </div>

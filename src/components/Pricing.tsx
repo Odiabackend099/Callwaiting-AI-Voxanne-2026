@@ -2,141 +2,153 @@
 
 import FadeIn from "@/components/ui/FadeIn";
 import { Button } from "@/components/ui/button";
-import { Check, Wallet, Phone, Zap } from "lucide-react";
+import { Check, Wallet, Phone, Zap, ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 
-const TOP_UP_OPTIONS = [
-    { label: "$25", pence: 1975, credits: "350 credits" },
-    { label: "$50", pence: 3950, credits: "700 credits" },
-    { label: "$100", pence: 7900, credits: "1,400 credits" },
-    { label: "$250", pence: 19750, credits: "3,500 credits" },
-    { label: "$600", pence: 47400, credits: "8,500 credits" },
-];
-
-const FEATURES = [
-    "AI voice receptionist — answers 24/7",
-    "Appointment booking with calendar sync",
-    "SMS confirmations & reminders",
-    "Call recording & transcripts",
-    "Knowledge base & FAQ answering",
-    "Lead scoring & analytics dashboard",
-    "Google Calendar integration",
-    "HIPAA & GDPR compliant",
-    "No setup fees, no contracts",
-];
-
-const STEPS = [
+const TIERS = [
     {
-        icon: Wallet,
-        title: "Top Up",
-        description: "Top up from $25",
+        name: "Starter",
+        price: "Pay As You Go",
+        description: "Perfect for solo practitioners and new clinics.",
+        features: [
+            "AI Receptionist 24/7",
+            "Appointment Booking",
+            "Basic Call Analytics",
+            "Email & SMS Notifications",
+            "Standard Voice Library",
+        ],
+        cta: "Start for Free",
+        highlight: false,
     },
     {
-        icon: Phone,
-        title: "AI Handles Calls",
-        description: "Your agent answers every call, 24/7",
+        name: "Growth",
+        price: "$100",
+        period: "/ month credit",
+        description: "For busy clinics that need more power and priority.",
+        features: [
+            "Everything in Starter",
+            "Prioritized Call Handling",
+            "Custom Voice Cloning",
+            "EHR Integration (Athena, DrChrono)",
+            "Advanced Analytics Dashboard",
+            "Dedicated Support Manager",
+        ],
+        cta: "Get Growth",
+        highlight: true, // Most popular
     },
     {
-        icon: Zap,
-        title: "Pay Per Use",
-        description: "Credits deducted per call based on duration",
+        name: "Enterprise",
+        price: "Custom",
+        description: "Full-scale automation for hospitals and networks.",
+        features: [
+            "Everything in Growth",
+            "HIPAA BAA Signed",
+            "Custom LLM Fine-Tuning",
+            "Multi-Location Management",
+            "SSO & Role-Based Access",
+            "SLA Guarantees",
+        ],
+        cta: "Contact Sales",
+        highlight: false,
     },
 ];
 
 export default function Pricing() {
     return (
-        <section id="pricing" className="py-24 bg-sterile-wash">
-            <div className="max-w-7xl mx-auto px-6">
+        <section id="pricing" className="py-32 bg-surgical-50 relative overflow-hidden">
+            <div className="section-container relative z-10">
                 <FadeIn>
-                    <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-4xl font-bold text-deep-obsidian tracking-tight mb-4">
-                            Simple, Transparent Pricing
+                    <div className="text-center max-w-3xl mx-auto mb-20">
+                        <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-surgical-200 rounded-full text-xs font-medium text-surgical-700 mb-8 uppercase tracking-widest">
+                            <Wallet className="h-3.5 w-3.5" />
+                            Transparent Pricing
+                        </span>
+                        <h2 className="font-sans font-bold text-4xl md:text-5xl lg:text-6xl text-obsidian tracking-tight mb-6">
+                            Simple Plans. <span className="font-sans font-semibold text-surgical-600">No Surprises.</span>
                         </h2>
-                        <p className="text-lg text-obsidian/70">
-                            Pay only for what you use. No subscriptions, no setup fees, no lock-in.
+                        <p className="text-lg text-obsidian/50">
+                            Start with flexible pay-as-you-go or save with our volume plans. No lock-in contracts.
                         </p>
                     </div>
                 </FadeIn>
 
-                {/* Central Pricing Card */}
-                <FadeIn delay={0.1}>
-                    <div className="max-w-2xl mx-auto bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-surgical-600 ring-1 ring-surgical-600 mb-16">
-                        <div className="text-center mb-8">
-                            <h3 className="text-2xl font-bold text-deep-obsidian mb-2">Pay As You Go</h3>
-                            <p className="text-obsidian/70 text-sm">
-                                Top up your wallet. AI handles calls. Credits deducted per call.
-                            </p>
-                        </div>
+                {/* Pricing Cards */}
+                <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto mb-20">
+                    {TIERS.map((tier, index) => (
+                        <motion.div
+                            key={tier.name}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: index * 0.1 }}
+                            className={`relative rounded-2xl p-8 flex flex-col ${tier.highlight
+                                    ? "bg-white border-2 border-surgical-600 shadow-lg scale-105 z-10"
+                                    : "bg-white border border-surgical-200 transition-shadow duration-500 hover:shadow-md"
+                                }`}
+                        >
+                            {tier.highlight && (
+                                <div className="absolute -top-3 inset-x-0 flex justify-center">
+                                    <span className="bg-surgical-600 text-white text-xs font-medium px-4 py-1 rounded-full uppercase tracking-widest">
+                                        Most Popular
+                                    </span>
+                                </div>
+                            )}
 
-                        <div className="text-center mb-8">
-                            <div className="flex items-baseline justify-center gap-2">
-                                <span className="text-5xl font-bold text-surgical-600">Credit Packs</span>
+                            <div className="mb-8">
+                                <h3 className="text-2xl font-semibold text-obsidian mb-2">{tier.name}</h3>
+                                <p className="text-obsidian/50 text-sm h-10">{tier.description}</p>
                             </div>
-                            <p className="text-sm text-obsidian/50 mt-2">No minimums. No contracts. All features included.</p>
+
+                            <div className="mb-8">
+                                <span className="text-4xl font-sans font-bold text-obsidian">{tier.price}</span>
+                                {tier.period && <span className="text-obsidian/40 text-sm ml-1">{tier.period}</span>}
+                            </div>
+
+                            <ul className="space-y-4 mb-8 flex-grow">
+                                {tier.features.map((feature) => (
+                                    <li key={feature} className="flex items-start gap-3 text-obsidian/70 text-sm">
+                                        <div className="bg-surgical-50 rounded-full p-1 mt-0.5 shrink-0">
+                                            <Check className="h-3 w-3 text-surgical-600" />
+                                        </div>
+                                        {feature}
+                                    </li>
+                                ))}
+                            </ul>
+
+                            <Link href="/start" className="block w-full">
+                                {tier.highlight ? (
+                                    <button className="btn-fill w-full py-4 text-sm font-medium rounded-lg bg-surgical-600 text-white uppercase tracking-wide hover:text-white transition-all duration-500">
+                                        {tier.cta}
+                                    </button>
+                                ) : (
+                                    <button className="w-full py-4 text-sm font-medium rounded-lg bg-surgical-50 hover:bg-surgical-100 text-surgical-700 border border-surgical-200 uppercase tracking-wide transition-all duration-500">
+                                        {tier.cta}
+                                    </button>
+                                )}
+                            </Link>
+
+                        </motion.div>
+                    ))}
+                </div>
+
+                {/* Guarantee / Footer */}
+                <FadeIn delay={0.4}>
+                    <div className="text-center max-w-2xl mx-auto border-t border-surgical-200 pt-12">
+                        <div className="flex flex-col md:flex-row items-center justify-center gap-8 mb-6">
+                            <div className="flex items-center gap-2 text-obsidian/50">
+                                <ShieldCheck className="h-5 w-5 text-surgical-600" />
+                                <span className="font-medium text-sm">30-Day Money Back Guarantee</span>
+                            </div>
+                            <div className="hidden md:block w-px h-5 bg-surgical-200" />
+                            <div className="flex items-center gap-2 text-obsidian/50">
+                                <Zap className="h-5 w-5 text-surgical-500" />
+                                <span className="font-medium text-sm">Cancel Anytime</span>
+                            </div>
                         </div>
-
-                        {/* Top-up pills */}
-                        <div className="flex flex-wrap justify-center gap-3 mb-8">
-                            {TOP_UP_OPTIONS.map((option) => (
-                                <span
-                                    key={option.pence}
-                                    className="px-4 py-2 rounded-full border border-surgical-200 text-sm font-medium text-obsidian/70 bg-surgical-50"
-                                >
-                                    {option.label} ({option.credits})
-                                </span>
-                            ))}
-                            <span className="px-4 py-2 rounded-full border border-surgical-200 text-sm font-medium text-obsidian/50 bg-surgical-50">
-                                Custom
-                            </span>
-                        </div>
-
-                        <Link href="/start" className="block w-full">
-                            <Button className="w-full bg-surgical-600 hover:bg-surgical-700 text-white py-3 text-base">
-                                Get Started
-                            </Button>
-                        </Link>
-
-                        <p className="text-center text-xs text-obsidian/50 mt-4">
-                            Set up auto-recharge to never run out of credits.
+                        <p className="text-xs text-obsidian/40">
+                            Prices exclude applicable taxes. High volume discounts available for enterprise customers.
                         </p>
-                    </div>
-                </FadeIn>
-
-                {/* How It Works Steps */}
-                <FadeIn delay={0.2}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-16">
-                        {STEPS.map((step, index) => {
-                            const Icon = step.icon;
-                            return (
-                                <div key={step.title} className="text-center p-6 bg-white rounded-2xl border border-surgical-200 shadow-sm">
-                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-surgical-600/10 mb-4">
-                                        <Icon className="w-6 h-6 text-surgical-600" />
-                                    </div>
-                                    <div className="text-xs font-bold text-surgical-600 uppercase tracking-wide mb-2">
-                                        Step {index + 1}
-                                    </div>
-                                    <h4 className="text-lg font-bold text-deep-obsidian mb-1">{step.title}</h4>
-                                    <p className="text-sm text-obsidian/60">{step.description}</p>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </FadeIn>
-
-                {/* All Features Included */}
-                <FadeIn delay={0.3}>
-                    <div className="max-w-3xl mx-auto">
-                        <h3 className="text-xl font-bold text-deep-obsidian text-center mb-8">
-                            All features included for every customer
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {FEATURES.map((feature) => (
-                                <div key={feature} className="flex items-start gap-3 text-sm text-obsidian/70">
-                                    <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                                    {feature}
-                                </div>
-                            ))}
-                        </div>
                     </div>
                 </FadeIn>
             </div>

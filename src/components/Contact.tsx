@@ -66,16 +66,16 @@ export default function Contact() {
     };
 
     return (
-        <section id="contact" className="py-24 bg-surgical-50">
-            <div className="max-w-7xl mx-auto px-6">
-                <div className="grid lg:grid-cols-2 gap-16">
+        <section id="contact" className="py-32 bg-surgical-50">
+            <div className="section-container">
+                <div className="grid lg:grid-cols-2 gap-20">
                     {/* Left Column: Info */}
                     <FadeIn>
-                        <h2 className="text-4xl font-bold text-obsidian tracking-tight mb-6">
+                        <h2 className="font-sans font-bold text-4xl md:text-5xl text-obsidian tracking-tight mb-6">
                             Ready to transform your <br />
-                            <span className="text-surgical-600">clinic&apos;s front desk?</span>
+                            <span className="font-sans font-semibold text-surgical-600">clinic&apos;s front desk?</span>
                         </h2>
-                        <p className="text-lg text-obsidian/70 mb-12">
+                        <p className="text-lg text-obsidian/50 mb-12">
                             Get in touch with our team to see how Voxanne can help you capture more patients and reduce admin work.
                         </p>
 
@@ -119,7 +119,7 @@ export default function Contact() {
 
                     {/* Right Column: Form */}
                     <FadeIn delay={0.2}>
-                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-surgical-200">
+                        <div className="bg-white rounded-2xl p-8 border border-surgical-200">
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">

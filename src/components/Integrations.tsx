@@ -35,14 +35,14 @@ const integrations = [
 
 export default function Integrations() {
     return (
-        <section className="py-24 bg-surgical-50">
-            <div className="max-w-7xl mx-auto px-6">
+        <section className="py-32 bg-white">
+            <div className="section-container">
                 <FadeIn>
-                    <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-3xl font-bold text-obsidian tracking-tight mb-4">
-                            Integrates with your existing stack
+                    <div className="text-center max-w-3xl mx-auto mb-20">
+                        <h2 className="font-sans font-bold text-4xl md:text-5xl text-obsidian tracking-tight mb-5">
+                            Integrates with your <span className="font-sans font-semibold">existing stack</span>
                         </h2>
-                        <p className="text-lg text-obsidian/70">
+                        <p className="text-lg text-obsidian/50">
                             No rip-and-replace. Voxanne connects to the tools you already use.
                         </p>
                     </div>
@@ -55,7 +55,7 @@ export default function Integrations() {
                                 {row.tools.map((tool) => (
                                     <div
                                         key={tool.name}
-                                        className="bg-white rounded-xl p-6 shadow-sm border border-surgical-100 flex flex-col items-center justify-center h-32 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
+                                        className="bg-surgical-50 rounded-xl p-6 border border-surgical-200 flex flex-col items-center justify-center h-32 hover:border-surgical-300 transition-all duration-500 group"
                                     >
                                         <div className="relative w-14 h-14 flex items-center justify-center mb-2">
                                             <Image
@@ -63,11 +63,11 @@ export default function Integrations() {
                                                 alt={`${tool.name} logo`}
                                                 width={56}
                                                 height={56}
-                                                className="object-contain group-hover:scale-110 transition-transform duration-300"
+                                                className="object-contain opacity-70 group-hover:opacity-100 transition-opacity duration-500"
                                                 priority={false}
                                             />
                                         </div>
-                                        <p className="text-sm font-medium text-obsidian/80 text-center leading-tight">
+                                        <p className="text-sm font-medium text-obsidian/60 text-center leading-tight">
                                             {tool.name}
                                         </p>
                                     </div>

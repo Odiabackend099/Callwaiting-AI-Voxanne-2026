@@ -113,10 +113,9 @@ html {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-inter), sans-serif;
-  font-size: 15px;
-  /* Slightly larger for readability */
-  line-height: 1.6;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -126,10 +125,10 @@ input,
 textarea,
 select {
   color: inherit !important;
-  font-size: 15px;
+  font-size: 16px;
 }
 
-/* Clinical Glassmorphism - Premium Depth */
+/* Clinical Glassmorphism - Premium Depth (kept for dashboard) */
 .glass-panel {
   @apply bg-white/90 backdrop-blur-md border border-surgical-200 transition-shadow duration-200;
   box-shadow: 0 10px 15px -3px rgba(0, 102, 255, 0.08), 0 4px 6px -4px rgba(0, 102, 255, 0.08);
@@ -151,7 +150,78 @@ select {
 /* Swiss Typography Utilities */
 .tracking-tight-swiss {
   letter-spacing: -0.02em;
-  /* Less aggressive than before */
+}
+
+/* ═══ IEQ-INSPIRED PREMIUM UTILITIES ═══ */
+
+/* Section container: 90% width, max 1300px (IEQ pattern) */
+.section-container {
+  @apply w-[90%] max-w-[1300px] mx-auto;
+}
+
+/* Nav link underline reveal (IEQ signature hover) */
+.nav-link-premium {
+  position: relative;
+}
+.nav-link-premium::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: #1D4ED8;
+  transition: width 0.5s ease-in-out;
+}
+.nav-link-premium:hover::after {
+  width: 100%;
+}
+
+/* Button fill animation from left (IEQ CTA style) */
+.btn-fill {
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+.btn-fill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  background: #1e40af;
+  transition: width 0.4s ease-in-out;
+  z-index: -1;
+}
+.btn-fill:hover::before {
+  width: 100%;
+}
+
+/* Scroll-triggered reveal (CSS replacement for Framer Motion whileInView) */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Accessibility: Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .nav-link-premium::after {
+    transition: none;
+  }
+  .btn-fill::before {
+    transition: none;
+  }
 }
 
 /* Ripple Animation for Button Click Effect */
