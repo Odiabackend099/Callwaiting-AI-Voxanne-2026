@@ -82,7 +82,7 @@ export function HeroCalendlyReplica() {
                     </div>
 
                     {/* RIGHT COLUMN: Workflow Animation */}
-                    <div className="relative hidden lg:flex items-center justify-center w-full h-full min-h-[500px] z-10">
+                    <div className="relative hidden lg:flex items-center justify-center w-full h-full min-h-[500px] z-10 overflow-hidden">
                         <WorkflowHeroAnimation />
                     </div>
                 </div>
