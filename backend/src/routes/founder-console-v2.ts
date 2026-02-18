@@ -3330,7 +3330,22 @@ router.post(
         logger.exception('Failed to create Vapi WebSocket call', vapiError);
 
         // Surface provider failures so the frontend doesn't spin forever.
-        // Do NOT include secrets; only return Vapi's message.
+        // Detect Vapi billing errors and translate to a clear platform message
+        // so users don't confuse Vapi's internal balance with the Voxanne wallet.
+        const isVapiBillingError =
+          message && /wallet balance|purchase more credits|upgrade your plan/i.test(message);
+
+        if (isVapiBillingError) {
+          res.status(402).json({
+            error: 'Voice provider (Vapi) billing limit reached. Please contact support or top up the Vapi dashboard to resume test calls.',
+            requestId,
+            provider: 'vapi',
+            providerStatus: status,
+            detail: 'This is NOT your Voxanne wallet — it is the voice infrastructure provider balance.'
+          });
+          return;
+        }
+
         if (status && status >= 400 && status < 500) {
           res.status(402).json({
             error: message || 'Vapi rejected the request',
@@ -3893,6 +3908,17 @@ router.post(
 
         logger.exception('Failed to create Vapi outbound call', vapiError);
         const errorMsg = vapiError?.response?.data?.message || vapiError?.message || 'Unknown error';
+
+        // Detect Vapi billing errors
+        if (/wallet balance|purchase more credits|upgrade your plan/i.test(errorMsg)) {
+          res.status(402).json({
+            error: 'Voice provider (Vapi) billing limit reached. Please contact support or top up the Vapi dashboard to resume calls.',
+            requestId,
+            provider: 'vapi',
+            detail: 'This is NOT your Voxanne wallet — it is the voice infrastructure provider balance.'
+          });
+          return;
+        }
 
         // Check if error is due to invalid phone number
         if (errorMsg.toLowerCase().includes('phone') || errorMsg.toLowerCase().includes('number')) {

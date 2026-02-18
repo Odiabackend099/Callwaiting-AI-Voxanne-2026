@@ -296,6 +296,9 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 if (err?.status === 400) {
                     throw new Error(err?.message || 'Agent not configured. Please configure agent settings first.');
                 }
+                if (err?.status === 402) {
+                    throw new Error(err?.message || 'Voice provider billing limit reached. Please contact support.');
+                }
                 throw err;
             });
 
