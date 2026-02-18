@@ -192,17 +192,13 @@ const TestAgentPageContent = () => {
             stopRecording();
             await stopCall();
         } else {
-            // Pre-check: ensure inbound agent is configured before attempting call
-            if (!inboundStatus?.configured) {
-                setOutboundConfigError('Please configure an inbound agent in Agent Configuration before testing.');
-                return;
-            }
             setCallInitiating(true);
             try {
                 await startCall();
-                // Wait a moment for connection to stabilize before recording
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Failed to start web call', err);
+                const msg = err?.message || 'Failed to start call';
+                showErrorToast(msg);
             } finally {
                 setCallInitiating(false);
             }
@@ -586,6 +582,13 @@ const TestAgentPageContent = () => {
                                 </motion.button>
                             )}
                         </AnimatePresence>
+
+                        {/* Voice error banner */}
+                        {voiceError && !isConnected && (
+                            <div className="mx-4 sm:mx-6 mb-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                                {voiceError}
+                            </div>
+                        )}
 
                         {/* Fixed Control Bar */}
                         <div className="sticky bottom-0 z-10 px-4 sm:px-6 py-4 sm:py-5 border-t border-surgical-200 bg-white/95 backdrop-blur-sm shadow-lg flex items-center justify-center gap-4 sm:gap-6">
