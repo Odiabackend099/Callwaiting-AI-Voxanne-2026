@@ -474,3 +474,27 @@ export function isValidVoice(voiceId: string, provider: string): boolean {
     voice !== undefined && voice.provider === provider && voice.status === "active"
   );
 }
+
+// ========================================
+// VAPI PROVIDER NAME MAPPING
+// ========================================
+// Vapi uses different provider identifiers than our internal naming.
+// This mapping translates at the API boundary so internal code stays readable.
+//
+//   Internal name  ->  Vapi API name
+//   "elevenlabs"   ->  "11labs"
+//
+const INTERNAL_TO_VAPI_PROVIDER: Record<string, string> = {
+  'elevenlabs': '11labs',
+};
+
+/**
+ * Translates internal provider names to Vapi API provider strings.
+ * Call this when constructing any voice payload sent to Vapi.
+ *
+ * Example: toVapiProvider('elevenlabs') => '11labs'
+ * Example: toVapiProvider('vapi')       => 'vapi' (pass-through)
+ */
+export function toVapiProvider(internalProvider: string): string {
+  return INTERNAL_TO_VAPI_PROVIDER[internalProvider] || internalProvider;
+}

@@ -12,6 +12,7 @@ import express, { Request, Response } from 'express';
 import { supabase } from '../services/supabase-client';
 import { log } from '../services/logger';
 import { VapiClient } from '../services/vapi-client';
+import { getVoiceById, toVapiProvider } from '../config/voice-registry';
 
 const router = express.Router();
 
@@ -100,6 +101,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             system_prompt: inboundConfig.system_prompt,
             first_message: inboundConfig.first_message,
             voice: inboundConfig.voice_id,
+            voice_provider: inboundConfig.voice_provider || getVoiceById(inboundConfig.voice_id)?.provider || 'vapi',
             language: inboundConfig.language,
             max_call_duration: inboundConfig.max_call_duration,
             vapi_assistant_id: inboundConfig.vapi_assistant_id,
@@ -131,6 +133,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             system_prompt: inboundConfig.system_prompt,
             first_message: inboundConfig.first_message,
             voice: inboundConfig.voice_id,
+            voice_provider: inboundConfig.voice_provider || getVoiceById(inboundConfig.voice_id)?.provider || 'vapi',
             language: inboundConfig.language,
             max_call_duration: inboundConfig.max_call_duration,
             vapi_assistant_id: inboundConfig.vapi_assistant_id,
@@ -177,6 +180,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             system_prompt: outboundConfig.system_prompt,
             first_message: outboundConfig.first_message,
             voice: outboundConfig.voice_id,
+            voice_provider: outboundConfig.voice_provider || getVoiceById(outboundConfig.voice_id)?.provider || 'vapi',
             language: outboundConfig.language,
             max_call_duration: outboundConfig.max_call_duration,
             vapi_assistant_id: outboundConfig.vapi_assistant_id,
@@ -211,6 +215,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
             system_prompt: outboundConfig.system_prompt,
             first_message: outboundConfig.first_message,
             voice: outboundConfig.voice_id,
+            voice_provider: outboundConfig.voice_provider || getVoiceById(outboundConfig.voice_id)?.provider || 'vapi',
             language: outboundConfig.language,
             max_call_duration: outboundConfig.max_call_duration,
             vapi_assistant_id: outboundConfig.vapi_assistant_id,
@@ -282,6 +287,9 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
       // Update inbound assistant if it exists
       if (inboundConfig?.vapi_assistant_id) {
         try {
+          const inboundVoiceProvider = toVapiProvider(
+            inboundConfig.voice_provider || getVoiceById(inboundConfig.voice_id)?.provider || 'vapi'
+          );
           await vapi.updateAssistant(inboundConfig.vapi_assistant_id, {
             name: 'Voxanne (Inbound Coordinator)',
             model: {
@@ -290,7 +298,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
               messages: [{ role: 'system', content: inboundConfig.system_prompt }]
             },
             voice: {
-              provider: 'vapi',
+              provider: inboundVoiceProvider,
               voiceId: inboundConfig.voice_id
             },
             firstMessage: inboundConfig.first_message,
@@ -330,6 +338,9 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
       // Update outbound assistant if it exists
       if (outboundConfig?.vapi_assistant_id) {
         try {
+          const outboundVoiceProvider = toVapiProvider(
+            outboundConfig.voice_provider || getVoiceById(outboundConfig.voice_id)?.provider || 'vapi'
+          );
           await vapi.updateAssistant(outboundConfig.vapi_assistant_id, {
             name: 'Voxanne (Outbound SDR)',
             model: {
@@ -338,7 +349,7 @@ router.post('/sync-agents', async (req: Request, res: Response): Promise<void> =
               messages: [{ role: 'system', content: outboundConfig.system_prompt }]
             },
             voice: {
-              provider: 'vapi',
+              provider: outboundVoiceProvider,
               voiceId: outboundConfig.voice_id
             },
             firstMessage: outboundConfig.first_message,

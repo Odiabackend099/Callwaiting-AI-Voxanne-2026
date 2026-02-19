@@ -29,14 +29,15 @@ function requireVapi(res: Response): VapiClient | null {
 }
 
 // Helper to determine voice provider from voice ID using voice registry SSOT
+// Returns the Vapi-compatible provider string (e.g., '11labs' not 'elevenlabs')
 function determineVoiceProvider(voiceId: string): string {
-  const { getVoiceById } = require('../config/voice-registry');
+  const { getVoiceById, toVapiProvider } = require('../config/voice-registry');
 
   // Find voice in registry (single source of truth)
   const voice = getVoiceById(voiceId);
 
   if (voice) {
-    return voice.provider;
+    return toVapiProvider(voice.provider);
   }
 
   // If voice not found, default to vapi

@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { createLogger } from './logger';
 import { config } from '../config/index';
 import { assertOutboundCallReady } from '../utils/outbound-call-preflight';
+import { toVapiProvider } from '../config/voice-registry';
 // DISABLED: Vapi API doesn't support fallbacks property
 // import { mergeFallbacksIntoPayload } from '../config/vapi-fallbacks';
 
@@ -253,7 +254,7 @@ export class VapiClient {
         ]
       },
       voice: configAny.voice ?? {
-        provider: config.voiceProvider || 'vapi',
+        provider: toVapiProvider(config.voiceProvider || 'vapi'),
         voiceId: config.voiceId || process.env.VAPI_DEFAULT_VOICE || 'Rohan'
       },
       transcriber: configAny.transcriber || config.transcriber || {

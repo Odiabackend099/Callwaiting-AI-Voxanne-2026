@@ -16,6 +16,7 @@ import { enhanceSystemPrompt } from './prompt-injector';
 import { ToolSyncService } from './tool-sync-service';
 import { getSuperSystemPrompt, getTemporalContext } from './super-system-prompt';
 import { resolveBackendUrl } from '../utils/resolve-backend-url';
+import { toVapiProvider } from '../config/voice-registry';
 import { createClient } from '@supabase/supabase-js';
 import { log } from './logger';
 
@@ -289,7 +290,7 @@ export class VapiAssistantManager {
               ],
             },
             voice: {
-              provider: voiceConfig.provider,
+              provider: toVapiProvider(voiceConfig.provider),
               voiceId: voiceConfig.voiceId,
             },
             firstMessage: config.firstMessage || 'Hello! How can I help you today?',

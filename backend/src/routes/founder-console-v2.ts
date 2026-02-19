@@ -78,7 +78,7 @@ import { withTimeout } from '../utils/timeout-helper';
 import { validateE164Format } from '../utils/phone-validation';
 import { phoneNumbersRouter } from './phone-numbers';
 import { createWebVoiceSession, endWebVoiceSession } from '../services/web-voice-bridge';
-import { getVoiceById, isValidVoice, getActiveVoices } from '../config/voice-registry';
+import { getVoiceById, isValidVoice, getActiveVoices, toVapiProvider } from '../config/voice-registry';
 import { config } from '../config/index';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
@@ -127,7 +127,10 @@ function convertToVapiVoiceId(dbVoiceId: string): string {
   }
 
   // Voice not found or deprecated - default to Rohan
-  // This preserves data but ensures valid Vapi voice is used
+  logger.warn('[VOICE_FALLBACK] Voice not found in registry, falling back to Rohan', {
+    requestedVoice: dbVoiceId,
+    fallback: 'Rohan'
+  });
   return 'Rohan';
 }
 
@@ -813,7 +816,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
   // Use voice registry to get provider, fallback to vapi if not found
   const voiceData = getVoiceById(resolvedVoiceId) || { provider: 'vapi' };
-  const resolvedVoiceProvider = voiceData.provider || agent.voice_provider || 'vapi';
+  const resolvedVoiceProvider = toVapiProvider(voiceData.provider || agent.voice_provider || 'vapi');
   const resolvedLanguage = agent.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE;
   const resolvedFirstMessage = agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE;
   const resolvedMaxDurationSeconds = agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION;
@@ -949,9 +952,40 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
         operation: 'update'
       });
 
+      // Tools are already preserved via existingToolIds in the update payload (line 885).
+      // If tools exist on the assistant, they're synced. Only run ToolSyncService
+      // if no tools are linked yet (first-time setup after migration).
+      let toolsSynced = existingToolIds.length > 0;
+
+      if (!toolsSynced) {
+        try {
+          const { data: agentData } = await supabase
+            .from('agents')
+            .select('org_id')
+            .eq('id', agentId)
+            .maybeSingle();
+
+          if (agentData?.org_id) {
+            await ToolSyncService.syncAllToolsForAssistant({
+              orgId: agentData.org_id,
+              assistantId: agent.vapi_assistant_id!,
+              backendUrl: resolveBackendUrl(),
+              skipIfExists: false
+            });
+            toolsSynced = true;
+          }
+        } catch (syncErr: any) {
+          logger.warn('Tool sync failed during assistant update (non-blocking)', {
+            agentId,
+            assistantId: agent.vapi_assistant_id,
+            error: syncErr.message
+          });
+        }
+      }
+
       return {
         assistantId: agent.vapi_assistant_id,
-        toolsSynced: false
+        toolsSynced
       };
     } catch (updateError: unknown) {
       const error = updateError as Error;
@@ -3267,7 +3301,7 @@ router.post(
       // uses the exact voice, first message, and system prompt from the database.
       const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
       const voiceDataForCall = getVoiceById(resolvedVoiceId) || { provider: 'vapi' };
-      const resolvedVoiceProvider = voiceDataForCall.provider || agent.voice_provider || 'vapi';
+      const resolvedVoiceProvider = toVapiProvider(voiceDataForCall.provider || agent.voice_provider || 'vapi');
 
       const inlineAssistant: Record<string, any> = {
         name: agent.name || 'Browser Test Agent',
@@ -3740,7 +3774,7 @@ router.post(
                     availableVoices: ['Rohan', 'Elliot', 'Savannah']
                   });
                 }
-                return voiceData?.provider || 'vapi';
+                return toVapiProvider(voiceData?.provider || 'vapi');
               })(),
               voiceId: activeConfig.voice || 'Elliot'
             },
