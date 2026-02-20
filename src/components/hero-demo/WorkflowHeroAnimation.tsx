@@ -15,42 +15,61 @@ import {
     ShieldCheck,
     Smartphone,
     Mail,
-    CreditCard
+    CreditCard,
+    FileUp,
+    Mic,
+    PhoneIncoming,
+    CalendarCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ─── STAGE CONFIGURATION ─────────────────────────────────────────────
+// ─── PHASE CONFIGURATION (3-PHASE WORKFLOW WITH SUBSTEPS) ────────────
 
-const stages = [
+const phases = [
     {
-        id: 'call',
+        id: 'setup',
+        title: 'Live in 5 Minutes',
+        subtitle: 'No IT department needed. Just connect and go.',
         color: 'text-blue-600',
         bg: 'bg-blue-50',
         accent: 'bg-blue-600',
-        icon: Phone,
-        title: 'Instant Response',
-        subtitle: 'AI answers immediately, 24/7.',
-        actionBadge: 'Incoming Call',
+        icon: Zap,
+        actionBadge: '5 Min Setup',
+        substeps: [
+            { icon: Phone, label: 'Get Number', duration: 2000 },
+            { icon: Calendar, label: 'Sync Calendar', duration: 2000 },
+            { icon: Zap, label: 'Deploy AI', duration: 2000 }
+        ]
     },
     {
-        id: 'book',
+        id: 'customize',
+        title: 'Your AI, Your Brand',
+        subtitle: 'Upload FAQs. Choose voice. Customize responses.',
         color: 'text-purple-600',
         bg: 'bg-purple-50',
         accent: 'bg-purple-600',
-        icon: Calendar,
-        title: 'Smart Scheduling',
-        subtitle: 'Bookings sync directly to your calendar.',
-        actionBadge: 'Booking...',
+        icon: MessageSquare,
+        actionBadge: 'Customizable',
+        substeps: [
+            { icon: FileUp, label: 'Upload Knowledge', duration: 2000 },
+            { icon: Mic, label: 'Select Voice', duration: 2000 },
+            { icon: MessageSquare, label: 'Preview Agent', duration: 2000 }
+        ]
     },
     {
-        id: 'roi',
+        id: 'results',
+        title: 'Revenue on Autopilot',
+        subtitle: 'Calls answered. Appointments booked. While you sleep.',
         color: 'text-emerald-600',
         bg: 'bg-emerald-50',
         accent: 'bg-emerald-600',
         icon: TrendingUp,
-        title: 'Revenue Growth',
-        subtitle: 'Capture every opportunity.',
-        actionBadge: 'Recovered',
+        actionBadge: 'Automated',
+        substeps: [
+            { icon: PhoneIncoming, label: 'Call Received', duration: 2000 },
+            { icon: CalendarCheck, label: 'Booked', duration: 2500 },
+            { icon: TrendingUp, label: 'Revenue Tracked', duration: 2500 }
+        ]
     },
 ];
 
@@ -116,229 +135,253 @@ const itemVariants = {
     }
 };
 
-// ─── CALL STAGE UI ───────────────────────────────────────────────────
+// ─── PHASE 1: SETUP UI ───────────────────────────────────────────────
 
-function CallStageUI({ active }: { active: boolean }) {
+function Phase1SetupUI({ activeSubstep }: { activeSubstep: number }) {
     return (
-        <div className="flex flex-col gap-4 relative">
-            {/* Caller ID Card */}
+        <div className="space-y-3">
+            {/* Phone Number Card */}
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="flex items-center gap-4 p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group"
+                animate={{ opacity: activeSubstep >= 0 ? 1 : 0.3, x: 0 }}
+                className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100"
             >
-                <div className="absolute top-0 bottom-0 left-0 w-1 bg-blue-500 rounded-l-2xl" />
-                <div className="relative">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border-2 border-white shadow-sm z-10 relative">
-                        <User className="w-6 h-6 text-slate-400" />
-                    </div>
-                    {active && (
-                        <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-4 w-4 bg-green-500 border-2 border-white"></span>
-                        </span>
-                    )}
+                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                    <Phone className="w-5 h-5 text-blue-600" />
                 </div>
                 <div className="flex-1">
-                    <h4 className="font-bold text-slate-900 leading-tight">Sarah Jenkins</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                        <Smartphone className="w-3 h-3" /> (555) 012-3456
-                    </p>
-                    <p className="text-xs text-slate-600 italic mt-1.5">"Hi, I need a Botox appointment next week..."</p>
+                    <p className="text-sm font-semibold text-slate-900">Phone Number</p>
+                    <p className="text-xs text-slate-500">(555) 123-4567</p>
                 </div>
-                <div className="ml-auto flex gap-2">
-                    <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-500 opacity-50"><Phone className="w-4 h-4 rotate-[135deg]" /></div>
-                    <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-600 animate-pulse"><Phone className="w-4 h-4" /></div>
-                </div>
+                {activeSubstep >= 0 && (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                )}
             </motion.div>
 
-            {/* AI Response Bubble */}
+            {/* Calendar Card */}
             <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.5 }}
-                className="self-end max-w-[85%]"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: activeSubstep >= 1 ? 1 : 0.3, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100"
             >
-                <div className="bg-blue-600 text-white p-4 rounded-2xl rounded-tr-sm shadow-lg shadow-blue-600/20 relative">
-                    <div className="flex items-start gap-3">
-                        <div className="min-w-[20px] mt-1">
-                            <Zap className="w-4 h-4 text-blue-200 fill-blue-200" />
-                        </div>
-                        <p className="text-sm font-medium leading-relaxed">
-                            {active ? (
-                                <TypingText text="Hi Sarah! Dr. Smith has Botox appointments available on Tuesday at 10:00 AM or Thursday at 2:00 PM. Which works better for you?" active={true} />
-                            ) : (
-                                "Hi Sarah! Dr. Smith has Botox appointments available on Tuesday at 10:00 AM or Thursday at 2:00 PM. Which works better for you?"
-                            )}
-                        </p>
-                    </div>
+                <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-purple-600" />
                 </div>
-                <div className="text-[10px] text-slate-400 text-right mt-1.5 font-medium px-1">Voxanne AI • Just now</div>
+                <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Google Calendar</p>
+                    <p className="text-xs text-slate-500">work@clinic.com</p>
+                </div>
+                {activeSubstep >= 1 && (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                )}
             </motion.div>
+
+            {/* Agent Active Badge */}
+            {activeSubstep >= 2 && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-emerald-50 p-4 rounded-xl flex items-center gap-2"
+                >
+                    <Zap className="w-5 h-5 text-emerald-600 fill-emerald-600" />
+                    <span className="text-sm font-bold text-emerald-700">Agent Deployed & Live</span>
+                </motion.div>
+            )}
         </div>
     );
 }
 
-// ─── BOOK STAGE UI ───────────────────────────────────────────────────
+// ─── PHASE 2: CUSTOMIZE UI ───────────────────────────────────────────
 
-function BookStageUI({ active }: { active: boolean }) {
+function Phase2CustomizeUI({ activeSubstep }: { activeSubstep: number }) {
+    const files = ['FAQs.pdf', 'Services.pdf', 'Pricing.pdf'];
+
     return (
-        <motion.div
-            className="space-y-3 relative"
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-        >
-            {/* Calendar Event Card */}
-            <motion.div
-                layoutId="calendar-card"
-                variants={itemVariants}
-                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
-            >
-                <div className="bg-purple-50/50 p-3 border-b border-purple-100 flex justify-between items-center">
-                    <span className="text-xs font-bold text-purple-700 uppercase tracking-wide">Suggested Slot</span>
-                    <span className="text-[10px] bg-white px-2 py-0.5 rounded-full text-purple-600 border border-purple-100 font-semibold shadow-sm">AI Optimized</span>
-                </div>
-                <div className="p-4 flex gap-4 items-center">
-                    <div className="flex flex-col items-center bg-slate-50 border border-slate-100 rounded-lg p-2 min-w-[60px]">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Feb</span>
-                        <span className="text-xl font-bold text-slate-900">24</span>
+        <div className="space-y-3">
+            {/* Knowledge Base Upload */}
+            {activeSubstep >= 0 && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="border-2 border-dashed border-purple-200 rounded-xl p-4 bg-purple-50/30"
+                >
+                    <div className="flex items-center gap-2 mb-2">
+                        <FileUp className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-semibold text-purple-900">Knowledge Base</span>
                     </div>
-                    <div>
-                        <h4 className="font-bold text-slate-900 text-sm">Botox Treatment - Sarah Jenkins</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            <span className="text-xs text-slate-500 font-medium">10:00 AM - 10:45 AM</span>
-                        </div>
-                        <p className="text-[10px] text-purple-600 mt-1 flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Synced to Google Calendar
-                        </p>
+                    <div className="space-y-1">
+                        {files.map((file, idx) => (
+                            <motion.div
+                                key={file}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: idx * 0.3 }}
+                                className="flex items-center gap-2 text-xs text-slate-600"
+                            >
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>{file}</span>
+                            </motion.div>
+                        ))}
                     </div>
-                    <div className="ml-auto transform transition-transform hover:scale-110">
-                        <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-600/30">
-                            <CheckCircle2 className="w-4 h-4 text-white" />
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
+                </motion.div>
+            )}
 
-            {/* Confirmation SMS */}
-            <motion.div
-                variants={itemVariants}
-                className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-start gap-3"
-            >
-                <div className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-4 h-4 text-slate-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-1">
-                        <span className="text-xs font-bold text-slate-700">SMS to Sarah</span>
-                        <span className="text-[10px] text-slate-400">✓ Delivered</span>
+            {/* Voice Selection */}
+            {activeSubstep >= 1 && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="bg-white p-3 rounded-xl border border-slate-100"
+                >
+                    <div className="flex items-center gap-2 mb-2">
+                        <Mic className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-semibold text-slate-900">Voice: Elliot</span>
                     </div>
-                    <p className="text-xs text-slate-500">Your Botox appointment with Dr. Smith is confirmed for Tuesday, Feb 24 at 10:00 AM. Reply CANCEL to reschedule.</p>
-                </div>
-            </motion.div>
-        </motion.div>
+                    <div className="flex gap-1">
+                        {[...Array(20)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="w-1 bg-purple-400 rounded-full animate-pulse"
+                                style={{
+                                    height: Math.random() * 20 + 10 + 'px',
+                                    animationDelay: i * 50 + 'ms'
+                                }}
+                            />
+                        ))}
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Agent Preview */}
+            {activeSubstep >= 2 && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-purple-600 text-white p-4 rounded-2xl rounded-tr-sm"
+                >
+                    <p className="text-sm">
+                        Hi! I'm Dr. Smith's AI assistant. How can I help you today?
+                    </p>
+                    <p className="text-xs text-purple-200 mt-2">Preview · Elliot Voice</p>
+                </motion.div>
+            )}
+        </div>
     );
 }
 
-// ─── ROI STAGE UI ────────────────────────────────────────────────────
+// ─── PHASE 3: RESULTS UI ────────────────────────────────────────────
 
-function RoiStageUI({ active }: { active: boolean }) {
+function Phase3ResultsUI({ activeSubstep }: { activeSubstep: number }) {
+    const [revenue, setRevenue] = useState(0);
+
+    useEffect(() => {
+        if (activeSubstep >= 2) {
+            const interval = setInterval(() => {
+                setRevenue(prev => Math.min(prev + 5, 150));
+            }, 30);
+            return () => clearInterval(interval);
+        }
+    }, [activeSubstep]);
+
     return (
-        <motion.div
-            className="grid grid-cols-2 gap-3 relative h-full"
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-        >
-            {/* Stat Card 1 */}
-            <motion.div
-                variants={itemVariants}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between"
-            >
-                <div className="flex justify-between items-start mb-2">
-                    <div className="p-2 bg-emerald-50 rounded-lg">
-                        <CreditCard className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">+12%</span>
-                </div>
-                <div>
-                    <span className="text-xs text-slate-400 font-medium">Revenue Recovered</span>
-                    <h4 className="text-xl font-bold text-slate-900">$150.00</h4>
-                    <p className="text-[10px] text-emerald-600 mt-0.5">Botox treatment value</p>
-                </div>
-            </motion.div>
-
-            {/* Stat Card 2 */}
-            <motion.div
-                variants={itemVariants}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between"
-            >
-                <div className="flex justify-between items-start mb-2">
-                    <div className="p-2 bg-blue-50 rounded-lg">
-                        <User className="w-4 h-4 text-blue-600" />
-                    </div>
-                </div>
-                <div>
-                    <span className="text-xs text-slate-400 font-medium">New Patient</span>
-                    <h4 className="text-lg font-bold text-slate-900 truncate">Sarah J.</h4>
-                    <span className="text-[10px] text-slate-400">Lead Captured</span>
-                </div>
-            </motion.div>
-
-            {/* Bottom Wide Card */}
-            <motion.div
-                variants={itemVariants}
-                className="col-span-2 bg-slate-900 text-white rounded-xl p-3 flex items-center justify-between shadow-lg"
-            >
-                <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <div className="flex flex-col">
-                        <span className="text-xs font-medium text-slate-300">HIPAA Compliant</span>
-                        <span className="text-[10px] text-slate-500">Data Secure & Encrypted</span>
-                    </div>
-                </div>
-                <div className="flex -space-x-2">
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="w-6 h-6 rounded-full border-2 border-slate-900 bg-slate-700 flex items-center justify-center text-[8px] font-bold">
-                            AI
+        <div className="space-y-4">
+            {/* Incoming Call */}
+            {activeSubstep >= 0 && (
+                <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-4 p-4 bg-white rounded-2xl shadow-sm border border-slate-100"
+                >
+                    <div className="relative">
+                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                            <User className="w-6 h-6 text-slate-400" />
                         </div>
-                    ))}
-                </div>
-            </motion.div>
-        </motion.div>
+                        <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-4 w-4 bg-green-500 border-2 border-white"></span>
+                        </span>
+                    </div>
+                    <div className="flex-1">
+                        <h4 className="font-bold text-slate-900">Sarah Jenkins</h4>
+                        <p className="text-xs text-slate-500">2:14 AM · "Need Botox appointment..."</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-600 animate-pulse">
+                        <Phone className="w-4 h-4" />
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Calendar Sync */}
+            {activeSubstep >= 1 && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
+                >
+                    <div className="bg-purple-50 p-3 border-b border-purple-100 flex justify-between">
+                        <span className="text-xs font-bold text-purple-700">Appointment Booked</span>
+                        <CheckCircle2 className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div className="p-4">
+                        <h4 className="font-bold text-slate-900 text-sm">Botox - Sarah Jenkins</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            <span className="text-xs text-slate-500">Feb 24, 10:00 AM</span>
+                        </div>
+                        <p className="text-xs text-purple-600 mt-2 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Synced to Google Calendar
+                        </p>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Revenue Counter */}
+            {activeSubstep >= 2 && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="bg-emerald-50 rounded-xl p-4 flex items-center justify-between"
+                >
+                    <div>
+                        <p className="text-xs text-emerald-600 font-medium">Revenue Captured</p>
+                        <h3 className="text-3xl font-bold text-emerald-700">
+                            ${revenue}
+                        </h3>
+                    </div>
+                    <TrendingUp className="w-8 h-8 text-emerald-600" />
+                </motion.div>
+            )}
+        </div>
     );
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────
 
 export default function WorkflowHeroAnimation() {
-    const [currentStage, setCurrentStage] = useState(0);
-    const [progress, setProgress] = useState(0);
-
-    // Cycle duration in ms
-    const CYCLE_DURATION = 5000;
+    const [currentPhase, setCurrentPhase] = useState(0);
+    const [currentSubstep, setCurrentSubstep] = useState(0);
 
     useEffect(() => {
-        const timer = setInterval(() => {
-            setCurrentStage((prev) => (prev + 1) % stages.length);
-            setProgress(0);
-        }, CYCLE_DURATION);
+        const phase = phases[currentPhase];
+        const substep = phase.substeps[currentSubstep];
 
-        const progressTimer = setInterval(() => {
-            setProgress(old => Math.min(old + (100 / (CYCLE_DURATION / 50)), 100));
-        }, 50);
+        const timer = setTimeout(() => {
+            if (currentSubstep < phase.substeps.length - 1) {
+                // Advance to next substep within current phase
+                setCurrentSubstep(prev => prev + 1);
+            } else {
+                // Move to next phase and reset substep counter
+                setCurrentPhase((prev) => (prev + 1) % phases.length);
+                setCurrentSubstep(0);
+            }
+        }, substep.duration);
 
-        return () => {
-            clearInterval(timer);
-            clearInterval(progressTimer);
-        };
-    }, []);
+        return () => clearTimeout(timer);
+    }, [currentPhase, currentSubstep]);
 
-    const stage = stages[currentStage];
-    const StageIcon = stage.icon;
+    const phase = phases[currentPhase];
+    const PhaseIcon = phase.icon;
 
     return (
         <div className="w-full max-w-[500px] mx-auto perspective-[2000px] group">
@@ -350,7 +393,7 @@ export default function WorkflowHeroAnimation() {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
                     </span>
-                    <span className="text-xs font-bold text-slate-700 tracking-wide">{stage.actionBadge}</span>
+                    <span className="text-xs font-bold text-slate-700 tracking-wide">{phase.actionBadge}</span>
                 </div>
             </div>
 
@@ -365,30 +408,30 @@ export default function WorkflowHeroAnimation() {
                 {/* 1. Header with Progress Line */}
                 <div className="relative px-8 pt-8 pb-4 border-b border-slate-100/50">
                     <div className="flex items-start gap-4 mb-6">
-                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner transition-colors duration-500", stage.bg)}>
-                            <StageIcon className={cn("w-6 h-6 transition-colors duration-500", stage.color)} />
+                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner transition-colors duration-500", phase.bg)}>
+                            <PhaseIcon className={cn("w-6 h-6 transition-colors duration-500", phase.color)} />
                         </div>
                         <div className="flex-1 min-w-0">
                             <AnimatePresence mode="wait">
                                 <motion.h3
-                                    key={stage.title}
+                                    key={phase.title}
                                     initial={{ opacity: 0, y: 5 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -5 }}
                                     className="text-xl font-bold text-slate-900 tracking-tight"
                                 >
-                                    {stage.title}
+                                    {phase.title}
                                 </motion.h3>
                             </AnimatePresence>
                             <AnimatePresence mode="wait">
                                 <motion.p
-                                    key={stage.id}
+                                    key={phase.id}
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
-                                    className="text-sm text-slate-500 font-medium truncate"
+                                    className="text-sm text-slate-500 font-medium"
                                 >
-                                    {stage.subtitle}
+                                    {phase.subtitle}
                                 </motion.p>
                             </AnimatePresence>
                         </div>
@@ -396,17 +439,17 @@ export default function WorkflowHeroAnimation() {
 
                     {/* Integrated Progress Bar */}
                     <div className="flex gap-2">
-                        {stages.map((s, idx) => (
+                        {phases.map((p, idx) => (
                             <div key={idx} className="h-1 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                {idx === currentStage && (
+                                {idx === currentPhase && (
                                     <motion.div
-                                        className={cn("h-full rounded-full", s.accent)}
-                                        initial={{ width: "0%" }}
-                                        animate={{ width: "100%" }}
-                                        transition={{ duration: CYCLE_DURATION / 1000, ease: "linear" }}
+                                        className={cn("h-full rounded-full", p.accent)}
+                                        initial={{ width: `${(currentSubstep / p.substeps.length) * 100}%` }}
+                                        animate={{ width: `${((currentSubstep + 1) / p.substeps.length) * 100}%` }}
+                                        transition={{ duration: p.substeps[currentSubstep].duration / 1000, ease: "linear" }}
                                     />
                                 )}
-                                {idx < currentStage && <div className={cn("h-full w-full", s.accent)} />}
+                                {idx < currentPhase && <div className={cn("h-full w-full", p.accent)} />}
                             </div>
                         ))}
                     </div>
@@ -416,7 +459,7 @@ export default function WorkflowHeroAnimation() {
                 <div className="p-6 min-h-[280px] bg-gradient-to-b from-white to-slate-50/50 relative">
                     <AnimatePresence mode="wait">
                         <motion.div
-                            key={currentStage}
+                            key={currentPhase}
                             initial={{ opacity: 0, y: 10, filter: "blur(2px)" }}
                             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                             exit={{ opacity: 0, y: -10, filter: "blur(2px)" }}
@@ -424,9 +467,9 @@ export default function WorkflowHeroAnimation() {
                             style={{ willChange: 'transform, opacity, filter' }}
                             className="h-full"
                         >
-                            {currentStage === 0 && <CallStageUI active={true} />}
-                            {currentStage === 1 && <BookStageUI active={true} />}
-                            {currentStage === 2 && <RoiStageUI active={true} />}
+                            {currentPhase === 0 && <Phase1SetupUI activeSubstep={currentSubstep} />}
+                            {currentPhase === 1 && <Phase2CustomizeUI activeSubstep={currentSubstep} />}
+                            {currentPhase === 2 && <Phase3ResultsUI activeSubstep={currentSubstep} />}
                         </motion.div>
                     </AnimatePresence>
                 </div>
@@ -445,7 +488,7 @@ export default function WorkflowHeroAnimation() {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-blue-200/20 via-purple-200/20 to-emerald-200/20 rounded-full blur-3xl -z-10 opacity-60 animate-pulse" />
 
             {/* Floaters */}
-            <FloatingToast show={currentStage === 1} text="Calendar Updated" icon={CheckCircle2} />
+            <FloatingToast show={currentPhase === 1} text="Calendar Updated" icon={CheckCircle2} />
         </div>
     );
 }
