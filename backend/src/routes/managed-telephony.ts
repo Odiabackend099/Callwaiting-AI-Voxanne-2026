@@ -427,7 +427,7 @@ router.get('/available-numbers', async (req: Request, res: Response): Promise<vo
     res.json({ numbers });
   } catch (err: any) {
     logger.error('Available-numbers endpoint error', { error: err.message });
-    res.status(500).json({ error: err?.message || 'Internal server error' });
+    return res.status(500).json({ error: 'Operation failed. Please try again.' });
   }
 });
 

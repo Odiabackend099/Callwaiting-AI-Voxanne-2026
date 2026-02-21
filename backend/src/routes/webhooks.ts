@@ -2179,7 +2179,12 @@ async function handleCheckAvailability(
         .eq('status', 'scheduled');
 
       if (error) {
-        throw new Error(`Database query failed: ${error.message}`);
+        logger.error('webhooks', 'Database query failed for appointment availability', {
+          orgId,
+          date,
+          error: error.message
+        });
+        throw new Error('Unable to check availability. Please try again.');
       }
 
       // Generate available slots (9 AM - 6 PM, 45-min intervals)

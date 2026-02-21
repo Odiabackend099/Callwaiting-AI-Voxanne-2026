@@ -5,6 +5,7 @@ import { supabase } from '../services/supabase-client';
 import { z } from 'zod'; // Assuming zod is available, if not fallback to manual validation
 import { createLogger } from '../services/logger';
 import { requireAuth } from '../middleware/auth';
+import { sanitizeError, sanitizeValidationError } from '../utils/error-sanitizer';
 
 const router = express.Router();
 const logger = createLogger('phone-numbers');
@@ -145,7 +146,8 @@ router.post('/import', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('Import failed', { error: error.message });
-    res.status(500).json({ error: error.message || 'Internal Server Error' });
+    const userMessage = sanitizeError(error, 'PhoneNumbers - POST /import', 'Failed to import phone number');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -159,7 +161,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     res.json(numbers);
   } catch (error: any) {
     logger.error('List numbers failed', { error: error.message });
-    res.status(500).json({ error: error.message });
+    const userMessage1 = sanitizeError(error, 'PhoneNumbers - GET /', 'Failed to fetch phone numbers');
+    return res.status(500).json({ error: userMessage1 });
   }
 });
 
@@ -173,7 +176,8 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     res.json(number);
   } catch (error: any) {
     logger.error('Get number failed', { id: req.params.id, error: error.message });
-    res.status(500).json({ error: error.message });
+    const userMessage2 = sanitizeError(error, 'PhoneNumbers - GET /:id', 'Failed to fetch phone number');
+    return res.status(500).json({ error: userMessage2 });
   }
 });
 
@@ -232,7 +236,8 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('Update phone number failed', { id: req.params.id, error: error.message });
-    res.status(500).json({ error: error.message });
+    const userMessage3 = sanitizeError(error, 'PhoneNumbers - PATCH /:id', 'Failed to update phone number');
+    return res.status(500).json({ error: userMessage3 });
   }
 });
 
@@ -250,7 +255,8 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error: any) {
     logger.error('Delete phone number failed', { id: req.params.id, error: error.message });
-    res.status(500).json({ error: error.message });
+    const userMessage4 = sanitizeError(error, 'PhoneNumbers - DELETE /:id', 'Failed to delete phone number');
+    return res.status(500).json({ error: userMessage4 });
   }
 });
 

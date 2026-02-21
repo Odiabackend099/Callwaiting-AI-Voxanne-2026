@@ -1,5 +1,27 @@
+import type { Metadata } from "next"
 import NavbarRedesigned from '@/components/NavbarRedesigned';
 import FooterRedesigned from '@/components/FooterRedesigned';
+
+export const metadata: Metadata = {
+  title: "Support Center | Voxanne AI Help & Documentation",
+  description: "Get help with Voxanne AI. Browse documentation, FAQs, integration guides, and contact our 24/7 support team for assistance.",
+  keywords: ["support", "help center", "documentation", "customer service"],
+  openGraph: {
+    title: "Support Center | Voxanne AI",
+    description: "Get help with Voxanne AI. Browse documentation and contact our support team.",
+    url: 'https://voxanne.ai/support',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Support Center | Voxanne AI",
+    description: "Get help with Voxanne AI. Browse documentation and contact our support team.",
+    images: ['/og-image.png'],
+  },
+  alternates: {
+    canonical: '/support',
+  },
+}
 
 export default function SupportPage() {
   return (

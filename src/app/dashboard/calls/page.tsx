@@ -43,6 +43,9 @@ interface CallDetail extends Call {
         sentiment: string;
     }>;
     action_items: string[];
+    cost_cents?: number;
+    appointment_id?: string;
+    tools_used?: string[];
 }
 
 const CallsPageContent = () => {
@@ -55,6 +58,8 @@ const CallsPageContent = () => {
     const [selectedCall, setSelectedCall] = useState<CallDetail | null>(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [filterDateRange, setFilterDateRange] = useState<string>('all');
     const [error, setError] = useState<string | null>(null);
     const [showFollowupModal, setShowFollowupModal] = useState(false);
     const [followupMessage, setFollowupMessage] = useState('');
@@ -115,12 +120,33 @@ const CallsPageContent = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [showDetailModal, showFollowupModal, confirmDialog]);
 
+    // Compute date range boundaries for filter
+    const getDateRange = () => {
+        const now = new Date();
+        if (filterDateRange === 'today') {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return { startDate: start.toISOString() };
+        } else if (filterDateRange === 'week') {
+            const start = new Date(now);
+            start.setDate(now.getDate() - 7);
+            return { startDate: start.toISOString() };
+        } else if (filterDateRange === 'month') {
+            const start = new Date(now);
+            start.setMonth(now.getMonth() - 1);
+            return { startDate: start.toISOString() };
+        }
+        return {};
+    };
+    const dateRange = getDateRange();
+
     // SWR for Calls List
     const callsQueryParams = new URLSearchParams({
         page: currentPage.toString(),
         limit: callsPerPage.toString(),
         call_type: activeTab,
-        ...(searchQuery && { search: searchQuery })
+        ...(searchQuery && { search: searchQuery }),
+        ...(filterStatus !== 'all' && { status: filterStatus }),
+        ...(dateRange.startDate && { startDate: dateRange.startDate }),
     }).toString();
 
     const { data: callsData, error: callsError, mutate: mutateCalls, isLoading: isCallsLoading } = useSWR(
@@ -163,6 +189,15 @@ const CallsPageContent = () => {
             setError(err?.message || 'Failed to load call details');
         }
     };
+
+    // Auto-open call detail when navigated with ?callId= param
+    useEffect(() => {
+        const callId = searchParams.get('callId');
+        if (callId && user) {
+            fetchCallDetail(callId);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams, user]);
 
     const deleteCall = (callId: string) => {
         setConfirmDialog({
@@ -339,15 +374,51 @@ const CallsPageContent = () => {
                     </button>
                 </div>
 
-                {/* Search */}
-                <div className="mb-6">
-                    <input
-                        type="text"
-                        placeholder="Search by caller name or phone..."
-                        value={searchQuery}
-                        onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                        className="w-full max-w-md px-4 py-2 border border-surgical-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-surgical-500"
-                    />
+                {/* Filters Row */}
+                <div className="mb-6 flex flex-wrap items-center gap-4">
+                    {/* Search with clear button */}
+                    <div className="relative flex-1 min-w-[200px] max-w-md">
+                        <input
+                            type="text"
+                            placeholder="Search by caller name or phone..."
+                            value={searchQuery}
+                            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                            onKeyDown={(e) => { if (e.key === 'Escape') { setSearchQuery(''); setCurrentPage(1); } }}
+                            className="w-full px-4 py-2 pr-9 border border-surgical-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-surgical-500"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-obsidian/40 hover:text-obsidian transition-colors"
+                                aria-label="Clear search"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                    {/* Status Filter */}
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                        className="px-3 py-2 border border-surgical-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-surgical-500"
+                    >
+                        <option value="all">All Status</option>
+                        <option value="completed">Completed</option>
+                        <option value="missed">Missed</option>
+                        <option value="transferred">Transferred</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    {/* Date Range Filter */}
+                    <select
+                        value={filterDateRange}
+                        onChange={(e) => { setFilterDateRange(e.target.value); setCurrentPage(1); }}
+                        className="px-3 py-2 border border-surgical-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-surgical-500"
+                    >
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                    </select>
                 </div>
 
                 {/* Calls Table */}
@@ -570,6 +641,26 @@ const CallsPageContent = () => {
                                 <div>
                                     <p className="text-xs text-obsidian/60 font-medium uppercase">Recording</p>
                                     <p className="text-sm text-obsidian">{selectedCall.has_recording ? 'Available' : 'None'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-obsidian/60 font-medium uppercase">Cost</p>
+                                    <p className="text-lg font-bold text-obsidian">
+                                        {selectedCall.cost_cents != null && selectedCall.cost_cents > 0
+                                            ? `£${(selectedCall.cost_cents / 100).toFixed(2)}`
+                                            : '—'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-obsidian/60 font-medium uppercase">Appointment ID</p>
+                                    <p className="text-sm font-bold text-obsidian truncate">{selectedCall.appointment_id || '—'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-obsidian/60 font-medium uppercase">Tools Used</p>
+                                    <p className="text-sm text-obsidian">
+                                        {selectedCall.tools_used && selectedCall.tools_used.length > 0
+                                            ? selectedCall.tools_used.join(', ')
+                                            : '—'}
+                                    </p>
                                 </div>
                             </div>
 

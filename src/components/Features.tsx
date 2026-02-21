@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 const features = [
     {
         title: "Automated Scheduling",
-        description: "Syncs directly with Google Calendar, Outlook, and major EHRs to book appointments in real-time without double-booking.",
+        description: "Syncs directly with Google Calendar to book appointments in real-time without double-booking.",
         icon: Calendar,
         colSpan: "lg:col-span-2",
         bg: "bg-white",

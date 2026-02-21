@@ -5,9 +5,7 @@ const partners = [
     { name: 'Vapi', logo: '/integrations/vapi.png' },
     { name: 'Google Calendar', logo: '/integrations/google-calendar.png' },
     { name: 'Twilio', logo: '/integrations/twilio.png' },
-    { name: 'Salesforce', logo: '/integrations/salesforce.png' },
     { name: 'Supabase', logo: '/integrations/supabase.png' },
-    { name: 'Calendly', logo: '/integrations/calendly.png' },
 ];
 
 export function TrustBarSimple() {
@@ -40,6 +38,7 @@ export function TrustBarSimple() {
                                         src={partner.logo}
                                         alt={partner.name}
                                         fill
+                                        sizes="40px"
                                         className="object-contain opacity-70 group-hover:opacity-100 transition-all duration-300"
                                     />
                                 </div>
@@ -60,6 +59,7 @@ export function TrustBarSimple() {
                                         src={partner.logo}
                                         alt={partner.name}
                                         fill
+                                        sizes="40px"
                                         className="object-contain opacity-70 group-hover:opacity-100 transition-all duration-300"
                                     />
                                 </div>

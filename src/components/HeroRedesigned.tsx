@@ -148,8 +148,8 @@ export default function HeroRedesigned({ onBookDemo }: HeroRedesignedProps) {
                         className="mt-16 pt-8 border-t border-surgical-200 flex flex-col sm:flex-row gap-8 justify-center text-obsidian/60"
                     >
                         <div className="text-center">
-                            <p className="text-2xl font-bold text-surgical-600">98%</p>
-                            <p className="text-sm">Call Completion Rate</p>
+                            <p className="text-2xl font-bold text-surgical-600">24/7</p>
+                            <p className="text-sm">Call Coverage</p>
                         </div>
                         <div className="text-center">
                             <p className="text-2xl font-bold text-surgical-500">24/7</p>

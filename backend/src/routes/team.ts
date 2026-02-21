@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { requireAuthOrDev } from '../middleware/auth';
 import { supabase } from '../services/supabase-client';
+import { sanitizeError, handleDatabaseError } from '../utils/error-sanitizer';
 
 const router = Router();
 
@@ -49,8 +50,12 @@ router.get('/members', requireAuthOrDev, async (req, res) => {
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('[Team] Error fetching members:', error);
-            return res.status(500).json({ error: error.message });
+            return handleDatabaseError(
+                res,
+                error,
+                'Team - GET /members',
+                'Failed to fetch team members'
+            );
         }
 
         // Fetch user details from auth.users for each member
@@ -144,8 +149,12 @@ router.post('/members', requireAuthOrDev, async (req, res) => {
             .single();
 
         if (error) {
-            console.error('[Team] Error inviting user:', error);
-            return res.status(400).json({ error: error.message });
+            return handleDatabaseError(
+                res,
+                error,
+                'Team - POST /invite',
+                'Failed to invite user'
+            );
         }
 
         res.status(201).json(data);
@@ -199,8 +208,12 @@ router.patch('/members/:userId/role', requireAuthOrDev, async (req, res) => {
             .single();
 
         if (error) {
-            console.error('[Team] Error updating role:', error);
-            return res.status(400).json({ error: error.message });
+            return handleDatabaseError(
+                res,
+                error,
+                'Team - PATCH /members/:userId/role',
+                'Failed to update user role'
+            );
         }
 
         if (!data) {
@@ -244,8 +257,12 @@ router.delete('/members/:userId', requireAuthOrDev, async (req, res) => {
             .eq('org_id', orgId);
 
         if (error) {
-            console.error('[Team] Error removing user:', error);
-            return res.status(400).json({ error: error.message });
+            return handleDatabaseError(
+                res,
+                error,
+                'Team - DELETE /members/:userId',
+                'Failed to remove user from organization'
+            );
         }
 
         res.status(204).send();

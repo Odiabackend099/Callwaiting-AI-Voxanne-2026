@@ -4,47 +4,47 @@
     "width": 1920,
     "height": 1080
   },
-  "capturedAt": "2026-02-04T20:18:34.622Z",
+  "capturedAt": "2026-02-20T12:33:57.266Z",
   "elements": [
     {
       "name": "hero-heading",
       "selector": "h1",
-      "x": 216,
-      "y": 242,
+      "x": 310,
+      "y": 239,
       "width": 576,
-      "height": 216,
-      "centerX": 504,
-      "centerY": 350
+      "height": 285,
+      "centerX": 598,
+      "centerY": 382
     },
     {
       "name": "hero-subheading",
       "selector": "h1 + p",
-      "x": 216,
-      "y": 490,
+      "x": 310,
+      "y": 565,
       "width": 512,
       "height": 56,
-      "centerX": 472,
-      "centerY": 518
+      "centerX": 566,
+      "centerY": 593
     },
     {
       "name": "cta-button-primary",
       "selector": "button:has-text(\"Get Started\")",
-      "x": 216,
-      "y": 594,
-      "width": 189,
-      "height": 56,
-      "centerX": 311,
-      "centerY": 622
+      "x": 310,
+      "y": 685,
+      "width": 179,
+      "height": 52,
+      "centerX": 400,
+      "centerY": 711
     },
     {
       "name": "cta-button-secondary",
       "selector": "button:has-text(\"Watch Demo\")",
-      "x": 421,
-      "y": 594,
-      "width": 203,
-      "height": 60,
-      "centerX": 523,
-      "centerY": 624
+      "x": 505,
+      "y": 685,
+      "width": 206,
+      "height": 54,
+      "centerX": 608,
+      "centerY": 712
     },
     {
       "name": "navigation-bar",
@@ -52,9 +52,9 @@
       "x": 0,
       "y": 0,
       "width": 1920,
-      "height": 103,
+      "height": 119,
       "centerX": 960,
-      "centerY": 51
+      "centerY": 60
     }
   ]
 }

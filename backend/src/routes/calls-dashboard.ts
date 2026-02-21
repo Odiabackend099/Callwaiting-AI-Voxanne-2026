@@ -21,6 +21,7 @@ import { Twilio } from 'twilio';
 import { Resend } from 'resend';
 import { rateLimitAction } from '../middleware/rate-limit-actions';
 import { withTwilioRetry, withResendRetry } from '../services/retry-strategy';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
 
 const callsRouter = Router();
 
@@ -246,10 +247,11 @@ callsRouter.get('/', async (req: Request, res: Response) => {
     });
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      return errorResponse(res, 400, e.message, 'VALIDATION_ERROR');
+      const userMessage = sanitizeValidationError(e);
+      return errorResponse(res, 400, userMessage, 'VALIDATION_ERROR');
     }
-    log.error('Calls', 'GET / - Error', { error: e?.message });
-    return errorResponse(res, 500, e?.message || 'Failed to fetch calls', 'INTERNAL_ERROR');
+    const userMessage = sanitizeError(e, 'Calls - GET /', 'Failed to fetch calls');
+    return errorResponse(res, 500, userMessage, 'INTERNAL_ERROR');
   }
 });
 
@@ -356,8 +358,8 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
       recentCalls
     });
   } catch (e: any) {
-    log.error('Calls', 'GET /stats - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch dashboard stats' });
+    const userMessage = sanitizeError(e, 'Calls - GET /stats', 'Failed to fetch dashboard stats');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -429,8 +431,8 @@ callsRouter.get('/analytics/summary', async (req: Request, res: Response) => {
       calls_this_month: monthCalls.length
     });
   } catch (e: any) {
-    log.error('Calls', 'GET /analytics/summary - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch analytics' });
+    const userMessage = sanitizeError(e, 'Calls - GET /analytics/summary', 'Failed to fetch analytics');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -473,7 +475,8 @@ callsRouter.get('/cost-analytics', async (req: Request, res: Response) => {
         error: error.message,
         orgId
       });
-      return res.status(500).json({ error: error.message });
+      const userMessage = sanitizeError(error, 'Calls - GET /cost-analytics', 'Failed to fetch cost analytics');
+      return res.status(500).json({ error: userMessage });
     }
 
     if (!calls || calls.length === 0) {
@@ -502,8 +505,8 @@ callsRouter.get('/cost-analytics', async (req: Request, res: Response) => {
       periodDays: days
     });
   } catch (e: any) {
-    log.error('Calls', 'GET /cost-analytics - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch cost analytics' });
+    const userMessage = sanitizeError(e, 'Calls - GET /cost-analytics (catch)', 'Failed to fetch cost analytics');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -785,15 +788,15 @@ callsRouter.post('/', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Calls', 'Failed to create call', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      const userMessage = sanitizeError(error, 'Calls - POST /', 'Failed to create call');
+      return res.status(500).json({ error: userMessage });
     }
 
     log.info('Calls', 'Call created', { orgId, callId: call.id, phone: parsed.phone_number });
     return res.status(201).json({ id: call.id, call });
   } catch (e: any) {
-    log.error('Calls', 'POST / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to create call' });
+    const userMessage = sanitizeError(e, 'Calls - POST /', 'Failed to create call');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -820,15 +823,15 @@ callsRouter.delete('/:callId', async (req: Request, res: Response) => {
       .eq('org_id', orgId);
 
     if (error) {
-      log.error('Calls', 'Failed to delete call', { orgId, callId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      const userMessage = sanitizeError(error, 'Calls - DELETE /:callId', 'Failed to delete call');
+      return res.status(500).json({ error: userMessage });
     }
 
     log.info('Calls', 'Call deleted', { orgId, callId });
     return res.json({ success: true });
   } catch (e: any) {
-    log.error('Calls', 'DELETE /:callId - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to delete call' });
+    const userMessage = sanitizeError(e, 'Calls - DELETE /:callId', 'Failed to delete call');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -923,17 +926,12 @@ callsRouter.post('/:callId/followup', rateLimitAction('sms'), async (req: Reques
     });
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
     // Log detailed error for debugging, but return generic message to client
-    log.error('Calls', 'POST /:callId/followup - Error', {
-      error: e?.message,
-      stack: e?.stack,
-      orgId,
-      callId
-    });
-    return res.status(500).json({ error: 'Failed to send follow-up SMS. Please try again later.' });
+    const userMessage = sanitizeError(e, 'Calls - POST /:callId/followup', 'Failed to send follow-up SMS. Please try again later.');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -1072,17 +1070,12 @@ This is an automated message. Please do not reply to this email.
     }
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
     // Log detailed error for debugging, but return generic message to client
-    log.error('Calls', 'POST /:callId/share - Error', {
-      error: e?.message,
-      stack: e?.stack,
-      orgId,
-      callId
-    });
-    return res.status(500).json({ error: 'Failed to share recording. Please try again later.' });
+    const userMessage = sanitizeError(e, 'Calls - POST /:callId/share', 'Failed to share recording. Please try again later.');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -1174,17 +1167,12 @@ callsRouter.post('/:callId/transcript/export', rateLimitAction('export'), async 
     return res.send(transcriptText);
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
     // Log detailed error for debugging, but return generic message to client
-    log.error('Calls', 'POST /:callId/transcript/export - Error', {
-      error: e?.message,
-      stack: e?.stack,
-      orgId,
-      callId
-    });
-    return res.status(500).json({ error: 'Failed to export transcript. Please try again later.' });
+    const userMessage = sanitizeError(e, 'Calls - POST /:callId/transcript/export', 'Failed to export transcript. Please try again later.');
+    return res.status(500).json({ error: userMessage });
   }
 });
 

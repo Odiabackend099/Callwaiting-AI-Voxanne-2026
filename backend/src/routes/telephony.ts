@@ -25,6 +25,7 @@ import { IntegrationDecryptor } from '../services/integration-decryptor';
 import twilio from 'twilio';
 import type { TwilioClient, RateLimitEntry, AuthenticatedRequest } from '../types/telephony-types';
 import { createLogger } from '../services/logger';
+import { sanitizeError } from '../utils/error-sanitizer';
 
 const logger = createLogger('TelephonyRoutes');
 
@@ -594,7 +595,12 @@ router.post('/forwarding-config', requireAuthOrDev, async (req: Request, res: Re
                        error.message.includes('not yet verified') ? 400 :
                        error.message.includes('not configured') ? 400 :
                        500;
-    res.status(statusCode).json({ error: error.message, requestId });
+    const userMessage = sanitizeError(
+      error,
+      'Telephony - POST /forwarding-code',
+      'Failed to generate forwarding code'
+    );
+    res.status(statusCode).json({ error: userMessage, requestId });
   }
 });
 

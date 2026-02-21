@@ -10,6 +10,7 @@ import { requireAuthOrDev } from '../middleware/auth';
 import { chunkDocumentWithMetadata } from '../services/document-chunker';
 import { generateEmbeddings, findSimilarChunks, generateEmbedding } from '../services/embeddings';
 import { log } from '../services/logger';
+import { sanitizeError, handleDatabaseError } from '../utils/error-sanitizer';
 
 const ragRouter = Router();
 
@@ -100,8 +101,12 @@ ragRouter.post('/chunk', async (req: Request, res: Response) => {
       totalTokens: chunks.reduce((sum: number, c: any) => sum + c.tokenCount, 0)
     });
   } catch (e: any) {
-    log.error('RAG', 'POST /chunk - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to chunk document' });
+    const userMessage = sanitizeError(
+      e,
+      'RAG - POST /chunk - Unexpected error',
+      'Failed to chunk document'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -141,8 +146,12 @@ ragRouter.post('/search', async (req: Request, res: Response) => {
       count: similarChunks?.length || 0
     });
   } catch (e: any) {
-    log.error('RAG', 'POST /search - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Search failed' });
+    const userMessage = sanitizeError(
+      e,
+      'RAG - POST /search - Unexpected error',
+      'Search failed'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -165,14 +174,22 @@ ragRouter.get('/:id/chunks', async (req: Request, res: Response) => {
       .order('chunk_index', { ascending: true });
 
     if (error) {
-      log.error('RAG', 'Failed to fetch chunks', { orgId, docId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'RAG - GET /:id/chunks - Database error',
+        'Failed to fetch chunks'
+      );
     }
 
     return res.json({ chunks: chunks || [] });
   } catch (e: any) {
-    log.error('RAG', 'GET /:id/chunks - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch chunks' });
+    const userMessage = sanitizeError(
+      e,
+      'RAG - GET /:id/chunks - Unexpected error',
+      'Failed to fetch chunks'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 

@@ -1,5 +1,29 @@
+import type { Metadata } from "next"
 import NavbarRedesigned from '@/components/NavbarRedesigned';
 import FooterRedesigned from '@/components/FooterRedesigned';
+
+export const metadata: Metadata = {
+  title: "Press Kit | Voxanne AI Brand Assets & Media",
+  description: "Download Voxanne AI logos, brand guidelines, screenshots, and press materials. Media inquiries welcome.",
+  keywords: ["press kit", "brand assets", "media kit", "logos"],
+  robots: {
+    index: false, // Press kits typically not indexed
+    follow: true,
+  },
+  openGraph: {
+    title: "Press Kit | Voxanne AI",
+    url: 'https://voxanne.ai/press-kit',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Press Kit | Voxanne AI",
+    images: ['/og-image.png'],
+  },
+  alternates: {
+    canonical: '/press-kit',
+  },
+}
 
 export default function PressKitPage() {
   return (
@@ -32,7 +56,7 @@ export default function PressKitPage() {
             <ul className="space-y-2 text-slate-700 text-sm leading-relaxed list-disc list-inside">
               <li>HIPAA compliant; SOC 2 Type II processes.</li>
               <li>Sub-second pickup; live transcripts and summaries.</li>
-              <li>Integrations: Google/Outlook calendars, EHR/CRM, voice infra.</li>
+              <li>Integrations: Google Calendar, Twilio, Vapi voice infrastructure.</li>
               <li>24/7 coverage with human failover for edge cases.</li>
             </ul>
           </div>

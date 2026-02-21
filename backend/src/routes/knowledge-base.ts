@@ -8,7 +8,8 @@ import VapiClient from '../services/vapi-client';
 import { log } from '../services/logger';
 import { chunkDocumentWithMetadata } from '../services/document-chunker';
 import { generateEmbeddings } from '../services/embeddings';
-import { getCached, setCached } from '../services/cache'; // <--- Changed cache service import
+import { getCached, setCached } from '../services/cache';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer'; // <--- Changed cache service import
 
 const knowledgeBaseRouter = express.Router();
 const KB_MAX_BYTES = 300_000;
@@ -263,26 +264,21 @@ knowledgeBaseRouter.get('/', async (req: Request, res: Response) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      log.error('KnowledgeBase', 'GET / - Database error', {
-        orgId,
-        error: error.message,
-        errorCode: error.code,
-        errorDetails: error.details,
-        errorHint: error.hint
-      });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'KnowledgeBase - GET /',
+        'Failed to fetch knowledge base documents'
+      );
     }
     return res.json({ items: data || [] });
   } catch (err: any) {
-    log.error('KnowledgeBase', 'GET / - Unexpected error', {
-      error: err?.message,
-      stack: err?.stack,
-      orgId: req.user?.orgId,
-      user: req.user,
-      hasAuthHeader: !!req.headers.authorization,
-      nodeEnv: process.env.NODE_ENV
-    });
-    return res.status(500).json({ error: err?.message || 'Failed to fetch documents' });
+    const userMessage = sanitizeError(
+      err,
+      'KnowledgeBase - GET / - Unexpected error',
+      'Failed to fetch documents'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -324,7 +320,14 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
       .select('*')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      return handleDatabaseError(
+        res,
+        error,
+        'KnowledgeBase - POST /',
+        'Failed to create knowledge base document'
+      );
+    }
 
     const { error: changelogError } = await supabase.from('knowledge_base_changelog').insert({
       knowledge_base_id: data.id,
@@ -374,10 +377,15 @@ knowledgeBaseRouter.post('/', async (req: Request, res: Response) => {
     return res.json({ item: data, id: data.id });
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    return res.status(500).json({ error: e?.message || 'Failed to create document' });
+    const userMessage = sanitizeError(
+      e,
+      'KnowledgeBase - POST / - Unexpected error',
+      'Failed to create document'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -436,7 +444,14 @@ knowledgeBaseRouter.patch('/:id', async (req: Request, res: Response) => {
       .select('*')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      return handleDatabaseError(
+        res,
+        error,
+        'KnowledgeBase - PATCH /:id',
+        'Failed to update knowledge base document'
+      );
+    }
 
     if (parsed.content !== undefined) {
       const { error: changelogError } = await supabase.from('knowledge_base_changelog').insert({
@@ -480,10 +495,15 @@ knowledgeBaseRouter.patch('/:id', async (req: Request, res: Response) => {
     return res.json({ item: data });
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    return res.status(500).json({ error: e?.message || 'Failed to update document' });
+    const userMessage = sanitizeError(
+      e,
+      'KnowledgeBase - PATCH /:id - Unexpected error',
+      'Failed to update document'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -550,8 +570,12 @@ knowledgeBaseRouter.delete('/:id', async (req: Request, res: Response) => {
 
     return res.json({ success: true });
   } catch (e: any) {
-    log.error('KnowledgeBase', 'DELETE - Unexpected error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to delete document' });
+    const userMessage = sanitizeError(
+      e,
+      'KnowledgeBase - DELETE /:id - Unexpected error',
+      'Failed to delete document'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -729,21 +753,25 @@ knowledgeBaseRouter.post('/sync', async (req: Request, res: Response) => {
 
   } catch (err: any) {
     const orgId = getOrgId(req);
-    log.error('KnowledgeBase', 'Sync failed', { orgId, error: err.message });
+    const userMessage = sanitizeError(
+      err,
+      'KnowledgeBase - POST /sync',
+      'Failed to sync knowledge base'
+    );
 
     // Log failure
     if (orgId) {
       await supabase.from('kb_sync_log').insert({
         org_id: orgId,
         status: 'failed',
-        error_message: err.message,
+        error_message: err.message, // Internal logging still has full error
         duration_ms: 0,
         docs_synced: 0,
         assistants_updated: 0
       });
     }
 
-    return res.status(400).json({ error: err.message || 'Failed to sync knowledge base' });
+    return res.status(400).json({ error: userMessage });
   }
 });
 

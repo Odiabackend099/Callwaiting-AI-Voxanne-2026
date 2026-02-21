@@ -45,6 +45,14 @@ test-results/
 playwright-report/
 *.backup
 
+# TestSprite E2E Testing
+testsprite-results/
+testsprite-screenshots/
+testsprite-videos/
+testsprite-reports/
+.testsprite/
+*.testsprite.log
+
 # Render deployment files with credentials
 RENDER_ENV_VARIABLES.txt
 backend/.env.render

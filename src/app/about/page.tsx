@@ -1,6 +1,28 @@
+import type { Metadata } from "next"
 import Image from 'next/image';
 import NavbarRedesigned from '@/components/NavbarRedesigned';
 import FooterRedesigned from '@/components/FooterRedesigned';
+
+export const metadata: Metadata = {
+  title: "About Voxanne AI | The Voice of Your Practice",
+  description: "Meet the team building the #1 AI receptionist for clinics. HIPAA-compliant voice automation trusted by healthcare practices worldwide. Built for modern clinics.",
+  keywords: ["about voxanne", "ai receptionist team", "voice automation company", "healthcare ai"],
+  openGraph: {
+    title: "About Voxanne AI | The Voice of Your Practice",
+    description: "HIPAA-compliant AI receptionist designed for healthcare. 24/7 call answering, appointment booking, and patient qualification.",
+    url: 'https://voxanne.ai/about',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "About Voxanne AI | The Voice of Your Practice",
+    description: "HIPAA-compliant AI receptionist designed for healthcare. 24/7 call answering, appointment booking, and patient qualification.",
+    images: ['/og-image.png'],
+  },
+  alternates: {
+    canonical: '/about',
+  },
+}
 
 export default function AboutPage() {
   const team = [
@@ -34,7 +56,7 @@ export default function AboutPage() {
           <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Built for modern clinics</h1>
           <p className="text-lg text-slate-600 leading-relaxed max-w-3xl">
             Voxanne AI is a voice-first receptionist designed for healthcare. We answer calls instantly,
-            qualify patients with natural language, book appointments into your calendar or EHR, and keep
+            qualify patients with natural language, book appointments into your calendar, and keep
             your front desk available 24/7 without adding headcount.
           </p>
         </div>
@@ -66,7 +88,7 @@ export default function AboutPage() {
             <h2 className="text-2xl font-bold text-slate-900">Why clinics choose Voxanne</h2>
             <ul className="space-y-3 text-slate-700 text-sm leading-relaxed list-disc list-inside">
               <li>AI that sounds human, understands intent, and follows clinical scripts.</li>
-              <li>Native integrations with Google/Outlook calendars, major EHRs, and CRMs.</li>
+              <li>Native integration with Google Calendar for real-time scheduling.</li>
               <li>Live agent failover and call summaries stored securely for your team.</li>
               <li>Deployed in minutes with a guided onboarding and dedicated support.</li>
             </ul>

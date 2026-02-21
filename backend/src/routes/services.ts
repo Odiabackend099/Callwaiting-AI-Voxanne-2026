@@ -10,6 +10,7 @@ import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
 import { getCachedServicePricing, invalidateServiceCache } from '../services/cache';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
 
 const servicesRouter = Router();
 
@@ -43,8 +44,12 @@ servicesRouter.get('/', async (req: Request, res: Response) => {
       .range(parsed.offset, parsed.offset + parsed.limit - 1);
 
     if (error) {
-      log.error('Services', 'GET / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Services - GET / - Database error',
+        'Failed to fetch services'
+      );
     }
 
     return res.json({
@@ -56,8 +61,12 @@ servicesRouter.get('/', async (req: Request, res: Response) => {
       }
     });
   } catch (e: any) {
-    log.error('Services', 'GET / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch services' });
+    const userMessage = sanitizeError(
+      e,
+      'Services - GET / - Unexpected error',
+      'Failed to fetch services'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -87,8 +96,12 @@ servicesRouter.get('/:id', async (req: Request, res: Response) => {
 
     return res.json(service);
   } catch (e: any) {
-    log.error('Services', 'GET /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch service' });
+    const userMessage = sanitizeError(
+      e,
+      'Services - GET /:id - Unexpected error',
+      'Failed to fetch service'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -128,8 +141,12 @@ servicesRouter.post('/', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Services', 'POST / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Services - POST / - Database error',
+        'Failed to create service'
+      );
     }
 
     // Invalidate service cache after creation
@@ -145,11 +162,15 @@ servicesRouter.post('/', async (req: Request, res: Response) => {
     return res.status(201).json(service);
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: firstError?.message || 'Validation failed' });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Services', 'POST / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to create service' });
+    const userMessage = sanitizeError(
+      e,
+      'Services - POST / - Unexpected error',
+      'Failed to create service'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -202,8 +223,12 @@ servicesRouter.patch('/:id', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Services', 'PATCH /:id - Database error', { orgId, serviceId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Services - PATCH /:id - Database error',
+        'Failed to update service'
+      );
     }
 
     // Invalidate service cache after update
@@ -214,11 +239,15 @@ servicesRouter.patch('/:id', async (req: Request, res: Response) => {
     return res.json(service);
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: firstError?.message || 'Validation failed' });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Services', 'PATCH /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to update service' });
+    const userMessage = sanitizeError(
+      e,
+      'Services - PATCH /:id - Unexpected error',
+      'Failed to update service'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -255,8 +284,12 @@ servicesRouter.delete('/:id', async (req: Request, res: Response) => {
       .eq('org_id', orgId);
 
     if (error) {
-      log.error('Services', 'DELETE /:id - Database error', { orgId, serviceId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Services - DELETE /:id - Database error',
+        'Failed to delete service'
+      );
     }
 
     // Invalidate service cache after deletion
@@ -269,8 +302,12 @@ servicesRouter.delete('/:id', async (req: Request, res: Response) => {
       message: `Service "${existing.name}" deleted successfully`
     });
   } catch (e: any) {
-    log.error('Services', 'DELETE /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to delete service' });
+    const userMessage = sanitizeError(
+      e,
+      'Services - DELETE /:id - Unexpected error',
+      'Failed to delete service'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 

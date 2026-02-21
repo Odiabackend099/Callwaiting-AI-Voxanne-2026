@@ -124,12 +124,12 @@ export default function TestimonialsRedesigned() {
                     >
                         <div className="grid md:grid-cols-4 gap-8 text-center">
                             <div>
-                                <p className="text-3xl font-bold text-surgical-900 mb-2">500+</p>
+                                <p className="text-3xl font-bold text-surgical-900 mb-2">Growing</p>
                                 <p className="text-obsidian/70">Clinics Using Voxanne AI</p>
                             </div>
                             <div>
-                                <p className="text-3xl font-bold text-surgical-600 mb-2">98%</p>
-                                <p className="text-obsidian/70">Patient Satisfaction Rate</p>
+                                <p className="text-3xl font-bold text-surgical-600 mb-2">24/7</p>
+                                <p className="text-obsidian/70">Always Available</p>
                             </div>
                             <div>
                                 <p className="text-3xl font-bold text-surgical-400 mb-2">40%</p>

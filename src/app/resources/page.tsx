@@ -110,7 +110,7 @@ export default function ResourcesPage() {
                         Get New Resources Delivered Weekly
                     </h3>
                     <p className="text-slate-600 mb-8 max-w-2xl mx-auto">
-                        Join 500+ medical practice owners getting actionable insights every Tuesday
+                        Join medical practice owners getting actionable insights every Tuesday
                     </p>
                     <form className="flex gap-4 max-w-md mx-auto">
                         <input

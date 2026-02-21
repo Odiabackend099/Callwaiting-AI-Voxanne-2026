@@ -10,6 +10,7 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
 import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
 import { VoiceSelector } from '@/components/VoiceSelector';
+import { formatPence } from '@/utils/currency';
 import useSWR from 'swr';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
@@ -364,8 +365,7 @@ export default function AgentConfigPage() {
         try {
             const wallet = await authedBackendFetch<any>('/api/billing/wallet');
             if ((wallet?.balance_pence || 0) < 79) {
-                const balanceGBP = ((wallet?.balance_pence || 0) / 100).toFixed(2);
-                setError(`Insufficient balance (£${balanceGBP}). Minimum £0.79 required for test calls. Please top up your wallet first.`);
+                setError(`Insufficient balance (${formatPence(wallet?.balance_pence || 0)}). Minimum £0.79 required for test calls. Please top up your wallet first.`);
                 return;
             }
         } catch {
@@ -428,8 +428,7 @@ export default function AgentConfigPage() {
             try {
                 const wallet = await authedBackendFetch<any>('/api/billing/wallet');
                 if ((wallet?.balance_pence || 0) < 79) {
-                    const balanceGBP = ((wallet?.balance_pence || 0) / 100).toFixed(2);
-                    setError(`Insufficient balance (£${balanceGBP}). Minimum £0.79 required for test calls. Please top up your wallet first.`);
+                    setError(`Insufficient balance (${formatPence(wallet?.balance_pence || 0)}). Minimum £0.79 required for test calls. Please top up your wallet first.`);
                     return;
                 }
             } catch {

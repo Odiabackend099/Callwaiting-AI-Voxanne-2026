@@ -1,0 +1,121 @@
+version: "2"
+type: frontend
+tech_stack:
+  - TypeScript
+  - Next.js 14
+  - React 18
+  - Tailwind CSS
+  - Supabase
+  - Framer Motion
+routes:
+  - path: /
+    file: src/app/page.tsx
+    auth_required: false
+    description: Landing page with hero, features, pricing
+  - path: /sign-in
+    file: src/app/sign-in/page.tsx
+    auth_required: false
+    description: User authentication page
+  - path: /dashboard
+    file: src/app/dashboard/page.tsx
+    auth_required: true
+    description: Main dashboard with analytics overview
+  - path: /dashboard/calls
+    file: src/app/dashboard/calls/page.tsx
+    auth_required: true
+    description: Call logs and history
+  - path: /dashboard/appointments
+    file: src/app/dashboard/appointments/page.tsx
+    auth_required: true
+    description: Appointments management and scheduling
+  - path: /dashboard/agent-config
+    file: src/app/dashboard/agent-config/page.tsx
+    auth_required: true
+    description: AI agent configuration
+  - path: /dashboard/wallet
+    file: src/app/dashboard/wallet/page.tsx
+    auth_required: true
+    description: Billing and credits management
+  - path: /dashboard/phone-settings
+    file: src/app/dashboard/phone-settings/page.tsx
+    auth_required: true
+    description: Phone number and telephony settings
+  - path: /dashboard/test-agent
+    file: src/app/dashboard/test-agent/page.tsx
+    auth_required: true
+    description: Test AI agent with browser or live call
+  - path: /dashboard/knowledge-base
+    file: src/app/dashboard/knowledge-base/page.tsx
+    auth_required: true
+    description: Upload and manage knowledge base documents
+features:
+  - name: User Authentication
+    description: Sign in with email and password using Supabase Auth
+    files:
+      - src/app/sign-in/page.tsx
+    entry_route: /sign-in
+    user_interactions:
+      - Fill email input field
+      - Fill password input field
+      - Click sign in button
+      - Redirect to dashboard on success
+    api_calls:
+      - method: POST
+        endpoint: /auth/v1/token
+    auth_required: false
+  - name: Dashboard Analytics
+    description: View call analytics and performance metrics
+    files:
+      - src/app/dashboard/page.tsx
+    entry_route: /dashboard
+    user_interactions:
+      - View total calls count
+      - View average sentiment percentage
+      - View pipeline value
+      - View recent activity feed
+    api_calls:
+      - method: GET
+        endpoint: /api/dashboard/stats
+    auth_required: true
+  - name: Appointments Management
+    description: View and manage scheduled appointments with outcome tracking
+    files:
+      - src/app/dashboard/appointments/page.tsx
+    entry_route: /dashboard/appointments
+    user_interactions:
+      - View appointments list with outcomes
+      - See appointment status
+      - View call outcomes and sentiment
+      - Filter appointments by status
+    api_calls:
+      - method: GET
+        endpoint: /api/appointments
+    auth_required: true
+  - name: AI Agent Configuration
+    description: Configure AI voice agent settings and tools
+    files:
+      - src/app/dashboard/agent-config/page.tsx
+    entry_route: /dashboard/agent-config
+    user_interactions:
+      - Select agent type
+      - Choose AI voice
+      - Configure system prompt
+      - Save agent configuration
+    api_calls:
+      - method: POST
+        endpoint: /api/agents
+    auth_required: true
+  - name: Wallet and Billing
+    description: Manage credits and add funds via Stripe
+    files:
+      - src/app/dashboard/wallet/page.tsx
+    entry_route: /dashboard/wallet
+    user_interactions:
+      - View current credit balance
+      - Click add credits button
+      - Complete Stripe checkout
+    api_calls:
+      - method: POST
+        endpoint: /api/stripe/create-checkout-session
+    auth_required: true
+known_limitations: []

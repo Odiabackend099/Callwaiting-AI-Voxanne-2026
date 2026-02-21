@@ -1,0 +1,3038 @@
+[
+  {
+    "id": "TC001",
+    "title": "View key analytics widgets on the Dashboard (calls, appointments, sentiment)",
+    "description": "Verifies that after login the dashboard shows total calls today, appointments booked, and average sentiment widgets.",
+    "category": "Dashboard Analytics",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total calls\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Appointments\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Average sentiment\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Dashboard shows recent activity feed and hot lead alerts",
+    "description": "Verifies that the dashboard renders the recent activity feed and hot lead alerts section after login.",
+    "category": "Dashboard Analytics",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Recent activity\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Activity feed list\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Hot leads\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Open a recent activity item to view call record details",
+    "description": "Verifies that clicking an activity item opens a detailed record showing cost, appointment ID, and tools used.",
+    "category": "Dashboard Analytics",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the first item in the \"Recent activity\" list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Cost\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Appointment ID\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Tools used\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Drilldown view shows cost value formatted as currency or cents label",
+    "description": "Verifies that the detailed call record presents a visible cost value (for example with a currency symbol or a cents label).",
+    "category": "Dashboard Analytics",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the first item in the \"Recent activity\" list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Cost\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Cost value\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Dashboard loads aggregated metrics without showing an error banner",
+    "description": "Verifies that when dashboard stats load successfully, the page does not show a re-authentication error banner.",
+    "category": "Dashboard Analytics",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Dashboard stats section\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"re-authenticate\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Dashboard metrics display numeric values (not placeholders)",
+    "description": "Verifies that key metrics render as visible numbers rather than empty states or loading placeholders.",
+    "category": "Dashboard Analytics",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Total calls value\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Appointments booked value\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Average sentiment value\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Dashboard remains usable while recent activity loads",
+    "description": "Verifies that the dashboard shows the main analytics widgets even if the activity feed is still loading.",
+    "category": "Dashboard Analytics",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total calls\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Appointments\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Recent activity loading indicator\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Search call logs by caller name or phone number and open call details",
+    "description": "Verifies that searching call logs filters the list and a matching call can be opened to view details.",
+    "category": "Call Logs Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type a caller name or phone number from a visible call row into the search field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Search\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text matching the search term is visible in the results list"
+      },
+      {
+        "type": "action",
+        "description": "Click the call row that matches the search results"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Call details\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Filter call logs by status and date range",
+    "description": "Verifies that applying a status filter and a date-range filter updates the call list results.",
+    "category": "Call Logs Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Completed\" from the status filter dropdown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Completed\" is visible in the active filters area"
+      },
+      {
+        "type": "action",
+        "description": "Fill a start date into the date range start field"
+      },
+      {
+        "type": "action",
+        "description": "Fill an end date into the date range end field"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the calls results list is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Send an SMS follow-up from call details",
+    "description": "Verifies that an SMS follow-up can be composed and sent from a call detail view and a success message is shown.",
+    "category": "Call Logs Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first call row in the list to open details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Call details\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Send SMS follow-up\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"SMS message\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Thanks for calling—please reply with any questions or preferred appointment times.\" into the SMS message field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Send\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"SMS sent\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Delete a call record from the call logs list",
+    "description": "Verifies that a call record can be deleted with confirmation and is removed from the list.",
+    "category": "Call Logs Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type a unique visible value from the first call row (caller name or number) into the search field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Search\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the results list shows at least one matching call row"
+      },
+      {
+        "type": "action",
+        "description": "Click the matching call row"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Delete call record\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Confirm\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Confirm\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Deleted\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Malformed phone search shows validation/error and no results",
+    "description": "Verifies that entering an invalid phone string in search shows an error/validation message and does not show matching results.",
+    "category": "Call Logs Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type \"12-ABCD-!!!!\" into the search field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Search\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Invalid\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"No results\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Clear search to return to the unfiltered call logs list",
+    "description": "Verifies that clearing the search input returns the call logs view back to the full (or default) list.",
+    "category": "Call Logs Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type a caller name or phone number from a visible call row into the search field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Search\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the calls results list is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Clear\" (or \"X\") control in the search field"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the search field is empty"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the calls results list is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Open call details from a filtered-by-status list",
+    "description": "Verifies that after filtering by status, a call can still be opened and its details are shown.",
+    "category": "Call Logs Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Calls\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Missed\" from the status filter dropdown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Missed\" is visible in the active filters area"
+      },
+      {
+        "type": "action",
+        "description": "Click the first call row in the filtered list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Call details\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Call status\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "View appointments list with pagination and open an appointment to see linked call data",
+    "description": "Verifies the user can browse the appointments list, paginate, open an appointment, and see linked call information in details.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify page title contains \"Appointments\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Next\" pagination control"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Appointments table\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Open appointment details and verify call Golden Record/link is visible",
+    "description": "Verifies appointment details include visible linked call data (Golden Record) for traceability.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first appointment in the appointments list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Appointment Details\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Linked Call\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Filter appointments by Pending status and verify results reflect the filter",
+    "description": "Verifies filtering the appointments list by Pending updates the visible results.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Pending\" from the \"Status\" dropdown filter"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Apply\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Pending\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Pending appointment reschedule to a valid new date and verify status/date updates",
+    "description": "Verifies a pending appointment can be rescheduled with a valid new date and the updated information is visible afterward.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Pending\" from the \"Status\" dropdown filter"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Apply\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the first appointment in the filtered list"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Complete reschedule submit and verify confirmation is visible",
+    "description": "Verifies the reschedule form can be submitted and a visible success/updated state appears.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first appointment in the appointments list"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Reschedule\" button"
+      },
+      {
+        "type": "action",
+        "description": "Type \"2030-01-15\" into the \"New date\" field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Rescheduled\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Cancel an appointment and confirm status becomes Cancelled",
+    "description": "Verifies the user can cancel an appointment, confirm the action, and see the updated cancelled status in UI.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first appointment in the appointments list"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Cancel\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Confirm\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Cancelled\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC021",
+    "title": "Attempt to reschedule with an invalid date and verify validation error is shown",
+    "description": "Verifies invalid reschedule input is blocked with a visible validation message and the appointment is not updated.",
+    "category": "Appointment Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first appointment in the appointments list"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Reschedule\" button"
+      },
+      {
+        "type": "action",
+        "description": "Type \"invalid-date\" into the \"New date\" field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Invalid date\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC022",
+    "title": "Filter appointments by date range and verify results update",
+    "description": "Verifies date range filtering updates the appointment list to reflect the chosen range.",
+    "category": "Appointment Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Appointments\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type \"2029-01-01\" into the \"Start date\" field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"2029-12-31\" into the \"End date\" field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Apply\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Appointments table\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC023",
+    "title": "Edit an existing agent and save changes (inbound tab)",
+    "description": "Verifies a user can edit an inbound agent’s basic details and see a visible save confirmation.",
+    "category": "AI Agent Configuration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify page title contains \"Agent\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Inbound\" agent tab"
+      },
+      {
+        "type": "action",
+        "description": "Click the first agent in the agent list to open it for editing"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"E2E Inbound Agent\" into the agent name field"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Updated by UI E2E test\" into the agent description field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Saved\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC024",
+    "title": "Switch between inbound and outbound tabs and verify agent lists are visible",
+    "description": "Verifies the user can switch tabs without errors and sees the correct tab content area update.",
+    "category": "AI Agent Configuration",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Inbound\" agent tab"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Inbound\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Outbound\" agent tab"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Outbound\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC025",
+    "title": "Assign a phone number to an agent and verify it appears on the agent card after save",
+    "description": "Verifies a phone number can be assigned from a dropdown and is visibly reflected after saving.",
+    "category": "AI Agent Configuration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first agent in the agent list to open it for editing"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Phone number\" dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Select the first available phone number option from the dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Saved\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the phone number value is visible on the agent card or within the agent details panel"
+      }
+    ]
+  },
+  {
+    "id": "TC026",
+    "title": "Set greeting and max call duration and save",
+    "description": "Verifies greeting and maximum call duration fields can be updated and saved with a confirmation.",
+    "category": "AI Agent Configuration",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first agent in the agent list to open it for editing"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Hello, this is Voxanne AI. How can I help you today?\" into the greeting / first message field"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"5\" into the max call duration field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Saved\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC027",
+    "title": "Trigger a test call from agent config and verify test call started confirmation",
+    "description": "Verifies the Test action can be initiated and the UI shows a visible indication that a test call has started (without requiring external phone receipt verification).",
+    "category": "AI Agent Configuration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first agent in the agent list to open it for editing"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Test\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Test call\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Started\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC028",
+    "title": "Prevent saving when system prompt is overly long (validation error)",
+    "description": "Verifies overly long system prompts show a visible validation error and block saving.",
+    "category": "AI Agent Configuration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first agent in the agent list to open it for editing"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\" into the system prompt field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"too long\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Saved\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC029",
+    "title": "Save button remains disabled or shows error when required fields are cleared",
+    "description": "Verifies basic required-field validation by clearing the agent name and ensuring saving is blocked or an error appears.",
+    "category": "AI Agent Configuration",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Agent Config\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first agent in the agent list to open it for editing"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"\" into the agent name field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC030",
+    "title": "Add a manual text knowledge base entry and see it in the list",
+    "description": "Verifies a user can create a manual text entry with a title and content and it appears in the knowledge base list.",
+    "category": "Knowledge Base Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Knowledge Base\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add manual text entry\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Title\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Test KB Entry\" into the title field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"This is a test knowledge base entry content.\" into the content field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Test KB Entry\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC031",
+    "title": "Try to save a manual text entry with missing required fields",
+    "description": "Verifies the manual entry form validates required fields and prevents saving when mandatory data is missing.",
+    "category": "Knowledge Base Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Knowledge Base\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add manual text entry\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Title is required\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Content is required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC032",
+    "title": "View wallet balance, trend chart, and transaction history",
+    "description": "Verifies the wallet page loads and shows GBP balance, a trend chart, and transaction history entries.",
+    "category": "Wallet and Billing",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"£\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Transaction\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC033",
+    "title": "Open Top Up flow and verify Stripe Checkout page is reached",
+    "description": "Verifies that starting a £25 top-up transitions the user to a Stripe checkout experience.",
+    "category": "Wallet and Billing",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Top Up\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"£25\" preset amount option"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Continue\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify page title contains \"Stripe\""
+      }
+    ]
+  },
+  {
+    "id": "TC034",
+    "title": "Top Up dialog can be opened and closed without changes",
+    "description": "Verifies the Top Up UI can be dismissed cleanly and returns to the wallet view.",
+    "category": "Wallet and Billing",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Top Up\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Cancel\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Transaction\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC035",
+    "title": "Validation prevents top-up below the minimum amount",
+    "description": "Verifies that entering a top-up amount below £25 shows a validation message and prevents checkout.",
+    "category": "Wallet and Billing",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Top Up\" button"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"£5\" into the top-up amount field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Continue\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"minimum\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC036",
+    "title": "Set auto-recharge with valid threshold and save",
+    "description": "Verifies auto-recharge can be enabled by entering a threshold and saving settings.",
+    "category": "Wallet and Billing",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Set auto-recharge\" button"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"25\" into the auto-recharge threshold field"
+      },
+      {
+        "type": "action",
+        "description": "Select the first available payment method option from the payment method dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Auto-recharge enabled\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC037",
+    "title": "Auto-recharge required fields validation",
+    "description": "Verifies the auto-recharge form shows a visible error when attempting to save with missing required fields.",
+    "category": "Wallet and Billing",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Set auto-recharge\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC038",
+    "title": "Transaction history shows expected column labels and at least one entry state",
+    "description": "Verifies transaction history area is present and displays either entries or an explicit empty state.",
+    "category": "Wallet and Billing",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Wallet\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Transaction\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Amount\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Date\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC039",
+    "title": "Access Phone Settings page after login",
+    "description": "Verifies an authenticated user can reach the Phone Settings page and see the managed numbers section.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard/phone-settings\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Phone Settings\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC040",
+    "title": "Buy a new managed phone number (happy path)",
+    "description": "Verifies a user can start the buy flow, select a country/area, complete purchase, and see the new number appear in the list.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Buy new phone number\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Buy\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Select \"United States\" from the country dropdown"
+      }
+    ]
+  },
+  {
+    "id": "TC041",
+    "title": "Complete number purchase and confirm new number appears",
+    "description": "Verifies completing the purchase shows a success state and the newly purchased number is visible in the managed numbers list.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Buy new phone number\" button"
+      },
+      {
+        "type": "action",
+        "description": "Select \"United States\" from the country dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Complete purchase\" button"
+      }
+    ]
+  },
+  {
+    "id": "TC042",
+    "title": "Configure AI forwarding mode to Total AI and save",
+    "description": "Verifies selecting an existing managed number, setting forwarding to Total AI, configuring ring time, and saving reflects an active forwarding mode.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first managed phone number in the list"
+      },
+      {
+        "type": "action",
+        "description": "Select \"total AI\" from the AI forwarding mode dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      }
+    ]
+  },
+  {
+    "id": "TC043",
+    "title": "Verify forwarding ring time can be set and persists after save",
+    "description": "Verifies the user can set a forwarding ring time, save, and still see the configured value displayed as active.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first managed phone number in the list"
+      },
+      {
+        "type": "action",
+        "description": "Select \"30 seconds\" from the ring time dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      }
+    ]
+  },
+  {
+    "id": "TC044",
+    "title": "Delete a managed number and confirm removal",
+    "description": "Verifies deleting a managed number via confirmation removes it from the list.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the first managed phone number in the list"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Delete\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Confirm\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"No managed numbers\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC045",
+    "title": "Prevent buying a second managed number when one already exists",
+    "description": "Verifies the UI shows an error and blocks purchase when the organization already has a managed number.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify at least one managed phone number is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Buy new phone number\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Only one managed number\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC046",
+    "title": "Block number purchase when wallet balance is insufficient",
+    "description": "Verifies attempting a purchase with insufficient balance shows a billing error and does not add a new number.",
+    "category": "Phone Settings & Managed Numbers",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Phone Settings\" in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Buy new phone number\" button"
+      },
+      {
+        "type": "action",
+        "description": "Select \"United States\" from the country dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Complete purchase\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Insufficient balance\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC047",
+    "title": "Text chat test: send a message and receive an agent reply",
+    "description": "Verifies a user can send a text message to the test agent and see an agent reply in the chat window.",
+    "category": "Test Agent",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Test\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard/test"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Hello—please confirm you can help book an appointment.\" into the message input field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Send\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Hello—please confirm you can help book an appointment.\" is visible in the chat window"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an element \"Agent message\" is visible in the chat window"
+      }
+    ]
+  },
+  {
+    "id": "TC048",
+    "title": "Text chat test: pressing Enter sends the message",
+    "description": "Verifies the text input supports sending a message via the Enter key and the message appears in the chat history.",
+    "category": "Test Agent",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Test\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard/test"
+      },
+      {
+        "type": "action",
+        "description": "Type \"What are your office hours?\" into the message input field"
+      },
+      {
+        "type": "action",
+        "description": "Press \"Enter\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"What are your office hours?\" is visible in the chat window"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an element \"Agent message\" is visible in the chat window"
+      }
+    ]
+  },
+  {
+    "id": "TC049",
+    "title": "Text chat validation: prevent sending an empty message",
+    "description": "Verifies the UI prevents sending a blank text message and shows a visible validation state.",
+    "category": "Test Agent",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Test\" in the dashboard navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard/test"
+      },
+      {
+        "type": "action",
+        "description": "Click the message input field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Send\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Message cannot be empty\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC050",
+    "title": "Submit onboarding intake form with all required fields (no optional attachment)",
+    "description": "Verifies a user can complete the onboarding intake form with required fields and sees a success confirmation.",
+    "category": "Onboarding Intake Form",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Acme Health Clinic\" into the Company Name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"ops@acmehealth.example\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+14155552671\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Thanks for calling Acme Health Clinic. How can I help you today?\" into the Greeting Script field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Voice selection option \"Default\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Success\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC051",
+    "title": "Submit onboarding intake form with a different voice selection",
+    "description": "Verifies selecting a non-default voice option still allows successful submission and shows a success message.",
+    "category": "Onboarding Intake Form",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Sunrise Dental\" into the Company Name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"frontdesk@sunrisedental.example\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+442079460123\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Hello, you’ve reached Sunrise Dental. How may we assist you?\" into the Greeting Script field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Voice selection option \"Female\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Success\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC052",
+    "title": "Required field validation: greeting script omitted blocks submission",
+    "description": "Verifies the form prevents submission and shows a validation message when greeting script is missing.",
+    "category": "Onboarding Intake Form",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Maple Family Practice\" into the Company Name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"admin@maplefp.example\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+16135550123\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Voice selection option \"Default\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Greeting\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC053",
+    "title": "Phone format validation: invalid phone blocks submission",
+    "description": "Verifies the form shows a phone format error when the phone number is not in E.164 format and submission is blocked.",
+    "category": "Onboarding Intake Form",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Pine Pediatrics\" into the Company Name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"hello@pinepeds.example\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"415-555-2671\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Hi! You’ve reached Pine Pediatrics. How can we help?\" into the Greeting Script field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Voice selection option \"Default\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"phone\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"E.164\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC054",
+    "title": "Email format validation: invalid email blocks submission",
+    "description": "Verifies the form shows an email validation error and does not submit when email format is invalid.",
+    "category": "Onboarding Intake Form",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Cedar Orthopedics\" into the Company Name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"not-an-email\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+12065550111\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Thank you for calling Cedar Orthopedics. How may we direct your call?\" into the Greeting Script field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Voice selection option \"Default\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"email\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"valid\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC055",
+    "title": "Required field validation: company name omitted blocks submission",
+    "description": "Verifies the form prevents submission and displays an error when company name is missing.",
+    "category": "Onboarding Intake Form",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"intake@nocname.example\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+13105550199\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Hello, thanks for calling. How can I help?\" into the Greeting Script field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Voice selection option \"Default\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Company\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC056",
+    "title": "Required field validation: voice not selected blocks submission (if voice is required)",
+    "description": "Verifies the form blocks submission and shows a validation message if voice selection is required and not chosen.",
+    "category": "Onboarding Intake Form",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /start"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Onboarding\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Harbor ENT\" into the Company Name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"team@harborent.example\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+15035550123\" into the Phone field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Thanks for calling Harbor ENT. How may we assist you today?\" into the Greeting Script field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the Submit button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Voice\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC057",
+    "title": "Already-verified number shows success message and verified status",
+    "description": "Verifies that starting verification for a number already verified in Twilio shows the blue success box and a visible verified status.",
+    "category": "Verified Caller ID",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+14155550100\" into the phone number field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Start Verification\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Phone number is already verified!\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Verified\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC058",
+    "title": "Not-yet-verified number displays a 6-digit validation code in the blue box",
+    "description": "Verifies that starting verification for an unverified number displays a visible 6-digit code in the blue code box.",
+    "category": "Verified Caller ID",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+14155550101\" into the phone number field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Start Verification\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"validation code\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Blue validation code box\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC059",
+    "title": "Complete verification after code is shown and see verified status",
+    "description": "Verifies that after a validation code is generated, the user can complete setup and see a verified status in the UI.",
+    "category": "Verified Caller ID",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type \"+14155550102\" into the phone number field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Start Verification\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Blue validation code box\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verify & Complete Setup\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Verified\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Verification complete\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC060",
+    "title": "Remove verification and confirm status is removed",
+    "description": "Verifies that a user can remove an existing verification and the UI no longer shows the number as verified.",
+    "category": "Verified Caller ID",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Remove Verification\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Confirm\" button in the confirmation dialog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Verified\" is not visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Not verified\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC061",
+    "title": "Attempt to complete setup without pre-check shows an error",
+    "description": "Verifies that clicking \"Verify & Complete Setup\" without running the pre-check shows an error indicating verification failed or pre-check was skipped.",
+    "category": "Verified Caller ID",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verify & Complete Setup\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"pre-check\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"verification failed\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC062",
+    "title": "Invalid phone number format blocks Start Verification and shows validation message",
+    "description": "Verifies that entering a non-E.164 phone number prevents the verification flow and shows a visible error/validation message.",
+    "category": "Verified Caller ID",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Type \"415-555-0100\" into the phone number field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Start Verification\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"E.164\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"invalid phone number\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC063",
+    "title": "Empty phone number blocks Start Verification",
+    "description": "Verifies that starting verification with an empty phone number shows a visible required-field error.",
+    "category": "Verified Caller ID",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Start Verification\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Phone number\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC064",
+    "title": "Cancel removal in confirmation dialog keeps verification intact",
+    "description": "Verifies that canceling the remove confirmation does not remove the verified status.",
+    "category": "Verified Caller ID",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/dashboard\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Verified Caller ID\" item in the dashboard navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Remove Verification\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Cancel\" button in the confirmation dialog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Verified\" is visible"
+      }
+    ]
+  }
+]

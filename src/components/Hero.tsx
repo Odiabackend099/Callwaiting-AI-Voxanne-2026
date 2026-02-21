@@ -55,7 +55,7 @@ export default function Hero() {
                     <FadeIn delay={0.2}>
                         <p className="text-xl text-slate-600 leading-relaxed max-w-lg mb-10">
                             Automate scheduling, answer patient queries, and reduce admin
-                            overhead with voice AI that sounds human, integrates with your EHR, 
+                            overhead with voice AI that sounds human, integrates with your calendar,
                             and never misses a call.
                         </p>
                     </FadeIn>

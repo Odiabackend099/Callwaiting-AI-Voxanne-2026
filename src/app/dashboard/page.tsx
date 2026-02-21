@@ -147,7 +147,16 @@ export default function CallWaitingAIDashboard() {
                     ) : (
                         <div className="divide-y divide-surgical-200">
                             {recentEvents.map((event) => (
-                                <div key={event.id} className="px-6 py-4 hover:bg-surgical-50 transition-colors">
+                                <div
+                                    key={event.id}
+                                    className={`px-6 py-4 hover:bg-surgical-50 transition-colors ${event.type === 'call_completed' ? 'cursor-pointer' : ''}`}
+                                    onClick={() => {
+                                        if (event.type === 'call_completed') {
+                                            const callId = event.id.replace('call_', '');
+                                            router.push(`/dashboard/calls?callId=${callId}`);
+                                        }
+                                    }}
+                                >
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex items-start gap-4 flex-1">
                                             {/* Event Type Icon */}

@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { requireAuthOrDev } from '../middleware/auth';
 import { supabase } from '../services/supabase-client';
 import { log } from '../services/logger';
+import { sanitizeError, handleDatabaseError } from '../utils/error-sanitizer';
 
 const router = Router();
 
@@ -46,8 +47,12 @@ router.get('/', requireAuthOrDev, async (req, res) => {
             .order('created_at', { ascending: true });
 
         if (error) {
-            log.error('agents', 'Error fetching agents', { error: error.message, orgId });
-            return res.status(500).json({ error: error.message });
+            return handleDatabaseError(
+                res,
+                error,
+                'Agents - GET /',
+                'Failed to fetch agents'
+            );
         }
 
         // Batch fetch user details to avoid N+1 query problem
@@ -57,8 +62,12 @@ router.get('/', requireAuthOrDev, async (req, res) => {
         });
 
         if (usersError) {
-            log.error('agents', 'Error fetching users in batch', { error: usersError.message, orgId });
-            return res.status(500).json({ error: usersError.message });
+            const userMessage = sanitizeError(
+                usersError,
+                'Agents - GET / - Auth admin error',
+                'Failed to fetch user details'
+            );
+            return res.status(500).json({ error: userMessage });
         }
 
         // Create lookup map for O(1) access

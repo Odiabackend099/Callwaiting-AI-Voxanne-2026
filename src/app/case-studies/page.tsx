@@ -19,7 +19,7 @@ const caseStudies = [
     challenge: "30% of calls went to voicemail during peak hours, losing an estimated $15K/month in missed bookings.",
     solution: "Deployed Voxanne AI to handle all after-hours calls and overflow during busy periods. Integrated with their existing calendar system.",
     results: [
-      { metric: "Call answer rate", value: "98%", change: "+45%" },
+      { metric: "Call answer rate", value: "24/7", change: "Always on" },
       { metric: "No-show rate", value: "5%", change: "-25%" },
       { metric: "Additional revenue", value: "$173K/year", change: "+12%" },
       { metric: "Time saved", value: "2 hrs/day", change: "100%" },
@@ -170,16 +170,16 @@ export default function CaseStudiesPage() {
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <Users className="w-6 h-6 text-surgical-600" />
-              <p className="text-4xl font-bold text-navy-900">500+</p>
+              <p className="text-4xl font-bold text-navy-900">Growing</p>
             </div>
             <p className="text-slate-600">Clinics using Voxanne AI</p>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <TrendingUp className="w-6 h-6 text-surgical-600" />
-              <p className="text-4xl font-bold text-navy-900">98%</p>
+              <p className="text-4xl font-bold text-navy-900">24/7</p>
             </div>
-            <p className="text-slate-600">Average call answer rate</p>
+            <p className="text-slate-600">Always available coverage</p>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">

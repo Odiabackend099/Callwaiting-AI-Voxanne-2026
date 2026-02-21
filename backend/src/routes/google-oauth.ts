@@ -130,7 +130,7 @@ router.post('/test-callback', async (req: Request, res: Response): Promise<void>
       }
 
       log.error('GoogleOAuth', 'Failed to insert test credentials', { error, code: error?.code });
-      res.status(500).json({ error: 'Failed to simulate OAuth callback', details: error?.message });
+      return res.status(500).json({ error: 'Failed to simulate OAuth callback' });
       return;
     }
 
@@ -138,7 +138,7 @@ router.post('/test-callback', async (req: Request, res: Response): Promise<void>
     res.json({ success: true, message: 'Test OAuth callback simulated', connected: true, email });
   } catch (error: any) {
     log.error('GoogleOAuth', 'Test callback error', { error: error?.message, code: error?.code });
-    res.status(500).json({ error: 'Test callback failed', message: error?.message });
+    return res.status(500).json({ error: 'Test callback failed' });
   }
 });
 
@@ -850,7 +850,7 @@ router.get('/test-success', async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error) {
     console.error('[DEBUG] Test error:', error);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Operation failed' });
   }
 });
 

@@ -23,8 +23,8 @@ export function useDashboardWebSocket() {
     return useContext(DashboardWebSocketContext);
 }
 
-const MAX_RECONNECT_ATTEMPTS = 5;
-const BASE_RECONNECT_DELAY = 2000;
+const MAX_RECONNECT_ATTEMPTS = 15;
+const BASE_RECONNECT_DELAY = 1000;
 
 export function DashboardWebSocketProvider({ children }: { children: React.ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);

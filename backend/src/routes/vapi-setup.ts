@@ -10,6 +10,7 @@ import axios from 'axios';
 import { log } from '../services/logger';
 import { supabase } from '../services/supabase-client';
 import { requireAuth } from '../middleware/auth';
+import { sanitizeError } from '../utils/error-sanitizer';
 
 const vapiSetupRouter = Router();
 
@@ -132,8 +133,12 @@ If knowledge base information is provided in the context, prioritize it in your 
     });
 
   } catch (error: any) {
-    log.error('Vapi-Setup', 'Configuration failed', { error: error?.message });
-    return res.status(500).json({ error: error?.message });
+    const userMessage = sanitizeError(
+      error,
+      'Vapi-Setup - POST /configure - Unexpected error',
+      'Failed to configure Vapi assistant'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 

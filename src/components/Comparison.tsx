@@ -31,7 +31,7 @@ export default function Comparison() {
                             {[
                                 { text: "Hallucinates medical advice", detail: "Risk of liability & lawsuits." },
                                 { text: "Confuses cosmetic vs medical", detail: "Sends Botox leads to nurses." },
-                                { text: "No EMR Integration", detail: "Manual data entry required." },
+                                { text: "No Calendar Integration", detail: "Manual data entry required." },
                                 { text: "Generic Security", detail: "Not HIPAA verified for voice." },
                             ].map((item, i) => (
                                 <motion.li
@@ -63,7 +63,7 @@ export default function Comparison() {
                             {[
                                 { text: "Zero Clinical Hallucinations", detail: "Strict medical guardrails enabled." },
                                 { text: "Trained on CPT Codes", detail: "Understands BBL, Rhinoplasty, etc." },
-                                { text: "Direct EMR Sync", detail: "Nextech, Mindbody, DrChrono." },
+                                { text: "Calendar Integration", detail: "Google Calendar with real-time sync." },
                                 { text: "UK GDPR & HIPAA Certified", detail: "Enterprise-grade patient privacy & compliance." },
                             ].map((item, i) => (
                                 <motion.li

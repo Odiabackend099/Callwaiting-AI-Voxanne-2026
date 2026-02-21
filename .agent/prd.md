@@ -1,10 +1,10 @@
 # Voxanne AI – Product Requirements Document (PRD)
 
-**Version:** 2026.35.0
-**Last Updated:** 2026-02-16 09:30 UTC
-**Status:** ✅ PRODUCTION READY - Billing Pipeline Schema Fixed & Rate Aligned
-**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅
-**Verification Status:** ✅ ALL PHASES OPERATIONAL - Schema mismatch resolved, rate aligned to 56p/min, E2E tests passing 100%
+**Version:** 2026.36.0
+**Last Updated:** 2026-02-21 UTC
+**Status:** ✅ PRODUCTION READY - Dashboard E2E Fixes Applied & Build Verified
+**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅
+**Verification Status:** ✅ ALL PHASES OPERATIONAL - 8 TestSprite E2E test failures resolved, Next.js build passing clean
 
 ---
 
@@ -224,7 +224,7 @@ Reservation committed: ✅ YES
    - **Enforcement:** Zero-debt for assets, £5.00 (500 pence) max debt for calls, all-or-nothing atomic transactions
 4. **Wallet Billing** – Stripe Checkout top-ups (£25 minimum), auto-recharge, credit ledger, webhook verification, and fixed-rate per-minute deductions (56 pence/min GBP).
 5. **Managed Telephony** – Purchase Twilio subaccount numbers, surface in Agent Config, enforce one-number-per-org, support manual AI Forwarding.
-6. **Dashboards & Leads** – Production dashboards for call stats, sentiment, lead enrichment, conversion tracking, and Geo/SEO telemetry.
+6. **Dashboards & Leads** – Production dashboards for call stats (Total Calls, Appointments, Average Sentiment, Avg Duration), call log filters (status, date range, search with clear), call detail modal (cost, appointment ID, tools used), activity click-through to call detail, appointment-to-call linkage, lead enrichment, conversion tracking, and Geo/SEO telemetry.
 7. **Onboarding Form** – Intake form at `/start` collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support team. Stores submissions in `onboarding_submissions` table with full audit trail.
 8. **Verified Caller ID** – Outbound caller ID verification via Twilio validation API. Pre-checks existing verifications to prevent errors, displays validation codes in UI, supports delete/unverify workflow. Works in both managed and BYOC telephony modes with automatic credential resolution.
 9. **Security & Compliance** – JWT middleware using `jwt-decode`, Supabase RLS on all tenant tables, hardened functions (`search_path` pinned to `public`), HIPAA-ready infrastructure.
@@ -252,6 +252,7 @@ Supporting services: wallet auto-recharge processor, webhook verification API, a
 
 | Date (UTC) | Release | Key Outcomes |
 |------------|---------|--------------|
+| 2026-02-21 | **Dashboard E2E Test Fixes (TestSprite)** | Fixed 8 TestSprite E2E test failures across 7 files. Backend: Extended `/api/analytics/dashboard-pulse` with `appointments_booked` and `avg_sentiment` fields. Frontend: ClinicalPulse rewritten with 4 metric cards (Total Calls, Appointments, Avg Sentiment, Avg Duration); call detail modal shows Cost, Appointment ID, Tools Used; call logs page gains Status + Date Range filter dropdowns and search clear button (X + Escape); dashboard activity items clickable for call events (navigates to call detail via `?callId=` param); appointment detail modal shows Linked Call section with call direction, duration, and "View Call Details" link. Backend connectivity resilience improved: WebSocket MAX_RECONNECT_ATTEMPTS 5→15, BASE_RECONNECT_DELAY 2000→1000ms; BackendStatusBanner timeout 5s→10s with retry-once logic. Next.js build verified clean. |
 | 2026-02-14 | **Real-Time Prepaid Billing Engine - Production Deployment** | All 3 phases deployed to production Supabase: Phase 1 (Atomic Asset Billing) with TOCTOU prevention via FOR UPDATE locks + idempotency; Phase 2 (Credit Reservation) with 5-minute call holds and credit release; Phase 3 (Kill Switch) with 60-second balance monitoring and automatic call termination. Database migrations applied and verified. All RPC functions operational. 100% test coverage (11 unit + 10 E2E + 3 load tests all passing). Zero revenue leaks remaining. |
 | 2026-02-13 | **API Endpoint Verification** | All dashboard endpoints tested and verified. GET /api/calls-dashboard/:callId returns complete Golden Record data. Outcome summaries verified as exactly 3 sentences with enriched context. All metrics (duration, sentiment, outcome) confirmed as real data from database. Recording endpoint ready. Multi-tenant isolation enforced. Frontend components configured to display all fields. |
 | 2026-02-13 | **Onboarding Form E2E** | Form submission at `/start` fully operational: FormData → backend validation → database storage → dual email delivery (user confirmation + support notification). Field name fix applied (greeting_script), comprehensive logging added, email verification API endpoints deployed. 20+ successful submissions tested. |
@@ -283,6 +284,13 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
   - `GET /api/calls-dashboard/stats` - Returns real aggregated metrics (total_calls, avg_duration_seconds, average_sentiment, pipeline_value)
   - `GET /api/calls-dashboard/:callId/recording-url` - Returns signed S3 URL when recording exists (ready for playback)
   - Multi-tenant isolation verified on all endpoints (org_id enforced via JWT)
+- **Frontend Display (2026-02-21):** ✅ All Golden Record fields rendered in UI:
+  - `GET /api/analytics/dashboard-pulse` - Extended with `appointments_booked` and `avg_sentiment` fields
+  - ClinicalPulse component: 4 metric cards (Total Calls, Appointments, Average Sentiment, Avg Duration)
+  - Call detail modal: Cost (formatted as currency), Appointment ID, Tools Used (comma-separated)
+  - Call logs page: Status filter, Date Range filter, search with clear (X button + Escape key)
+  - Dashboard activity items: Click-through to call detail via `?callId=` URL param
+  - Appointment detail modal: "Linked Call" section with call_id, direction, duration, and navigation link
 
 ### 6.3 Wallet & Billing
 - Minimum top-up: **2,500 pence (£25)**; preset buttons derive from env-configured rate.  
@@ -452,4 +460,10 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 - [x] Email delivery verified programmatically via `/api/email-testing/*` endpoints.
 - [x] Form validation enforces required fields (company, email, phone, greeting_script).
 - [x] Documentation kept concise (single source, no duplicated incident logs).
+- [x] Dashboard ClinicalPulse displays 4 metric cards (Total Calls, Appointments, Avg Sentiment, Avg Duration).
+- [x] Call detail modal renders Cost, Appointment ID, and Tools Used from Golden Record.
+- [x] Call logs page supports Status and Date Range filters with search clear functionality.
+- [x] Dashboard activity items navigate to call detail on click.
+- [x] Appointment detail modal shows Linked Call section with navigation to call detail.
+- [x] WebSocket reconnection resilient (15 attempts, 1s base delay) and health check retries before showing banner.
 

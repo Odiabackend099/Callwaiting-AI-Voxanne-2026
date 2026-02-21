@@ -7,6 +7,7 @@
 import express, { Request, Response } from 'express';
 import axios from 'axios';
 import { log } from '../services/logger';
+import { sanitizeError } from '../utils/error-sanitizer';
 import { configureVapiWebhook } from '../services/vapi-webhook-configurator';
 
 const router = express.Router();
@@ -72,7 +73,8 @@ router.post('/discover/assistants', async (req: Request, res: Response): Promise
       return;
     }
 
-    res.status(500).json({ error: `Failed to fetch assistants: ${message}` });
+    const userMessage = sanitizeError(error, 'VapiDiscovery - GET assistants', 'Failed to fetch assistants');
+    res.status(500).json({ error: userMessage });
   }
 });
 
@@ -121,7 +123,8 @@ router.post('/discover/phone-numbers', async (req: Request, res: Response): Prom
       return;
     }
 
-    res.status(500).json({ error: `Failed to fetch phone numbers: ${message}` });
+    const userMessage = sanitizeError(error, 'VapiDiscovery - GET phone numbers', 'Failed to fetch phone numbers');
+    res.status(500).json({ error: userMessage });
   }
 });
 
@@ -190,7 +193,8 @@ router.post('/discover/all', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    res.status(500).json({ error: `Failed to fetch Vapi resources: ${message}` });
+    const userMessage = sanitizeError(error, 'VapiDiscovery - GET all resources', 'Failed to fetch Vapi resources');
+    res.status(500).json({ error: userMessage });
   }
 });
 
@@ -225,7 +229,7 @@ router.post('/discover/configure', async (req: Request, res: Response): Promise<
     }
   } catch (error: any) {
     log.error('VapiDiscovery', 'Configure failed', { error: error?.message });
-    res.status(500).json({ error: `Configuration failed: ${error?.message}` });
+    return res.status(500).json({ error: 'Configuration failed. Please try again.' });
   }
 });
 

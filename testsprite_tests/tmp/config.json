@@ -1,0 +1,19 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "ceo@demo.com",
+  "loginPassword": "demo123",
+  "executionArgs": {
+    "projectName": "Callwaiting-AI-Voxanne-2026",
+    "projectPath": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026",
+    "testIds": [],
+    "additionalInstruction": "Test with account ceo@demo.com and password demo123. Focus on appointments page to verify outcome fields display correctly after schema fix. Verify dashboard loads, call logs show data, appointments show outcomes. Ensure all authentication tests use the correct credentials: email ceo@demo.com, password demo123.",
+    "envs": {
+      "API_KEY": "sk-user-3IKQwfk0mej3zwRQixbMn9A69RCZ7aXw5-yD0nP9zZbzXIodOM_6tfZfgfCBcDlbV0z-BDe34H3kfMkT0-6GzcsgL56Kjrl4Qn__faHj7Cqn15rot_aY8EuFxCBdiRtRZr4"
+    }
+  },
+  "serverPort": 65049,
+  "proxy": "http://7cfb913b-33ca-4007-8346-50fa89b48a90:PWgrdXyrJf8WzatzGR0Fiqt7xziQZxdf@tun.testsprite.com:8080"
+}

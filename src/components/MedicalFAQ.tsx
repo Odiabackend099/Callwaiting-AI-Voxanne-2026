@@ -40,7 +40,7 @@ const faqData: FAQCategory[] = [
         title: "Practice Integration",
         icon: Network,
         items: [
-            { question: "What EMRs do you integrate with?", answer: "We support direct integrations with major aesthetic EMRs including Mindbody, Nextech, Aesthetics Pro, and DrChrono. We can also connect via custom API." },
+            { question: "What do you integrate with?", answer: "We integrate with Google Calendar for real-time appointment booking and availability checks. More integrations are on our roadmap based on customer demand." },
             { question: "How long is setup?", answer: "Because Call Waiting AI is pre-trained on medical workflows, we can go live in as little as 48 hours after your 15-minute onboarding call." },
             { question: "Do I need to train her?", answer: "No. Our team configures her voice, knowledge base, and booking rules for you. You just hand us your FAQ doc." },
             { question: "Can I customize her responses?", answer: "Absolutely. In our Growth and Premium tiers, you have full control over her script, tone, and objection handling." }

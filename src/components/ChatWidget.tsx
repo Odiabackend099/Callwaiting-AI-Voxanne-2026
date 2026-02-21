@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, X, Send } from "lucide-react";
+import { MessageCircle, X, Send } from "lucide-react";
 import Image from "next/image";
 
 export const ChatWidget = () => {
@@ -108,11 +108,10 @@ export const ChatWidget = () => {
                                         className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                     >
                                         <div
-                                            className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed ${
-                                                msg.role === "user"
+                                            className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed ${msg.role === "user"
                                                     ? "bg-cyan-600 text-white rounded-tr-none"
                                                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none shadow-sm"
-                                            }`}
+                                                }`}
                                         >
                                             {msg.text}
                                         </div>
@@ -180,14 +179,48 @@ export const ChatWidget = () => {
             </AnimatePresence>
 
             {/* Toggle Button */}
-            <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-14 h-14 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 flex items-center justify-center hover:shadow-xl transition-shadow"
-            >
-                {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
-            </motion.button>
+            <div className="relative">
+                {/* Hover tooltip */}
+                {!isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 4, scale: 0.92 }}
+                        whileHover={{ opacity: 1, y: 0, scale: 1 }}
+                        className="absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-obsidian text-white text-xs font-medium rounded-lg whitespace-nowrap pointer-events-none"
+                        style={{ transformOrigin: 'bottom right' }}
+                    >
+                        Chat with us ✨
+                        <div className="absolute bottom-[-4px] right-4 w-2 h-2 bg-obsidian rotate-45" />
+                    </motion.div>
+                )}
+
+                <motion.button
+                    animate={!isOpen ? { scale: [1, 1.05, 1] } : {}}
+                    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                    whileHover={{ scale: 1.08, boxShadow: '0 12px 30px rgba(29,78,216,0.40)' }}
+                    whileTap={{ scale: 0.93 }}
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="relative w-14 h-14 rounded-full bg-gradient-to-br from-surgical-500 to-surgical-700 text-white shadow-lg shadow-surgical-600/35 flex items-center justify-center transition-shadow"
+                >
+                    {/* Notification pulse dot */}
+                    {!isOpen && (
+                        <span className="absolute top-0 right-0 flex h-3.5 w-3.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-green-500 border-2 border-white" />
+                        </span>
+                    )}
+                    <AnimatePresence mode="wait" initial={false}>
+                        {isOpen ? (
+                            <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                                <X className="w-6 h-6" />
+                            </motion.div>
+                        ) : (
+                            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                                <MessageCircle className="w-6 h-6 fill-white/20" />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </motion.button>
+            </div>
         </div>
     );
 };

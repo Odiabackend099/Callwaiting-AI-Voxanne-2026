@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef, useState, useEffect } from "react";
+import { useRef } from "react";
 import Image from "next/image";
 
 export default function RevenueLeak() {
@@ -13,15 +13,8 @@ export default function RevenueLeak() {
 
     const opacity = useTransform(scrollYProgress, [0, 0.2, 0.9, 1], [0, 1, 1, 0]);
 
-    // Live counter logic
-    const [lostRevenue, setLostRevenue] = useState(847);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setLostRevenue(prev => prev + Math.floor(Math.random() * 50) + 10);
-        }, 2000);
-        return () => clearInterval(interval);
-    }, []);
+    // Illustrative industry estimate based on published healthcare no-show data
+    const lostRevenue = 35000;
 
     return (
         <section ref={containerRef} className="relative py-24 md:py-32 bg-obsidian text-white overflow-hidden">
@@ -37,6 +30,7 @@ export default function RevenueLeak() {
                                 src="/clinic-interior.png"
                                 alt="Empty Clinic Reception"
                                 fill
+                                sizes="(max-width: 768px) 100vw, 448px"
                                 className="object-cover grayscale hover:grayscale-0 transition-all duration-700"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
@@ -46,9 +40,9 @@ export default function RevenueLeak() {
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                                     </span>
-                                    Live Loss Tracker
+                                    Estimated Monthly Loss
                                 </p>
-                                <p className="text-white text-xs mb-1 uppercase tracking-wider opacity-60">Revenue Lost While You Watch This Page</p>
+                                <p className="text-white text-xs mb-1 uppercase tracking-wider opacity-60">Average clinic revenue lost to missed calls per month</p>
                                 <div className="text-5xl font-mono font-bold text-white tracking-tight tabular-nums">
                                     £{lostRevenue.toLocaleString()}
                                 </div>

@@ -13,7 +13,7 @@ interface ComparisonRow {
 const comparisonData: ComparisonRow[] = [
     { feature: "Medical-Specific Training", voxanne: true, generic: false, highlight: true },
     { feature: "UK GDPR & HIPAA Compliance", voxanne: true, generic: "Varies", highlight: true },
-    { feature: "EMR/EHR Integration", voxanne: true, generic: false, highlight: true },
+    { feature: "Calendar Integration", voxanne: true, generic: false, highlight: true },
     { feature: "Procedure Knowledge (BBL, Rhinoplasty, etc.)", voxanne: "500+ procedures", generic: "Basic only" },
     { feature: "UK + US Support", voxanne: true, generic: "US only" },
     { feature: "British English Voice", voxanne: true, generic: false, highlight: true },

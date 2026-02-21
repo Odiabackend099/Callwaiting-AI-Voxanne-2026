@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         const monthlyRevenueLoss = Math.round(missedCallsPerMonth * avgProcedureValue * conversionRate);
         const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
-        // With Call Waiting AI (98% call answer rate - industry-leading)
+        // With Call Waiting AI (high call answer rate - always available)
         const withCallWaitingAIMissed = Math.round(missedCallsPerMonth * 0.02);
         const withCallWaitingAIRevenueSaved = Math.round((missedCallsPerMonth - withCallWaitingAIMissed) * avgProcedureValue * conversionRate);
         const yearlyRevenueSaved = withCallWaitingAIRevenueSaved * 12;
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
                             <h2 style="margin: 0 0 20px 0; color: #0f172a; font-size: 24px; font-weight: 700;">✨ With Call Waiting AI AI</h2>
                             
                             <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
-                                <p style="margin: 0 0 10px 0; color: #d1fae5; font-size: 14px; font-weight: 600; text-transform: uppercase;">98% Call Answer Rate</p>
+                                <p style="margin: 0 0 10px 0; color: #d1fae5; font-size: 14px; font-weight: 600; text-transform: uppercase;">24/7 Call Coverage</p>
                                 <p style="margin: 0; color: #ffffff; font-size: 48px; font-weight: 700;">$${withCallWaitingAIRevenueSaved.toLocaleString()}</p>
                                 <p style="margin: 10px 0 0 0; color: #d1fae5; font-size: 16px;">saved per month</p>
                             </div>

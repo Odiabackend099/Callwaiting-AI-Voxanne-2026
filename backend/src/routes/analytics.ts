@@ -88,11 +88,32 @@ analyticsRouter.get('/dashboard-pulse', requireAuth, async (req: Request, res: R
 
         const avgDuration = callCountForAvg > 0 ? Math.round(totalDuration / callCountForAvg) : 0;
 
+        // Fetch appointment count for this org
+        const { count: appointmentsCount } = await supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .eq('org_id', orgId);
+
+        // Calculate average sentiment from calls with sentiment scores
+        let avgSentiment = 0;
+        const { data: sentimentRows } = await supabase
+            .from('calls')
+            .select('sentiment_score')
+            .eq('org_id', orgId)
+            .not('sentiment_score', 'is', null);
+
+        if (sentimentRows && sentimentRows.length > 0) {
+            const sum = sentimentRows.reduce((acc: number, row: any) => acc + (row.sentiment_score || 0), 0);
+            avgSentiment = sum / sentimentRows.length;
+        }
+
         return res.json({
             total_calls: totalCalls,
             inbound_calls: inboundCalls,
             outbound_calls: outboundCalls,
             avg_duration_seconds: avgDuration,
+            appointments_booked: appointmentsCount || 0,
+            avg_sentiment: avgSentiment,
             success_rate: 0, // TODO: Calculate from outcomes
             pipeline_value: 0, // TODO: Calculate from lead scores
             hot_leads_count: 0 // TODO: Count from contacts table

@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import useSWR from 'swr';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { formatPence } from '@/utils/currency';
 
 const USD_TO_GBP_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_GBP_RATE || '0.79');
 const MIN_TOPUP_PENCE = parseInt(process.env.NEXT_PUBLIC_WALLET_MIN_TOPUP_PENCE || '2500', 10);
@@ -57,12 +58,6 @@ interface TransactionsResponse {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatPence(pence: number): string {
-    // Display in GBP (pounds) - UK primary market
-    const gbpAmount = (pence / 100).toFixed(2);
-    return `£${gbpAmount}`;
-}
 
 function formatGbpLabelFromPence(pence: number): string {
     return `£${(pence / 100).toFixed(0)}`;

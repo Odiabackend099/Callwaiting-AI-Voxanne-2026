@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { supabase } from '../services/supabase-client';
 import { requireAuthOrDev } from '../middleware/auth';
 import { log } from '../services/logger';
+import { sanitizeError, sanitizeValidationError, handleDatabaseError } from '../utils/error-sanitizer';
 
 const notificationsRouter = Router();
 
@@ -80,8 +81,8 @@ notificationsRouter.get('/', async (req: Request, res: Response) => {
     const { data, error, count } = await query;
 
     if (error) {
-      log.error('Notifications', 'GET / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      const userMessage = handleDatabaseError(res, error, 'Notifications - GET / - Database error', 'Failed to fetch notifications');
+      return;
     }
 
     return res.json({
@@ -94,8 +95,8 @@ notificationsRouter.get('/', async (req: Request, res: Response) => {
       }
     });
   } catch (e: any) {
-    log.error('Notifications', 'GET / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch notifications' });
+    const userMessage = sanitizeError(e, 'Notifications - GET /', 'Failed to fetch notifications');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -117,8 +118,8 @@ notificationsRouter.get('/unread', async (req: Request, res: Response) => {
       .eq('is_read', false);
 
     if (countError) {
-      log.error('Notifications', 'GET /unread - Count error', { orgId, error: countError.message });
-      return res.status(500).json({ error: countError.message });
+      const userMessage = handleDatabaseError(res, countError, 'Notifications - GET /unread - Count error', 'Failed to fetch unread count');
+      return;
     }
 
     // Get recent unread notifications
@@ -131,8 +132,8 @@ notificationsRouter.get('/unread', async (req: Request, res: Response) => {
       .limit(5);
 
     if (dataError) {
-      log.error('Notifications', 'GET /unread - Data error', { orgId, error: dataError.message });
-      return res.status(500).json({ error: dataError.message });
+      const userMessage = handleDatabaseError(res, dataError, 'Notifications - GET /unread - Data error', 'Failed to fetch unread notifications');
+      return;
     }
 
     return res.json({
@@ -140,8 +141,8 @@ notificationsRouter.get('/unread', async (req: Request, res: Response) => {
       recentUnread: unread || []
     });
   } catch (e: any) {
-    log.error('Notifications', 'GET /unread - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch unread notifications' });
+    const userMessage = sanitizeError(e, 'Notifications - GET /unread', 'Failed to fetch unread notifications');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -182,15 +183,15 @@ notificationsRouter.patch('/:id/read', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Notifications', 'PATCH /:id/read - Database error', { orgId, notificationId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      const userMessage = handleDatabaseError(res, error, 'Notifications - PATCH /:id/read', 'Failed to mark notification as read');
+      return;
     }
 
     log.info('Notifications', 'Notification marked as read', { orgId, notificationId: id });
     return res.json(data);
   } catch (e: any) {
-    log.error('Notifications', 'PATCH /:id/read - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to mark notification as read' });
+    const userMessage = sanitizeError(e, 'Notifications - PATCH /:id/read', 'Failed to mark notification as read');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -226,15 +227,15 @@ notificationsRouter.delete('/:id', async (req: Request, res: Response) => {
       .eq('org_id', orgId);
 
     if (error) {
-      log.error('Notifications', 'DELETE /:id - Database error', { orgId, notificationId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      const userMessage = handleDatabaseError(res, error, 'Notifications - DELETE /:id', 'Failed to delete notification');
+      return;
     }
 
     log.info('Notifications', 'Notification deleted', { orgId, notificationId: id });
     return res.json({ success: true });
   } catch (e: any) {
-    log.error('Notifications', 'DELETE /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to delete notification' });
+    const userMessage = sanitizeError(e, 'Notifications - DELETE /:id', 'Failed to delete notification');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -278,19 +279,19 @@ notificationsRouter.post('/', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Notifications', 'POST / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      const userMessage = handleDatabaseError(res, error, 'Notifications - POST /', 'Failed to create notification');
+      return;
     }
 
     log.info('Notifications', 'Notification created', { orgId, notificationId: data.id, type: parsed.type });
     return res.status(201).json(data);
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Notifications', 'POST / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to create notification' });
+    const userMessage = sanitizeError(e, 'Notifications - POST /', 'Failed to create notification');
+    return res.status(500).json({ error: userMessage });
   }
 });
 

@@ -1,4 +1,28 @@
+import type { Metadata } from "next"
 import React from 'react';
+
+export const metadata: Metadata = {
+  title: "Terms of Service | Voxanne AI",
+  description: "Voxanne AI Terms of Service. Review our platform usage terms, service agreements, and user responsibilities for AI voice automation.",
+  keywords: ["terms of service", "user agreement", "legal terms"],
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    title: "Terms of Service | Voxanne AI",
+    url: 'https://voxanne.ai/terms',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Terms of Service | Voxanne AI",
+    images: ['/og-image.png'],
+  },
+  alternates: {
+    canonical: '/terms',
+  },
+}
 
 export default function TermsOfService() {
     return (

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "TestSprite": {
+      "command": "/usr/local/Cellar/node/25.5.0/bin/npx",
+      "args": ["@testsprite/testsprite-mcp@latest"],
+      "env": {
+        "API_KEY": "sk-user-4x5qBEX9R9Jr0RZaQQY51bJgBVT3_SJHh5xRfZlCqjOM43ieSincIlPqN1ldojd81XwaJX7ztZWqee1PJaovqbIVtyQDj6zpkHF9oCicdetrYfAoVeCasAm9HdSSQTnHKiE"
+      }
+    }
+  }
+}

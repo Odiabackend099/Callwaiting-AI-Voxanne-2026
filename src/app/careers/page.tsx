@@ -1,5 +1,27 @@
+import type { Metadata } from "next"
 import NavbarRedesigned from '@/components/NavbarRedesigned';
 import FooterRedesigned from '@/components/FooterRedesigned';
+
+export const metadata: Metadata = {
+  title: "Careers at Voxanne AI | Join Our Team",
+  description: "Join Voxanne AI and help build the future of healthcare voice automation. Remote-first company with competitive compensation and benefits.",
+  keywords: ["careers", "jobs", "voxanne hiring", "remote jobs"],
+  openGraph: {
+    title: "Careers at Voxanne AI",
+    description: "Build the future of AI-powered healthcare communication.",
+    url: 'https://voxanne.ai/careers',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Careers at Voxanne AI",
+    description: "Build the future of AI-powered healthcare communication.",
+    images: ['/og-image.png'],
+  },
+  alternates: {
+    canonical: '/careers',
+  },
+}
 
 export default function CareersPage() {
   return (

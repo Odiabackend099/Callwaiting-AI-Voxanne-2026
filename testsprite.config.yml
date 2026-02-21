@@ -1,0 +1,183 @@
+# TestSprite Configuration for Voxanne AI
+# Healthcare Voice Platform E2E Testing
+
+project:
+  name: "Voxanne AI - Healthcare Voice Platform"
+  description: "Multi-tenant Voice-as-a-Service platform for healthcare"
+  base_url: "https://voxanne.ai"
+  api_url: "https://voxanneai.onrender.com"
+  version: "2026.35.0"
+
+# Browser matrix for cross-browser testing
+browsers:
+  - chrome
+  - firefox
+  - safari
+  - edge
+
+# Viewport configurations
+viewports:
+  desktop:
+    width: 1920
+    height: 1080
+  tablet:
+    width: 768
+    height: 1024
+  mobile:
+    width: 375
+    height: 667
+
+# Test account credentials
+test_account:
+  email: "ceo@demo.com"
+  password: "demo123"
+  note: "Dedicated test organization with isolated data"
+
+# Environment configurations
+environments:
+  production:
+    frontend: "https://voxanne.ai"
+    backend: "https://voxanneai.onrender.com"
+    database: "lbjymlodxprzqgtyqtcq.supabase.co"
+    stripe_mode: "test"
+    stripe_test_card: "4242424242424242"  # Visa test card
+    stripe_auto_complete: true
+
+  local:
+    frontend: "http://localhost:3000"
+    backend: "http://localhost:3001"
+    database: "localhost:54322"
+    stripe_mode: "test"
+    stripe_test_card: "4242424242424242"
+    stripe_auto_complete: true
+
+# Screenshot settings
+screenshots:
+  on_failure: true
+  on_success: false
+  full_page: true
+  format: "png"
+  quality: 90
+
+# Video recording settings
+video_recording:
+  enabled: true
+  on_failure_only: true
+  format: "mp4"
+  fps: 30
+
+# Timeout configurations (milliseconds)
+timeouts:
+  page_load: 30000      # 30 seconds
+  element_wait: 10000   # 10 seconds
+  test_timeout: 120000  # 2 minutes
+  api_timeout: 15000    # 15 seconds
+
+# Performance benchmarks
+performance:
+  first_contentful_paint: 1500  # 1.5s max
+  time_to_interactive: 3000     # 3s max
+  total_page_load: 5000         # 5s max
+  api_response_time: 500        # 500ms max
+
+# Visual regression settings
+visual_regression:
+  enabled: true
+  threshold: 0.1  # 0.1% pixel difference allowed
+  ignore_regions:
+    - ".timestamp"
+    - ".balance-value"
+    - ".current-time"
+    - ".live-indicator"
+
+# Test data configurations
+test_data:
+  max_test_calls: 100
+  max_test_contacts: 50
+  max_test_appointments: 30
+  cleanup_after_test: true
+
+# Retry configuration
+retry:
+  max_retries: 2
+  retry_delay: 1000  # 1 second
+
+# Reporting
+reporting:
+  format: "junit"
+  output_dir: "./test-results"
+  slack_webhook: ""  # Optional: Add Slack webhook URL for notifications
+  email_recipients: []  # Optional: Add email addresses for reports
+
+# Database verification settings
+database:
+  enable_assertions: true
+  connection_timeout: 5000
+  query_timeout: 10000
+
+# Security testing
+security:
+  xss_patterns:
+    - "<script>alert('XSS')</script>"
+    - "<img src=x onerror=alert('XSS')>"
+    - "javascript:alert('XSS')"
+
+  sql_injection_patterns:
+    - "' OR 1=1; --"
+    - "'; DROP TABLE users; --"
+    - "' UNION SELECT * FROM users; --"
+
+  phi_test_data:
+    ssn: "123-45-6789"
+    credit_card: "4532-1234-5678-9010"
+    diagnosis: "Type 2 Diabetes"
+    dob: "1985-03-15"
+
+# Test suites
+suites:
+  smoke:
+    description: "Quick smoke tests (15 min)"
+    tests:
+      - "auth.login"
+      - "dashboard.load"
+      - "api.health"
+
+  critical_path:
+    description: "Critical user journeys (30 min)"
+    tests:
+      - "auth.*"
+      - "booking.e2e"
+      - "billing.checkout"
+      - "dashboard.call_logs"
+
+  full_regression:
+    description: "Complete test suite (2 hours)"
+    tests:
+      - "**/*"
+
+  security:
+    description: "Security & compliance tests"
+    tests:
+      - "security.*"
+      - "compliance.phi_redaction"
+
+  performance:
+    description: "Performance benchmarks"
+    tests:
+      - "performance.*"
+      - "load.concurrent_users"
+
+# Parallel execution
+parallel:
+  enabled: true
+  max_workers: 4
+  timeout_per_worker: 600000  # 10 minutes
+
+# Feature flags
+features:
+  visual_regression: true
+  performance_monitoring: true
+  api_testing: true
+  mobile_testing: true
+  cross_browser: true
+  database_assertions: true

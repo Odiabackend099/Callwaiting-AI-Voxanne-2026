@@ -24,6 +24,7 @@ import { createIdempotencyMiddleware } from '../middleware/idempotency';
 import { retryWithBackoff } from '../utils/error-recovery';
 import { getRealtimeSyncService } from '../services/realtime-sync';
 import { log } from '../services/logger';
+import { sanitizeError } from '../utils/error-sanitizer';
 
 const router = Router();
 
@@ -202,15 +203,15 @@ router.post(
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
 
-      log.error('LeadStatusUpdate', 'Failed to update status', {
-        error: err.message,
-        orgId: req.user?.orgId,
-      });
-
       if (err.message.includes('not found')) {
         res.status(404).json({ error: 'One or more leads not found' });
       } else if (err.message.includes('Invalid')) {
-        res.status(400).json({ error: err.message });
+        const userMessage = sanitizeError(
+          err,
+          'LeadStatusUpdate - Validation error',
+          'Invalid input provided'
+        );
+        res.status(400).json({ error: userMessage });
       } else {
         res.status(500).json({
           error: 'Failed to update status',

@@ -117,7 +117,7 @@ export default function SecurityBadges() {
                     className="mt-12 text-center"
                 >
                     <p className="text-obsidian/60 text-sm mb-4">
-                        Trusted by 50+ medical practices across the UK and US
+                        Trusted by medical practices across the UK and US
                     </p>
                     <div className="flex items-center justify-center gap-2 text-obsidian/50 text-xs">
                         <Lock className="w-4 h-4" />

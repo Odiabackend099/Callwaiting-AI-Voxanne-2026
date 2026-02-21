@@ -4,27 +4,6 @@
     "width": 1920,
     "height": 1080
   },
-  "capturedAt": "2026-02-04T20:22:06.607Z",
-  "elements": [
-    {
-      "name": "dashboard-header",
-      "selector": "h1:has-text(\"Dashboard\")",
-      "x": 480,
-      "y": 48,
-      "width": 1232,
-      "height": 36,
-      "centerX": 1096,
-      "centerY": 66
-    },
-    {
-      "name": "recent-activity-section",
-      "selector": "text=/Recent Activity/i",
-      "x": 505,
-      "y": 485,
-      "width": 124,
-      "height": 28,
-      "centerX": 567,
-      "centerY": 499
-    }
-  ]
+  "capturedAt": "2026-02-20T12:38:51.833Z",
+  "elements": []
 }

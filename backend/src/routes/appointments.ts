@@ -15,6 +15,7 @@ import { Resend } from 'resend';
 import { withTwilioRetry, withResendRetry } from '../services/retry-strategy';
 import { createAppointmentReminderMessage, createAppointmentEmailSubject, getOrgTimezone } from '../services/timezone-helper';
 import { rateLimitAction } from '../middleware/rate-limit-actions';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
 
 const appointmentsRouter = Router();
 
@@ -43,9 +44,10 @@ function transformAppointment(apt: any, linkedCall?: any) {
     deleted_at: apt.deleted_at,
     // Call-linked data (from Golden Record)
     call_id: apt.call_id || linkedCall?.id || null,
-    outcome_summary: linkedCall?.outcome_summary || null,
-    sentiment_label: linkedCall?.sentiment_label || null,
-    sentiment_score: linkedCall?.sentiment_score || null,
+    // Prioritize appointment's own outcome columns (after schema fix)
+    outcome_summary: apt.outcome_summary || linkedCall?.outcome_summary || null,
+    sentiment_label: apt.sentiment_label || linkedCall?.sentiment_label || null,
+    sentiment_score: apt.sentiment_score || linkedCall?.sentiment_score || null,
     has_recording: !!(linkedCall?.recording_url || linkedCall?.recording_storage_path),
     call_direction: linkedCall?.call_direction || null,
     call_duration_seconds: linkedCall?.duration_seconds || null,
@@ -119,8 +121,12 @@ appointmentsRouter.get('/', async (req: Request, res: Response) => {
     const { data, error, count } = await query;
 
     if (error) {
-      log.error('Appointments', 'GET / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Appointments - GET /',
+        'Failed to fetch appointments'
+      );
     }
 
     // Batch-fetch linked call data for appointments (Golden Record enrichment)
@@ -161,8 +167,12 @@ appointmentsRouter.get('/', async (req: Request, res: Response) => {
       }
     });
   } catch (e: any) {
-    log.error('Appointments', 'GET / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch appointments' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - GET / - Unexpected error',
+      'Failed to fetch appointments'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -216,19 +226,27 @@ appointmentsRouter.post('/', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Appointments', 'POST / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Appointments - POST /',
+        'Failed to create appointment'
+      );
     }
 
     log.info('Appointments', 'Appointment created', { orgId, appointmentId: data.id, service: parsed.serviceType });
     return res.status(201).json(transformAppointment(data));
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Appointments', 'POST / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to create appointment' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - POST / - Unexpected error',
+      'Failed to create appointment'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -260,8 +278,12 @@ appointmentsRouter.get('/:id', async (req: Request, res: Response) => {
 
     return res.json(transformAppointment(data));
   } catch (e: any) {
-    log.error('Appointments', 'GET /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch appointment' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - GET /:id - Unexpected error',
+      'Failed to fetch appointment'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -318,8 +340,12 @@ appointmentsRouter.patch('/:id', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Appointments', 'PATCH /:id - Database error', { orgId, appointmentId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Appointments - PATCH /:id',
+        'Failed to update appointment'
+      );
     }
 
     log.info('Appointments', 'Appointment updated', { orgId, appointmentId: id });
@@ -328,8 +354,12 @@ appointmentsRouter.patch('/:id', async (req: Request, res: Response) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input' });
     }
-    log.error('Appointments', 'PATCH /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to update appointment' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - PATCH /:id - Unexpected error',
+      'Failed to update appointment'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -353,15 +383,23 @@ appointmentsRouter.delete('/:id', async (req: Request, res: Response) => {
       .eq('org_id', orgId);
 
     if (error) {
-      log.error('Appointments', 'DELETE /:id - Database error', { orgId, appointmentId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Appointments - DELETE /:id',
+        'Failed to delete appointment'
+      );
     }
 
     log.info('Appointments', 'Appointment deleted', { orgId, appointmentId: id });
     return res.json({ success: true });
   } catch (e: any) {
-    log.error('Appointments', 'DELETE /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to delete appointment' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - DELETE /:id - Unexpected error',
+      'Failed to delete appointment'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -403,8 +441,12 @@ appointmentsRouter.get('/available-slots', async (req: Request, res: Response) =
       .in('status', ['pending', 'confirmed', 'in_progress']);
 
     if (error) {
-      log.error('Appointments', 'GET /available-slots - Database error', { orgId, date: parsed.date, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Appointments - GET /available-slots',
+        'Failed to fetch available slots'
+      );
     }
 
     // Generate time slots (9 AM to 6 PM, 45-min slots)
@@ -442,8 +484,12 @@ appointmentsRouter.get('/available-slots', async (req: Request, res: Response) =
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     }
-    log.error('Appointments', 'GET /available-slots - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch available slots' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - GET /available-slots - Unexpected error',
+      'Failed to fetch available slots'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -694,17 +740,15 @@ appointmentsRouter.post('/:appointmentId/send-reminder', async (req: Request, re
     });
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    // Log detailed error for debugging, but return generic message to client
-    log.error('Appointments', 'POST /:appointmentId/send-reminder - Error', {
-      error: e?.message,
-      stack: e?.stack,
-      orgId,
-      appointmentId
-    });
-    return res.status(500).json({ error: 'Failed to send reminder. Please try again later.' });
+    const userMessage = sanitizeError(
+      e,
+      'Appointments - POST /:appointmentId/send-reminder - Unexpected error',
+      'Failed to send reminder. Please try again later.'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 

@@ -20,7 +20,7 @@ export const ROICalculator = () => {
     const monthlyRevenueLoss = Math.round(missedCallsPerMonth * avgProcedureValue * conversionRate);
     const yearlyRevenueLoss = monthlyRevenueLoss * 12;
 
-    // With Voxanne AI (98% call answer rate - industry-leading)
+    // With Voxanne AI (high call answer rate - always available)
     const withVoxanneAIMissed = Math.round(missedCallsPerMonth * 0.02);
     const withVoxanneAIRevenueSaved = Math.round((missedCallsPerMonth - withVoxanneAIMissed) * avgProcedureValue * conversionRate);
     const yearlyRevenueSaved = withVoxanneAIRevenueSaved * 12;
@@ -175,7 +175,7 @@ export const ROICalculator = () => {
                                 <div className="pt-4 border-t border-emerald-500/20">
                                     <div className="flex items-center gap-2 text-emerald-400 font-bold">
                                         <DollarSign className="w-4 h-4" />
-                                        <span>98% Call Answer Rate</span>
+                                        <span>24/7 Call Coverage</span>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-1">
                                         Only {withVoxanneAIMissed} missed calls/month

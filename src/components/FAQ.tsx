@@ -23,7 +23,7 @@ const faqs = [
     },
     {
         question: "Can Voxanne integrate with my existing calendar system?",
-        answer: "Absolutely. Voxanne integrates seamlessly with Google Calendar, Outlook, Calendly, and major EHR systems to check availability and book appointments in real-time.",
+        answer: "Absolutely. Voxanne integrates with Google Calendar to check availability and book appointments in real-time. More calendar integrations are on our roadmap.",
     },
     {
         question: "What industries does Voxanne serve?",

@@ -563,6 +563,37 @@ const AppointmentsDashboardContent = () => {
                                         </div>
                                     </div>
 
+                                    {/* Linked Call */}
+                                    {selectedAppointment.call_id && (
+                                        <div className="bg-surgical-50 rounded-lg p-4">
+                                            <p className="text-sm font-bold text-obsidian mb-3">Linked Call</p>
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Phone className="w-4 h-4 text-obsidian/40" />
+                                                    <span className="text-sm text-obsidian">Call ID: {selectedAppointment.call_id}</span>
+                                                </div>
+                                                {selectedAppointment.call_direction && (
+                                                    <div className="flex items-center gap-2">
+                                                        {selectedAppointment.call_direction === 'inbound' ? <PhoneIncoming className="w-4 h-4 text-obsidian/40" /> : <PhoneOutgoing className="w-4 h-4 text-obsidian/40" />}
+                                                        <span className="text-sm text-obsidian capitalize">{selectedAppointment.call_direction} call</span>
+                                                        {selectedAppointment.call_duration_seconds != null && (
+                                                            <span className="text-xs text-obsidian/60">({Math.floor(selectedAppointment.call_duration_seconds / 60)}m {selectedAppointment.call_duration_seconds % 60}s)</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        setShowDetailModal(false);
+                                                        router.push(`/dashboard/calls?callId=${selectedAppointment.call_id}`);
+                                                    }}
+                                                    className="text-sm text-surgical-600 hover:text-surgical-700 font-medium underline"
+                                                >
+                                                    View Call Details
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Notes */}
                                     {selectedAppointment.notes && (
                                         <div className="bg-surgical-50 rounded-lg p-4">

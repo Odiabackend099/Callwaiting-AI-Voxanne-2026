@@ -12,6 +12,7 @@ import { log } from '../services/logger';
 import { sendHotLeadSMS } from '../services/sms-notifications';
 import { scoreLead } from '../services/lead-scoring';
 import { hasEnoughBalance } from '../services/wallet-service';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
 
 const contactsRouter = Router();
 
@@ -54,8 +55,12 @@ contactsRouter.get('/stats', async (req: Request, res: Response) => {
       .eq('org_id', orgId);
 
     if (error) {
-      log.error('Contacts', 'GET /stats - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Contacts - GET /stats',
+        'Failed to fetch contact statistics'
+      );
     }
 
     const stats = {
@@ -67,8 +72,12 @@ contactsRouter.get('/stats', async (req: Request, res: Response) => {
 
     return res.json(stats);
   } catch (e: any) {
-    log.error('Contacts', 'GET /stats - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch contact stats' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - GET /stats - Unexpected error',
+      'Failed to fetch contact statistics'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -115,8 +124,12 @@ contactsRouter.get('/', async (req: Request, res: Response) => {
     const { data, error, count } = await query;
 
     if (error) {
-      log.error('Contacts', 'GET / - Query error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Contacts - GET / - Query error',
+        'Failed to fetch contacts'
+      );
     }
 
     const rows = Array.isArray(data) ? data : [];
@@ -134,8 +147,12 @@ contactsRouter.get('/', async (req: Request, res: Response) => {
       }
     });
   } catch (e: any) {
-    log.error('Contacts', 'GET / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch contacts' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - GET / - Unexpected error',
+      'Failed to fetch contacts'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -192,19 +209,27 @@ contactsRouter.post('/', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Contacts', 'POST / - Database error', { orgId, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Contacts - POST / - Database error',
+        'Failed to create contact'
+      );
     }
 
     log.info('Contacts', 'Contact created', { orgId, contactId: data.id, phone: parsed.phone });
     return res.status(201).json(data);
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Contacts', 'POST / - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to create contact' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - POST / - Unexpected error',
+      'Failed to create contact'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -261,8 +286,12 @@ contactsRouter.get('/:id', async (req: Request, res: Response) => {
 
     return res.json(enhancedContact);
   } catch (e: any) {
-    log.error('Contacts', 'GET /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to fetch contact' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - GET /:id - Unexpected error',
+      'Failed to fetch contact'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -322,18 +351,27 @@ contactsRouter.patch('/:id', async (req: Request, res: Response) => {
       .single();
 
     if (error) {
-      log.error('Contacts', 'PATCH /:id - Database error', { orgId, contactId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Contacts - PATCH /:id - Database error',
+        'Failed to update contact'
+      );
     }
 
     log.info('Contacts', 'Contact updated', { orgId, contactId: id });
     return res.json(data);
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid input' });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Contacts', 'PATCH /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to update contact' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - PATCH /:id - Unexpected error',
+      'Failed to update contact'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -357,15 +395,23 @@ contactsRouter.delete('/:id', async (req: Request, res: Response) => {
       .eq('org_id', orgId);
 
     if (error) {
-      log.error('Contacts', 'DELETE /:id - Database error', { orgId, contactId: id, error: error.message });
-      return res.status(500).json({ error: error.message });
+      return handleDatabaseError(
+        res,
+        error,
+        'Contacts - DELETE /:id - Database error',
+        'Failed to delete contact'
+      );
     }
 
     log.info('Contacts', 'Contact deleted', { orgId, contactId: id });
     return res.json({ success: true });
   } catch (e: any) {
-    log.error('Contacts', 'DELETE /:id - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to delete contact' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - DELETE /:id - Unexpected error',
+      'Failed to delete contact'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -604,8 +650,12 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input' });
     }
-    log.error('Contacts', 'POST /:id/call-back - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to initiate call' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - POST /:id/call-back - Unexpected error',
+      'Failed to initiate call'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -675,16 +725,24 @@ contactsRouter.post('/:id/sms', async (req: Request, res: Response) => {
         message: '📱 SMS sent successfully'
       });
     } catch (smsError: any) {
-      log.error('Contacts', 'POST /:id/sms - SMS delivery failed', { orgId, contactId: id, error: smsError?.message });
-      return res.status(500).json({ error: 'Failed to send SMS: ' + (smsError?.message || 'Unknown error') });
+      const userMessage = sanitizeError(
+        smsError,
+        'Contacts - POST /:id/sms - SMS delivery failed',
+        'Failed to send SMS. Please try again.'
+      );
+      return res.status(500).json({ error: userMessage });
     }
   } catch (e: any) {
     if (e instanceof z.ZodError) {
-      const firstError = e.issues?.[0];
-      return res.status(400).json({ error: 'Invalid input: ' + (firstError?.message || 'validation failed') });
+      const userMessage = sanitizeValidationError(e);
+      return res.status(400).json({ error: userMessage });
     }
-    log.error('Contacts', 'POST /:id/sms - Error', { error: e?.message });
-    return res.status(500).json({ error: e?.message || 'Failed to send SMS' });
+    const userMessage = sanitizeError(
+      e,
+      'Contacts - POST /:id/sms - Unexpected error',
+      'Failed to send SMS'
+    );
+    return res.status(500).json({ error: userMessage });
   }
 });
 

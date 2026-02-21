@@ -101,21 +101,14 @@ Phone Systems:
 - Dedicated Voxanne number (we provide)
 
 Calendar Integrations:
-- Google Calendar
-- Acuity Scheduling
-- 10to8
-- Calendly
-- Apple Calendar
-- Outlook
-- Custom API integrations
+- Google Calendar (primary, fully integrated)
+- More calendar integrations coming soon
 
-CRM/EMR/EHR:
-- ChartRequest
-- Weave
-- Marmo Dental
-- Salesforce
-- HubSpot
-- Custom integrations available
+Integrations:
+- Google Calendar (primary scheduling)
+- Twilio (telephony & SMS)
+- Vapi (voice AI infrastructure)
+- Custom API integrations available
 
 Setup Time: 15 min (phone) + 10 min per calendar = ~30 min total
 

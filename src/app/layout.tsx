@@ -43,23 +43,15 @@ export const metadata: Metadata = {
     description: "Replace your missed calls with revenue. The AI receptionist that books appointments for you.",
     url: 'https://voxanne.ai',
     siteName: 'Voxanne AI',
-    images: [
-      {
-        url: 'https://voxanne.ai/Brand/3.png',
-        width: 512,
-        height: 512,
-        alt: 'Voxanne AI Logo',
-        type: 'image/png',
-      },
-    ],
     locale: 'en_US',
     type: 'website',
+    // OG image auto-generated from /src/app/opengraph-image.tsx
   },
   twitter: {
     card: 'summary_large_image',
     title: "Voxanne AI | The #1 AI Receptionist for Clinics",
     description: "Don't let missed calls cost you money. Switch to Voxanne AI.",
-    images: ['/Brand/3.png'],
+    // Twitter image auto-generated from /src/app/opengraph-image.tsx
   },
   robots: {
     index: true,

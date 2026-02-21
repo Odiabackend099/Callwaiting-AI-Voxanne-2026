@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { requireAuthOrDev } from '../middleware/auth';
 import { supabase } from '../services/supabase-client';
+import { sanitizeError } from '../utils/error-sanitizer';
 
 const router = Router();
 
@@ -34,7 +35,8 @@ router.get('/', requireAuthOrDev, async (req, res) => {
 
         if (error) {
             console.error('[Escalation Rules] Error fetching rules:', error);
-            return res.status(500).json({ error: error.message });
+            const userMessage = sanitizeError(error, 'EscalationRules', 'Operation failed');
+            return res.status(500).json({ error: userMessage });
         }
 
         res.json(data || []);
@@ -97,7 +99,8 @@ router.post('/', requireAuthOrDev, async (req, res) => {
 
         if (error) {
             console.error('[Escalation Rules] Error creating rule:', error);
-            return res.status(400).json({ error: error.message });
+            const userMessage = sanitizeError(error, 'EscalationRules', 'Invalid request');
+            return res.status(400).json({ error: userMessage });
         }
 
         res.status(201).json(data);
@@ -132,7 +135,8 @@ router.patch('/:id', requireAuthOrDev, async (req, res) => {
 
         if (error) {
             console.error('[Escalation Rules] Error updating rule:', error);
-            return res.status(400).json({ error: error.message });
+            const userMessage = sanitizeError(error, 'EscalationRules', 'Invalid request');
+            return res.status(400).json({ error: userMessage });
         }
 
         if (!data) {
@@ -163,7 +167,8 @@ router.delete('/:id', requireAuthOrDev, async (req, res) => {
 
         if (error) {
             console.error('[Escalation Rules] Error deleting rule:', error);
-            return res.status(400).json({ error: error.message });
+            const userMessage = sanitizeError(error, 'EscalationRules', 'Invalid request');
+            return res.status(400).json({ error: userMessage });
         }
 
         res.status(204).send();
@@ -197,7 +202,8 @@ router.get('/transfers', requireAuthOrDev, async (req, res) => {
 
         if (error) {
             console.error('[Escalation Rules] Error fetching transfers:', error);
-            return res.status(500).json({ error: error.message });
+            const userMessage = sanitizeError(error, 'EscalationRules', 'Operation failed');
+            return res.status(500).json({ error: userMessage });
         }
 
         res.json(data || []);

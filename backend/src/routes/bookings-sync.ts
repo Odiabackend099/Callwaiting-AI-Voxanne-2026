@@ -146,7 +146,7 @@ router.post(
       if (err.message.includes('not found')) {
         res.status(404).json({ error: 'Appointment not found' });
       } else if (err.message.includes('already')) {
-        res.status(409).json({ error: err.message });
+        return res.status(409).json({ error: 'Conflict: Unable to process booking.' });
       } else {
         res.status(500).json({
           error: 'Failed to confirm appointment',

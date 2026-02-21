@@ -18,6 +18,7 @@ import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { EncryptionService } from '../services/encryption';
 import { log } from '../services/logger';
 import { requireAuthOrDev } from '../middleware/auth';
+import { sanitizeError } from '../utils/error-sanitizer';
 import { supabase } from '../services/supabase-client';
 
 export const integrationsRouter = express.Router();
@@ -256,7 +257,8 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
 
   } catch (error: any) {
     log.error('integrations', 'Failed to list Vapi numbers', { error: error.message });
-    res.status(500).json({ success: false, error: error.message });
+    const userMessage = sanitizeError(error, 'Integrations - GET /vapi-phone-numbers', 'Failed to list phone numbers');
+    return res.status(500).json({ success: false, error: userMessage });
   }
 });
 
@@ -370,7 +372,8 @@ integrationsRouter.post('/vapi/assign-number', async (req: express.Request, res:
 
   } catch (error: any) {
     log.error('integrations', 'Assign error', { error: error.message });
-    res.status(500).json({ success: false, error: error.message });
+    const userMessage = sanitizeError(error, 'Integrations - PATCH /assign-agent', 'Failed to assign agent');
+    return res.status(500).json({ success: false, error: userMessage });
   }
 });
 
@@ -476,7 +479,8 @@ integrationsRouter.post('/:provider/verify', async (req: express.Request, res: e
         await client.api.accounts(config.accountSid).fetch();
         return res.json({ success: true, data: { connected: true } });
       } catch (e: any) {
-        return res.json({ success: false, error: e.message });
+        const userMessage = sanitizeError(e, 'Integrations - Test Twilio', 'Failed to verify Twilio credentials');
+        return res.json({ success: false, error: userMessage });
       }
     }
 

@@ -1121,8 +1121,25 @@ vapiWebhookRouter.post('/webhook', webhookLimiter, async (req: Request, res: Res
                   supabase
                     .from('appointments')
                     .update({
+                      // Existing linkage
                       call_id: callRecord.id,
-                      vapi_call_id: call.id
+                      vapi_call_id: call.id,
+
+                      // NEW: Write outcomes directly to appointment
+                      outcome: outcomeShort,
+                      outcome_summary: outcomeDetailed,
+
+                      // NEW: Write sentiment data
+                      sentiment_label: sentimentLabel,
+                      sentiment_score: sentimentScore,
+                      sentiment_summary: sentimentSummary,
+                      sentiment_urgency: sentimentUrgency,
+
+                      // NEW: Update status if call completed
+                      status: call.status === 'ended' ? 'completed' : linkedAppointment.status,
+
+                      // Track update
+                      updated_at: new Date().toISOString()
                     })
                     .eq('id', linkedAppointment.id)
                 ]);

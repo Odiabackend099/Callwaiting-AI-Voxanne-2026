@@ -106,19 +106,14 @@ Phone Systems:
 ✓ Traditional phone lines (PSTN)
 
 Calendar & Scheduling:
-✓ Google Calendar
-✓ Acuity Scheduling
-✓ 10to8 Booking
-✓ Calendly
-✓ Apple Calendar / iCal
-✓ Microsoft Outlook
-✓ Custom integrations (API)
+✓ Google Calendar (primary, fully integrated)
+✓ More calendar integrations coming soon
 
-CRM / EMR:
-✓ ChartRequest
-✓ Weave
-✓ Marmo Dental
-✓ Practice Management Systems (custom)
+Integrations:
+✓ Google Calendar (primary scheduling)
+✓ Twilio (telephony & SMS)
+✓ Vapi (voice AI infrastructure)
+✓ Custom API integrations available
 
 Setup time: 15 min for phone + 10 min per integration. Total: 30-45 min.
 

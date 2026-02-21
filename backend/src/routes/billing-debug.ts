@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../config/supabase';
 import { requireAuth } from '../middleware/auth';
+import { sanitizeError } from '../utils/error-sanitizer';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.get('/:callId', requireAuth, async (req, res) => {
       .maybeSingle();
 
     if (callError) {
-      return res.status(500).json({ error: 'Failed to fetch call', details: callError.message });
+      return res.status(500).json({ error: 'Failed to fetch call', details: 'Call data unavailable' });
     }
 
     if (!call) {
@@ -101,7 +102,7 @@ router.get('/:callId', requireAuth, async (req, res) => {
     });
   } catch (error: any) {
     console.error('Billing debug error:', error);
-    return res.status(500).json({ error: 'Internal server error', details: error.message });
+    return res.status(500).json({ error: 'Internal server error', details: 'Unable to process request' });
   }
 });
 
@@ -130,7 +131,7 @@ router.get('/org/:orgId', requireAuth, async (req, res) => {
       .limit(limit);
 
     if (callsError) {
-      return res.status(500).json({ error: 'Failed to fetch calls', details: callsError.message });
+      return res.status(500).json({ error: 'Failed to fetch calls', details: 'Unable to fetch calls' });
     }
 
     // Get all reservations for these calls
@@ -180,7 +181,7 @@ router.get('/org/:orgId', requireAuth, async (req, res) => {
     });
   } catch (error: any) {
     console.error('Billing debug org error:', error);
-    return res.status(500).json({ error: 'Internal server error', details: error.message });
+    return res.status(500).json({ error: 'Internal server error', details: 'Unable to process request' });
   }
 });
 

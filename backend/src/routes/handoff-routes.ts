@@ -27,7 +27,7 @@ router.post('/update', async (req, res) => {
 
     } catch (error: any) {
         log.error('HandoffAPI', 'Error updating handoff', { error: error.message });
-        res.status(500).json({ error: 'Failed to update handoff state.', details: error.message || error });
+        return res.status(500).json({ error: 'Failed to update handoff state.' });
     }
 });
 

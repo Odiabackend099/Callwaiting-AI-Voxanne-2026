@@ -1,6 +1,6 @@
 # Voxanne AI - Database Schema SSOT (Single Source of Truth)
 
-**Status:** ✅ PRODUCTION READY - Billing Pipeline Schema Fixed & Rate Aligned (2026-02-16)
+**Status:** ✅ PRODUCTION READY - Dashboard E2E Fixes Applied & Build Verified (2026-02-21)
 **Generated:** Directly from live Supabase PostgreSQL database + production deployment verification
 **Database State:** Production-ready, security hardened, prepaid billing engine operational with schema fix applied
 **Real-Time Prepaid Billing Engine:** ✅ ALL 3 PHASES COMPLETE & VERIFIED + SCHEMA FIX DEPLOYED
@@ -13,7 +13,8 @@
 **Prepaid Billing Testing:** ✅ COMPLETE - 11 unit + 10 E2E + 3 load tests + billing E2E (100% passing)
 **Security Verification:** ✅ CERTIFIED - All P0 vulnerabilities mitigated (21/21 tests passed)
 **Deployment Status:** ✅ FULLY OPERATIONAL - All 4 RPC functions deployed, schema fix applied, rate aligned, all tests passing
-**Latest Change:** Billing Pipeline Schema Fix deployed (2026-02-16 09:18 UTC) - Added call_id/vapi_call_id columns, fixed 49p→56p rate mismatch, E2E test passing
+**Latest Change:** Dashboard E2E Fixes (2026-02-21) - Extended analytics API with appointments_booked + avg_sentiment; no schema changes (frontend + backend API only)
+**Previous Change:** Billing Pipeline Schema Fix deployed (2026-02-16 09:18 UTC) - Added call_id/vapi_call_id columns, fixed 49p→56p rate mismatch, E2E test passing
 
 ---
 
@@ -915,13 +916,15 @@ Organization (organizations)
 | **Security Infrastructure** | ✅ **COMPLETE** | 1 table, 7 indexes, 7 helper functions, automated RLS verification |
 | **P0 Vulnerabilities** | ✅ **MITIGATED** | 4/4 critical issues fixed (21/21 tests passed) |
 | **API Endpoints** | ✅ **VERIFIED** | All dashboard endpoints tested, real data confirmed, 3-sentence outcomes |
+| **Dashboard Frontend** | ✅ **E2E VERIFIED** | 8 TestSprite failures fixed (2026-02-21): metrics, filters, detail fields, navigation |
 
 ---
 
 ## 📝 Last Updated
 
-- **Date:** February 16, 2026
-- **Latest Event:** Billing Pipeline Schema Fix & Rate Alignment - Resolved critical schema mismatch, aligned RPC rate from 49p to 56p/min, E2E test passing 100%
+- **Date:** February 21, 2026
+- **Latest Event:** Dashboard E2E Test Fixes (TestSprite) - Fixed 8 E2E test failures. Extended `/api/analytics/dashboard-pulse` with `appointments_booked` (queries appointments table) and `avg_sentiment` (averages calls.sentiment_score). No database schema changes - all fixes are frontend components and backend API response shaping. Files modified: `backend/src/routes/analytics.ts`, `src/components/dashboard/ClinicalPulse.tsx`, `src/app/dashboard/calls/page.tsx`, `src/app/dashboard/page.tsx`, `src/app/dashboard/appointments/page.tsx`, `src/contexts/DashboardWebSocketContext.tsx`, `src/components/dashboard/BackendStatusBanner.tsx`. Next.js build verified clean.
+- **Previous Event:** Billing Pipeline Schema Fix & Rate Alignment - Resolved critical schema mismatch, aligned RPC rate from 49p to 56p/min, E2E test passing 100%
 - **Schema Fix Details (2026-02-16 09:18 UTC):**
   - ✅ **Root Cause:** `commit_reserved_credits()` RPC tried to INSERT call_id/vapi_call_id but columns didn't exist in credit_transactions
   - ✅ **Impact:** 48 hours of silent billing failures (zero revenue collected, calls completed normally)
@@ -1062,8 +1065,8 @@ Organization (organizations)
 ---
 
 **This is the Single Source of Truth (SSOT) for the Voxanne AI database schema.**
-**Status:** Current as of 2026-02-14 (Real-Time Prepaid Billing Engine Deployed)
-**Last Verified:** Real-Time Prepaid Billing Engine deployment completed (24/24 tests passing)
+**Status:** Current as of 2026-02-21 (Dashboard E2E Fixes Applied - no schema changes)
+**Last Verified:** Dashboard E2E fixes (2026-02-21) - analytics API extended, frontend components updated, build clean
 **Billing Status:** ✅ PRODUCTION READY - All 3 phases deployed, zero revenue leaks remaining
 **Security Score:** 95+/100 (with prepaid billing atomic enforcement)
 **Revenue Protection:** £500-2,000/month leak eliminated through strict prepaid enforcement

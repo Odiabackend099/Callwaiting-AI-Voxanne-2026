@@ -73,6 +73,7 @@ import { requireAuth, requireAuthOrDev } from '../middleware/auth';
 import { agentConfigLimiter, callCreationLimiter } from '../middleware/rate-limit';
 import { validateRequest } from '../middleware/validation';
 import { agentBehaviorSchema, agentConfigSchema, agentTestCallSchema, createCallSchema } from '../schemas/founder-console';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
 import { getIntegrationSettings } from './founder-console-settings';
 import { withTimeout } from '../utils/timeout-helper';
 import { validateE164Format } from '../utils/phone-validation';
@@ -477,7 +478,8 @@ router.get('/voices', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     logger.exception('Failed to fetch voices', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -853,7 +855,10 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   try {
     vapiClient = new VapiClient(vapiApiKey);
   } catch (error) {
-    throw new Error(`Invalid Vapi API key: ${(error as Error).message}`);
+    log.error('FounderConsole', 'Failed to initialize Vapi client', {
+      error: (error as Error).message
+    });
+    throw new Error('Invalid Vapi API key. Please check your credentials.');
   }
 
   // 4. If assistant exists, validate and UPDATE it (idempotent)
@@ -1398,7 +1403,8 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
     });
   } catch (error: any) {
     logger.exception('Failed to get agent config', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -1867,15 +1873,13 @@ router.post(
 
         // Return appropriate HTTP status based on error type
         if (parsed.code === 'AGENT_NOT_FOUND') {
-          res.status(404).json({ error: 'Agent not found', details: parsed.message });
-          return;
+          return res.status(404).json({ error: 'Agent not found' });
         }
         if (parsed.code === 'VALIDATION_FAILED') {
-          res.status(400).json({ error: 'Validation failed', details: parsed.message });
-          return;
+          return res.status(400).json({ error: 'Invalid configuration. Please check all required fields.' });
         }
-        res.status(500).json({ error: 'Failed to save configuration', details: parsed.message });
-        return;
+        const userMessage = sanitizeError(parsed, 'FounderConsole - Save config', 'Failed to save configuration');
+        return res.status(500).json({ error: userMessage });
       }
 
       logger.info('Atomic config update succeeded', {
@@ -2107,7 +2111,8 @@ router.post(
       });
     } catch (error: any) {
       logger.exception('Failed to save agent config', error);
-      res.status(500).json({ error: error.message });
+      const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
     }
   });
 
@@ -2734,7 +2739,8 @@ router.post(
       
       // Validation errors should return 400, not 500
       const statusCode = error?.message?.includes('Invalid') ? 400 : 500;
-      res.status(statusCode).json({ error: error?.message || 'Internal server error', requestId });
+      const userMessage = sanitizeError(error, 'FounderConsole - Test call', 'An error occurred');
+      return res.status(statusCode).json({ error: userMessage, requestId });
     }
   }
 );
@@ -3002,7 +3008,8 @@ router.post(
       });
     } catch (error: any) {
       logger.exception('Failed to run test call', error);
-      res.status(500).json({ error: error.message, requestId });
+      const userMessage = sanitizeError(error, 'FounderConsole - POST /test-call', 'Test call failed');
+      return res.status(500).json({ error: userMessage, requestId });
     }
   }
 );
@@ -3519,7 +3526,8 @@ router.post(
       });
     } catch (error: any) {
       logger.exception('Failed to end web test', error);
-      res.status(500).json({ error: error.message, requestId });
+      const userMessage = sanitizeError(error, 'FounderConsole - POST /end-web-test', 'Failed to end test');
+      return res.status(500).json({ error: userMessage, requestId });
     }
   }
 );
@@ -4124,7 +4132,8 @@ router.get('/metrics/usage', async (req: Request, res: Response): Promise<void> 
     });
   } catch (error: any) {
     logger.exception('Failed to get usage metrics', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -4174,7 +4183,8 @@ router.get('/recordings', async (req: Request, res: Response): Promise<void> => 
     res.json(mappedRecordings);
   } catch (error: any) {
     logger.exception('Failed to get recordings', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -4225,7 +4235,8 @@ router.delete('/recordings/:id', async (req: Request, res: Response): Promise<vo
     res.status(204).send();
   } catch (error: any) {
     logger.exception('Failed to delete recording', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -4882,7 +4893,8 @@ router.post('/calls/end', requireAuthOrDev, async (req: Request, res: Response):
     res.status(204).send();
   } catch (error: any) {
     logger.exception('Failed to end call', error, { requestId });
-    res.status(500).json({ error: error.message, requestId });
+    const userMessage = sanitizeError(error, 'FounderConsole - POST /:callId/end', 'Failed to end call');
+    return res.status(500).json({ error: userMessage, requestId });
   }
 });
 
@@ -4952,7 +4964,8 @@ router.get('/calls/recent', async (req: Request, res: Response): Promise<void> =
     res.json(mappedCalls);
   } catch (error: any) {
     logger.exception('Failed to get recent calls', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -4995,7 +5008,8 @@ router.post('/leads/csv/validate', upload.single('file'), async (req: Request & 
     });
   } catch (error: any) {
     logger.exception('CSV validation failed', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -5037,7 +5051,8 @@ router.post('/leads/csv/import', upload.single('file'), async (req: Request & { 
     res.json(result);
   } catch (error: any) {
     logger.exception('CSV import failed', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -5064,7 +5079,8 @@ router.get('/leads/imports', async (req: Request, res: Response): Promise<void> 
     res.json(imports);
   } catch (error: any) {
     logger.exception('Failed to list imports', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -5097,7 +5113,8 @@ router.get('/leads/imports/:importId', async (req: Request, res: Response): Prom
     res.json(importRecord);
   } catch (error: any) {
     logger.exception('Failed to get import status', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -5126,7 +5143,8 @@ router.get('/leads/imports/:importId/errors', async (req: Request, res: Response
     res.json(errors);
   } catch (error: any) {
     logger.exception('Failed to get import errors', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -5228,7 +5246,8 @@ router.get('/leads/imports/:importId/errors/download', async (req: Request, res:
     res.send(csv);
   } catch (error: any) {
     logger.exception('Failed to download import errors', error);
-    res.status(500).json({ error: error.message });
+    const userMessage = sanitizeError(error, 'FounderConsole', 'An error occurred');
+    return res.status(500).json({ error: userMessage });
   }
 });
 

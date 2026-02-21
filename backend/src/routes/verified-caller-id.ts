@@ -44,6 +44,7 @@ import { IntegrationDecryptor } from '../services/integration-decryptor';
 import { ManagedTelephonyService } from '../services/managed-telephony-service';
 import { VapiClient } from '../services/vapi-client';
 import logger from '../services/logger';
+import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
 
 const router = Router();
 
@@ -490,7 +491,8 @@ router.post('/verify', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('verified-caller-id', 'Error in caller ID verification', { error });
-    res.status(500).json({ error: error.message || 'Verification failed' });
+    const userMessage = sanitizeError(error, 'VerifiedCallerId - POST /verify', 'Verification failed');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -574,7 +576,8 @@ router.post('/confirm', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('verified-caller-id', 'Error confirming verification', { error });
-    res.status(500).json({ error: error.message || 'Confirmation failed' });
+    const userMessage = sanitizeError(error, 'VerifiedCallerId - POST /confirm', 'Confirmation failed');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -604,7 +607,8 @@ router.get('/list', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('verified-caller-id', 'Error listing verified numbers', { error });
-    res.status(500).json({ error: error.message || 'Failed to list numbers' });
+    const userMessage = sanitizeError(error, 'VerifiedCallerId - GET /list', 'Failed to list numbers');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -770,7 +774,8 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('verified-caller-id', 'Error deleting verified number', { error: error.message });
-    res.status(500).json({ error: error.message || 'Deletion failed' });
+    const userMessage = sanitizeError(error, 'VerifiedCallerId - DELETE /:numberId', 'Deletion failed');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
@@ -813,7 +818,8 @@ router.delete('/', requireAuth, async (req: Request, res: Response) => {
 
   } catch (error: any) {
     logger.error('verified-caller-id', 'Error in delete endpoint', { error: error.message });
-    res.status(500).json({ error: error.message || 'Deletion failed' });
+    const userMessage = sanitizeError(error, 'VerifiedCallerId - DELETE /', 'Deletion failed');
+    return res.status(500).json({ error: userMessage });
   }
 });
 
