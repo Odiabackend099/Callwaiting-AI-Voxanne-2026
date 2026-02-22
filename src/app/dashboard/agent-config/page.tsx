@@ -125,21 +125,42 @@ export default function AgentConfigPage() {
     // Derive state from SWR data
     const isLoading = agentLoading && !agentData;
 
-    // Derive direction map: vapiPhoneId → 'inbound' | 'outbound'
+    // Derive direction map: vapiPhoneId/phoneNumber → 'inbound' | 'outbound'
+    // Uses multiple data sources for robustness:
+    //   1. numbers.inbound[] / numbers.outbound[] arrays (multi-number routing)
+    //   2. Flat inbound.vapiPhoneId / outbound.managedOutboundVapiPhoneId fields (fallback)
     const numberDirectionMap = useMemo(() => {
         const map: Record<string, string> = {};
-        if (phoneSettingsRaw?.numbers?.inbound) {
+        if (!phoneSettingsRaw) return map;
+
+        // Source 1: numbers arrays (preferred — from multi-number routing)
+        if (phoneSettingsRaw.numbers?.inbound) {
             phoneSettingsRaw.numbers.inbound.forEach((n: any) => {
                 if (n.vapiPhoneId) map[n.vapiPhoneId] = 'inbound';
                 if (n.phoneNumber) map[n.phoneNumber] = 'inbound';
             });
         }
-        if (phoneSettingsRaw?.numbers?.outbound) {
+        if (phoneSettingsRaw.numbers?.outbound) {
             phoneSettingsRaw.numbers.outbound.forEach((n: any) => {
                 if (n.vapiPhoneId) map[n.vapiPhoneId] = 'outbound';
                 if (n.phoneNumber) map[n.phoneNumber] = 'outbound';
             });
         }
+
+        // Source 2: flat fields (fallback for orgs without numbers arrays)
+        if (phoneSettingsRaw.inbound?.vapiPhoneId) {
+            map[phoneSettingsRaw.inbound.vapiPhoneId] = map[phoneSettingsRaw.inbound.vapiPhoneId] || 'inbound';
+        }
+        if (phoneSettingsRaw.inbound?.managedNumber) {
+            map[phoneSettingsRaw.inbound.managedNumber] = map[phoneSettingsRaw.inbound.managedNumber] || 'inbound';
+        }
+        if (phoneSettingsRaw.outbound?.managedOutboundVapiPhoneId) {
+            map[phoneSettingsRaw.outbound.managedOutboundVapiPhoneId] = map[phoneSettingsRaw.outbound.managedOutboundVapiPhoneId] || 'outbound';
+        }
+        if (phoneSettingsRaw.outbound?.managedOutboundNumber) {
+            map[phoneSettingsRaw.outbound.managedOutboundNumber] = map[phoneSettingsRaw.outbound.managedOutboundNumber] || 'outbound';
+        }
+
         return map;
     }, [phoneSettingsRaw]);
 
