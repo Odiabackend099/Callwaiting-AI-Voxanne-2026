@@ -23,7 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 export function OrgErrorBoundary({ children }: { children: React.ReactNode }) {
   const { orgId, orgValid, orgError, isNetworkError, loading } = useOrgValidation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
 
   // Track if we've ever successfully rendered children
   // This persists across re-renders but resets on page refresh
@@ -108,8 +108,10 @@ export function OrgErrorBoundary({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Show error state ONLY if validation definitively failed (not loading, has error)
-  if (!loading && (!orgValid || orgError)) {
+  // Show error state ONLY if validation definitively failed (not loading, has error, user is logged in)
+  // Guard on `user` prevents a flash of this screen during logout when user becomes null
+  // before the /login redirect fires from onAuthStateChange
+  if (!loading && user && (!orgValid || orgError)) {
     return (
       <div className="flex items-center justify-center h-screen bg-clinical-bg">
         <div className="max-w-md w-full mx-auto px-6 text-center">

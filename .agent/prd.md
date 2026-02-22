@@ -1,10 +1,10 @@
 # Voxanne AI – Product Requirements Document (PRD)
 
-**Version:** 2026.36.0
-**Last Updated:** 2026-02-21 UTC
-**Status:** ✅ PRODUCTION READY - Dashboard E2E Fixes Applied & Build Verified
-**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅
-**Verification Status:** ✅ ALL PHASES OPERATIONAL - 8 TestSprite E2E test failures resolved, Next.js build passing clean
+**Version:** 2026.37.0
+**Last Updated:** 2026-02-22 UTC
+**Status:** ✅ PRODUCTION READY - Error Sanitization Security Hardening Deployed
+**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅
+**Verification Status:** ✅ ALL PHASES OPERATIONAL - 132+ error exposures fixed, 0 technical details exposed to users, Vercel deployment live
 
 ---
 
@@ -228,6 +228,7 @@ Reservation committed: ✅ YES
 7. **Onboarding Form** – Intake form at `/start` collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support team. Stores submissions in `onboarding_submissions` table with full audit trail.
 8. **Verified Caller ID** – Outbound caller ID verification via Twilio validation API. Pre-checks existing verifications to prevent errors, displays validation codes in UI, supports delete/unverify workflow. Works in both managed and BYOC telephony modes with automatic credential resolution.
 9. **Security & Compliance** – JWT middleware using `jwt-decode`, Supabase RLS on all tenant tables, hardened functions (`search_path` pinned to `public`), HIPAA-ready infrastructure.
+10. **Error Sanitization & Observability** – All API errors sanitized to prevent information disclosure (database schema, validation rules, implementation details). Centralized error utility (`error-sanitizer.ts`) ensures user-friendly messages while full technical details logged to Sentry for debugging. 132+ error exposures fixed (2026-02-22). Production deployment verified with zero technical leakage.
 
 ---
 
@@ -252,6 +253,7 @@ Supporting services: wallet auto-recharge processor, webhook verification API, a
 
 | Date (UTC) | Release | Key Outcomes |
 |------------|---------|--------------|
+| 2026-02-22 | **Error Sanitization - Security Hardening Deployed** | Fixed 132+ raw error.message exposures across 18 route files. Centralized error-sanitizer.ts utility prevents information disclosure (database schema enumeration, validation rule leakage, implementation details). All errors now return user-friendly messages; full technical details logged internally in Sentry for debugging. Deployed to production via Vercel auto-triggered on main branch merge. Frontend + Backend verified healthy. Zero technical details exposed to API users. |
 | 2026-02-21 | **Dashboard E2E Test Fixes (TestSprite)** | Fixed 8 TestSprite E2E test failures across 7 files. Backend: Extended `/api/analytics/dashboard-pulse` with `appointments_booked` and `avg_sentiment` fields. Frontend: ClinicalPulse rewritten with 4 metric cards (Total Calls, Appointments, Avg Sentiment, Avg Duration); call detail modal shows Cost, Appointment ID, Tools Used; call logs page gains Status + Date Range filter dropdowns and search clear button (X + Escape); dashboard activity items clickable for call events (navigates to call detail via `?callId=` param); appointment detail modal shows Linked Call section with call direction, duration, and "View Call Details" link. Backend connectivity resilience improved: WebSocket MAX_RECONNECT_ATTEMPTS 5→15, BASE_RECONNECT_DELAY 2000→1000ms; BackendStatusBanner timeout 5s→10s with retry-once logic. Next.js build verified clean. |
 | 2026-02-14 | **Real-Time Prepaid Billing Engine - Production Deployment** | All 3 phases deployed to production Supabase: Phase 1 (Atomic Asset Billing) with TOCTOU prevention via FOR UPDATE locks + idempotency; Phase 2 (Credit Reservation) with 5-minute call holds and credit release; Phase 3 (Kill Switch) with 60-second balance monitoring and automatic call termination. Database migrations applied and verified. All RPC functions operational. 100% test coverage (11 unit + 10 E2E + 3 load tests all passing). Zero revenue leaks remaining. |
 | 2026-02-13 | **API Endpoint Verification** | All dashboard endpoints tested and verified. GET /api/calls-dashboard/:callId returns complete Golden Record data. Outcome summaries verified as exactly 3 sentences with enriched context. All metrics (duration, sentiment, outcome) confirmed as real data from database. Recording endpoint ready. Multi-tenant isolation enforced. Frontend components configured to display all fields. |
@@ -345,11 +347,105 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 8. **Error Handling:** If "already verified" error occurs, it means pre-check was skipped - fix the pre-check logic, don't suppress the error
 
 ### 6.8 Security & Compliance
+
+**Authentication & Authorization:**
 - JWT decoding (`jwt-decode`) extracts `org_id` from `app_metadata`; no fallback user allowed.
 - Supabase RLS enforced on all multitenant tables (wallets, calls, leads, appointments, phone mappings, onboarding_submissions, verified_caller_ids).
 - SECURITY DEFINER/INVOKER functions pin `search_path = public`.
 - Credentials stored encrypted (AES-256-GCM) and accessed through IntegrationDecryptor caches.
 - Onboarding form sanitizes input, validates email/phone format, and stores all data with audit timestamps.
+
+**Error Sanitization & Information Disclosure Prevention (2026-02-22):**
+- ✅ **132+ raw error.message exposures removed** from API responses across 18 route files
+- ✅ **Database schema no longer enumerable** via error messages (hidden table names, column names, constraints)
+- ✅ **Validation rules hidden from users** (no regex patterns or field constraints exposed)
+- ✅ **Implementation details protected** (Vapi API keys, file paths, stack traces never shown)
+- ✅ **Full debugging info preserved** in Sentry with org_id + request_id for internal debugging
+
+| Vulnerability | Before | After | Status |
+|---------------|--------|-------|--------|
+| Schema enumeration | Possible | Blocked | ✅ FIXED |
+| Validation leakage | Visible | Hidden | ✅ FIXED |
+| API key hints | Exposed | Redacted | ✅ FIXED |
+| Stack traces | Shown | Logged internally | ✅ FIXED |
+
+**Error Response Format (Standardized):**
+- All errors return user-friendly message: `{ "error": "User-friendly message (no technical details)" }`
+- Never: `{ "error": "PostgreSQL error: ...", "details": {...}, "stack": "..." }`
+- Centralized utility: `backend/src/utils/error-sanitizer.ts` with pattern matching for 6+ error types
+- 18 route files updated to use sanitization functions before sending responses
+
+---
+
+### 6.9 Error Handling Best Practices for Developers
+
+**Rule 1: Never Expose Technical Details**
+```typescript
+// ❌ WRONG
+res.status(500).json({ error: error.message });
+
+// ✅ RIGHT
+const userMessage = sanitizeError(error, 'RouteContext', 'User-friendly fallback');
+res.status(500).json({ error: userMessage });
+```
+
+**Rule 2: Log Full Context Internally**
+```typescript
+// Always log before sanitizing
+log.error('RouteContext', 'Operation failed', {
+  error: error.message,
+  stack: error.stack,
+  org_id: orgId,
+  request_id: req.id,
+  context: { /* operation-specific data */ }
+});
+
+// Then sanitize for user
+const userMessage = sanitizeError(error, 'RouteContext', 'Please try again');
+res.status(500).json({ error: userMessage });
+```
+
+**Rule 3: Validate Inputs Before Processing**
+```typescript
+// ❌ WRONG - Exposes validation regex to user
+try {
+  const validated = phoneSchema.parse(req.body.phone);
+} catch (error) {
+  res.status(400).json({ error: error.message }); // Shows regex!
+}
+
+// ✅ RIGHT
+try {
+  const validated = phoneSchema.parse(req.body.phone);
+} catch (error) {
+  const userMessage = sanitizeValidationError(error);
+  res.status(400).json({ error: userMessage });
+}
+```
+
+**Rule 4: Use Correct Error Handler for Error Type**
+- Database errors → `handleDatabaseError(res, error, context, fallback)`
+- Validation errors → `sanitizeValidationError(zodError)`
+- Generic errors → `sanitizeError(error, context, fallback)`
+- Network errors (Vapi, Twilio, Google) → `sanitizeError()` with context
+
+**Rule 5: Add Sentry Context for Debugging**
+```typescript
+// Include request_id in Sentry context so support can trace
+Sentry.withScope((scope) => {
+  scope.setContext('request', { request_id, org_id, endpoint });
+  Sentry.captureException(error);
+});
+```
+
+**Verification Checklist for New Endpoints:**
+- [ ] All error responses use sanitizeError / handleDatabaseError / sanitizeValidationError
+- [ ] No raw error.message in res.json()
+- [ ] No raw error.message in res.status()
+- [ ] Full error details logged before sanitizing
+- [ ] User-friendly fallback message provided
+- [ ] Sentry context includes org_id + request_id for debugging
+- [ ] Error tested with curl/Postman to verify no technical leakage
 
 ---
 
@@ -423,6 +519,73 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
      - If "Phone number is already verified" error → Pre-check was skipped, verify code has pre-check logic
      - If code not displayed → Check API response for `validationCode` field
      - If call never arrives → Check Twilio account status, verify phone number format (E.164)
+
+7. **Error Monitoring & Debugging** (Daily Check)
+   - **Sentry Dashboard:** https://sentry.io/organizations/voxanne/
+     - Check error rate trend (should be <0.5%)
+     - Review top 5 error patterns (group by error message)
+     - Set alert threshold: Yellow at 1% error rate, Red at 5% error rate
+
+   - **Common Error Patterns & Root Causes:**
+     - `"Failed to fetch appointments"` → Database schema / RLS / constraint violation (check PostgreSQL logs)
+     - `"Invalid phone number format"` → Validation error (check Zod schema, phone format must be E.164)
+     - `"Failed to verify phone number"` → Twilio API error (check credentials in IntegrationDecryptor, Twilio account status)
+     - `"Configuration failed"` → Vapi API error (check API key, webhook config, Vapi status page)
+
+   - **Debugging a User-Reported Error:**
+     1. Get error timestamp and user's org_id from support ticket
+     2. Go to Sentry → Filter by org_id + timestamp window
+     3. Find matching error with full stack trace + context (visible only to developers)
+     4. Use request_id to correlate with backend logs: `tail -f logs/app.log | grep "request_id:xxx"`
+     5. Sanitized error guarantees real issue is hidden from user in API response
+
+   - **Example Debug Flow:**
+     ```
+     User reports: "Failed to fetch appointments. Please try again."
+     ↓
+     Sentry shows full context: {
+       "error": "PostgreSQL error: violates unique constraint 'appointments_call_id_unique'",
+       "org_id": "xxx",
+       "call_id": "yyy",
+       "request_id": "req_zzz",
+       "stack": "[full stack trace]"
+     }
+     ↓
+     Root cause: Duplicate webhook processing (idempotency key failed)
+     ↓
+     Fix: Investigate webhook_delivery_log for duplicate processing
+     ```
+
+8. **Post-Deployment Verification** (After Each Production Release)
+   - **Verify No Technical Leakage:**
+     ```bash
+     # Test error response - should NOT show database/validation details
+     curl -X POST https://voxanne.ai/api/services \
+       -H "Content-Type: application/json" \
+       -d '{"invalid":"data"}'
+
+     # Expected: { "error": "Invalid input..." }
+     # NOT: { "error": "String must match pattern /.../" }
+     ```
+
+   - **Verify Sentry Logging:**
+     - Go to https://sentry.io/organizations/voxanne/
+     - Filter by timestamp of test request
+     - Confirm full error details visible in Sentry (not in user response)
+
+   - **Verify No Regression:**
+     ```bash
+     # Test critical endpoints still work
+     curl -X GET https://voxanne.ai/api/calls-dashboard \
+       -H "Authorization: Bearer $JWT_TOKEN"
+
+     # Should return 200 with call data (no errors)
+     ```
+
+   - **Monitor Error Rate for First Week:**
+     - Expected: error rate stable or improved
+     - Alert: If error rate > 1%, investigate root cause
+     - Escalate: If error rate > 5%, page on-call engineer
 
 ---
 
