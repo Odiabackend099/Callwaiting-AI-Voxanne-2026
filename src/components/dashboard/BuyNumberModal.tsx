@@ -9,6 +9,7 @@ interface BuyNumberModalProps {
   onClose: () => void;
   onSuccess?: (phoneNumber: string) => void;
   currentMode?: string;
+  defaultDirection?: 'inbound' | 'outbound';
 }
 
 type Step = 'search' | 'confirm' | 'success';
@@ -54,11 +55,12 @@ const COUNTRIES = [
   // Removed AU (Australia) - not in backend carrier_forwarding_rules table
 ] as const;
 
-export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberModalProps) {
+export function BuyNumberModal({ onClose, onSuccess, currentMode, defaultDirection = 'inbound' }: BuyNumberModalProps) {
   const [step, setStep] = useState<Step>('search');
   const [country, setCountry] = useState('US');
   const [numberType, setNumberType] = useState<'local' | 'toll_free'>('local');
   const [areaCode, setAreaCode] = useState('');
+  const [direction, setDirection] = useState<'inbound' | 'outbound'>(defaultDirection);
   const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
   const [selectedNumber, setSelectedNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -147,7 +149,7 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
         };
       }>('/api/managed-telephony/provision', {
         method: 'POST',
-        body: JSON.stringify({ country, numberType, areaCode }),
+        body: JSON.stringify({ country, numberType, areaCode, direction }),
       });
 
       if (!data.success) {
@@ -191,35 +193,62 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
     }
   };
 
-  // Pre-flight check: Check if org has existing phone number AND sufficient balance
+  // Pre-flight check: Check per-direction limits AND sufficient balance
   const checkExistingNumber = async () => {
     try {
       setLoading(true);
       setError(null);
       setErrorDetails(null);
 
-      const data = await authedBackendFetch<{
-        hasPhoneNumber: boolean;
-        phoneNumberType: 'managed' | 'byoc' | 'none';
-        phoneNumber?: string;
-        details?: string;
-      }>('/api/managed-telephony/phone-status');
+      // Use phone-settings status which returns direction-grouped data
+      const statusData = await authedBackendFetch<any>('/api/phone-settings/status');
 
-      if (data.hasPhoneNumber) {
+      // Check per-direction: inbound checks inbound lane, outbound checks outbound lane
+      let blocked = false;
+      if (direction === 'inbound' && statusData?.inbound?.hasManagedNumber) {
+        blocked = true;
         setHasExistingNumber(true);
         setExistingNumberInfo({
-          type: data.phoneNumberType as 'managed' | 'byoc',
-          phoneNumber: data.phoneNumber!,
-          details: data.details!,
+          type: 'managed',
+          phoneNumber: statusData.inbound.managedNumber,
+          details: 'Active managed inbound number',
         });
-        const errorMsg = `You already have ${data.phoneNumberType === 'managed' ? 'a managed' : 'a BYOC'} phone number (${data.phoneNumber}). Please delete it before provisioning a new one.`;
+        const errorMsg = `You already have an inbound number (${statusData.inbound.managedNumber}). Please release it before provisioning a new one.`;
         setError(errorMsg);
-        setErrorDetails({
-          message: errorMsg,
-          canRetry: false,
-          failedStep: 'validation'
+        setErrorDetails({ message: errorMsg, canRetry: false, failedStep: 'validation' });
+      } else if (direction === 'outbound' && statusData?.outbound?.hasManagedOutboundNumber) {
+        blocked = true;
+        setHasExistingNumber(true);
+        setExistingNumberInfo({
+          type: 'managed',
+          phoneNumber: statusData.outbound.managedOutboundNumber,
+          details: 'Active managed outbound number',
         });
-      } else {
+        const errorMsg = `You already have an outbound number (${statusData.outbound.managedOutboundNumber}). Please release it before provisioning a new one.`;
+        setError(errorMsg);
+        setErrorDetails({ message: errorMsg, canRetry: false, failedStep: 'validation' });
+      }
+
+      if (!blocked) {
+        // Also check BYOC for inbound direction
+        if (direction === 'inbound') {
+          const phoneData = await authedBackendFetch<any>('/api/managed-telephony/phone-status');
+          if (phoneData?.hasPhoneNumber && phoneData?.phoneNumberType === 'byoc') {
+            setHasExistingNumber(true);
+            setExistingNumberInfo({
+              type: 'byoc',
+              phoneNumber: phoneData.phoneNumber!,
+              details: phoneData.details!,
+            });
+            const errorMsg = `You already have a BYOC phone number (${phoneData.phoneNumber}). Please disconnect it first.`;
+            setError(errorMsg);
+            setErrorDetails({ message: errorMsg, canRetry: false, failedStep: 'validation' });
+            blocked = true;
+          }
+        }
+      }
+
+      if (!blocked) {
         setHasExistingNumber(false);
         setExistingNumberInfo(null);
       }
@@ -251,10 +280,10 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
     }
   };
 
-  // Check for existing number on modal open
+  // Check for existing number on modal open and when direction changes
   useEffect(() => {
     checkExistingNumber();
-  }, []);
+  }, [direction]);
 
   return (
     <AnimatePresence>
@@ -340,6 +369,40 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode }: BuyNumberMod
                     </div>
                   </div>
                 )}
+
+                {/* Direction selector */}
+                <div>
+                  <label className="block text-sm font-medium text-obsidian/70 mb-2">Number Purpose</label>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'inbound' as const, label: 'Inbound', desc: 'Receive Calls (AI Receptionist)' },
+                      { value: 'outbound' as const, label: 'Outbound', desc: 'Caller ID (Sales / Callbacks)' },
+                    ]).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          setDirection(opt.value);
+                          setError(null);
+                          setErrorDetails(null);
+                          setHasExistingNumber(false);
+                          setExistingNumberInfo(null);
+                          // Re-check with new direction
+                          setTimeout(() => checkExistingNumber(), 0);
+                        }}
+                        className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors text-left ${
+                          direction === opt.value
+                            ? opt.value === 'inbound'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : 'bg-blue-50 text-blue-700 border-blue-300'
+                            : 'bg-white text-obsidian/60 border-surgical-200 hover:border-surgical-300'
+                        }`}
+                      >
+                        <div className="font-semibold">{opt.label}</div>
+                        <div className="text-xs opacity-75">{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Country selector */}
                 <div>

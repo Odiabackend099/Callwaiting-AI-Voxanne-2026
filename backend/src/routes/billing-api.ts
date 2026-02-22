@@ -272,7 +272,7 @@ router.post('/create-checkout-session', requireAuth, async (req: Request, res: R
       });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5001';
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -329,7 +329,7 @@ router.post('/create-portal-session', requireAuth, async (req: Request, res: Res
       return res.status(400).json({ error: 'No billing account found' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5001';
 
     const session = await stripe.billingPortal.sessions.create({
       customer: org.stripe_customer_id,
@@ -589,7 +589,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
       },
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5001';
 
     let session;
     try {

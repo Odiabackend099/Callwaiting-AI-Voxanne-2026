@@ -49,8 +49,17 @@ interface PhoneSettingsStatus {
       createdAt: string;
       id: string;
     } | null;
+    // New: outbound managed number support
+    hasManagedOutboundNumber?: boolean;
+    managedOutboundNumber?: string | null;
+    managedOutboundVapiPhoneId?: string | null;
   };
   mode: 'managed' | 'byoc' | 'none';
+  numbers?: {
+    inbound: Array<{ phoneNumber: string; status: string; vapiPhoneId: string | null; countryCode: string; routingDirection: string }>;
+    outbound: Array<{ phoneNumber: string; status: string; vapiPhoneId: string | null; countryCode: string; routingDirection: string }>;
+    all: Array<{ phoneNumber: string; status: string; vapiPhoneId: string | null; countryCode: string; routingDirection: string }>;
+  };
 }
 
 type VerificationStep = 'input' | 'verify' | 'success';
@@ -102,6 +111,7 @@ export default function PhoneSettingsPage() {
 
   // Buy number modal
   const [showBuyNumberModal, setShowBuyNumberModal] = useState(false);
+  const [buyModalDirection, setBuyModalDirection] = useState<'inbound' | 'outbound'>('inbound');
 
   // Verification flow
   const [verificationStep, setVerificationStep] = useState<VerificationStep>('input');
@@ -443,11 +453,11 @@ export default function PhoneSettingsPage() {
                 Purchase a dedicated number for your AI receptionist. Forward your office calls using a simple carrier code.
               </p>
               <button
-                onClick={() => setShowBuyNumberModal(true)}
+                onClick={() => { setBuyModalDirection('inbound'); setShowBuyNumberModal(true); }}
                 className="px-6 py-3 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium inline-flex items-center gap-2"
               >
                 <ShoppingCart className="w-4 h-4" />
-                Buy AI Number
+                Buy Inbound Number
               </button>
               <p className="text-xs text-obsidian/60 mt-3">
                 £1.50/month + usage-based pricing
@@ -816,6 +826,7 @@ export default function PhoneSettingsPage() {
             fetchPhoneSettings();
           }}
           currentMode={status?.mode || 'none'}
+          defaultDirection={buyModalDirection}
         />
       )}
 

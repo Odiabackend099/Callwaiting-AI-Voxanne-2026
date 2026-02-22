@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     appointmentDate.setHours(hours, minutes, 0, 0);
 
     // Forward to backend API
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
     const response = await fetch(`${backendUrl}/api/appointments`, {
       method: 'POST',
       headers: {

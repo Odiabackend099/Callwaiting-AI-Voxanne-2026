@@ -11,7 +11,7 @@ export async function watchLiveCalls(
   context: string
 ): Promise<string> {
   try {
-    const wsUrl = process.env.WS_URL || "ws://localhost:3000";
+    const wsUrl = process.env.WS_URL || "ws://localhost:5001";
 
     return (
       `Live Call Monitoring\n` +

@@ -69,10 +69,32 @@ async function resolveOrgPhoneNumberIdInner(
       // Best-effort; fall through to managed numbers
     }
 
-    // Step 1: Check managed_phone_numbers for an active number with vapi_phone_id
+    // Step 1: Check managed_phone_numbers for an active OUTBOUND number with vapi_phone_id
+    // Only outbound-tagged numbers should be used for outbound calls
     // Short-circuits the entire BYOC resolution chain for managed orgs
     try {
       const { data: managedNumber } = await supabaseAdmin
+        .from('managed_phone_numbers')
+        .select('vapi_phone_id, phone_number')
+        .eq('org_id', orgId)
+        .eq('status', 'active')
+        .eq('routing_direction', 'outbound')
+        .not('vapi_phone_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+
+      if (managedNumber?.vapi_phone_id) {
+        logger.info('Resolved managed outbound phone number (Step 1 short-circuit)', {
+          orgId,
+          vapiPhoneNumberId: managedNumber.vapi_phone_id,
+          phoneLast4: managedNumber.phone_number?.slice(-4),
+        });
+        return { phoneNumberId: managedNumber.vapi_phone_id, callerNumber: managedNumber.phone_number };
+      }
+
+      // Fallback: if no outbound-tagged number exists, try any active managed number
+      // This preserves backward compatibility for existing single-number orgs
+      const { data: anyManagedNumber } = await supabaseAdmin
         .from('managed_phone_numbers')
         .select('vapi_phone_id, phone_number')
         .eq('org_id', orgId)
@@ -81,13 +103,13 @@ async function resolveOrgPhoneNumberIdInner(
         .limit(1)
         .maybeSingle();
 
-      if (managedNumber?.vapi_phone_id) {
-        logger.info('Resolved managed phone number (Step 1 short-circuit)', {
+      if (anyManagedNumber?.vapi_phone_id) {
+        logger.info('Resolved managed phone number fallback (Step 1 — no outbound-tagged number)', {
           orgId,
-          vapiPhoneNumberId: managedNumber.vapi_phone_id,
-          phoneLast4: managedNumber.phone_number?.slice(-4),
+          vapiPhoneNumberId: anyManagedNumber.vapi_phone_id,
+          phoneLast4: anyManagedNumber.phone_number?.slice(-4),
         });
-        return { phoneNumberId: managedNumber.vapi_phone_id, callerNumber: managedNumber.phone_number };
+        return { phoneNumberId: anyManagedNumber.vapi_phone_id, callerNumber: anyManagedNumber.phone_number };
       }
     } catch {
       // Step 1 is best-effort; fall through to BYOC chain

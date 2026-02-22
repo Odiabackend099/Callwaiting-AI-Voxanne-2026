@@ -101,7 +101,7 @@ const AppointmentsDashboardContent = () => {
 
     // WebSocket real-time updates
     useEffect(() => {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
         const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
         const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
         const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;
@@ -391,8 +391,13 @@ const AppointmentsDashboardContent = () => {
                                                         {apt.status.charAt(0).toUpperCase() + apt.status.slice(1)}
                                                     </span>
                                                     {apt.call_direction && (
-                                                        <span className="inline-flex items-center gap-1 text-xs text-obsidian/50">
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                                            apt.call_direction === 'inbound'
+                                                                ? 'bg-green-50 text-green-700 border-green-200'
+                                                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                                        }`}>
                                                             {apt.call_direction === 'inbound' ? <PhoneIncoming className="w-3 h-3" /> : <PhoneOutgoing className="w-3 h-3" />}
+                                                            {apt.call_direction === 'inbound' ? 'Inbound' : 'Outbound'}
                                                         </span>
                                                     )}
                                                 </div>
@@ -574,8 +579,16 @@ const AppointmentsDashboardContent = () => {
                                                 </div>
                                                 {selectedAppointment.call_direction && (
                                                     <div className="flex items-center gap-2">
-                                                        {selectedAppointment.call_direction === 'inbound' ? <PhoneIncoming className="w-4 h-4 text-obsidian/40" /> : <PhoneOutgoing className="w-4 h-4 text-obsidian/40" />}
-                                                        <span className="text-sm text-obsidian capitalize">{selectedAppointment.call_direction} call</span>
+                                                        {selectedAppointment.call_direction === 'inbound'
+                                                            ? <PhoneIncoming className="w-4 h-4 text-green-600" />
+                                                            : <PhoneOutgoing className="w-4 h-4 text-blue-600" />}
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                                            selectedAppointment.call_direction === 'inbound'
+                                                                ? 'bg-green-50 text-green-700 border-green-200'
+                                                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                                        }`}>
+                                                            {selectedAppointment.call_direction === 'inbound' ? 'Inbound' : 'Outbound'} Call
+                                                        </span>
                                                         {selectedAppointment.call_duration_seconds != null && (
                                                             <span className="text-xs text-obsidian/60">({Math.floor(selectedAppointment.call_duration_seconds / 60)}m {selectedAppointment.call_duration_seconds % 60}s)</span>
                                                         )}

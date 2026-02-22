@@ -2248,6 +2248,7 @@ router.post(
           logger.info('Outbound phone number ID included in payload', {
             vapiPhoneNumberId: config.vapiPhoneNumberId
           });
+
         }
 
         // Filter out null/undefined values to avoid database errors
@@ -2264,6 +2265,25 @@ router.post(
       // Build payloads for each agent
       const inboundPayload = buildUpdatePayload(inbound, 'inbound');
       const outboundPayload = buildUpdatePayload(outbound, 'outbound');
+
+      // Resolve linked_phone_number_id for outbound agent (async, best-effort)
+      if (outboundPayload && outbound?.vapiPhoneNumberId) {
+        try {
+          const { data: linkedManagedNumber } = await supabase
+            .from('managed_phone_numbers')
+            .select('id')
+            .eq('org_id', orgId)
+            .eq('vapi_phone_id', outbound.vapiPhoneNumberId)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (linkedManagedNumber) {
+            outboundPayload.linked_phone_number_id = linkedManagedNumber.id;
+          }
+        } catch {
+          // Best-effort — linked_phone_number_id is supplementary
+        }
+      }
 
       // CRITICAL DEBUG: Log what was built AND what was rejected
       logger.info('Payloads built for agent update', {
@@ -2922,9 +2942,25 @@ router.post(
 
         // Backfill to agents table for future calls
         if (phoneNumberId) {
+          // Also resolve linked_phone_number_id from managed_phone_numbers
+          let linkedId: string | null = null;
+          try {
+            const { data: linkedMn } = await supabase
+              .from('managed_phone_numbers')
+              .select('id')
+              .eq('org_id', orgId)
+              .eq('vapi_phone_id', phoneNumberId)
+              .eq('status', 'active')
+              .maybeSingle();
+            linkedId = linkedMn?.id || null;
+          } catch { /* best-effort */ }
+
           await supabase
             .from('agents')
-            .update({ vapi_phone_number_id: phoneNumberId })
+            .update({
+              vapi_phone_number_id: phoneNumberId,
+              ...(linkedId ? { linked_phone_number_id: linkedId } : {}),
+            })
             .eq('id', agent.id)
             .eq('org_id', orgId);
         }
@@ -3458,7 +3494,7 @@ router.post(
       // CRITICAL FIX: Use X-Forwarded-Host if available (from reverse proxy), otherwise use Host header
       // This ensures WebSocket URL matches the frontend's origin for same-origin policy
       const forwardedHost = req.get('x-forwarded-host');
-      const requestHost = forwardedHost || req.get('host') || 'localhost:3001';
+      const requestHost = forwardedHost || req.get('host') || 'localhost:5002';
       const forwardedProto = req.get('x-forwarded-proto');
       const wsProtocol = (forwardedProto === 'https' || req.protocol === 'https') ? 'wss' : 'ws';
       const baseUrl = `${wsProtocol}://${requestHost}`;

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Forward to backend API to save contact
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
 
     // Save contact to database
     const contactResponse = await fetch(`${backendUrl}/api/contacts`, {

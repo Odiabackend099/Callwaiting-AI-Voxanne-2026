@@ -39,7 +39,7 @@ router.post('/sms-status', async (req: Request, res: Response): Promise<void> =>
       // Validate using Twilio's signature validation
       // Note: Twilio sends form-encoded data, so we need to parse it correctly
       const protocol = req.protocol || (req.secure ? 'https' : 'http');
-      const host = req.get('host') || 'localhost:3001';
+      const host = req.get('host') || 'localhost:5002';
       const url = `${protocol}://${host}${req.originalUrl || req.url}`;
       
       // validateRequest checks the signature against the auth token

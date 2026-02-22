@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     console.log(`[Google OAuth] Got org_id from JWT: ${orgId}`);
 
     // Step 3: Call backend with the REAL org_id
-    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
     console.log(`[Google OAuth] Using backend URL: ${backendUrl}`);
 
     // CRITICAL FIX: Call the unified OAuth endpoint

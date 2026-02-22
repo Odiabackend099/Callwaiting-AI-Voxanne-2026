@@ -10,7 +10,7 @@
  * - GET /api/google-oauth/token-status/:orgId - Check token status
  *
  * Usage (CLI):
- * curl -X POST http://localhost:3001/api/google-oauth/refresh-token \
+ * curl -X POST http://localhost:5002/api/google-oauth/refresh-token \
  *   -H "Content-Type: application/json" \
  *   -d '{"orgId": "...", "forceRefresh": true}'
  */

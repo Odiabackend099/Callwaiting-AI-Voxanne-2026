@@ -83,7 +83,7 @@ export const config = {
   // CORE APPLICATION SETTINGS
   // ========================================================================
   NODE_ENV: getOptional('NODE_ENV', 'development'),
-  PORT: getNumber('PORT', 3001),
+  PORT: getNumber('PORT', 5002),
   LOG_LEVEL: getOptional('LOG_LEVEL', 'info'),
   COMPANY_NAME: getOptional('COMPANY_NAME', 'CallWaiting AI'),
   CLINIC_NAME: getOptional('CLINIC_NAME', 'VoxAnne'),
@@ -100,9 +100,9 @@ export const config = {
   // ========================================================================
   // BACKEND URLS
   // ========================================================================
-  BACKEND_URL: getOptional('BACKEND_URL', 'http://localhost:3001'),
-  FRONTEND_URL: getOptional('FRONTEND_URL', 'http://localhost:3000'),
-  CORS_ORIGIN: getOptional('CORS_ORIGIN', 'http://localhost:3000'),
+  BACKEND_URL: getOptional('BACKEND_URL', 'http://localhost:5002'),
+  FRONTEND_URL: getOptional('FRONTEND_URL', 'http://localhost:5001'),
+  CORS_ORIGIN: getOptional('CORS_ORIGIN', 'http://localhost:5001'),
   WEBHOOK_URL: getOptional('WEBHOOK_URL'),
 
   // ========================================================================

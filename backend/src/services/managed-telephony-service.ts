@@ -32,6 +32,7 @@ export interface ProvisionRequest {
   country: string;        // 'US', 'GB'
   numberType?: string;    // 'local' | 'toll_free'
   areaCode?: string;      // Optional area code preference
+  direction?: 'inbound' | 'outbound' | 'unassigned';  // Routing direction
 }
 
 export interface ProvisionResult {
@@ -58,6 +59,7 @@ export interface ManagedStatus {
     status: string;
     vapiPhoneId: string | null;
     countryCode: string;
+    routingDirection: string;
   }>;
 }
 
@@ -275,7 +277,7 @@ export class ManagedTelephonyService {
    * 7. Update agents.vapi_phone_number_id if outbound agent exists
    */
   static async provisionManagedNumber(request: ProvisionRequest): Promise<ProvisionResult> {
-    const { orgId, country, numberType = 'local', areaCode } = request;
+    const { orgId, country, numberType = 'local', areaCode, direction = 'inbound' } = request;
 
     try {
       // STEP 0: Acquire advisory lock to prevent concurrent provisioning
@@ -525,7 +527,8 @@ export class ManagedTelephonyService {
           p_vapi_credential_id: vapiCredentialId || '',
           p_country_code: country,
           p_number_type: numberType,
-          p_clinic_name: org.name || 'Managed Number'
+          p_clinic_name: org.name || 'Managed Number',
+          p_routing_direction: direction
         });
 
       if (atomicError || !atomicResult?.success) {
@@ -720,7 +723,7 @@ export class ManagedTelephonyService {
       log.info('ManagedTelephony', 'Cleaned up org_credentials (SSOT)', { orgId, provider: 'twilio' });
 
       // CRITICAL FIX: Step 6 - Unlink agents that were using this phone
-      // Find agents that had this phone configured and reset their vapi_phone_number_id
+      // Find agents that had this phone configured and reset their vapi_phone_number_id + linked_phone_number_id
       const { data: linkedAgents } = await supabaseAdmin
         .from('agents')
         .select('id')
@@ -730,7 +733,7 @@ export class ManagedTelephonyService {
       if (linkedAgents && linkedAgents.length > 0) {
         await supabaseAdmin
           .from('agents')
-          .update({ vapi_phone_number_id: null })
+          .update({ vapi_phone_number_id: null, linked_phone_number_id: null })
           .eq('org_id', orgId)
           .eq('vapi_phone_number_id', mnRecord.vapi_phone_id);
 
@@ -740,6 +743,13 @@ export class ManagedTelephonyService {
           vapiPhoneId: mnRecord.vapi_phone_id,
         });
       }
+
+      // Also clear linked_phone_number_id on agents linked by managed number ID
+      await supabaseAdmin
+        .from('agents')
+        .update({ linked_phone_number_id: null })
+        .eq('org_id', orgId)
+        .eq('linked_phone_number_id', mnRecord.id);
 
       log.info('ManagedTelephony', 'Managed number released (full cleanup complete)', { orgId, phone: redactPhone(phoneNumber) });
 
@@ -826,10 +836,10 @@ export class ManagedTelephonyService {
       .eq('org_id', orgId)
       .maybeSingle();
 
-    // Get managed numbers
+    // Get managed numbers (include routing_direction)
     const { data: numbers } = await supabaseAdmin
       .from('managed_phone_numbers')
-      .select('phone_number, status, vapi_phone_id, country_code')
+      .select('phone_number, status, vapi_phone_id, country_code, routing_direction')
       .eq('org_id', orgId)
       .neq('status', 'released');
 
@@ -846,6 +856,7 @@ export class ManagedTelephonyService {
         status: n.status,
         vapiPhoneId: n.vapi_phone_id,
         countryCode: n.country_code,
+        routingDirection: n.routing_direction || 'inbound',
       })),
     };
   }

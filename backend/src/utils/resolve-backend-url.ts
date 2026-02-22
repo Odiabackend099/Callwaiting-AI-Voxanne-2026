@@ -9,14 +9,14 @@
  * 1. BACKEND_URL - explicit configuration (highest priority)
  * 2. RENDER_EXTERNAL_URL - auto-set by Render hosting platform
  * 3. BASE_URL - generic fallback
- * 4. 'http://localhost:3001' - development only
+ * 4. 'http://localhost:5002' - development only
  */
 export function resolveBackendUrl(): string {
   const url =
     process.env.BACKEND_URL ||
     process.env.RENDER_EXTERNAL_URL ||
     process.env.BASE_URL ||
-    'http://localhost:3001';
+    'http://localhost:5002';
 
   if (url.includes('localhost') && process.env.NODE_ENV === 'production') {
     console.warn(

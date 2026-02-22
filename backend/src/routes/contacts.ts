@@ -520,16 +520,31 @@ contactsRouter.post('/:id/call-back', async (req: Request, res: Response) => {
       const resolved = await resolveOrgPhoneNumberId(orgId, vapiApiKey);
       phoneNumberId = resolved.phoneNumberId;
 
-      // Backfill onto agents table for future calls
+      // Backfill onto agents table for future calls (both vapi_phone_number_id AND linked_phone_number_id)
       if (phoneNumberId && agent.id) {
+        let linkedId: string | null = null;
+        try {
+          const { data: linkedMn } = await supabase
+            .from('managed_phone_numbers')
+            .select('id')
+            .eq('org_id', orgId)
+            .eq('vapi_phone_id', phoneNumberId)
+            .eq('status', 'active')
+            .maybeSingle();
+          linkedId = linkedMn?.id || null;
+        } catch { /* best-effort */ }
+
         await supabase
           .from('agents')
-          .update({ vapi_phone_number_id: phoneNumberId })
+          .update({
+            vapi_phone_number_id: phoneNumberId,
+            ...(linkedId ? { linked_phone_number_id: linkedId } : {}),
+          })
           .eq('id', agent.id)
           .eq('org_id', orgId);
 
         log.info('Contacts', 'Auto-resolved and stored phone number on outbound agent', {
-          orgId, agentId: agent.id, phoneNumberId
+          orgId, agentId: agent.id, phoneNumberId, linkedPhoneNumberId: linkedId
         });
       }
     }

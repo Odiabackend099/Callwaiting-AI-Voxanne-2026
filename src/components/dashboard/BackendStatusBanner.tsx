@@ -9,7 +9,7 @@ export function BackendStatusBanner() {
   const [dismissed, setDismissed] = useState(false);
 
   const checkBackend = useCallback(async () => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
 
     const tryFetch = async (): Promise<boolean> => {
       const controller = new AbortController();

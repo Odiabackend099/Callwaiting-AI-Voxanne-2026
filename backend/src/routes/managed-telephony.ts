@@ -44,7 +44,13 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const { country = 'US', numberType = 'local', areaCode } = req.body;
+    const { country = 'US', numberType = 'local', areaCode, direction = 'inbound' } = req.body;
+
+    // Validate direction
+    if (!['inbound', 'outbound', 'unassigned'].includes(direction)) {
+      res.status(400).json({ error: 'Invalid direction. Must be "inbound", "outbound", or "unassigned"' });
+      return;
+    }
 
     // Validate master credentials exist (CRITICAL for managed telephony)
     const masterSid = process.env.TWILIO_MASTER_ACCOUNT_SID;
@@ -79,7 +85,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     // Check if organization already has an existing phone number (managed or BYOC)
     logger.info('Validating phone provisioning eligibility', { orgId, country, numberType, areaCode });
 
-    const validation = await PhoneValidationService.validateCanProvision(orgId);
+    const validation = await PhoneValidationService.validateCanProvision(orgId, direction);
 
     if (!validation.canProvision) {
       logger.warn('Provisioning blocked - existing number', {
@@ -182,6 +188,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       country,
       numberType,
       areaCode,
+      direction,
     });
 
     if (!result.success) {

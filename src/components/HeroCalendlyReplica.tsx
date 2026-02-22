@@ -36,10 +36,18 @@ const itemVariants = {
 export function HeroCalendlyReplica() {
     const [agentId, setAgentId] = useState<string | null>(null);
     const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+    // Framer Motion v12 + Next.js App Router: initial="hidden" renders opacity:0 on the
+    // server and animations only fire after client hydration. isMounted gates animate so
+    // the stagger runs reliably after mount regardless of React Strict Mode double-invocation.
+    const [isMounted, setIsMounted] = useState(false);
     const heroRef = useRef<HTMLElement>(null);
     const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
     const pillY = useTransform(scrollYProgress, [0, 1], [0, -60]);
     const demoY = useTransform(scrollYProgress, [0, 1], [0, 40]);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     useEffect(() => {
         async function fetchAgent() {
@@ -83,7 +91,7 @@ export function HeroCalendlyReplica() {
                         className="max-w-xl space-y-8 md:space-y-10"
                         variants={containerVariants}
                         initial="hidden"
-                        animate="visible"
+                        animate={isMounted ? "visible" : "hidden"}
                     >
                         {/* Eyebrow badge */}
                         <motion.div variants={itemVariants}>
@@ -162,7 +170,7 @@ export function HeroCalendlyReplica() {
                                 <motion.div
                                     key={pill.label}
                                     initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
+                                    animate={isMounted ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
                                     transition={{ delay: 0.7 + i * 0.1, duration: 0.4, ease: 'backOut' }}
                                     whileHover={{ y: -3, boxShadow: '0 8px 20px rgba(29,78,216,0.15)' }}
                                     className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-white border border-surgical-100 shadow-sm cursor-default"
@@ -188,7 +196,7 @@ export function HeroCalendlyReplica() {
                                     <motion.span
                                         key={name}
                                         initial={{ opacity: 0 }}
-                                        animate={{ opacity: 0.45 }}
+                                        animate={isMounted ? { opacity: 0.45 } : { opacity: 0 }}
                                         transition={{ delay: 1 + i * 0.15 }}
                                         whileHover={{ opacity: 0.75 }}
                                         className="font-medium text-sm md:text-base text-obsidian tracking-wide transition-opacity duration-300 cursor-default"
@@ -206,7 +214,7 @@ export function HeroCalendlyReplica() {
                         style={{ y: demoY }}
                         className="relative hidden lg:flex items-center justify-center w-full h-full min-h-[520px] z-10"
                         initial={{ opacity: 0, x: 40 }}
-                        animate={{ opacity: 1, x: 0 }}
+                        animate={isMounted ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
                         transition={{ delay: 0.4, duration: 0.8, ease: 'easeOut' }}
                     >
                         {/* Subtle glow ring behind demo */}

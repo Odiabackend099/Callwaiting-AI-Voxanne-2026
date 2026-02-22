@@ -62,7 +62,7 @@ export const UNIFIED_BOOKING_TOOL = {
 
 /**
  * Get the unified booking tool with webhook server URL
- * @param backendUrl - Base URL of backend (e.g., http://localhost:3001 or https://api.example.com)
+ * @param backendUrl - Base URL of backend (e.g., http://localhost:5002 or https://api.example.com)
  * @returns Complete tool definition with server endpoint
  */
 export function getUnifiedBookingTool(backendUrl: string) {

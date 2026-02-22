@@ -16,11 +16,20 @@ import { createLogger } from './logger';
 
 const logger = createLogger('PhoneValidationService');
 
+export type RoutingDirection = 'inbound' | 'outbound' | 'unassigned';
+
 export interface PhoneNumberStatus {
   hasPhoneNumber: boolean;
   phoneNumberType: 'managed' | 'byoc' | 'none';
   phoneNumber?: string;
   details?: string;
+}
+
+export interface DirectionStatus {
+  hasInbound: boolean;
+  hasOutbound: boolean;
+  inboundNumber?: string;
+  outboundNumber?: string;
 }
 
 export interface ValidationResult {
@@ -107,47 +116,99 @@ export class PhoneValidationService {
   }
 
   /**
+   * Check which routing directions already have active managed numbers
+   */
+  static async checkDirectionStatus(orgId: string): Promise<DirectionStatus> {
+    const { data: numbers } = await supabaseAdmin
+      .from('managed_phone_numbers')
+      .select('phone_number, routing_direction')
+      .eq('org_id', orgId)
+      .eq('status', 'active');
+
+    const inbound = numbers?.find((n: any) => n.routing_direction === 'inbound');
+    const outbound = numbers?.find((n: any) => n.routing_direction === 'outbound');
+
+    return {
+      hasInbound: !!inbound,
+      hasOutbound: !!outbound,
+      inboundNumber: inbound?.phone_number,
+      outboundNumber: outbound?.phone_number,
+    };
+  }
+
+  /**
    * Validate if organization can provision a new managed number
    *
-   * Enforces one-number-per-org rule by checking for existing numbers
+   * Direction-aware: allows 1 inbound + 1 outbound per org.
+   * Blocks if a number with the SAME direction already exists.
    *
    * @param orgId - Organization ID to validate
+   * @param direction - Routing direction for the new number (default: 'inbound')
    * @returns ValidationResult indicating if provisioning is allowed
    */
-  static async validateCanProvision(orgId: string): Promise<ValidationResult> {
+  static async validateCanProvision(orgId: string, direction: RoutingDirection = 'inbound'): Promise<ValidationResult> {
     try {
-      const status = await this.checkOrgPhoneStatus(orgId);
+      // Check per-direction limits for managed numbers
+      const directionStatus = await this.checkDirectionStatus(orgId);
 
-      // Allow provisioning if org has no existing phone number
-      if (!status.hasPhoneNumber) {
-        logger.info('Provisioning allowed - no existing phone', { orgId });
-        return { canProvision: true };
+      if (direction === 'inbound' && directionStatus.hasInbound) {
+        logger.warn('Provisioning blocked - existing inbound number', {
+          orgId,
+          existingNumber: directionStatus.inboundNumber?.slice(-4),
+        });
+        return {
+          canProvision: false,
+          reason: `Your organization already has an inbound number (${directionStatus.inboundNumber}). Please release it before provisioning a new one.`,
+          existingNumber: {
+            type: 'managed',
+            phoneNumber: directionStatus.inboundNumber!,
+            details: 'Active managed inbound number',
+          },
+        };
       }
 
-      // Block provisioning - org already has a phone number
-      const errorMessage =
-        status.phoneNumberType === 'managed'
-          ? `Your organization already has a managed phone number (${status.phoneNumber}). Please delete it before provisioning a new one.`
-          : `Your organization already has a BYOC Twilio connection (${status.phoneNumber}). Please disconnect it in Settings > Integrations before provisioning a managed number.`;
+      if (direction === 'outbound' && directionStatus.hasOutbound) {
+        logger.warn('Provisioning blocked - existing outbound number', {
+          orgId,
+          existingNumber: directionStatus.outboundNumber?.slice(-4),
+        });
+        return {
+          canProvision: false,
+          reason: `Your organization already has an outbound number (${directionStatus.outboundNumber}). Please release it before provisioning a new one.`,
+          existingNumber: {
+            type: 'managed',
+            phoneNumber: directionStatus.outboundNumber!,
+            details: 'Active managed outbound number',
+          },
+        };
+      }
 
-      logger.warn('Provisioning blocked - existing number detected', {
-        orgId,
-        type: status.phoneNumberType,
-        phoneLast4: status.phoneNumber?.slice(-4),
-      });
+      // For inbound direction, also check BYOC — can't have both BYOC and managed inbound
+      if (direction === 'inbound') {
+        const status = await this.checkOrgPhoneStatus(orgId);
+        if (status.hasPhoneNumber && status.phoneNumberType === 'byoc') {
+          logger.warn('Provisioning blocked - existing BYOC number', {
+            orgId,
+            phoneLast4: status.phoneNumber?.slice(-4),
+          });
+          return {
+            canProvision: false,
+            reason: `Your organization already has a BYOC Twilio connection (${status.phoneNumber}). Please disconnect it in Settings > Integrations before provisioning a managed number.`,
+            existingNumber: {
+              type: 'byoc',
+              phoneNumber: status.phoneNumber!,
+              details: status.details!,
+            },
+          };
+        }
+      }
 
-      return {
-        canProvision: false,
-        reason: errorMessage,
-        existingNumber: {
-          type: status.phoneNumberType as 'managed' | 'byoc',
-          phoneNumber: status.phoneNumber!,
-          details: status.details!,
-        },
-      };
+      logger.info('Provisioning allowed', { orgId, direction });
+      return { canProvision: true };
     } catch (err: any) {
       logger.error('Error validating provisioning eligibility', {
         orgId,
+        direction,
         error: err.message,
         stack: err.stack,
       });

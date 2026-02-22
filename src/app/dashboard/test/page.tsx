@@ -12,7 +12,7 @@ import { useVoiceAgentContext } from '@/contexts/VoiceAgentContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
 
 // E.164 phone validation
 const E164_REGEX = /^\+[1-9]\d{1,14}$/;
@@ -296,13 +296,25 @@ const TestAgentPageContent = () => {
                     setOutboundConfigError(null);
                     setOutboundConfigMissingFields([]);
 
-                    // Show caller ID info: agent's phone > inbound number > auto-assigned
-                    if (config.vapi_phone_number_id) {
-                        setOutboundCallerIdNumber(config.vapi_phone_number_id);
-                    } else if (inboundStatus?.inboundNumber) {
-                        setOutboundCallerIdNumber(inboundStatus.inboundNumber);
-                    } else {
-                        setOutboundCallerIdNumber('Auto-assigned at call time');
+                    // Show caller ID info: managed outbound number > verified caller > inbound number > auto-assigned
+                    try {
+                        const phoneStatus = await authedBackendFetch<any>('/api/phone-settings/status');
+                        if (phoneStatus?.outbound?.managedOutboundNumber) {
+                            setOutboundCallerIdNumber(phoneStatus.outbound.managedOutboundNumber);
+                        } else if (phoneStatus?.outbound?.verifiedNumber) {
+                            setOutboundCallerIdNumber(phoneStatus.outbound.verifiedNumber);
+                        } else if (inboundStatus?.inboundNumber) {
+                            setOutboundCallerIdNumber(inboundStatus.inboundNumber);
+                        } else {
+                            setOutboundCallerIdNumber('Auto-assigned at call time');
+                        }
+                    } catch {
+                        // Fallback if phone-settings fetch fails
+                        if (inboundStatus?.inboundNumber) {
+                            setOutboundCallerIdNumber(inboundStatus.inboundNumber);
+                        } else {
+                            setOutboundCallerIdNumber('Auto-assigned at call time');
+                        }
                     }
 
                     setCachedConfig(config);

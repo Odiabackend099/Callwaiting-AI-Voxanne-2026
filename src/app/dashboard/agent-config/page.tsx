@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -118,9 +118,28 @@ export default function AgentConfigPage() {
     const { data: numbersRaw } = useSWR(
         user ? '/api/integrations/vapi/numbers' : null, fetcher
     );
+    const { data: phoneSettingsRaw } = useSWR(
+        user ? '/api/phone-settings/status' : null, fetcher
+    );
 
     // Derive state from SWR data
     const isLoading = agentLoading && !agentData;
+
+    // Derive direction map: vapiPhoneId → 'inbound' | 'outbound'
+    const numberDirectionMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        if (phoneSettingsRaw?.numbers?.inbound) {
+            phoneSettingsRaw.numbers.inbound.forEach((n: any) => {
+                if (n.vapiPhoneId) map[n.vapiPhoneId] = 'inbound';
+            });
+        }
+        if (phoneSettingsRaw?.numbers?.outbound) {
+            phoneSettingsRaw.numbers.outbound.forEach((n: any) => {
+                if (n.vapiPhoneId) map[n.vapiPhoneId] = 'outbound';
+            });
+        }
+        return map;
+    }, [phoneSettingsRaw]);
 
     // Sync voices from SWR
     useEffect(() => {
@@ -810,7 +829,7 @@ export default function AgentConfigPage() {
                                                 <option value="" disabled>Select number...</option>
                                                 {vapiNumbers.map((num) => (
                                                     <option key={num.id} value={num.id}>
-                                                        {num.number} {num.name ? `(${num.name})` : ''}
+                                                        {num.number} {num.name ? `(${num.name})` : ''}{numberDirectionMap[num.id] ? ` [${numberDirectionMap[num.id].charAt(0).toUpperCase() + numberDirectionMap[num.id].slice(1)}]` : ''}
                                                     </option>
                                                 ))}
                                             </select>
@@ -857,7 +876,7 @@ export default function AgentConfigPage() {
                                                 <option value="" disabled>Select number...</option>
                                                 {vapiNumbers.map((num) => (
                                                     <option key={num.id} value={num.id}>
-                                                        {num.number} {num.name ? `(${num.name})` : ''}
+                                                        {num.number} {num.name ? `(${num.name})` : ''}{numberDirectionMap[num.id] ? ` [${numberDirectionMap[num.id].charAt(0).toUpperCase() + numberDirectionMap[num.id].slice(1)}]` : ''}
                                                     </option>
                                                 ))}
                                             </select>

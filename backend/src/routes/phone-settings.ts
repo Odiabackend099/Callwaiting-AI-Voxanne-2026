@@ -39,12 +39,20 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Get managed telephony status (Lane 1: Inbound)
+    // Get managed telephony status (now direction-aware)
     const managedStatus = await ManagedTelephonyService.getManagedStatus(orgId);
 
-    // Extract managed number data
-    const hasManagedNumber = managedStatus.numbers.length > 0;
-    const managedNumber = hasManagedNumber ? managedStatus.numbers[0] : null;
+    // Split numbers by routing direction
+    const inboundNumbers = managedStatus.numbers.filter(n => n.routingDirection === 'inbound');
+    const outboundNumbers = managedStatus.numbers.filter(n => n.routingDirection === 'outbound');
+
+    // Backward-compatible: first inbound number (existing behavior)
+    const hasManagedNumber = inboundNumbers.length > 0;
+    const managedNumber = hasManagedNumber ? inboundNumbers[0] : null;
+
+    // Outbound managed number (new)
+    const hasOutboundManagedNumber = outboundNumbers.length > 0;
+    const outboundManagedNumber = hasOutboundManagedNumber ? outboundNumbers[0] : null;
 
     // Get verified caller ID status (Lane 2: Outbound)
     const { data: verifiedNumbers, error: verifiedError } = await supabaseAdmin
@@ -126,7 +134,7 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
       // Best-effort — forwarding config is non-critical
     }
 
-    // Return combined response
+    // Return combined response (backward-compatible + new direction-aware fields)
     res.json({
       inbound: {
         hasManagedNumber,
@@ -143,8 +151,18 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
         verifiedId: verifiedNumber?.id || null,
         vapiLinked: !!verifiedNumber?.vapi_phone_number_id,
         pendingVerification,
+        // New: outbound managed number (separate from verified caller ID)
+        hasManagedOutboundNumber: hasOutboundManagedNumber,
+        managedOutboundNumber: outboundManagedNumber?.phoneNumber || null,
+        managedOutboundVapiPhoneId: outboundManagedNumber?.vapiPhoneId || null,
       },
       mode: managedStatus.mode,
+      // New: all numbers grouped by direction (for multi-number UI)
+      numbers: {
+        inbound: inboundNumbers,
+        outbound: outboundNumbers,
+        all: managedStatus.numbers,
+      },
     });
 
   } catch (error: any) {

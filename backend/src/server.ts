@@ -62,6 +62,7 @@ import { callsRouter as callsDashboardRouter } from './routes/calls-dashboard'; 
 // DEPRECATED: Agent sync no longer needed - agents table is SSOT
 // import agentSyncRouter from './routes/agent-sync'; // default export
 import dashboardLeadsRouter from './routes/dashboard-leads'; // default export
+import dashboardMvpRouter from './routes/dashboard-mvp'; // default export
 import { bookDemoRouter } from './routes/book-demo';
 import integrationsStatusRouter from './routes/integrations-status'; // default export
 // import { scheduleOrphanCleanup } from './jobs/orphan-recording-cleanup'; // DISABLED: orphaned_recordings table deleted
@@ -184,8 +185,8 @@ app.use(cors({
   origin: (origin, callback) => {
     // Default allowed origins (always include these)
     const defaultOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
+      'http://localhost:5001',
+      'http://localhost:5002',
       'https://voxanne.ai',
       'https://www.voxanne.ai',
       'https://callwaitingai.dev',
@@ -314,6 +315,7 @@ app.use('/api/founder-console', founderConsoleSettingsRouter);
 // DEPRECATED: Agent sync no longer needed - agents table is SSOT
 // app.use('/api/founder-console', agentSyncRouter);
 app.use('/api/dashboard', dashboardLeadsRouter);
+app.use('/api/dashboard-mvp', dashboardMvpRouter);
 app.use('/api/book-demo', bookDemoRouter);
 app.use('/api/escalation-rules', escalationRulesRouter);
 app.use('/api/team', teamRouter);
@@ -540,6 +542,8 @@ server.on('upgrade', (request, socket, head) => {
 
   // Validate origin for CORS security (allow localhost and production domains)
   const allowedOrigins = [
+    'http://localhost:5001',
+    'http://127.0.0.1:5001',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'https://voxanne.ai',
@@ -732,7 +736,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.warn('You can manually configure webhook endpoint in Stripe Dashboard');
   });
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     // Resolve backend URL and emit warnings if misconfigured
     const backendUrl = resolveBackendUrl();
 
