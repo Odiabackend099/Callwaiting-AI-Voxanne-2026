@@ -51,6 +51,13 @@ interface InboundStatus {
     inboundNumber?: string;
 }
 
+interface VapiNumber {
+    id: string;      // Vapi phone number UUID
+    number: string;  // E.164 format e.g. "+14407396528"
+    name: string;
+    type: 'managed' | 'byoc';
+}
+
 export default function AgentConfigPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -73,7 +80,7 @@ export default function AgentConfigPage() {
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
 
     // Vapi Phone Number State
-    const [vapiNumbers, setVapiNumbers] = useState<any[]>([]);
+    const [vapiNumbers, setVapiNumbers] = useState<VapiNumber[]>([]);
     const [selectedNumberId, setSelectedNumberId] = useState('');
     const [assigningNumber, setAssigningNumber] = useState(false);
 
@@ -115,10 +122,10 @@ export default function AgentConfigPage() {
     const { data: inboundRaw } = useSWR(
         user ? '/api/inbound/status' : null, fetcher
     );
-    const { data: numbersRaw } = useSWR(
+    const { data: vapiNumbersData } = useSWR(
         user ? '/api/integrations/vapi/numbers' : null, fetcher
     );
-    const { data: phoneSettingsRaw } = useSWR(
+    const { data: phoneSettings, isLoading: phoneSettingsLoading } = useSWR(
         user ? '/api/phone-settings/status' : null, fetcher
     );
 
@@ -126,43 +133,40 @@ export default function AgentConfigPage() {
     const isLoading = agentLoading && !agentData;
 
     // Derive direction map: vapiPhoneId/phoneNumber → 'inbound' | 'outbound'
-    // Uses multiple data sources for robustness:
-    //   1. numbers.inbound[] / numbers.outbound[] arrays (multi-number routing)
-    //   2. Flat inbound.vapiPhoneId / outbound.managedOutboundVapiPhoneId fields (fallback)
-    const numberDirectionMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        if (!phoneSettingsRaw) return map;
+    //
+    // Two data sources, applied in priority order (Source 1 wins over Source 2):
+    //   1. numbers.inbound[] / numbers.outbound[] arrays — multi-number routing (preferred)
+    //   2. Flat inbound/outbound fields — orgs provisioned before multi-number routing (fallback)
+    //
+    // Within Source 1: inbound is written first, outbound second. If the same number
+    // appears in both arrays (data integrity issue upstream), outbound wins — intentional,
+    // as outbound assignment is more specific.
+    const numberDirectionMap = useMemo((): Record<string, 'inbound' | 'outbound'> => {
+        const map: Record<string, 'inbound' | 'outbound'> = {};
+        if (!phoneSettings) return map;
 
-        // Source 1: numbers arrays (preferred — from multi-number routing)
-        if (phoneSettingsRaw.numbers?.inbound) {
-            phoneSettingsRaw.numbers.inbound.forEach((n: any) => {
-                if (n.vapiPhoneId) map[n.vapiPhoneId] = 'inbound';
-                if (n.phoneNumber) map[n.phoneNumber] = 'inbound';
-            });
-        }
-        if (phoneSettingsRaw.numbers?.outbound) {
-            phoneSettingsRaw.numbers.outbound.forEach((n: any) => {
-                if (n.vapiPhoneId) map[n.vapiPhoneId] = 'outbound';
-                if (n.phoneNumber) map[n.phoneNumber] = 'outbound';
-            });
-        }
+        // Source 1: numbers arrays (multi-number routing)
+        (phoneSettings.numbers?.inbound as { vapiPhoneId?: string; phoneNumber?: string }[] ?? []).forEach((n) => {
+            if (n.vapiPhoneId) map[n.vapiPhoneId] = 'inbound';
+            if (n.phoneNumber) map[n.phoneNumber] = 'inbound';
+        });
+        (phoneSettings.numbers?.outbound as { vapiPhoneId?: string; phoneNumber?: string }[] ?? []).forEach((n) => {
+            if (n.vapiPhoneId) map[n.vapiPhoneId] = 'outbound';
+            if (n.phoneNumber) map[n.phoneNumber] = 'outbound';
+        });
 
-        // Source 2: flat fields (fallback for orgs without numbers arrays)
-        if (phoneSettingsRaw.inbound?.vapiPhoneId) {
-            map[phoneSettingsRaw.inbound.vapiPhoneId] = map[phoneSettingsRaw.inbound.vapiPhoneId] || 'inbound';
-        }
-        if (phoneSettingsRaw.inbound?.managedNumber) {
-            map[phoneSettingsRaw.inbound.managedNumber] = map[phoneSettingsRaw.inbound.managedNumber] || 'inbound';
-        }
-        if (phoneSettingsRaw.outbound?.managedOutboundVapiPhoneId) {
-            map[phoneSettingsRaw.outbound.managedOutboundVapiPhoneId] = map[phoneSettingsRaw.outbound.managedOutboundVapiPhoneId] || 'outbound';
-        }
-        if (phoneSettingsRaw.outbound?.managedOutboundNumber) {
-            map[phoneSettingsRaw.outbound.managedOutboundNumber] = map[phoneSettingsRaw.outbound.managedOutboundNumber] || 'outbound';
-        }
+        // Source 2: flat fields (orgs provisioned before multi-number routing).
+        // Only sets a key if Source 1 didn't already populate it.
+        const setIfAbsent = (key: string | undefined, dir: 'inbound' | 'outbound') => {
+            if (key && !(key in map)) map[key] = dir;
+        };
+        setIfAbsent(phoneSettings.inbound?.vapiPhoneId, 'inbound');
+        setIfAbsent(phoneSettings.inbound?.managedNumber, 'inbound');
+        setIfAbsent(phoneSettings.outbound?.managedOutboundVapiPhoneId, 'outbound');
+        setIfAbsent(phoneSettings.outbound?.managedOutboundNumber, 'outbound');
 
         return map;
-    }, [phoneSettingsRaw]);
+    }, [phoneSettings]);
 
     // Sync voices from SWR
     useEffect(() => {
@@ -183,10 +187,10 @@ export default function AgentConfigPage() {
 
     // Sync vapi numbers from SWR
     useEffect(() => {
-        if (numbersRaw?.success) {
-            setVapiNumbers(numbersRaw.numbers || []);
+        if (vapiNumbersData?.success) {
+            setVapiNumbers(vapiNumbersData.numbers || []);
         }
-    }, [numbersRaw]);
+    }, [vapiNumbersData]);
 
     // Sync agent config from SWR — DB is the single source of truth.
     // Always overwrite the in-memory Zustand store with what the DB returns.
@@ -847,10 +851,13 @@ export default function AgentConfigPage() {
                                             <select
                                                 value={selectedNumberId}
                                                 onChange={(e) => setSelectedNumberId(e.target.value)}
-                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none"
+                                                disabled={phoneSettingsLoading}
+                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none disabled:opacity-60"
                                             >
-                                                <option value="" disabled>Select number...</option>
-                                                {vapiNumbers.map((num) => {
+                                                <option value="" disabled>
+                                                    {phoneSettingsLoading ? 'Loading...' : 'Select number...'}
+                                                </option>
+                                                {!phoneSettingsLoading && vapiNumbers.map((num) => {
                                                     const dir = numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
                                                     return (
                                                         <option key={num.id} value={num.id}>
@@ -861,7 +868,7 @@ export default function AgentConfigPage() {
                                             </select>
                                             <button
                                                 onClick={handleAssignNumber}
-                                                disabled={assigningNumber || !selectedNumberId}
+                                                disabled={assigningNumber || !selectedNumberId || phoneSettingsLoading}
                                                 className="px-3 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
                                                 {assigningNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -897,10 +904,13 @@ export default function AgentConfigPage() {
                                             <select
                                                 value={selectedOutboundNumberId}
                                                 onChange={(e) => setSelectedOutboundNumberId(e.target.value)}
-                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none"
+                                                disabled={phoneSettingsLoading}
+                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none disabled:opacity-60"
                                             >
-                                                <option value="" disabled>Select number...</option>
-                                                {vapiNumbers.map((num) => {
+                                                <option value="" disabled>
+                                                    {phoneSettingsLoading ? 'Loading...' : 'Select number...'}
+                                                </option>
+                                                {!phoneSettingsLoading && vapiNumbers.map((num) => {
                                                     const dir = numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
                                                     return (
                                                         <option key={num.id} value={num.id}>
@@ -911,7 +921,7 @@ export default function AgentConfigPage() {
                                             </select>
                                             <button
                                                 onClick={handleAssignOutboundNumber}
-                                                disabled={assigningOutboundNumber || !selectedOutboundNumberId}
+                                                disabled={assigningOutboundNumber || !selectedOutboundNumberId || phoneSettingsLoading}
                                                 className="px-3 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
                                                 {assigningOutboundNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
