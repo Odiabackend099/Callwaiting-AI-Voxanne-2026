@@ -131,11 +131,13 @@ export default function AgentConfigPage() {
         if (phoneSettingsRaw?.numbers?.inbound) {
             phoneSettingsRaw.numbers.inbound.forEach((n: any) => {
                 if (n.vapiPhoneId) map[n.vapiPhoneId] = 'inbound';
+                if (n.phoneNumber) map[n.phoneNumber] = 'inbound';
             });
         }
         if (phoneSettingsRaw?.numbers?.outbound) {
             phoneSettingsRaw.numbers.outbound.forEach((n: any) => {
                 if (n.vapiPhoneId) map[n.vapiPhoneId] = 'outbound';
+                if (n.phoneNumber) map[n.phoneNumber] = 'outbound';
             });
         }
         return map;
@@ -827,11 +829,14 @@ export default function AgentConfigPage() {
                                                 className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none"
                                             >
                                                 <option value="" disabled>Select number...</option>
-                                                {vapiNumbers.map((num) => (
-                                                    <option key={num.id} value={num.id}>
-                                                        {num.number} {num.name ? `(${num.name})` : ''}{numberDirectionMap[num.id] ? ` [${numberDirectionMap[num.id].charAt(0).toUpperCase() + numberDirectionMap[num.id].slice(1)}]` : ''}
-                                                    </option>
-                                                ))}
+                                                {vapiNumbers.map((num) => {
+                                                    const dir = numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
+                                                    return (
+                                                        <option key={num.id} value={num.id}>
+                                                            {num.number} {num.name ? `(${num.name})` : ''}{dir ? ` [${dir.charAt(0).toUpperCase() + dir.slice(1)}]` : ''}
+                                                        </option>
+                                                    );
+                                                })}
                                             </select>
                                             <button
                                                 onClick={handleAssignNumber}
@@ -874,11 +879,14 @@ export default function AgentConfigPage() {
                                                 className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none"
                                             >
                                                 <option value="" disabled>Select number...</option>
-                                                {vapiNumbers.map((num) => (
-                                                    <option key={num.id} value={num.id}>
-                                                        {num.number} {num.name ? `(${num.name})` : ''}{numberDirectionMap[num.id] ? ` [${numberDirectionMap[num.id].charAt(0).toUpperCase() + numberDirectionMap[num.id].slice(1)}]` : ''}
-                                                    </option>
-                                                ))}
+                                                {vapiNumbers.map((num) => {
+                                                    const dir = numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
+                                                    return (
+                                                        <option key={num.id} value={num.id}>
+                                                            {num.number} {num.name ? `(${num.name})` : ''}{dir ? ` [${dir.charAt(0).toUpperCase() + dir.slice(1)}]` : ''}
+                                                        </option>
+                                                    );
+                                                })}
                                             </select>
                                             <button
                                                 onClick={handleAssignOutboundNumber}

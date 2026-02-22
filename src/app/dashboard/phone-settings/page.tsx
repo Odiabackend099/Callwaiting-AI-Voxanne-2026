@@ -417,6 +417,9 @@ export default function PhoneSettingsPage() {
                         {status.inbound.forwardingConfig.forwardingType === 'total_ai' ? 'Full AI' : 'Safety Net'}
                       </span>
                     ) : null}
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
+                      Inbound
+                    </span>
                     <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
                       Active
                     </span>
@@ -490,9 +493,47 @@ export default function PhoneSettingsPage() {
             </div>
           </div>
 
+          {/* Managed Outbound Number */}
+          {status?.outbound.hasManagedOutboundNumber ? (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-base font-semibold text-obsidian">Outbound Number</h3>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-2xl font-mono font-bold text-blue-700">
+                    {status.outbound.managedOutboundNumber}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">
+                      Outbound
+                    </span>
+                    <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
+                      Active
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-700">Managed by Voxanne</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <button
+                onClick={() => { setBuyModalDirection('outbound'); setShowBuyNumberModal(true); }}
+                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Buy Outbound Number
+              </button>
+              <p className="text-xs text-obsidian/60 mt-2 text-center">
+                Purchase a dedicated number for outbound AI calls
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mb-4">
             <h3 className="text-base font-semibold text-obsidian">
-              Your Outbound Caller ID
+              Verified Caller ID
             </h3>
           </div>
 

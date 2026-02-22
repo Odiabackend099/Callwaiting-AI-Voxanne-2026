@@ -254,6 +254,28 @@ const TestAgentPageContent = () => {
         loadInboundStatus();
     }, [user]);
 
+    // Load phone settings on mount for Caller ID display (independent of outbound config)
+    useEffect(() => {
+        if (!user) return;
+        const loadCallerIdInfo = async () => {
+            try {
+                const phoneStatus = await authedBackendFetch<any>('/api/phone-settings/status');
+                if (phoneStatus?.outbound?.managedOutboundNumber) {
+                    setOutboundCallerIdNumber(phoneStatus.outbound.managedOutboundNumber);
+                } else if (phoneStatus?.outbound?.verifiedNumber) {
+                    setOutboundCallerIdNumber(phoneStatus.outbound.verifiedNumber);
+                } else if (phoneStatus?.inbound?.managedNumber) {
+                    setOutboundCallerIdNumber(phoneStatus.inbound.managedNumber);
+                } else {
+                    setOutboundCallerIdNumber('Auto-assigned at call time');
+                }
+            } catch {
+                // Fallback handled by existing inbound status
+            }
+        };
+        loadCallerIdInfo();
+    }, [user]);
+
     // Load outbound agent config before making phone calls
     useEffect(() => {
         const loadOutboundConfig = async () => {
@@ -289,33 +311,11 @@ const TestAgentPageContent = () => {
                     setOutboundConfigError('Outbound agent configuration is incomplete');
                     setOutboundConfigMissingFields(missingFields);
                     setOutboundConfigLoaded(false);
-                    setOutboundCallerIdNumber('');
                     setCachedConfig(config, missingFields);
                 } else {
                     setOutboundConfigLoaded(true);
                     setOutboundConfigError(null);
                     setOutboundConfigMissingFields([]);
-
-                    // Show caller ID info: managed outbound number > verified caller > inbound number > auto-assigned
-                    try {
-                        const phoneStatus = await authedBackendFetch<any>('/api/phone-settings/status');
-                        if (phoneStatus?.outbound?.managedOutboundNumber) {
-                            setOutboundCallerIdNumber(phoneStatus.outbound.managedOutboundNumber);
-                        } else if (phoneStatus?.outbound?.verifiedNumber) {
-                            setOutboundCallerIdNumber(phoneStatus.outbound.verifiedNumber);
-                        } else if (inboundStatus?.inboundNumber) {
-                            setOutboundCallerIdNumber(inboundStatus.inboundNumber);
-                        } else {
-                            setOutboundCallerIdNumber('Auto-assigned at call time');
-                        }
-                    } catch {
-                        // Fallback if phone-settings fetch fails
-                        if (inboundStatus?.inboundNumber) {
-                            setOutboundCallerIdNumber(inboundStatus.inboundNumber);
-                        } else {
-                            setOutboundCallerIdNumber('Auto-assigned at call time');
-                        }
-                    }
 
                     setCachedConfig(config);
                 }
@@ -663,9 +663,9 @@ const TestAgentPageContent = () => {
                                 <h2 className="text-2xl font-semibold text-obsidian mb-2">Live Call Test</h2>
                                 <p className="text-sm text-obsidian/70">Enter your phone number to receive a test call from your agent.</p>
 
-                                <div className="mt-4 p-4 bg-white border border-surgical-200 rounded-lg text-left">
-                                    <p className="text-xs text-obsidian/60 font-medium uppercase">Caller ID</p>
-                                    <p className="text-sm text-obsidian mt-1">
+                                <div className="mt-4 p-4 bg-surgical-50 border border-surgical-200 rounded-lg text-left">
+                                    <p className="text-xs text-obsidian/60 font-semibold uppercase tracking-wider">From Number / Caller ID</p>
+                                    <p className="text-lg font-mono font-bold text-obsidian mt-1">
                                         {outboundCallerIdNumber && outboundCallerIdNumber !== 'Auto-assigned at call time'
                                             ? outboundCallerIdNumber
                                             : inboundStatus?.configured && inboundStatus.inboundNumber
@@ -673,7 +673,7 @@ const TestAgentPageContent = () => {
                                                 : 'Auto-assigned at call time'}
                                     </p>
                                     <p className="text-xs text-obsidian/60 mt-2">
-                                        {outboundCallerIdNumber === 'Auto-assigned at call time'
+                                        {(!outboundCallerIdNumber || outboundCallerIdNumber === 'Auto-assigned at call time') && !(inboundStatus?.configured && inboundStatus.inboundNumber)
                                             ? 'A phone number will be automatically selected from your account when the call is placed.'
                                             : 'This number will appear as the caller ID on outbound calls.'}
                                     </p>
