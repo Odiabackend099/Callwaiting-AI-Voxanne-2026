@@ -19,7 +19,7 @@ export function getRedirectUrl(path: string = '/auth/callback'): string {
   
   if (!appUrl) {
     // Server-side fallback
-    return `http://localhost:5001${normalizedPath}`;
+    return `http://localhost:3000${normalizedPath}`;
   }
   
   // Ensure appUrl doesn't have trailing slash

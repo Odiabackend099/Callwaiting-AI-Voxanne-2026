@@ -1,4 +1,10 @@
 
+export const PHONE_NUMBER_PRICING = {
+  costDisplay: '£10.00',
+  costType: 'one-time setup',
+  costPence: 1000,
+};
+
 export const COMPANY_INFO = {
     name: "CallWaiting AI",
     tagline: "Surgical-Grade AI Receptionists",

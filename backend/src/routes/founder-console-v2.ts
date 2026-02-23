@@ -1276,11 +1276,13 @@ router.get('/me', (req: Request, res: Response): void => {
 
 /**
  * POST /api/founder-console/agent/voice-preview
- * Generates a short TTS audio preview using the org's stored ElevenLabs credentials.
- * Only works for ElevenLabs voices. For other providers, returns previewUnavailable.
+ * Serves a pre-generated voice preview sample for ANY voice/provider.
  *
- * Request body: { voiceId: string, provider: string, text: string }
- * Response: audio/mpeg binary (ElevenLabs) OR JSON { previewUnavailable, message } (others)
+ * No per-org API keys required — Vapi already includes access to all voice
+ * providers. Samples are static MP3 files generated once at dev-time.
+ *
+ * Request body: { voiceId: string, provider: string }
+ * Response: audio/mpeg binary
  */
 router.post('/agent/voice-preview', voicePreviewLimiter, requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1290,12 +1292,9 @@ router.post('/agent/voice-preview', voicePreviewLimiter, requireAuthOrDev, async
       return;
     }
 
-    const { voiceId, provider, text, voiceStability, voiceSimilarityBoost } = req.body as {
+    const { voiceId, provider } = req.body as {
       voiceId: string;
       provider: string;
-      text: string;
-      voiceStability?: number;
-      voiceSimilarityBoost?: number;
     };
 
     if (!voiceId || !provider) {
@@ -1303,57 +1302,22 @@ router.post('/agent/voice-preview', voicePreviewLimiter, requireAuthOrDev, async
       return;
     }
 
-    // Only ElevenLabs supports standalone TTS preview
-    if (provider !== 'elevenlabs') {
-      res.json({
-        previewUnavailable: true,
-        message: 'Voice preview is available for ElevenLabs voices only. Use the Test Call button to hear your agent live.'
-      });
-      return;
-    }
+    const { getVoicePreviewService } = await import('../services/voice-preview-service');
+    const previewService = getVoicePreviewService();
 
-    // Clamp text to 200 chars for cost control; provide fallback if empty
-    const previewText = (text || 'Hello, thank you for calling. How can I assist you today?')
-      .trim()
-      .substring(0, 200);
+    const result = await previewService.generatePreview({ voiceId, provider });
 
-    // Retrieve org's ElevenLabs API key from encrypted credentials
-    let elevenLabsApiKey: string;
-    try {
-      const creds = await IntegrationDecryptor.getElevenLabsCredentials(orgId);
-      elevenLabsApiKey = creds.apiKey;
-    } catch {
-      res.json({
-        previewUnavailable: true,
-        message: 'ElevenLabs is not connected for your account. Connect it in Integrations to enable voice previews.'
-      });
-      return;
-    }
-
-    // Generate speech using the ElevenLabsClient
-    const { createElevenLabsClient } = await import('../services/elevenlabs-client');
-    const elevenLabsClient = createElevenLabsClient(elevenLabsApiKey);
-
-    const audio = await elevenLabsClient.generateSpeech({
-      text: previewText,
-      voiceId,
-      ...(voiceStability != null ? { stability: voiceStability } : {}),
-      ...(voiceSimilarityBoost != null ? { similarityBoost: voiceSimilarityBoost } : {}),
-    });
-
-    // Stream audio buffer back as MP3
-    res.set('Content-Type', 'audio/mpeg');
-    res.set('Content-Length', String(audio.audioBuffer.length));
-    res.set('Cache-Control', 'no-store');
-    res.send(audio.audioBuffer);
+    res.set('Content-Type', result.contentType);
+    res.set('Content-Length', String(result.audioBuffer.length));
+    res.set('Cache-Control', 'public, max-age=86400'); // Static samples can be cached 24h
+    res.send(result.audioBuffer);
 
   } catch (error: any) {
-    logger.error('[VOICE_PREVIEW] Failed to generate voice preview', {
+    logger.error('[VOICE_PREVIEW] Failed to serve voice preview', {
       error: error.message,
     });
-    // Return JSON error (don't crash with audio content-type headers)
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to generate voice preview. Please try again.' });
+      res.status(500).json({ error: 'Voice preview failed. Please try again.' });
     }
   }
 });
@@ -2352,25 +2316,36 @@ router.post(
         }
 
         // Voice quality parameters — ElevenLabs only (silently ignored by Vapi for other providers)
-        if (config.voiceStability !== undefined && config.voiceStability !== null) {
-          const stability = Number(config.voiceStability);
-          if (isNaN(stability) || stability < 0.0 || stability > 1.0) {
-            throw new Error(`Voice stability must be between 0.0 and 1.0 for ${agentRole} agent`);
+        // Explicit null = "reset to provider default" (clears DB column)
+        if (config.voiceStability !== undefined) {
+          if (config.voiceStability === null) {
+            payload.voice_stability = null;
+          } else {
+            const stability = Number(config.voiceStability);
+            if (isNaN(stability) || stability < 0.0 || stability > 1.0) {
+              throw new Error(`Voice stability must be between 0.0 and 1.0 for ${agentRole} agent`);
+            }
+            payload.voice_stability = stability;
           }
-          payload.voice_stability = stability;
         }
-        if (config.voiceSimilarityBoost !== undefined && config.voiceSimilarityBoost !== null) {
-          const similarityBoost = Number(config.voiceSimilarityBoost);
-          if (isNaN(similarityBoost) || similarityBoost < 0.0 || similarityBoost > 1.0) {
-            throw new Error(`Voice similarity boost must be between 0.0 and 1.0 for ${agentRole} agent`);
+        if (config.voiceSimilarityBoost !== undefined) {
+          if (config.voiceSimilarityBoost === null) {
+            payload.voice_similarity_boost = null;
+          } else {
+            const similarityBoost = Number(config.voiceSimilarityBoost);
+            if (isNaN(similarityBoost) || similarityBoost < 0.0 || similarityBoost > 1.0) {
+              throw new Error(`Voice similarity boost must be between 0.0 and 1.0 for ${agentRole} agent`);
+            }
+            payload.voice_similarity_boost = similarityBoost;
           }
-          payload.voice_similarity_boost = similarityBoost;
         }
 
-        // Filter out null/undefined values to avoid database errors
+        // Filter out undefined values to avoid database errors.
+        // Null values are allowed through — they explicitly clear DB columns
+        // (e.g., voice_stability = null means "reset to provider default").
         const cleanPayload: Record<string, any> = {};
         Object.entries(payload).forEach(([key, value]) => {
-          if (value !== null && value !== undefined) {
+          if (value !== undefined) {
             cleanPayload[key] = value;
           }
         });

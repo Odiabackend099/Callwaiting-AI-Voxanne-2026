@@ -109,7 +109,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     // CRITICAL FIX (2026-02-14): Uses atomic check_balance_and_deduct_asset_cost() RPC
     // to eliminate TOCTOU race condition. A single FOR UPDATE lock prevents concurrent
     // requests from both passing the balance check before either deducts.
-    const PHONE_NUMBER_COST_PENCE = 1000; // $10.00 = 1000 pence
+    const PHONE_NUMBER_COST_PENCE = 1000; // £10.00 = 1000 pence
 
     // Generate idempotency key to prevent duplicate charges on retries
     const idempotencyKey = `provision-${orgId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -145,7 +145,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       });
 
       res.status(402).json({
-        error: 'Insufficient funds. $10.00 required to provision phone number.',
+        error: 'Insufficient funds. £10.00 required to provision phone number.',
         required: PHONE_NUMBER_COST_PENCE,
         current: deductResult.balanceBefore,
         shortfallPence: deductResult.shortfallPence,

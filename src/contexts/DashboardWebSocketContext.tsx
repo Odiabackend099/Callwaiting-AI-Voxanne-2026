@@ -63,7 +63,7 @@ export function DashboardWebSocketProvider({ children }: { children: React.React
             }
         }
 
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
         const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
         const wsHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
         const wsUrl = `${wsProtocol}//${wsHost}/ws/live-calls`;

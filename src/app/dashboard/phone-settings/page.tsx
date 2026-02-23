@@ -14,11 +14,13 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  ExternalLink
+  ExternalLink,
+  User
 } from 'lucide-react';
 import { BuyNumberModal } from '@/components/dashboard/BuyNumberModal';
 import CarrierForwardingInstructions from './components/CarrierForwardingInstructions';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { PHONE_NUMBER_PRICING } from '@/lib/constants';
 
 interface ForwardingConfig {
   forwardingType: 'total_ai' | 'safety_net';
@@ -134,9 +136,17 @@ export default function PhoneSettingsPage() {
   const [confirmDeleteVerified, setConfirmDeleteVerified] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Agent linking
+  const [agents, setAgents] = useState<{
+    inbound: { id: string; name: string; vapiAssistantId: string | null } | null;
+    outbound: { id: string; name: string; vapiAssistantId: string | null; vapiPhoneNumberId: string | null } | null;
+  }>({ inbound: null, outbound: null });
+  const [assigningAgent, setAssigningAgent] = useState<'inbound' | 'outbound' | null>(null);
+
   // Fetch phone settings status
   useEffect(() => {
     fetchPhoneSettings();
+    fetchAgents();
   }, []);
 
   // Real-time country detection (Stripe pattern)
@@ -197,6 +207,44 @@ export default function PhoneSettingsPage() {
       setError(err.message || 'Failed to load phone settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAgents = async () => {
+    try {
+      const data = await authedBackendFetch<{ agents: Array<{ id: string; name: string; role: string; vapiAssistantId: string | null; vapiPhoneNumberId?: string | null }> }>('/api/founder-console/agent/config');
+      if (data?.agents) {
+        const inbound = data.agents.find(a => a.role === 'inbound') || null;
+        const outbound = data.agents.find(a => a.role === 'outbound') || null;
+        setAgents({
+          inbound: inbound ? { id: inbound.id, name: inbound.name, vapiAssistantId: inbound.vapiAssistantId } : null,
+          outbound: outbound ? { id: outbound.id, name: outbound.name, vapiAssistantId: outbound.vapiAssistantId, vapiPhoneNumberId: outbound.vapiPhoneNumberId ?? null } : null,
+        });
+      }
+    } catch {
+      // Non-critical — agent info is best-effort
+    }
+  };
+
+  const handleLinkAgent = async (direction: 'inbound' | 'outbound') => {
+    const vapiPhoneId = direction === 'inbound'
+      ? status?.inbound.vapiPhoneId
+      : status?.outbound.managedOutboundVapiPhoneId;
+
+    if (!vapiPhoneId) return;
+
+    setAssigningAgent(direction);
+    try {
+      await authedBackendFetch('/api/integrations/vapi/assign-number', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumberId: vapiPhoneId, role: direction }),
+      });
+      showSuccessToast('Agent linked successfully');
+      await Promise.all([fetchPhoneSettings(), fetchAgents()]);
+    } catch {
+      showErrorToast('Failed to link agent. Please try again.');
+    } finally {
+      setAssigningAgent(null);
     }
   };
 
@@ -374,18 +422,13 @@ export default function PhoneSettingsPage() {
           {/* PROMINENT INBOUND HEADER */}
           <div className="mb-6 pb-4 border-b border-surgical-200">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Smartphone className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-lg bg-surgical-100 flex items-center justify-center">
+                <Smartphone className="w-5 h-5 text-surgical-600" />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-obsidian">
-                    Inbound Calls
-                  </h2>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold uppercase tracking-wide">
-                    Receive
-                  </span>
-                </div>
+                <h2 className="text-lg font-semibold text-obsidian">
+                  Inbound Calls
+                </h2>
                 <p className="text-sm text-obsidian/60 mt-1">
                   Forward calls TO your AI receptionist
                 </p>
@@ -411,29 +454,56 @@ export default function PhoneSettingsPage() {
                     {status.inbound.forwardingConfig ? (
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                         status.inbound.forwardingConfig.forwardingType === 'total_ai'
-                          ? 'bg-surgical-50 text-surgical-700 border border-surgical-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          ? 'bg-surgical-100 text-surgical-700 border border-surgical-200'
+                          : 'bg-surgical-50 text-obsidian/70 border border-surgical-200'
                       }`}>
-                        {status.inbound.forwardingConfig.forwardingType === 'total_ai' ? 'Full AI' : 'Safety Net'}
+                        {status.inbound.forwardingConfig.forwardingType === 'total_ai' ? 'AI Handles All Calls' : 'AI + Human Backup'}
                       </span>
                     ) : null}
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
-                      Inbound
-                    </span>
-                    <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
+                    <span className="text-xs bg-surgical-100 text-surgical-600 px-2 py-1 rounded-full font-medium">
                       Active
                     </span>
                   </div>
                 </div>
                 <p className="text-xs text-obsidian/60">
-                  {status.inbound.countryCode} • Managed by Voxanne
+                  {status.inbound.countryCode} • Hosted by CallWaiting AI
                 </p>
+              </div>
+
+              {/* What happens next */}
+              <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-3">
+                <p className="text-xs font-medium text-obsidian mb-1">✓ Number active and ready</p>
+                <p className="text-xs text-obsidian/60">Forward your office calls to this number using the carrier code below</p>
               </div>
 
               <CarrierForwardingInstructions
                 managedNumber={status.inbound.managedNumber!}
                 savedConfig={status.inbound.forwardingConfig}
               />
+
+              {/* Agent Linking */}
+              {agents.inbound && (
+                <div className="bg-white border border-surgical-200 rounded-lg p-3">
+                  <p className="text-xs text-obsidian/60 mb-2 font-medium">Linked Agent</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-surgical-600" />
+                      <p className="text-sm font-medium text-obsidian">{agents.inbound.name}</p>
+                    </div>
+                    <button
+                      onClick={() => handleLinkAgent('inbound')}
+                      disabled={assigningAgent === 'inbound'}
+                      className="text-xs px-3 py-1.5 border border-surgical-200 text-surgical-600 rounded-lg hover:bg-surgical-50 transition-colors font-medium disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {assigningAgent === 'inbound' ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" />Syncing...</>
+                      ) : (
+                        'Re-sync Agent'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={() => setConfirmDeleteManaged(true)}
@@ -463,7 +533,7 @@ export default function PhoneSettingsPage() {
                 Buy Inbound Number
               </button>
               <p className="text-xs text-obsidian/60 mt-3">
-                £1.50/month + usage-based pricing
+                {PHONE_NUMBER_PRICING.costDisplay} {PHONE_NUMBER_PRICING.costType} + usage-based pricing
               </p>
             </div>
           )}
@@ -474,20 +544,15 @@ export default function PhoneSettingsPage() {
           {/* PROMINENT OUTBOUND HEADER */}
           <div className="mb-6 pb-4 border-b border-surgical-200">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <Phone className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 rounded-lg bg-surgical-100 flex items-center justify-center">
+                <Phone className="w-5 h-5 text-surgical-600" />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-obsidian">
-                    Outbound Calls
-                  </h2>
-                  <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold uppercase tracking-wide">
-                    Make
-                  </span>
-                </div>
+                <h2 className="text-lg font-semibold text-obsidian">
+                  Outbound Calls
+                </h2>
                 <p className="text-sm text-obsidian/60 mt-1">
-                  Set what customers SEE when AI calls them
+                  Set what customers see when AI calls them
                 </p>
               </div>
             </div>
@@ -495,32 +560,56 @@ export default function PhoneSettingsPage() {
 
           {/* Managed Outbound Number */}
           {status?.outbound.hasManagedOutboundNumber ? (
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-base font-semibold text-obsidian">Outbound Number</h3>
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="mb-6 space-y-3">
+              <h3 className="text-base font-semibold text-obsidian">Outbound Number</h3>
+              <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-2xl font-mono font-bold text-blue-700">
+                  <p className="text-2xl font-mono font-bold text-surgical-600">
                     {status.outbound.managedOutboundNumber}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">
-                      Outbound
-                    </span>
-                    <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">
-                      Active
-                    </span>
+                  <span className="text-xs bg-surgical-100 text-surgical-600 px-2 py-1 rounded-full font-medium">
+                    Active
+                  </span>
+                </div>
+                <p className="text-xs text-obsidian/60">Hosted by CallWaiting AI</p>
+              </div>
+
+              {/* Agent Linking */}
+              {agents.outbound && (
+                <div className="bg-white border border-surgical-200 rounded-lg p-3">
+                  <p className="text-xs text-obsidian/60 mb-2 font-medium">Linked Agent</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-surgical-600" />
+                      <p className="text-sm font-medium text-obsidian">{agents.outbound.name}</p>
+                      {agents.outbound.vapiPhoneNumberId === status.outbound.managedOutboundVapiPhoneId ? (
+                        <span className="text-xs bg-surgical-100 text-surgical-600 px-2 py-0.5 rounded-full">Active</span>
+                      ) : (
+                        <span className="text-xs bg-obsidian/10 text-obsidian/50 px-2 py-0.5 rounded-full">Not synced</span>
+                      )}
+                    </div>
+                    {agents.outbound.vapiPhoneNumberId !== status.outbound.managedOutboundVapiPhoneId && (
+                      <button
+                        onClick={() => handleLinkAgent('outbound')}
+                        disabled={assigningAgent === 'outbound'}
+                        className="text-xs px-3 py-1.5 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {assigningAgent === 'outbound' ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" />Syncing...</>
+                        ) : (
+                          'Sync Agent'
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
-                <p className="text-xs text-blue-700">Managed by Voxanne</p>
-              </div>
+              )}
             </div>
           ) : (
             <div className="mb-6">
               <button
                 onClick={() => { setBuyModalDirection('outbound'); setShowBuyNumberModal(true); }}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center justify-center gap-2"
+                className="w-full px-6 py-3 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 transition-colors font-medium inline-flex items-center justify-center gap-2"
               >
                 <ShoppingCart className="w-4 h-4" />
                 Buy Outbound Number
@@ -540,25 +629,25 @@ export default function PhoneSettingsPage() {
           {status?.outbound.hasVerifiedNumber && verificationStep !== 'success' ? (
             // Active verified number
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-surgical-50 border border-surgical-200 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <p className="text-2xl font-mono font-bold text-green-700">
+                  <CheckCircle className="w-5 h-5 text-surgical-600" />
+                  <p className="text-2xl font-mono font-bold text-surgical-700">
                     {status.outbound.verifiedNumber}
                   </p>
                 </div>
-                <p className="text-xs text-green-700">
+                <p className="text-xs text-obsidian/60">
                   Verified on {new Date(status.outbound.verifiedAt!).toLocaleDateString()}
                 </p>
               </div>
 
-              <div className={`border rounded-lg p-4 ${status.outbound.vapiLinked ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+              <div className={`border rounded-lg p-4 ${status.outbound.vapiLinked ? 'bg-surgical-50 border-surgical-200' : 'bg-surgical-50 border-surgical-200'}`}>
                 {status.outbound.vapiLinked ? (
-                  <p className="text-sm text-green-800">
+                  <p className="text-sm text-obsidian">
                     <strong>Ready for outbound calls.</strong> When your AI calls customers, they see <strong>{status.outbound.verifiedNumber}</strong>.
                   </p>
                 ) : (
-                  <p className="text-sm text-yellow-800">
+                  <p className="text-sm text-obsidian/70">
                     <strong>Linking to call system...</strong> This usually completes within a few seconds. Refresh the page if this persists.
                   </p>
                 )}
@@ -606,18 +695,18 @@ export default function PhoneSettingsPage() {
                         placeholder="+1234567890"
                         className={`w-full px-4 py-2 pr-12 border rounded-lg focus:ring-2 focus:ring-surgical-500 outline-none font-mono transition-colors ${
                           isValidPhoneFormat
-                            ? 'border-green-500 focus:border-green-500'
+                            ? 'border-surgical-500 focus:border-surgical-500'
                             : 'border-surgical-200 focus:border-surgical-500'
                         }`}
                       />
                       {isValidPhoneFormat && detectedCountry && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <CheckCircle className="w-5 h-5 text-surgical-600" />
                         </div>
                       )}
                     </div>
                     {isValidPhoneFormat && detectedCountry ? (
-                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-surgical-600 mt-1 flex items-center gap-1">
                         ✓ Valid {getCountryName(detectedCountry)} number detected
                       </p>
                     ) : (
@@ -654,22 +743,22 @@ export default function PhoneSettingsPage() {
               {verificationStep === 'verify' && (
                 <>
                   {/* Status header — different message if recovered from navigation */}
-                  <div className={`border rounded-lg p-3 ${verificationCode ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                  <div className="border border-surgical-200 rounded-lg p-3 bg-surgical-50">
                     {verificationCode ? (
                       <>
-                        <p className="text-sm font-medium text-green-900 mb-1">
+                        <p className="text-sm font-medium text-obsidian mb-1">
                           Verification call sent!
                         </p>
-                        <p className="text-xs text-green-700">
+                        <p className="text-xs text-obsidian/60">
                           Calling: {phoneNumber}
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-medium text-amber-900 mb-1">
+                        <p className="text-sm font-medium text-obsidian mb-1">
                           Verification in progress for {phoneNumber}
                         </p>
-                        <p className="text-xs text-amber-700">
+                        <p className="text-xs text-obsidian/60">
                           If you already entered the code on your phone, click "Verify & Complete Setup" below.
                           Otherwise, click "Resend" to get a new verification call.
                         </p>
@@ -679,16 +768,16 @@ export default function PhoneSettingsPage() {
 
                   {/* VALIDATION CODE DISPLAY - CRITICAL */}
                   {verificationCode && (
-                    <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-6 text-center">
-                      <p className="text-sm font-medium text-blue-900 mb-3">
+                    <div className="bg-surgical-50 border-2 border-surgical-500 rounded-lg p-6 text-center">
+                      <p className="text-sm font-medium text-obsidian mb-3">
                         🔑 Your Verification Code
                       </p>
-                      <div className="bg-white border-2 border-blue-400 rounded-lg p-4 mb-3">
-                        <p className="text-4xl font-bold text-blue-600 tracking-widest font-mono">
+                      <div className="bg-white border-2 border-surgical-400 rounded-lg p-4 mb-3">
+                        <p className="text-4xl font-bold text-surgical-600 tracking-widest font-mono">
                           {verificationCode}
                         </p>
                       </div>
-                      <p className="text-xs text-blue-700">
+                      <p className="text-xs text-obsidian/60">
                         Enter this code on your phone keypad when Twilio calls
                       </p>
                     </div>
@@ -775,13 +864,13 @@ export default function PhoneSettingsPage() {
                 <div className="space-y-4">
                   {/* Success header */}
                   <div className="text-center py-6">
-                    <div className="w-16 h-16 rounded-full bg-green-50 mx-auto flex items-center justify-center mb-3 border border-green-200">
-                      <CheckCircle className="w-8 h-8 text-green-600" />
+                    <div className="w-16 h-16 rounded-full bg-surgical-50 mx-auto flex items-center justify-center mb-3 border border-surgical-200">
+                      <CheckCircle className="w-8 h-8 text-surgical-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-obsidian mb-2">
                       🎉 Verification Complete!
                     </h3>
-                    <p className="text-sm text-green-700 font-medium">
+                    <p className="text-sm text-obsidian font-medium">
                       Your caller ID is now set to: {phoneNumber}
                     </p>
                   </div>
@@ -792,15 +881,15 @@ export default function PhoneSettingsPage() {
 
                     <div className="space-y-2 text-xs text-obsidian/70">
                       <div className="flex gap-2">
-                        <span className="text-green-600">✓</span>
+                        <span className="text-surgical-600">✓</span>
                         <p>When your AI calls customers, they see YOUR business number</p>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-green-600">✓</span>
+                        <span className="text-surgical-600">✓</span>
                         <p>No more "Unknown Number" or random phone numbers</p>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-green-600">✓</span>
+                        <span className="text-surgical-600">✓</span>
                         <p>Higher answer rates = more conversations</p>
                       </div>
                     </div>
@@ -830,10 +919,10 @@ export default function PhoneSettingsPage() {
         >
           <div className="text-left">
             <h3 className="text-sm font-semibold text-obsidian">
-              Advanced: Bring Your Own Twilio Account
+              Advanced: Connect Your Own Phone Provider
             </h3>
             <p className="text-xs text-obsidian/60 mt-0.5">
-              For power users who want to use their own Twilio credentials
+              Already have a Twilio account? Connect it directly
             </p>
           </div>
           {showAdvanced ? (
@@ -852,7 +941,7 @@ export default function PhoneSettingsPage() {
               href="/dashboard/inbound-config"
               className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-surgical-200 text-surgical-600 rounded-lg hover:bg-surgical-50 transition-colors font-medium"
             >
-              Configure BYOC Telephony
+              Configure Your Own Provider
               <ExternalLink className="w-4 h-4" />
             </a>
           </div>

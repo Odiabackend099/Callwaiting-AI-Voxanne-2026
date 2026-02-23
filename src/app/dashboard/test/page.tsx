@@ -12,7 +12,7 @@ import { useVoiceAgentContext } from '@/contexts/VoiceAgentContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 // E.164 phone validation
 const E164_REGEX = /^\+[1-9]\d{1,14}$/;

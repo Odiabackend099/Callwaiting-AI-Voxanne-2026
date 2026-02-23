@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight, ChevronDown, Info } from 'lucide-react';
+import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight, ChevronDown, Info, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
@@ -384,8 +384,8 @@ export default function AgentConfigPage() {
                     voiceProvider: inboundConfig.voiceProvider,
                     language: inboundConfig.language,
                     maxDurationSeconds: inboundConfig.maxDuration,
-                    ...(inboundConfig.voiceStability != null ? { voiceStability: inboundConfig.voiceStability } : {}),
-                    ...(inboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: inboundConfig.voiceSimilarityBoost } : {})
+                    voiceStability: inboundConfig.voiceStability ?? null,
+                    voiceSimilarityBoost: inboundConfig.voiceSimilarityBoost ?? null,
                 };
             }
 
@@ -407,8 +407,8 @@ export default function AgentConfigPage() {
                     language: outboundConfig.language,
                     maxDurationSeconds: outboundConfig.maxDuration,
                     vapiPhoneNumberId: selectedOutboundNumberId || null,
-                    ...(outboundConfig.voiceStability != null ? { voiceStability: outboundConfig.voiceStability } : {}),
-                    ...(outboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: outboundConfig.voiceSimilarityBoost } : {})
+                    voiceStability: outboundConfig.voiceStability ?? null,
+                    voiceSimilarityBoost: outboundConfig.voiceSimilarityBoost ?? null,
                 };
             }
 
@@ -492,8 +492,8 @@ export default function AgentConfigPage() {
                         voiceProvider: inboundConfig.voiceProvider,
                         language: inboundConfig.language,
                         maxDurationSeconds: inboundConfig.maxDuration,
-                        ...(inboundConfig.voiceStability != null ? { voiceStability: inboundConfig.voiceStability } : {}),
-                        ...(inboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: inboundConfig.voiceSimilarityBoost } : {})
+                        voiceStability: inboundConfig.voiceStability ?? null,
+                        voiceSimilarityBoost: inboundConfig.voiceSimilarityBoost ?? null,
                     }
                 };
                 const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
@@ -557,8 +557,8 @@ export default function AgentConfigPage() {
                             language: outboundConfig.language,
                             maxDurationSeconds: outboundConfig.maxDuration,
                             vapiPhoneNumberId: selectedOutboundNumberId || null,
-                            ...(outboundConfig.voiceStability != null ? { voiceStability: outboundConfig.voiceStability } : {}),
-                            ...(outboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: outboundConfig.voiceSimilarityBoost } : {})
+                            voiceStability: outboundConfig.voiceStability ?? null,
+                            voiceSimilarityBoost: outboundConfig.voiceSimilarityBoost ?? null,
                         }
                     };
                     const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
@@ -693,15 +693,6 @@ export default function AgentConfigPage() {
             previewAudioRef.current = null;
         }
 
-        // Short-circuit non-ElevenLabs voices with instant toast — no network call needed.
-        // Vapi does not expose a REST TTS endpoint for native voices.
-        if (provider !== 'elevenlabs') {
-            toastInfo(
-                `Voice preview is not available for ${provider} voices. Use the Test Call button to hear your agent with this voice.`
-            );
-            return; // Never set isPreviewing — VoiceSelector stays idle
-        }
-
         setIsPreviewing(true);
         setPreviewPhase('loading');
         setPreviewingVoiceId(voiceId);
@@ -711,9 +702,6 @@ export default function AgentConfigPage() {
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         try {
-            const previewText = (currentConfig.firstMessage?.trim() || 'Hello, thank you for calling. How can I assist you today?')
-                .substring(0, 200);
-
             const { data: sessionData } = await supabase.auth.getSession();
             const token = sessionData?.session?.access_token;
 
@@ -725,13 +713,7 @@ export default function AgentConfigPage() {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 credentials: 'include',
-                body: JSON.stringify({
-                    voiceId,
-                    provider,
-                    text: previewText,
-                    voiceStability: currentConfig.voiceStability ?? undefined,
-                    voiceSimilarityBoost: currentConfig.voiceSimilarityBoost ?? undefined,
-                }),
+                body: JSON.stringify({ voiceId, provider }),
                 signal: controller.signal,
             });
 
@@ -1078,111 +1060,54 @@ export default function AgentConfigPage() {
                             </div>
                         </div>
 
-                        {/* Status Card (Inbound Only) */}
+                        {/* Phone Number (read-only — manage in Phone Settings) */}
                         {activeTab === 'inbound' && (
-                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                                <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                    <Phone className="w-5 h-5 text-surgical-600" />
-                                    Phone Number
-                                </h3>
-                                <div className="space-y-4">
-                                    <div className="p-3 bg-surgical-50 rounded-lg border border-surgical-200">
-                                        <p className="text-xs font-medium text-obsidian/60 uppercase tracking-wider mb-1">Current Number</p>
-                                        <p className="text-lg font-mono text-obsidian">
+                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-obsidian mb-0.5 flex items-center gap-2">
+                                            <Phone className="w-4 h-4 text-surgical-600" />
+                                            Phone Number
+                                        </h3>
+                                        <p className="text-sm text-obsidian/70">
                                             {inboundStatus?.configured && inboundStatus.inboundNumber
-                                                ? inboundStatus.inboundNumber
-                                                : 'Not Assigned'}
+                                                ? <><span className="font-mono">{inboundStatus.inboundNumber}</span> · Active</>
+                                                : <span className="text-obsidian/40">No number assigned</span>}
                                         </p>
                                     </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-obsidian/60 mb-2">
-                                            Assign New Number
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={selectedNumberId}
-                                                onChange={(e) => setSelectedNumberId(e.target.value)}
-                                                disabled={phoneSettingsLoading}
-                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none disabled:opacity-60"
-                                            >
-                                                <option value="" disabled>
-                                                    {phoneSettingsLoading ? 'Loading...' : 'Select number...'}
-                                                </option>
-                                                {!phoneSettingsLoading && inboundNumbers.map((num) => {
-                                                    const dir = num.routingDirection || numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
-                                                    return (
-                                                        <option key={num.id} value={num.id}>
-                                                            {num.number} {num.name ? `(${num.name})` : ''}{dir ? ` [${dir.charAt(0).toUpperCase() + dir.slice(1)}]` : ''}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </select>
-                                            <button
-                                                onClick={handleAssignNumber}
-                                                disabled={assigningNumber || !selectedNumberId || phoneSettingsLoading}
-                                                className="px-3 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                            >
-                                                {assigningNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <a
+                                        href="/dashboard/phone-settings"
+                                        className="text-xs text-surgical-600 hover:text-surgical-700 font-medium flex items-center gap-1 shrink-0 ml-4"
+                                    >
+                                        Manage in Phone Settings
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
                                 </div>
                             </div>
                         )}
 
-                        {/* Caller ID Selection (Outbound Only) */}
+                        {/* Outbound Caller ID (read-only — manage in Phone Settings) */}
                         {activeTab === 'outbound' && (
-                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                                <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                    <Phone className="w-5 h-5 text-surgical-600" />
-                                    Outbound Caller ID
-                                </h3>
-                                <div className="space-y-4">
-                                    <div className="p-3 bg-surgical-50 rounded-lg border border-surgical-200">
-                                        <p className="text-xs font-medium text-obsidian/60 uppercase tracking-wider mb-1">Selected Number</p>
-                                        <p className="text-lg font-mono text-obsidian">
-                                            {selectedOutboundNumberId && vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number
-                                                ? vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number
-                                                : 'Not Selected'}
-                                        </p>
-                                    </div>
-
+                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-4">
+                                <div className="flex items-center justify-between">
                                     <div>
-                                        <label className="block text-sm font-medium text-obsidian/60 mb-2">
-                                            Choose Caller ID Number
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={selectedOutboundNumberId}
-                                                onChange={(e) => setSelectedOutboundNumberId(e.target.value)}
-                                                disabled={phoneSettingsLoading}
-                                                className="flex-1 px-3 py-2 rounded-lg bg-white border border-surgical-200 text-obsidian text-sm focus:ring-2 focus:ring-surgical-500 outline-none disabled:opacity-60"
-                                            >
-                                                <option value="" disabled>
-                                                    {phoneSettingsLoading ? 'Loading...' : 'Select number...'}
-                                                </option>
-                                                {!phoneSettingsLoading && outboundNumbers.map((num) => {
-                                                    const dir = num.routingDirection || numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
-                                                    return (
-                                                        <option key={num.id} value={num.id}>
-                                                            {num.number} {num.name ? `(${num.name})` : ''}{dir ? ` [${dir.charAt(0).toUpperCase() + dir.slice(1)}]` : ''}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </select>
-                                            <button
-                                                onClick={handleAssignOutboundNumber}
-                                                disabled={assigningOutboundNumber || !selectedOutboundNumberId || phoneSettingsLoading}
-                                                className="px-3 py-2 bg-surgical-600 text-white rounded-lg hover:bg-surgical-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                            >
-                                                {assigningOutboundNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                        <p className="text-xs text-obsidian/60 mt-2">
-                                            This number will be shown as Caller ID when calling leads.
+                                        <h3 className="text-sm font-semibold text-obsidian mb-0.5 flex items-center gap-2">
+                                            <Phone className="w-4 h-4 text-surgical-600" />
+                                            Outbound Caller ID
+                                        </h3>
+                                        <p className="text-sm text-obsidian/70">
+                                            {selectedOutboundNumberId && vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number
+                                                ? <><span className="font-mono">{vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number}</span> · Active</>
+                                                : <span className="text-obsidian/40">No number assigned</span>}
                                         </p>
                                     </div>
+                                    <a
+                                        href="/dashboard/phone-settings"
+                                        className="text-xs text-surgical-600 hover:text-surgical-700 font-medium flex items-center gap-1 shrink-0 ml-4"
+                                    >
+                                        Manage in Phone Settings
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
                                 </div>
                             </div>
                         )}

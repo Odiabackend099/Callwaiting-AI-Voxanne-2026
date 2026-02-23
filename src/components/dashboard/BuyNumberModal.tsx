@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Phone, Loader2, AlertCircle, Check, Search } from 'lucide-react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { PHONE_NUMBER_PRICING } from '@/lib/constants';
 
 interface BuyNumberModalProps {
   onClose: () => void;
@@ -558,7 +559,7 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode, defaultDirecti
                 <div className="text-center py-4">
                   <p className="text-sm text-obsidian/60 mb-2">You are about to purchase:</p>
                   <p className="text-2xl font-mono font-bold text-obsidian">{selectedNumber}</p>
-                  <p className="text-sm text-obsidian/50 mt-2">£1.50/month + usage</p>
+                  <p className="text-sm text-obsidian/50 mt-2">{PHONE_NUMBER_PRICING.costDisplay} {PHONE_NUMBER_PRICING.costType} + usage</p>
                 </div>
 
                 <div className="flex gap-3">
