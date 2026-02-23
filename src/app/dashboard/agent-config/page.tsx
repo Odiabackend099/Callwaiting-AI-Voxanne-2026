@@ -55,7 +55,7 @@ export default function AgentConfigPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading } = useAuth();
-    const { success } = useToast();
+    const { success, warning: toastWarning, info: toastInfo } = useToast();
 
     // Tab navigation with URL param support
     const tabParam = searchParams.get('agent');
@@ -77,9 +77,12 @@ export default function AgentConfigPage() {
     const [voices, setVoices] = useState<Voice[]>([]);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
 
-    // Voice preview state
+    // Voice preview state — parent is single source of truth
     const [isPreviewing, setIsPreviewing] = useState(false);
+    const [previewPhase, setPreviewPhase] = useState<'idle' | 'loading' | 'playing'>('idle');
+    const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+    const previewAbortRef = useRef<AbortController | null>(null);
 
     // Vapi Phone Number State
     const [vapiNumbers, setVapiNumbers] = useState<VapiNumber[]>([]);
@@ -282,6 +285,12 @@ export default function AgentConfigPage() {
             if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
             }
+            // Clean up voice preview on unmount
+            if (previewAbortRef.current) previewAbortRef.current.abort();
+            if (previewAudioRef.current) {
+                previewAudioRef.current.pause();
+                previewAudioRef.current = null;
+            }
         };
     }, []);
 
@@ -316,6 +325,18 @@ export default function AgentConfigPage() {
         if (activeTab === 'outbound') return outboundChanged;
         return false;
     };
+
+    // Warn user before losing unsaved changes on browser close/refresh
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (inboundChanged || outboundChanged) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [inboundChanged, outboundChanged]);
 
 
     const validateAgentConfig = (config: AgentConfig, agentType: 'inbound' | 'outbound'): string | null => {
@@ -613,6 +634,16 @@ export default function AgentConfigPage() {
         const template = templates.find(t => t.id === templateId);
         if (!template) return;
 
+        // Confirm before overwriting a custom (non-template) prompt
+        const currentPrompt = type === 'inbound' ? inboundConfig.systemPrompt : outboundConfig.systemPrompt;
+        if (currentPrompt && currentPrompt.trim().length > 0) {
+            const allTemplates = [...PROMPT_TEMPLATES, ...OUTBOUND_PROMPT_TEMPLATES];
+            const isFromTemplate = allTemplates.some(t => t.systemPrompt === currentPrompt);
+            if (!isFromTemplate && !window.confirm(
+                `Selecting "${template.name}" will replace your current system prompt and first message. Continue?`
+            )) return;
+        }
+
         if (type === 'inbound') {
             setInboundConfig({
                 ...inboundConfig,
@@ -630,22 +661,59 @@ export default function AgentConfigPage() {
         }
     };
 
+    // Reset all preview state to idle
+    const resetPreviewState = () => {
+        setIsPreviewing(false);
+        setPreviewPhase('idle');
+        setPreviewingVoiceId(null);
+    };
+
+    const handleStopPreview = () => {
+        if (previewAudioRef.current) {
+            previewAudioRef.current.pause();
+            previewAudioRef.current = null;
+        }
+        if (previewAbortRef.current) {
+            previewAbortRef.current.abort();
+        }
+        resetPreviewState();
+    };
+
     const handlePreviewVoice = async (voiceId: string, provider: string) => {
         if (isPreviewing) return; // prevent double-clicks
 
-        // Stop any existing preview
+        // Abort any in-flight preview request
+        if (previewAbortRef.current) {
+            previewAbortRef.current.abort();
+        }
+
+        // Stop any existing preview audio
         if (previewAudioRef.current) {
             previewAudioRef.current.pause();
             previewAudioRef.current = null;
         }
 
+        // Short-circuit non-ElevenLabs voices with instant toast — no network call needed.
+        // Vapi does not expose a REST TTS endpoint for native voices.
+        if (provider !== 'elevenlabs') {
+            toastInfo(
+                `Voice preview is not available for ${provider} voices. Use the Test Call button to hear your agent with this voice.`
+            );
+            return; // Never set isPreviewing — VoiceSelector stays idle
+        }
+
         setIsPreviewing(true);
+        setPreviewPhase('loading');
+        setPreviewingVoiceId(voiceId);
+
+        const controller = new AbortController();
+        previewAbortRef.current = controller;
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         try {
             const previewText = (currentConfig.firstMessage?.trim() || 'Hello, thank you for calling. How can I assist you today?')
                 .substring(0, 200);
 
-            // Need a raw fetch to handle both JSON and audio/mpeg responses
             const { data: sessionData } = await supabase.auth.getSession();
             const token = sessionData?.session?.access_token;
 
@@ -657,24 +725,35 @@ export default function AgentConfigPage() {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 credentials: 'include',
-                body: JSON.stringify({ voiceId, provider, text: previewText }),
+                body: JSON.stringify({
+                    voiceId,
+                    provider,
+                    text: previewText,
+                    voiceStability: currentConfig.voiceStability ?? undefined,
+                    voiceSimilarityBoost: currentConfig.voiceSimilarityBoost ?? undefined,
+                }),
+                signal: controller.signal,
             });
+
+            clearTimeout(timeoutId);
 
             const contentType = res.headers.get('content-type') || '';
 
             if (contentType.includes('application/json')) {
                 const data = await res.json();
-                const message = data.message || 'Voice preview is not available for this provider. Use Test Call.';
-                setError(message);
-                setTimeout(() => setError(null), 5000);
-                setIsPreviewing(false);
+                if (data.previewUnavailable) {
+                    toastWarning(data.message || 'Voice preview not available. Use Test Call instead.');
+                } else {
+                    setError(data.error || 'Voice preview failed.');
+                    setTimeout(() => setError(null), 5000);
+                }
+                resetPreviewState();
                 return;
             }
 
             if (!res.ok) {
-                setError('Voice preview failed. Please try Test Call instead.');
-                setTimeout(() => setError(null), 5000);
-                setIsPreviewing(false);
+                toastWarning('Voice preview failed. Please try Test Call instead.');
+                resetPreviewState();
                 return;
             }
 
@@ -685,20 +764,32 @@ export default function AgentConfigPage() {
             const audio = new Audio(url);
             previewAudioRef.current = audio;
             audio.onended = () => {
-                setIsPreviewing(false);
+                resetPreviewState();
                 URL.revokeObjectURL(url);
                 previewAudioRef.current = null;
             };
             audio.onerror = () => {
-                setIsPreviewing(false);
+                resetPreviewState();
                 URL.revokeObjectURL(url);
                 previewAudioRef.current = null;
             };
-            await audio.play();
+            try {
+                await audio.play();
+                setPreviewPhase('playing');
+            } catch (playError: any) {
+                toastWarning('Browser blocked audio playback. Click the page first, then try again.');
+                resetPreviewState();
+                URL.revokeObjectURL(url);
+                previewAudioRef.current = null;
+            }
         } catch (err: any) {
-            setError(err?.message || 'Voice preview failed. Try Test Call instead.');
-            setTimeout(() => setError(null), 5000);
-            setIsPreviewing(false);
+            clearTimeout(timeoutId);
+            if (err.name === 'AbortError') {
+                resetPreviewState();
+                return;
+            }
+            toastWarning(err?.message || 'Voice preview failed. Try Test Call instead.');
+            resetPreviewState();
         }
     };
 
@@ -866,6 +957,7 @@ export default function AgentConfigPage() {
                     <div className="flex items-center gap-1 mt-6 border-b border-surgical-200">
                         <button
                             onClick={() => {
+                                handleStopPreview();
                                 setActiveTab('inbound');
                                 setAdvancedVoiceOpen(false);
                                 router.push('/dashboard/agent-config?agent=inbound');
@@ -880,6 +972,7 @@ export default function AgentConfigPage() {
                         </button>
                         <button
                             onClick={() => {
+                                handleStopPreview();
                                 setActiveTab('outbound');
                                 setAdvancedVoiceOpen(false);
                                 router.push('/dashboard/agent-config?agent=outbound');
@@ -911,7 +1004,54 @@ export default function AgentConfigPage() {
                 )}
 
 
-                <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${isLoading ? 'hidden' : ''}`}>
+                {/* AI Persona — full-width above grid so users pick persona first */}
+                {!isLoading && (
+                <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6 mb-8">
+                    <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
+                            <LayoutTemplate className="w-5 h-5 text-surgical-600" />
+                            AI Persona
+                        </h3>
+                        <span className="text-xs text-obsidian/40 font-medium">Choose your agent&apos;s personality</span>
+                    </div>
+                    <p className="text-xs text-obsidian/50 mb-4">Selecting a persona pre-fills your system prompt and first message with a proven template.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {templates.map((template) => {
+                            const activeTemplateId = activeTab === 'inbound' ? selectedInboundTemplateId : selectedOutboundTemplateId;
+                            const isSelected = activeTemplateId === template.id;
+                            return (
+                                <button
+                                    key={template.id}
+                                    onClick={() => applyTemplate(template.id, activeTab)}
+                                    className={`text-left p-4 rounded-xl border-2 transition-all group relative ${
+                                        isSelected
+                                            ? 'border-surgical-600 bg-surgical-50 shadow-sm'
+                                            : 'border-surgical-200 hover:border-surgical-400 hover:bg-surgical-50/50'
+                                    }`}
+                                >
+                                    {isSelected && (
+                                        <span className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-surgical-600 flex items-center justify-center">
+                                            <Check className="w-3 h-3 text-white" />
+                                        </span>
+                                    )}
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <span className="text-2xl leading-none">{template.icon}</span>
+                                        <div>
+                                            <div className="font-semibold text-obsidian text-sm leading-tight">{template.name}</div>
+                                            <div className="text-xs text-surgical-600 font-medium">{template.persona}</div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-obsidian/60 leading-relaxed">
+                                        {template.tagline}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+                )}
+
+                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${isLoading ? 'hidden' : ''}`}>
                     {/* LEFT COLUMN - Configuration */}
                     <div className="lg:col-span-1 space-y-6">
                         {/* Agent Identity Card */}
@@ -1066,6 +1206,9 @@ export default function AgentConfigPage() {
                                         });
                                     }}
                                     onPreviewVoice={handlePreviewVoice}
+                                    onStopPreview={handleStopPreview}
+                                    previewingVoiceId={previewingVoiceId}
+                                    previewPhase={previewPhase}
                                 />
 
                                 <div>
@@ -1204,87 +1347,42 @@ export default function AgentConfigPage() {
                                     </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* Limits */}
-                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                <Clock className="w-5 h-5 text-surgical-600" />
-                                Limits
-                            </h3>
-                            <div>
-                                <label className="block text-sm font-medium text-obsidian/60 mb-2">
-                                    Max Duration (Seconds)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={currentConfig.maxDuration}
-                                    onChange={(e) => setConfig({ ...currentConfig, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
-                                    min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                    max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                    className="w-full px-3 py-2.5 rounded-lg bg-white border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none"
-                                />
-                                <p className="text-xs text-obsidian/60 mt-1">
-                                    Auto-end call after this time.
-                                </p>
+                                {/* Call Limits — merged into Voice Settings card */}
+                                <div className="pt-4 mt-4 border-t border-surgical-100">
+                                    <label className="block text-sm font-medium text-obsidian/60 mb-2 flex items-center gap-1.5">
+                                        <Clock className="w-4 h-4" />
+                                        Max Duration (Seconds)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={currentConfig.maxDuration}
+                                        onChange={(e) => setConfig({ ...currentConfig, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
+                                        min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
+                                        max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
+                                        className="w-full px-3 py-2.5 rounded-lg bg-white border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none"
+                                    />
+                                    <p className="text-xs text-obsidian/60 mt-1">
+                                        Auto-end call after this time.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* RIGHT COLUMN - Intelligence */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Persona Cards */}
-                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <div className="flex items-center justify-between mb-1">
-                                <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
-                                    <LayoutTemplate className="w-5 h-5 text-surgical-600" />
-                                    AI Persona
-                                </h3>
-                                <span className="text-xs text-obsidian/40 font-medium">Choose your agent's personality</span>
-                            </div>
-                            <p className="text-xs text-obsidian/50 mb-4">Selecting a persona pre-fills your system prompt and first message with a proven template.</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {templates.map((template) => {
-                                    const activeTemplateId = activeTab === 'inbound' ? selectedInboundTemplateId : selectedOutboundTemplateId;
-                                    const isSelected = activeTemplateId === template.id;
-                                    return (
-                                        <button
-                                            key={template.id}
-                                            onClick={() => applyTemplate(template.id, activeTab)}
-                                            className={`text-left p-4 rounded-xl border-2 transition-all group relative ${
-                                                isSelected
-                                                    ? 'border-surgical-600 bg-surgical-50 shadow-sm'
-                                                    : 'border-surgical-200 hover:border-surgical-400 hover:bg-surgical-50/50'
-                                            }`}
-                                        >
-                                            {isSelected && (
-                                                <span className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-surgical-600 flex items-center justify-center">
-                                                    <Check className="w-3 h-3 text-white" />
-                                                </span>
-                                            )}
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="text-2xl leading-none">{template.icon}</span>
-                                                <div>
-                                                    <div className="font-semibold text-obsidian text-sm leading-tight">{template.name}</div>
-                                                    <div className="text-xs text-surgical-600 font-medium">{template.persona}</div>
-                                                </div>
-                                            </div>
-                                            <p className="text-xs text-obsidian/60 leading-relaxed">
-                                                {template.tagline}
-                                            </p>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
                         {/* System Prompt */}
                         <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
                                     <Bot className="w-5 h-5 text-surgical-600" />
                                     System Prompt
+                                    <span
+                                        title="The instructions that define your AI agent's personality and behavior. Never spoken aloud — it's the agent's internal operating manual."
+                                        className="text-obsidian/40 hover:text-obsidian/60 cursor-help"
+                                    >
+                                        <Info className="w-4 h-4" />
+                                    </span>
                                 </h3>
                                 <span className="text-xs px-2 py-1 rounded-full bg-surgical-50 text-obsidian/60 font-medium">
                                     Core Personality
@@ -1297,7 +1395,7 @@ export default function AgentConfigPage() {
                                 value={currentConfig.systemPrompt}
                                 onChange={(e) => setConfig({ ...currentConfig, systemPrompt: e.target.value })}
                                 placeholder="You are a helpful AI assistant..."
-                                className="w-full h-96 px-4 py-3 rounded-xl bg-surgical-50 border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                                className="w-full h-64 min-h-[8rem] px-4 py-3 rounded-xl bg-surgical-50 border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none resize-y font-mono text-sm leading-relaxed"
                             />
                         </div>
 
@@ -1306,6 +1404,9 @@ export default function AgentConfigPage() {
                             <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
                                 <MessageSquare className="w-5 h-5 text-surgical-600" />
                                 First Message
+                                <span title="The first sentence your AI agent speaks when the call connects. Keep it short and welcoming." className="text-obsidian/40 hover:text-obsidian/60 cursor-help">
+                                    <Info className="w-4 h-4" />
+                                </span>
                             </h3>
                             <p className="text-sm text-obsidian/60 mb-4">
                                 The very first thing your agent says when the call connects.

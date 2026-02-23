@@ -1290,10 +1290,12 @@ router.post('/agent/voice-preview', voicePreviewLimiter, requireAuthOrDev, async
       return;
     }
 
-    const { voiceId, provider, text } = req.body as {
+    const { voiceId, provider, text, voiceStability, voiceSimilarityBoost } = req.body as {
       voiceId: string;
       provider: string;
       text: string;
+      voiceStability?: number;
+      voiceSimilarityBoost?: number;
     };
 
     if (!voiceId || !provider) {
@@ -1335,6 +1337,8 @@ router.post('/agent/voice-preview', voicePreviewLimiter, requireAuthOrDev, async
     const audio = await elevenLabsClient.generateSpeech({
       text: previewText,
       voiceId,
+      ...(voiceStability != null ? { stability: voiceStability } : {}),
+      ...(voiceSimilarityBoost != null ? { similarityBoost: voiceSimilarityBoost } : {}),
     });
 
     // Stream audio buffer back as MP3

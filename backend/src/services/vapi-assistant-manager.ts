@@ -45,6 +45,8 @@ export interface AssistantConfig {
   modelName?: string;
   language?: string;
   maxDurationSeconds?: number;
+  voiceStability?: number;
+  voiceSimilarityBoost?: number;
   serverUrl?: string;
   serverMessages?: any[];
   transcriber?: any;
@@ -292,6 +294,10 @@ export class VapiAssistantManager {
             voice: {
               provider: toVapiProvider(voiceConfig.provider),
               voiceId: voiceConfig.voiceId,
+              ...(toVapiProvider(voiceConfig.provider) === '11labs' && config.voiceStability != null
+                ? { stability: config.voiceStability } : {}),
+              ...(toVapiProvider(voiceConfig.provider) === '11labs' && config.voiceSimilarityBoost != null
+                ? { similarityBoost: config.voiceSimilarityBoost } : {}),
             },
             firstMessage: config.firstMessage || 'Hello! How can I help you today?',
             maxDurationSeconds: config.maxDurationSeconds || 600,
