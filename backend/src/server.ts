@@ -185,6 +185,8 @@ app.use(cors({
   origin: (origin, callback) => {
     // Default allowed origins (always include these)
     const defaultOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
       'http://localhost:5001',
       'http://localhost:5002',
       'https://voxanne.ai',
