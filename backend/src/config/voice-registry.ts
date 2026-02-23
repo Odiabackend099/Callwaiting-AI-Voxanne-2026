@@ -498,3 +498,18 @@ const INTERNAL_TO_VAPI_PROVIDER: Record<string, string> = {
 export function toVapiProvider(internalProvider: string): string {
   return INTERNAL_TO_VAPI_PROVIDER[internalProvider] || internalProvider;
 }
+
+/**
+ * Complete list of valid internal voice provider names.
+ * Use this as the single source of truth when validating provider input — avoids
+ * hardcoding provider names in multiple routes.
+ */
+export const VALID_VOICE_PROVIDERS: readonly string[] = [
+  'vapi',
+  'elevenlabs',
+  'openai',
+  'google',
+  'azure',
+  'playht',
+  'rime',
+];

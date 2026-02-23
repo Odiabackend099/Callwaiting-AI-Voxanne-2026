@@ -2,6 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Cross-browser range slider (used in Advanced Voice Settings) ─────────
+   surgical-600 = #1D4ED8  |  surgical-100 = #E0F2FE  |  surgical-700 = #1e40af
+   accent-color alone is enough for modern browsers (Chrome 93+, Firefox 92+,
+   Safari 15.4+), but the track and thumb cannot be styled with accent-color,
+   so we style them explicitly here for pixel-perfect consistency.
+   ─────────────────────────────────────────────────────────────────────── */
+.voice-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: #E0F2FE;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Webkit (Chrome, Safari, Edge) */
+.voice-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #E0F2FE;
+}
+.voice-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1D4ED8;
+  cursor: pointer;
+  margin-top: -6px;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.voice-slider::-webkit-slider-thumb:hover {
+  background: #1e40af;
+  transform: scale(1.15);
+}
+.voice-slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #1D4ED8;
+  outline-offset: 2px;
+}
+
+/* Firefox */
+.voice-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #E0F2FE;
+  border: none;
+}
+.voice-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1D4ED8;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.voice-slider::-moz-range-thumb:hover {
+  background: #1e40af;
+  transform: scale(1.15);
+}
+
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;

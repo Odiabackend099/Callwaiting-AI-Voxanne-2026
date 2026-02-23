@@ -123,34 +123,42 @@ export function OrgErrorBoundary({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <h1 className="text-2xl font-semibold text-obsidian mb-3 tracking-tight">Organization Not Found</h1>
+          <h1 className="text-2xl font-semibold text-obsidian mb-3 tracking-tight">Account Setup Incomplete</h1>
 
-          {orgError && (
-            <p className="text-sm text-red-600 mb-6 leading-relaxed tracking-tight">
-              {orgError}
+          {!orgId ? (
+            <p className="text-sm text-obsidian/70 mb-2 leading-relaxed tracking-tight">
+              Your account exists but has not been linked to an organization yet. This is a provisioning issue — signing out will not fix it.
             </p>
+          ) : (
+            orgError && (
+              <p className="text-sm text-obsidian/70 mb-2 leading-relaxed tracking-tight">
+                {orgError}
+              </p>
+            )
           )}
 
-          {!orgId && (
-            <p className="text-sm text-red-600 mb-6 leading-relaxed tracking-tight">
-              Your account does not have an organization assigned. Please contact your administrator.
-            </p>
-          )}
+          <p className="text-sm text-obsidian/50 mb-6 leading-relaxed tracking-tight">
+            Contact your administrator and ask them to run{' '}
+            <code className="bg-surgical-50 border border-surgical-100 px-1.5 py-0.5 rounded text-xs font-mono text-surgical-700">
+              npm run verify:demo
+            </code>{' '}
+            on the backend to diagnose and repair your account.
+          </p>
 
           <div className="space-y-3">
             <button
-              onClick={() => signOut()}
-              className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-all shadow-sm tracking-tight"
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-3 bg-surgical-600 hover:bg-surgical-700 text-white font-medium rounded-xl transition-all shadow-sm tracking-tight"
             >
-              Sign Out & Try Again
+              Retry
             </button>
 
-            <a
-              href="/"
-              className="block w-full px-4 py-3 bg-white hover:bg-gray-50 border border-surgical-200 text-obsidian font-medium rounded-xl transition-all tracking-tight"
+            <button
+              onClick={() => signOut()}
+              className="w-full px-4 py-3 bg-white hover:bg-gray-50 border border-surgical-200 text-obsidian/60 font-medium rounded-xl transition-all tracking-tight text-sm"
             >
-              Back to Home
-            </a>
+              Sign Out
+            </button>
           </div>
 
           <p className="text-xs text-obsidian/40 mt-6 tracking-tight">

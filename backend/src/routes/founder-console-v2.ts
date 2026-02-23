@@ -70,7 +70,7 @@ import { createLogger } from '../services/logger';
 import { wsBroadcast } from '../services/websocket';
 import { resolveBackendUrl } from '../utils/resolve-backend-url';
 import { requireAuth, requireAuthOrDev } from '../middleware/auth';
-import { agentConfigLimiter, callCreationLimiter } from '../middleware/rate-limit';
+import { agentConfigLimiter, callCreationLimiter, voicePreviewLimiter } from '../middleware/rate-limit';
 import { validateRequest } from '../middleware/validation';
 import { agentBehaviorSchema, agentConfigSchema, agentTestCallSchema, createCallSchema } from '../schemas/founder-console';
 import { sanitizeError, handleDatabaseError, sanitizeValidationError } from '../utils/error-sanitizer';
@@ -79,7 +79,7 @@ import { withTimeout } from '../utils/timeout-helper';
 import { validateE164Format } from '../utils/phone-validation';
 import { phoneNumbersRouter } from './phone-numbers';
 import { createWebVoiceSession, endWebVoiceSession } from '../services/web-voice-bridge';
-import { getVoiceById, isValidVoice, getActiveVoices, toVapiProvider } from '../config/voice-registry';
+import { getVoiceById, isValidVoice, getActiveVoices, toVapiProvider, VALID_VOICE_PROVIDERS } from '../config/voice-registry';
 import { config } from '../config/index';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
@@ -789,7 +789,7 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
   console.time(`${timerId}-db-fetch`);
   const { data: agents, error: agentError } = await supabase
     .from('agents')
-    .select('id, name, system_prompt, voice, voice_provider, language, first_message, max_call_duration, vapi_assistant_id')
+    .select('id, name, system_prompt, voice, voice_provider, language, first_message, max_call_duration, vapi_assistant_id, voice_stability, voice_similarity_boost')
     .eq('id', agentId);
   console.timeEnd(`${timerId}-db-fetch`);
 
@@ -816,9 +816,11 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
 
   const resolvedSystemPrompt = agent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig());
   const resolvedVoiceId = agent.voice || DEFAULT_VOICE;
-  // Use voice registry to get provider, fallback to vapi if not found
-  const voiceData = getVoiceById(resolvedVoiceId) || { provider: 'vapi' };
-  const resolvedVoiceProvider = toVapiProvider(voiceData.provider || agent.voice_provider || 'vapi');
+  // Use voice registry to get provider; for custom voices not in the registry,
+  // fall back to the DB-stored voice_provider before defaulting to 'vapi'.
+  // This ensures custom ElevenLabs voices (not in registry) still resolve to '11labs'.
+  const voiceData = getVoiceById(resolvedVoiceId);
+  const resolvedVoiceProvider = toVapiProvider(voiceData?.provider || agent.voice_provider || 'vapi');
   const resolvedLanguage = agent.language || VAPI_DEFAULTS.DEFAULT_LANGUAGE;
   const resolvedFirstMessage = agent.first_message || VAPI_DEFAULTS.DEFAULT_FIRST_MESSAGE;
   const resolvedMaxDurationSeconds = agent.max_call_duration || VAPI_DEFAULTS.DEFAULT_MAX_DURATION;
@@ -836,7 +838,14 @@ async function ensureAssistantSynced(agentId: string, vapiApiKey: string, import
     },
     voice: {
       provider: resolvedVoiceProvider,
-      voiceId: resolvedVoiceId
+      voiceId: resolvedVoiceId,
+      // ElevenLabs-only params: only sent when provider is 11labs and values are set
+      ...(resolvedVoiceProvider === '11labs' && agent.voice_stability != null
+        ? { stability: agent.voice_stability }
+        : {}),
+      ...(resolvedVoiceProvider === '11labs' && agent.voice_similarity_boost != null
+        ? { similarityBoost: agent.voice_similarity_boost }
+        : {})
     },
     transcriber: {
       provider: VAPI_DEFAULTS.TRANSCRIBER_PROVIDER,
@@ -1263,6 +1272,88 @@ router.get('/me', (req: Request, res: Response): void => {
   });
 });
 
+// ========== VOICE PREVIEW ==========
+
+/**
+ * POST /api/founder-console/agent/voice-preview
+ * Generates a short TTS audio preview using the org's stored ElevenLabs credentials.
+ * Only works for ElevenLabs voices. For other providers, returns previewUnavailable.
+ *
+ * Request body: { voiceId: string, provider: string, text: string }
+ * Response: audio/mpeg binary (ElevenLabs) OR JSON { previewUnavailable, message } (others)
+ */
+router.post('/agent/voice-preview', voicePreviewLimiter, requireAuthOrDev, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { voiceId, provider, text } = req.body as {
+      voiceId: string;
+      provider: string;
+      text: string;
+    };
+
+    if (!voiceId || !provider) {
+      res.status(400).json({ error: 'voiceId and provider are required' });
+      return;
+    }
+
+    // Only ElevenLabs supports standalone TTS preview
+    if (provider !== 'elevenlabs') {
+      res.json({
+        previewUnavailable: true,
+        message: 'Voice preview is available for ElevenLabs voices only. Use the Test Call button to hear your agent live.'
+      });
+      return;
+    }
+
+    // Clamp text to 200 chars for cost control; provide fallback if empty
+    const previewText = (text || 'Hello, thank you for calling. How can I assist you today?')
+      .trim()
+      .substring(0, 200);
+
+    // Retrieve org's ElevenLabs API key from encrypted credentials
+    let elevenLabsApiKey: string;
+    try {
+      const creds = await IntegrationDecryptor.getElevenLabsCredentials(orgId);
+      elevenLabsApiKey = creds.apiKey;
+    } catch {
+      res.json({
+        previewUnavailable: true,
+        message: 'ElevenLabs is not connected for your account. Connect it in Integrations to enable voice previews.'
+      });
+      return;
+    }
+
+    // Generate speech using the ElevenLabsClient
+    const { createElevenLabsClient } = await import('../services/elevenlabs-client');
+    const elevenLabsClient = createElevenLabsClient(elevenLabsApiKey);
+
+    const audio = await elevenLabsClient.generateSpeech({
+      text: previewText,
+      voiceId,
+    });
+
+    // Stream audio buffer back as MP3
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Content-Length', String(audio.audioBuffer.length));
+    res.set('Cache-Control', 'no-store');
+    res.send(audio.audioBuffer);
+
+  } catch (error: any) {
+    logger.error('[VOICE_PREVIEW] Failed to generate voice preview', {
+      error: error.message,
+    });
+    // Return JSON error (don't crash with audio content-type headers)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate voice preview. Please try again.' });
+    }
+  }
+});
+
 // ========== AGENT CONFIG ==========
 
 /**
@@ -1306,7 +1397,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
       // Get the inbound agent (select only needed columns for performance)
       role === 'outbound' ? Promise.resolve({ data: null }) : supabase
         .from('agents')
-        .select('id, name, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, role')
+        .select('id, name, system_prompt, voice, voice_provider, language, max_call_duration, first_message, vapi_assistant_id, role, voice_stability, voice_similarity_boost')
         .eq('role', AGENT_ROLES.INBOUND)
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
@@ -1315,7 +1406,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
       // Get the outbound agent (select only needed columns for performance)
       role === 'inbound' ? Promise.resolve({ data: null }) : supabase
         .from('agents')
-        .select('id, name, system_prompt, voice, language, max_call_duration, first_message, vapi_assistant_id, vapi_phone_number_id, role')
+        .select('id, name, system_prompt, voice, voice_provider, language, max_call_duration, first_message, vapi_assistant_id, vapi_phone_number_id, role, voice_stability, voice_similarity_boost')
         .eq('role', AGENT_ROLES.OUTBOUND)
         .eq('org_id', orgId)
         .limit(1)
@@ -1341,10 +1432,13 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
         role: 'inbound',
         systemPrompt: inboundAgent.system_prompt,
         voice: inboundAgent.voice,
+        voiceProvider: inboundAgent.voice_provider || null,
         language: inboundAgent.language,
         maxCallDuration: inboundAgent.max_call_duration,
         firstMessage: inboundAgent.first_message,
-        vapiAssistantId: inboundAgent.vapi_assistant_id
+        vapiAssistantId: inboundAgent.vapi_assistant_id,
+        voiceStability: inboundAgent.voice_stability ?? null,
+        voiceSimilarityBoost: inboundAgent.voice_similarity_boost ?? null
       });
     }
 
@@ -1356,6 +1450,7 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
         system_prompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
         systemPrompt: outboundAgent.system_prompt || buildOutboundSystemPrompt(getDefaultPromptConfig()),
         voice: outboundAgent.voice || 'jennifer',
+        voiceProvider: outboundAgent.voice_provider || null,
         language: outboundAgent.language || 'en-GB',
         maxCallDuration: outboundAgent.max_call_duration || 600,
         max_call_duration: outboundAgent.max_call_duration || 600,
@@ -1364,7 +1459,9 @@ router.get('/agent/config', requireAuthOrDev, async (req: Request, res: Response
         vapiAssistantId: outboundAgent.vapi_assistant_id,
         vapi_assistant_id: outboundAgent.vapi_assistant_id,
         vapiPhoneNumberId: outboundAgent.vapi_phone_number_id,
-        vapi_phone_number_id: outboundAgent.vapi_phone_number_id
+        vapi_phone_number_id: outboundAgent.vapi_phone_number_id,
+        voiceStability: outboundAgent.voice_stability ?? null,
+        voiceSimilarityBoost: outboundAgent.voice_similarity_boost ?? null
       });
     }
 
@@ -2210,9 +2307,8 @@ router.post(
           // ✅ NEW: Extract and validate voice provider
           const voiceProviderValue = config.voiceProvider || config.voice_provider;
           if (voiceProviderValue) {
-            const validProviders = ['vapi', 'elevenlabs', 'openai', 'google', 'azure', 'playht', 'rime'];
-            if (!validProviders.includes(voiceProviderValue)) {
-              throw new Error(`Invalid voice provider '${voiceProviderValue}' for ${agentRole} agent. Must be one of: ${validProviders.join(', ')}`);
+            if (!VALID_VOICE_PROVIDERS.includes(voiceProviderValue)) {
+              throw new Error(`Invalid voice provider '${voiceProviderValue}' for ${agentRole} agent. Must be one of: ${VALID_VOICE_PROVIDERS.join(', ')}`);
             }
             payload.voice_provider = voiceProviderValue;
           } else {
@@ -2249,6 +2345,22 @@ router.post(
             vapiPhoneNumberId: config.vapiPhoneNumberId
           });
 
+        }
+
+        // Voice quality parameters — ElevenLabs only (silently ignored by Vapi for other providers)
+        if (config.voiceStability !== undefined && config.voiceStability !== null) {
+          const stability = Number(config.voiceStability);
+          if (isNaN(stability) || stability < 0.0 || stability > 1.0) {
+            throw new Error(`Voice stability must be between 0.0 and 1.0 for ${agentRole} agent`);
+          }
+          payload.voice_stability = stability;
+        }
+        if (config.voiceSimilarityBoost !== undefined && config.voiceSimilarityBoost !== null) {
+          const similarityBoost = Number(config.voiceSimilarityBoost);
+          if (isNaN(similarityBoost) || similarityBoost < 0.0 || similarityBoost > 1.0) {
+            throw new Error(`Voice similarity boost must be between 0.0 and 1.0 for ${agentRole} agent`);
+          }
+          payload.voice_similarity_boost = similarityBoost;
         }
 
         // Filter out null/undefined values to avoid database errors

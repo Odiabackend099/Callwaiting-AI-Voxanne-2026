@@ -9,11 +9,11 @@
     "projectName": "Callwaiting-AI-Voxanne-2026",
     "projectPath": "/Users/mac/Desktop/Callwaiting-AI-Voxanne-2026",
     "testIds": [],
-    "additionalInstruction": "Test with account ceo@demo.com and password demo123. Focus on appointments page to verify outcome fields display correctly after schema fix. Verify dashboard loads, call logs show data, appointments show outcomes. Ensure all authentication tests use the correct credentials: email ceo@demo.com, password demo123.",
+    "additionalInstruction": "Test as peter@demo.com / demo123. The login page is at http://localhost:3000/login. After logging in the dashboard is at http://localhost:3000/dashboard.\n\nFocus on these critical flows:\n1. Login with peter@demo.com / demo123 — must succeed and reach dashboard\n2. Agent Config page (http://localhost:3000/dashboard/agent-config):\n   - Persona cards are visual cards with icons and taglines (not plain text buttons)\n   - Voice selector has a Play button next to each voice option\n   - Advanced Voice Settings accordion is collapsible and only shows sliders when ElevenLabs is selected\n   - Changing voice provider enables the Save button\n   - Save button works\n3. Dashboard home shows call stats without errors\n4. No \"Organization Not Found\" / \"Account Setup Incomplete\" error screens appear",
     "envs": {
-      "API_KEY": "sk-user-3IKQwfk0mej3zwRQixbMn9A69RCZ7aXw5-yD0nP9zZbzXIodOM_6tfZfgfCBcDlbV0z-BDe34H3kfMkT0-6GzcsgL56Kjrl4Qn__faHj7Cqn15rot_aY8EuFxCBdiRtRZr4"
+      "API_KEY": "sk-user-4x5qBEX9R9Jr0RZaQQY51bJgBVT3_SJHh5xRfZlCqjOM43ieSincIlPqN1ldojd81XwaJX7ztZWqee1PJaovqbIVtyQDj6zpkHF9oCicdetrYfAoVeCasAm9HdSSQTnHKiE"
     }
   },
-  "serverPort": 65049,
-  "proxy": "http://7cfb913b-33ca-4007-8346-50fa89b48a90:PWgrdXyrJf8WzatzGR0Fiqt7xziQZxdf@tun.testsprite.com:8080"
+  "serverPort": 53047,
+  "proxy": "http://bcdcbc20-e586-4dda-a0c8-fdf7bc406f99:8iGXjqovgveHwGefpO99cruibgK4s25P@tun.testsprite.com:8080"
 }

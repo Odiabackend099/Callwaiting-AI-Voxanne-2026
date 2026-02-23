@@ -20,6 +20,7 @@ import { log } from '../services/logger';
 import { requireAuthOrDev } from '../middleware/auth';
 import { sanitizeError } from '../utils/error-sanitizer';
 import { supabase } from '../services/supabase-client';
+import { supabaseAdmin } from '../config/supabase';
 
 export const integrationsRouter = express.Router();
 
@@ -207,10 +208,56 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
 
     const orgId = (req as any).user.orgId;
 
-    // DB SSOT: Only return numbers that are explicitly provisioned/assigned for this org.
-    // Do NOT list all platform Vapi numbers via global VAPI_PRIVATE_KEY.
-    // UNIFIED SOURCE: Query org_credentials table for both managed and BYOC numbers
-    // This table now stores all Twilio credentials with is_managed flag
+    // MULTI-NUMBER SSOT: For managed orgs, read from managed_phone_numbers.
+    // This table supports multiple numbers per org with routing_direction ('inbound'|'outbound').
+    // org_credentials is single-slot (UNIQUE on org_id+provider) and cannot represent
+    // multiple numbers — it only stores subaccount-level credentials for the first number.
+    const { data: managedNumbers, error: mnErr } = await supabaseAdmin
+      .from('managed_phone_numbers')
+      .select('phone_number, vapi_phone_id, routing_direction')
+      .eq('org_id', orgId)
+      .eq('status', 'active');
+
+    if (mnErr) {
+      log.warn('integrations', 'managed_phone_numbers query error — falling back to org_credentials', {
+        orgId,
+        error: mnErr.message,
+      });
+    } else if (managedNumbers && managedNumbers.length > 0) {
+      // Managed org: return all active managed numbers with their routing direction.
+      // Filter to only rows where vapi_phone_id is populated (Vapi import completed).
+      const numbers = managedNumbers
+        .filter((n: any) => n.vapi_phone_id)
+        .map((n: any) => ({
+          id: n.vapi_phone_id,
+          number: n.phone_number,
+          name: `Managed (${n.routing_direction || 'unassigned'})`,
+          type: 'managed' as const,
+          routingDirection: n.routing_direction,
+        }));
+
+      if (numbers.length < managedNumbers.length) {
+        log.warn('integrations', 'Some managed numbers have no vapi_phone_id — excluded from response', {
+          orgId,
+          total: managedNumbers.length,
+          withVapiId: numbers.length,
+        });
+      }
+
+      // If all managed rows are missing vapi_phone_id (e.g., all Vapi imports failed),
+      // fall through to the BYOC path rather than returning an empty list silently.
+      if (numbers.length > 0) {
+        log.info('integrations', 'Returning managed numbers from managed_phone_numbers', {
+          orgId,
+          count: numbers.length,
+        });
+        return res.json({ success: true, numbers });
+      }
+
+      log.warn('integrations', 'All managed numbers lack vapi_phone_id — falling back to org_credentials', { orgId });
+    }
+
+    // BYOC fallback: org has no managed numbers (or all are missing vapi_phone_id) — read from org_credentials
     const { data: credentials, error: credErr } = await supabase
       .from('org_credentials')
       .select('encrypted_config, is_managed')
@@ -226,7 +273,7 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
       return res.status(500).json({ success: false, error: 'Failed to load phone numbers' } as IntegrationResponse);
     }
 
-    // Decrypt and format credentials with badges
+    // Decrypt and format BYOC credentials
     const numbers = [];
     for (const cred of credentials || []) {
       try {
@@ -237,8 +284,9 @@ integrationsRouter.get('/vapi/numbers', async (req: express.Request, res: expres
           numbers.push({
             id: decrypted.vapiPhoneId,
             number: decrypted.phoneNumber,
-            name: cred.is_managed ? 'Managed' : 'Your Twilio',  // Badge based on is_managed
-            type: cred.is_managed ? 'managed' : 'byoc',
+            name: 'Your Twilio',
+            type: 'byoc' as const,
+            routingDirection: undefined,
           });
         }
       } catch (decryptErr: any) {

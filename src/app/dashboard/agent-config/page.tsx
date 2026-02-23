@@ -3,12 +3,13 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight } from 'lucide-react';
+import { Bot, Save, Check, AlertCircle, Loader2, Volume2, Globe, MessageSquare, Clock, Phone, Sparkles, LayoutTemplate, Play, ArrowRight, ChevronDown, Info } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
+import { supabase } from '@/lib/supabase';
 import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/lib/prompt-templates';
-import { useAgentStore, INITIAL_CONFIG } from '@/lib/store/agentStore';
+import { useAgentStore, INITIAL_CONFIG, AgentConfig } from '@/lib/store/agentStore';
 import { VoiceSelector } from '@/components/VoiceSelector';
 import { formatPence } from '@/utils/currency';
 import useSWR from 'swr';
@@ -36,15 +37,6 @@ interface Voice {
     requiresApiKey: boolean;
 }
 
-interface AgentConfig {
-    name: string;
-    systemPrompt: string;
-    firstMessage: string;
-    voice: string;
-    voiceProvider?: string; // NEW: Voice provider from voice registry
-    language: string;
-    maxDuration: number;
-}
 
 interface InboundStatus {
     configured: boolean;
@@ -52,10 +44,11 @@ interface InboundStatus {
 }
 
 interface VapiNumber {
-    id: string;      // Vapi phone number UUID
-    number: string;  // E.164 format e.g. "+14407396528"
+    id: string;               // Vapi phone number UUID
+    number: string;           // E.164 format e.g. "+14407396528"
     name: string;
     type: 'managed' | 'byoc';
+    routingDirection?: string; // 'inbound' | 'outbound' | 'unassigned' — from managed_phone_numbers
 }
 
 export default function AgentConfigPage() {
@@ -75,9 +68,18 @@ export default function AgentConfigPage() {
     const [error, setError] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [advancedVoiceOpen, setAdvancedVoiceOpen] = useState(false);
+
+    // Track which persona template is currently active (for selected ring)
+    const [selectedInboundTemplateId, setSelectedInboundTemplateId] = useState<string | null>(null);
+    const [selectedOutboundTemplateId, setSelectedOutboundTemplateId] = useState<string | null>(null);
 
     const [voices, setVoices] = useState<Voice[]>([]);
     const [inboundStatus, setInboundStatus] = useState<InboundStatus | null>(null);
+
+    // Voice preview state
+    const [isPreviewing, setIsPreviewing] = useState(false);
+    const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
     // Vapi Phone Number State
     const [vapiNumbers, setVapiNumbers] = useState<VapiNumber[]>([]);
@@ -105,7 +107,9 @@ export default function AgentConfigPage() {
             a.voice === b.voice &&
             a.voiceProvider === b.voiceProvider &&
             a.language === b.language &&
-            a.maxDuration === b.maxDuration;
+            a.maxDuration === b.maxDuration &&
+            (a.voiceStability ?? null) === (b.voiceStability ?? null) &&
+            (a.voiceSimilarityBoost ?? null) === (b.voiceSimilarityBoost ?? null);
     };
 
     const [originalInboundConfig, setOriginalInboundConfig] = useState<AgentConfig | null>(null);
@@ -168,6 +172,23 @@ export default function AgentConfigPage() {
         return map;
     }, [phoneSettings]);
 
+    // Direction-filtered number arrays for the Agent Config dropdowns.
+    // Inbound tab shows only inbound-direction numbers; outbound tab shows only outbound.
+    // Numbers with no known direction (falsy, 'unassigned', or BYOC) appear in both tabs.
+    // NOTE: 'unassigned' is an explicit DB string — must be handled alongside falsy values
+    // so these numbers don't get excluded from both dropdowns silently.
+    const inboundNumbers = useMemo(() =>
+        vapiNumbers.filter(num => {
+            const dir = num.routingDirection || numberDirectionMap[num.id] || numberDirectionMap[num.number];
+            return !dir || dir === 'inbound' || dir === 'unassigned';
+        }), [vapiNumbers, numberDirectionMap]);
+
+    const outboundNumbers = useMemo(() =>
+        vapiNumbers.filter(num => {
+            const dir = num.routingDirection || numberDirectionMap[num.id] || numberDirectionMap[num.number];
+            return !dir || dir === 'outbound' || dir === 'unassigned';
+        }), [vapiNumbers, numberDirectionMap]);
+
     // Sync voices from SWR
     useEffect(() => {
         if (voicesRaw) {
@@ -210,7 +231,9 @@ export default function AgentConfigPage() {
                 voice: inboundAgent.voice || '',
                 voiceProvider: inboundAgent.voiceProvider || inboundAgent.voice_provider || undefined,
                 language: inboundAgent.language || 'en-US',
-                maxDuration: inboundAgent.maxCallDuration || inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                maxDuration: inboundAgent.maxCallDuration || inboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS,
+                voiceStability: inboundAgent.voiceStability ?? null,
+                voiceSimilarityBoost: inboundAgent.voiceSimilarityBoost ?? null
             };
 
             setInboundConfig(loadedConfig);
@@ -225,7 +248,9 @@ export default function AgentConfigPage() {
                 voice: outboundAgent.voice || '',
                 voiceProvider: outboundAgent.voiceProvider || outboundAgent.voice_provider || undefined,
                 language: outboundAgent.language || 'en-US',
-                maxDuration: outboundAgent.maxCallDuration || outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+                maxDuration: outboundAgent.maxCallDuration || outboundAgent.max_call_duration || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS,
+                voiceStability: outboundAgent.voiceStability ?? null,
+                voiceSimilarityBoost: outboundAgent.voiceSimilarityBoost ?? null
             };
 
             if (outboundAgent.vapi_phone_number_id || outboundAgent.vapiPhoneNumberId) {
@@ -271,8 +296,11 @@ export default function AgentConfigPage() {
             current.systemPrompt !== original.systemPrompt ||
             current.firstMessage !== original.firstMessage ||
             current.voice !== original.voice ||
+            current.voiceProvider !== original.voiceProvider ||
             current.language !== original.language ||
-            current.maxDuration !== original.maxDuration
+            current.maxDuration !== original.maxDuration ||
+            (current.voiceStability ?? null) !== (original.voiceStability ?? null) ||
+            (current.voiceSimilarityBoost ?? null) !== (original.voiceSimilarityBoost ?? null)
         );
     };
 
@@ -332,9 +360,11 @@ export default function AgentConfigPage() {
                     systemPrompt: inboundConfig.systemPrompt,
                     firstMessage: inboundConfig.firstMessage,
                     voiceId: inboundConfig.voice,
-                    voiceProvider: inboundConfig.voiceProvider, // NEW: Include voice provider
+                    voiceProvider: inboundConfig.voiceProvider,
                     language: inboundConfig.language,
-                    maxDurationSeconds: inboundConfig.maxDuration
+                    maxDurationSeconds: inboundConfig.maxDuration,
+                    ...(inboundConfig.voiceStability != null ? { voiceStability: inboundConfig.voiceStability } : {}),
+                    ...(inboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: inboundConfig.voiceSimilarityBoost } : {})
                 };
             }
 
@@ -352,10 +382,12 @@ export default function AgentConfigPage() {
                     systemPrompt: outboundConfig.systemPrompt,
                     firstMessage: outboundConfig.firstMessage,
                     voiceId: outboundConfig.voice,
-                    voiceProvider: outboundConfig.voiceProvider, // NEW: Include voice provider
+                    voiceProvider: outboundConfig.voiceProvider,
                     language: outboundConfig.language,
                     maxDurationSeconds: outboundConfig.maxDuration,
-                    vapiPhoneNumberId: selectedOutboundNumberId || null
+                    vapiPhoneNumberId: selectedOutboundNumberId || null,
+                    ...(outboundConfig.voiceStability != null ? { voiceStability: outboundConfig.voiceStability } : {}),
+                    ...(outboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: outboundConfig.voiceSimilarityBoost } : {})
                 };
             }
 
@@ -438,7 +470,9 @@ export default function AgentConfigPage() {
                         voiceId: inboundConfig.voice,
                         voiceProvider: inboundConfig.voiceProvider,
                         language: inboundConfig.language,
-                        maxDurationSeconds: inboundConfig.maxDuration
+                        maxDurationSeconds: inboundConfig.maxDuration,
+                        ...(inboundConfig.voiceStability != null ? { voiceStability: inboundConfig.voiceStability } : {}),
+                        ...(inboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: inboundConfig.voiceSimilarityBoost } : {})
                     }
                 };
                 const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
@@ -501,7 +535,9 @@ export default function AgentConfigPage() {
                             voiceProvider: outboundConfig.voiceProvider,
                             language: outboundConfig.language,
                             maxDurationSeconds: outboundConfig.maxDuration,
-                            vapiPhoneNumberId: selectedOutboundNumberId || null
+                            vapiPhoneNumberId: selectedOutboundNumberId || null,
+                            ...(outboundConfig.voiceStability != null ? { voiceStability: outboundConfig.voiceStability } : {}),
+                            ...(outboundConfig.voiceSimilarityBoost != null ? { voiceSimilarityBoost: outboundConfig.voiceSimilarityBoost } : {})
                         }
                     };
                     const result = await authedBackendFetch<any>('/api/founder-console/agent/behavior', {
@@ -583,12 +619,86 @@ export default function AgentConfigPage() {
                 systemPrompt: template.systemPrompt,
                 firstMessage: template.firstMessage
             });
+            setSelectedInboundTemplateId(templateId);
         } else {
             setOutboundConfig({
                 ...outboundConfig,
                 systemPrompt: template.systemPrompt,
                 firstMessage: template.firstMessage
             });
+            setSelectedOutboundTemplateId(templateId);
+        }
+    };
+
+    const handlePreviewVoice = async (voiceId: string, provider: string) => {
+        if (isPreviewing) return; // prevent double-clicks
+
+        // Stop any existing preview
+        if (previewAudioRef.current) {
+            previewAudioRef.current.pause();
+            previewAudioRef.current = null;
+        }
+
+        setIsPreviewing(true);
+
+        try {
+            const previewText = (currentConfig.firstMessage?.trim() || 'Hello, thank you for calling. How can I assist you today?')
+                .substring(0, 200);
+
+            // Need a raw fetch to handle both JSON and audio/mpeg responses
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+            const res = await fetch(`${backendUrl}/api/founder-console/agent/voice-preview`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                credentials: 'include',
+                body: JSON.stringify({ voiceId, provider, text: previewText }),
+            });
+
+            const contentType = res.headers.get('content-type') || '';
+
+            if (contentType.includes('application/json')) {
+                const data = await res.json();
+                const message = data.message || 'Voice preview is not available for this provider. Use Test Call.';
+                setError(message);
+                setTimeout(() => setError(null), 5000);
+                setIsPreviewing(false);
+                return;
+            }
+
+            if (!res.ok) {
+                setError('Voice preview failed. Please try Test Call instead.');
+                setTimeout(() => setError(null), 5000);
+                setIsPreviewing(false);
+                return;
+            }
+
+            // Audio binary — stream as blob and play
+            const arrayBuffer = await res.arrayBuffer();
+            const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            previewAudioRef.current = audio;
+            audio.onended = () => {
+                setIsPreviewing(false);
+                URL.revokeObjectURL(url);
+                previewAudioRef.current = null;
+            };
+            audio.onerror = () => {
+                setIsPreviewing(false);
+                URL.revokeObjectURL(url);
+                previewAudioRef.current = null;
+            };
+            await audio.play();
+        } catch (err: any) {
+            setError(err?.message || 'Voice preview failed. Try Test Call instead.');
+            setTimeout(() => setError(null), 5000);
+            setIsPreviewing(false);
         }
     };
 
@@ -757,6 +867,7 @@ export default function AgentConfigPage() {
                         <button
                             onClick={() => {
                                 setActiveTab('inbound');
+                                setAdvancedVoiceOpen(false);
                                 router.push('/dashboard/agent-config?agent=inbound');
                             }}
                             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'inbound'
@@ -770,6 +881,7 @@ export default function AgentConfigPage() {
                         <button
                             onClick={() => {
                                 setActiveTab('outbound');
+                                setAdvancedVoiceOpen(false);
                                 router.push('/dashboard/agent-config?agent=outbound');
                             }}
                             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'outbound'
@@ -857,8 +969,8 @@ export default function AgentConfigPage() {
                                                 <option value="" disabled>
                                                     {phoneSettingsLoading ? 'Loading...' : 'Select number...'}
                                                 </option>
-                                                {!phoneSettingsLoading && vapiNumbers.map((num) => {
-                                                    const dir = numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
+                                                {!phoneSettingsLoading && inboundNumbers.map((num) => {
+                                                    const dir = num.routingDirection || numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
                                                     return (
                                                         <option key={num.id} value={num.id}>
                                                             {num.number} {num.name ? `(${num.name})` : ''}{dir ? ` [${dir.charAt(0).toUpperCase() + dir.slice(1)}]` : ''}
@@ -910,8 +1022,8 @@ export default function AgentConfigPage() {
                                                 <option value="" disabled>
                                                     {phoneSettingsLoading ? 'Loading...' : 'Select number...'}
                                                 </option>
-                                                {!phoneSettingsLoading && vapiNumbers.map((num) => {
-                                                    const dir = numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
+                                                {!phoneSettingsLoading && outboundNumbers.map((num) => {
+                                                    const dir = num.routingDirection || numberDirectionMap[num.id] || numberDirectionMap[num.number] || '';
                                                     return (
                                                         <option key={num.id} value={num.id}>
                                                             {num.number} {num.name ? `(${num.name})` : ''}{dir ? ` [${dir.charAt(0).toUpperCase() + dir.slice(1)}]` : ''}
@@ -950,9 +1062,10 @@ export default function AgentConfigPage() {
                                         setConfig({
                                             ...currentConfig,
                                             voice: voiceId,
-                                            voiceProvider: provider // NEW: Also store voice provider
+                                            voiceProvider: provider
                                         });
                                     }}
+                                    onPreviewVoice={handlePreviewVoice}
                                 />
 
                                 <div>
@@ -971,6 +1084,125 @@ export default function AgentConfigPage() {
                                         <option value="fr-FR">French</option>
                                         <option value="de-DE">German</option>
                                     </select>
+                                </div>
+
+                                {/* Advanced Voice Settings accordion */}
+                                <div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAdvancedVoiceOpen(v => !v)}
+                                        className="flex items-center justify-between w-full py-2 text-sm font-medium text-obsidian/60 hover:text-obsidian transition-colors select-none"
+                                        aria-expanded={advancedVoiceOpen}
+                                    >
+                                        <span>Advanced Voice Settings</span>
+                                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${advancedVoiceOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    <div
+                                        className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out ${advancedVoiceOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}
+                                        {...(!advancedVoiceOpen ? { inert: true } : {})}
+                                    >
+                                    <div className="mt-3 space-y-5 pt-3 border-t border-surgical-100">
+                                        {currentConfig.voiceProvider === 'elevenlabs' ? (
+                                            <>
+                                                {/* Stability slider */}
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <label className="text-sm font-medium text-obsidian/70">
+                                                            Voice Stability
+                                                        </label>
+                                                        <span
+                                                            title="Higher = more consistent but less expressive. Lower = more dynamic but less predictable."
+                                                            className="text-obsidian/40 hover:text-obsidian/60 cursor-help"
+                                                        >
+                                                            <Info className="w-3.5 h-3.5" />
+                                                        </span>
+                                                        <span className="ml-auto flex items-center gap-2 text-xs font-mono text-surgical-600">
+                                                            {currentConfig.voiceStability != null
+                                                                ? currentConfig.voiceStability.toFixed(2)
+                                                                : 'default'}
+                                                            {currentConfig.voiceStability != null && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setConfig({ ...currentConfig, voiceStability: null })}
+                                                                    className="font-sans text-obsidian/40 hover:text-obsidian/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-surgical-500 rounded-sm"
+                                                                    title="Reset to provider default"
+                                                                >
+                                                                    Reset
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={1}
+                                                        step={0.05}
+                                                        value={currentConfig.voiceStability ?? 0.5}
+                                                        onChange={(e) => setConfig({
+                                                            ...currentConfig,
+                                                            voiceStability: parseFloat(e.target.value)
+                                                        })}
+                                                        className="w-full voice-slider"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-obsidian/40 mt-0.5">
+                                                        <span>Expressive</span>
+                                                        <span>Consistent</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Similarity Boost slider */}
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <label className="text-sm font-medium text-obsidian/70">
+                                                            Voice Similarity
+                                                        </label>
+                                                        <span
+                                                            title="Higher = voice sounds closer to the original sample. Lower = allows more flexibility."
+                                                            className="text-obsidian/40 hover:text-obsidian/60 cursor-help"
+                                                        >
+                                                            <Info className="w-3.5 h-3.5" />
+                                                        </span>
+                                                        <span className="ml-auto flex items-center gap-2 text-xs font-mono text-surgical-600">
+                                                            {currentConfig.voiceSimilarityBoost != null
+                                                                ? currentConfig.voiceSimilarityBoost.toFixed(2)
+                                                                : 'default'}
+                                                            {currentConfig.voiceSimilarityBoost != null && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setConfig({ ...currentConfig, voiceSimilarityBoost: null })}
+                                                                    className="font-sans text-obsidian/40 hover:text-obsidian/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-surgical-500 rounded-sm"
+                                                                    title="Reset to provider default"
+                                                                >
+                                                                    Reset
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={1}
+                                                        step={0.05}
+                                                        value={currentConfig.voiceSimilarityBoost ?? 0.75}
+                                                        onChange={(e) => setConfig({
+                                                            ...currentConfig,
+                                                            voiceSimilarityBoost: parseFloat(e.target.value)
+                                                        })}
+                                                        className="w-full voice-slider"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-obsidian/40 mt-0.5">
+                                                        <span>Flexible</span>
+                                                        <span>Original</span>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <p className="text-xs text-obsidian/50 italic py-1">
+                                                Advanced voice parameters (stability, similarity) are available for ElevenLabs voices only.
+                                            </p>
+                                        )}
+                                    </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1002,30 +1234,48 @@ export default function AgentConfigPage() {
 
                     {/* RIGHT COLUMN - Intelligence */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Template Selector */}
+                        {/* Persona Cards */}
                         <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                <LayoutTemplate className="w-5 h-5 text-surgical-600" />
-                                Quick Start Templates
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {templates.map((template) => (
-                                    <button
-                                        key={template.id}
-                                        onClick={() => applyTemplate(template.id, activeTab)}
-                                        className="text-left p-4 rounded-xl border border-surgical-200 hover:border-surgical-600 hover:bg-surgical-50 transition-all group"
-                                    >
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="font-medium text-obsidian group-hover:text-surgical-600">
-                                                {template.name}
-                                            </span>
-                                            <Sparkles className="w-4 h-4 text-obsidian/40 group-hover:text-surgical-600" />
-                                        </div>
-                                        <p className="text-xs text-obsidian/60 line-clamp-2">
-                                            {template.description}
-                                        </p>
-                                    </button>
-                                ))}
+                            <div className="flex items-center justify-between mb-1">
+                                <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
+                                    <LayoutTemplate className="w-5 h-5 text-surgical-600" />
+                                    AI Persona
+                                </h3>
+                                <span className="text-xs text-obsidian/40 font-medium">Choose your agent's personality</span>
+                            </div>
+                            <p className="text-xs text-obsidian/50 mb-4">Selecting a persona pre-fills your system prompt and first message with a proven template.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {templates.map((template) => {
+                                    const activeTemplateId = activeTab === 'inbound' ? selectedInboundTemplateId : selectedOutboundTemplateId;
+                                    const isSelected = activeTemplateId === template.id;
+                                    return (
+                                        <button
+                                            key={template.id}
+                                            onClick={() => applyTemplate(template.id, activeTab)}
+                                            className={`text-left p-4 rounded-xl border-2 transition-all group relative ${
+                                                isSelected
+                                                    ? 'border-surgical-600 bg-surgical-50 shadow-sm'
+                                                    : 'border-surgical-200 hover:border-surgical-400 hover:bg-surgical-50/50'
+                                            }`}
+                                        >
+                                            {isSelected && (
+                                                <span className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-surgical-600 flex items-center justify-center">
+                                                    <Check className="w-3 h-3 text-white" />
+                                                </span>
+                                            )}
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <span className="text-2xl leading-none">{template.icon}</span>
+                                                <div>
+                                                    <div className="font-semibold text-obsidian text-sm leading-tight">{template.name}</div>
+                                                    <div className="text-xs text-surgical-600 font-medium">{template.persona}</div>
+                                                </div>
+                                            </div>
+                                            <p className="text-xs text-obsidian/60 leading-relaxed">
+                                                {template.tagline}
+                                            </p>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 

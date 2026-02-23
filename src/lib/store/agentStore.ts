@@ -14,6 +14,8 @@ export interface AgentConfig {
     voiceProvider?: string;
     language: string;
     maxDuration: number;
+    voiceStability?: number | null;      // ElevenLabs only: 0.0–1.0
+    voiceSimilarityBoost?: number | null; // ElevenLabs only: 0.0–1.0
 }
 
 interface AgentState {
@@ -49,7 +51,9 @@ const validateAgentConfig = (config: Partial<AgentConfig>, existingConfig: Agent
         voice: merged.voice ?? '',
         voiceProvider: merged.voiceProvider,
         language: merged.language ?? 'en-US',
-        maxDuration: merged.maxDuration ?? AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS
+        maxDuration: merged.maxDuration ?? AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS,
+        voiceStability: merged.voiceStability ?? null,
+        voiceSimilarityBoost: merged.voiceSimilarityBoost ?? null
     };
 
     return validated;

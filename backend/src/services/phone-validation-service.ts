@@ -1,13 +1,19 @@
 /**
  * Phone Number Validation Service
- * Enforces one-number-per-organization rule for managed telephony
+ * Enforces per-direction number limits for managed telephony.
  *
- * Rule: Each organization can have ONLY ONE phone number at a time,
- * either BYOC (Bring Your Own Carrier) or managed (Voxanne-provisioned).
+ * Rule: Each organization may have at most ONE inbound and ONE outbound
+ * managed (Voxanne-provisioned) number. BYOC numbers are only checked
+ * against the inbound direction (BYOC inbound + managed outbound is allowed).
  *
- * This service checks both:
- * - managed_phone_numbers table (Voxanne-provisioned numbers)
- * - org_credentials table (BYOC Twilio credentials)
+ * Error policy: checkDirectionStatus is fail-open — on DB error it returns
+ * {hasInbound: false, hasOutbound: false} to prevent transient DB issues from
+ * blocking all provisioning. Trade-off: a DB outage during validation could
+ * allow duplicate provisioning in the same direction.
+ *
+ * This service checks:
+ * - managed_phone_numbers table (direction-aware, multi-number SSOT)
+ * - org_credentials table (BYOC Twilio credential, inbound-direction only)
  */
 
 import { supabaseAdmin } from '../config/supabase';
@@ -116,24 +122,45 @@ export class PhoneValidationService {
   }
 
   /**
-   * Check which routing directions already have active managed numbers
+   * Check which routing directions already have active managed numbers.
+   *
+   * Fail-open: on any DB error, returns {hasInbound: false, hasOutbound: false} so
+   * transient DB issues don't block all provisioning. See module-level doc for trade-off.
+   *
+   * @param orgId - Organization ID to check
    */
   static async checkDirectionStatus(orgId: string): Promise<DirectionStatus> {
-    const { data: numbers } = await supabaseAdmin
-      .from('managed_phone_numbers')
-      .select('phone_number, routing_direction')
-      .eq('org_id', orgId)
-      .eq('status', 'active');
+    try {
+      const { data: numbers, error } = await supabaseAdmin
+        .from('managed_phone_numbers')
+        .select('phone_number, routing_direction')
+        .eq('org_id', orgId)
+        .eq('status', 'active');
 
-    const inbound = numbers?.find((n: any) => n.routing_direction === 'inbound');
-    const outbound = numbers?.find((n: any) => n.routing_direction === 'outbound');
+      if (error) {
+        logger.warn('checkDirectionStatus: DB query error — treating as no managed numbers', {
+          orgId,
+          error: error.message,
+        });
+        return { hasInbound: false, hasOutbound: false };
+      }
 
-    return {
-      hasInbound: !!inbound,
-      hasOutbound: !!outbound,
-      inboundNumber: inbound?.phone_number,
-      outboundNumber: outbound?.phone_number,
-    };
+      const inbound = numbers?.find((n: any) => n.routing_direction === 'inbound');
+      const outbound = numbers?.find((n: any) => n.routing_direction === 'outbound');
+
+      return {
+        hasInbound: !!inbound,
+        hasOutbound: !!outbound,
+        inboundNumber: inbound?.phone_number,
+        outboundNumber: outbound?.phone_number,
+      };
+    } catch (err: any) {
+      logger.error('checkDirectionStatus: unexpected error — treating as no managed numbers', {
+        orgId,
+        error: err.message,
+      });
+      return { hasInbound: false, hasOutbound: false };
+    }
   }
 
   /**
@@ -183,7 +210,9 @@ export class PhoneValidationService {
         };
       }
 
-      // For inbound direction, also check BYOC — can't have both BYOC and managed inbound
+      // For inbound direction only, also check BYOC — can't have BYOC inbound + managed inbound.
+      // Outbound direction intentionally skips BYOC check: BYOC inbound + managed outbound is
+      // a valid hybrid configuration (org uses their own carrier for receiving, managed for dialling).
       if (direction === 'inbound') {
         const status = await this.checkOrgPhoneStatus(orgId);
         if (status.hasPhoneNumber && status.phoneNumberType === 'byoc') {

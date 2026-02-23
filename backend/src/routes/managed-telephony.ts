@@ -24,6 +24,7 @@ import { PhoneValidationService } from '../services/phone-validation-service';
 import { supabaseAdmin } from '../config/supabase';
 import { createLogger } from '../services/logger';
 import { checkBalance, deductPhoneProvisioningCost, addCredits, deductAssetCost } from '../services/wallet-service';
+import { sendSlackAlert } from '../services/slack-alerts';
 
 const logger = createLogger('ManagedTelephonyRoutes');
 const router = Router();
@@ -177,7 +178,7 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       .from('organizations')
       .select('telephony_mode')
       .eq('id', orgId)
-      .single();
+      .maybeSingle();
 
     const hasByocCreds = !!existingCred && existingOrg?.telephony_mode === 'byoc';
 
@@ -220,7 +221,17 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
           refundError: refundResult.error,
           originalError: result.error,
         });
-        // Alert ops team - customer was charged but didn't get the service
+        // Alert ops — customer was charged $10 but provisioning failed AND refund failed.
+        // Manual credit required. Fire-and-forget: alert must not block the error response.
+        sendSlackAlert('🚨 CRITICAL: Phone provisioning refund failed', {
+          orgId,
+          amountPence: PHONE_NUMBER_COST_PENCE,
+          provisioningError: result.error,
+          refundError: refundResult.error,
+          action: 'Manual credit of $10.00 required for this org',
+        }).catch((alertErr: any) => {
+          logger.error('Slack alert failed for refund failure', { orgId, error: alertErr.message });
+        });
       } else {
         logger.info('Payment refunded successfully', {
           orgId,
@@ -374,7 +385,7 @@ router.post('/switch-mode', async (req: Request, res: Response): Promise<void> =
         .from('organizations')
         .select('name')
         .eq('id', orgId)
-        .single();
+        .maybeSingle();
 
       if (!org) {
         res.status(404).json({ error: 'Organization not found' });
@@ -434,7 +445,7 @@ router.get('/available-numbers', async (req: Request, res: Response): Promise<vo
     res.json({ numbers });
   } catch (err: any) {
     logger.error('Available-numbers endpoint error', { error: err.message });
-    return res.status(500).json({ error: 'Operation failed. Please try again.' });
+    res.status(500).json({ error: 'Operation failed. Please try again.' });
   }
 });
 

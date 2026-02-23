@@ -287,7 +287,7 @@ export class ManagedTelephonyService {
         .rpc('acquire_managed_telephony_provision_lock', { p_org_id: orgId });
 
       if (lockError) {
-        logger.error('Failed to acquire provisioning lock', {
+        log.error('ManagedTelephony', 'Failed to acquire provisioning lock', {
           orgId,
           error: lockError.message
         });
@@ -302,7 +302,7 @@ export class ManagedTelephonyService {
 
       if (!lockAcquired) {
         // Another provisioning request is already in progress for this org
-        logger.warn('Provisioning lock already held', { orgId });
+        log.warn('ManagedTelephony', 'Provisioning lock already held', { orgId });
         return {
           success: false,
           error: 'Another provisioning request is already in progress for this organization',
@@ -312,7 +312,7 @@ export class ManagedTelephonyService {
         };
       }
 
-      logger.info('Provisioning lock acquired', { orgId });
+      log.info('ManagedTelephony', 'Provisioning lock acquired', { orgId });
 
       // Step 1: Get org name for subaccount friendly name
       const { data: org } = await supabaseAdmin
@@ -483,7 +483,7 @@ export class ManagedTelephonyService {
           return {
             success: false,
             error: 'Phone number import failed: Vapi returned invalid phone ID',
-            failedStep: 'vapi_import_validation',
+            failedStep: 'vapi_import',
             canRetry: true,
             userMessage: 'Number purchase was successful but setup failed. The number has been released. Please try again.'
           };
@@ -561,34 +561,61 @@ export class ManagedTelephonyService {
         outboundAgentUpdated: atomicResult.outbound_agent_updated
       });
 
-      // Step 9: Save via single-slot gate (UPSERT + mutual exclusion + Vapi credential sync)
-      //         ALSO saves to org_credentials for unified agent config dropdown
-      // CRITICAL: This write is MANDATORY. If it fails, the number is unusable in agent config.
-      log.info('ManagedTelephony', 'Attempting MANDATORY SSOT write to org_credentials', {
-        orgId,
-        phoneNumber: redactPhone(purchasedNumber.phoneNumber),
-        vapiPhoneId: vapiPhoneId,
-        vapiCredentialId: vapiCredentialId || 'not_set',
-        source: 'managed',
-        hasSubaccountSid: !!subaccountSid,
-        hasSubToken: !!subToken
-      });
+      // Step 9: Conditional SSOT write to org_credentials.
+      // Only needed for the FIRST managed number — subaccount credentials (SID/AuthToken)
+      // are shared across all numbers and only need to be stored once.
+      // For subsequent numbers, managed_phone_numbers is the SSOT for number-specific data
+      // (phone_number, vapi_phone_id, routing_direction) and /api/integrations/vapi/numbers
+      // now reads from there directly.
+      // Calling saveTwilioCredential for a second number would:
+      //   1. Overwrite the first number's vapiPhoneId in org_credentials (data corruption)
+      //   2. Call syncVapiCredential which fails — Vapi credential for this subaccount already exists
+      const { data: existingManagedCred, error: credCheckError } = await supabaseAdmin
+        .from('org_credentials')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('provider', 'twilio')
+        .eq('is_managed', true)
+        .maybeSingle();
 
-      // Do NOT catch this error - let it bubble up to trigger proper error handling
-      await IntegrationDecryptor.saveTwilioCredential(orgId, {
-        accountSid: subaccountSid,
-        authToken: subToken,
-        phoneNumber: purchasedNumber.phoneNumber,
-        source: 'managed',
-        vapiPhoneId: vapiPhoneId,
-        vapiCredentialId: vapiCredentialId || undefined,
-      });
-
-      log.info('ManagedTelephony', 'MANDATORY SSOT write successful - number now visible in agent config', {
-        orgId,
-        phoneNumber: redactPhone(purchasedNumber.phoneNumber),
-        vapiPhoneId: vapiPhoneId
-      });
+      if (credCheckError) {
+        // Fail closed: cannot confirm whether a managed credential already exists.
+        // Skip saveTwilioCredential to avoid corrupting org_credentials if this is
+        // actually a second managed number and the DB check failed transiently.
+        // The number is already in managed_phone_numbers (Steps 7-8), so
+        // /api/integrations/vapi/numbers will still return it correctly.
+        log.warn('ManagedTelephony', 'Could not verify existing managed credential — skipping org_credentials write (fail-closed)', {
+          orgId,
+          error: credCheckError.message,
+          newPhoneNumber: redactPhone(purchasedNumber.phoneNumber),
+        });
+      } else if (!existingManagedCred) {
+        // First managed number: create the org_credentials entry (subaccount creds + initial number)
+        log.info('ManagedTelephony', 'First managed number — writing subaccount creds to org_credentials', {
+          orgId,
+          phoneNumber: redactPhone(purchasedNumber.phoneNumber),
+          vapiPhoneId,
+        });
+        // Do NOT catch this error — let it bubble up to the inner catch in provisionManagedNumber
+        await IntegrationDecryptor.saveTwilioCredential(orgId, {
+          accountSid: subaccountSid,
+          authToken: subToken,
+          phoneNumber: purchasedNumber.phoneNumber,
+          source: 'managed',
+          vapiPhoneId: vapiPhoneId,
+          vapiCredentialId: vapiCredentialId || undefined,
+        });
+        log.info('ManagedTelephony', 'org_credentials write complete', { orgId, vapiPhoneId });
+      } else {
+        // Second+ managed number: org_credentials already has subaccount creds — skip UPSERT.
+        // managed_phone_numbers already has this number's vapiPhoneId (inserted in Steps 7-8).
+        log.info('ManagedTelephony', 'Subsequent managed number — skipping org_credentials write (subaccount creds already exist)', {
+          orgId,
+          existingCredId: existingManagedCred.id,
+          newPhoneNumber: redactPhone(purchasedNumber.phoneNumber),
+          newVapiPhoneId: vapiPhoneId,
+        });
+      }
 
       return {
         success: true,
@@ -598,7 +625,7 @@ export class ManagedTelephonyService {
       };
     } catch (err: any) {
       const failurePoint = err.message?.includes('org_credentials') || err.message?.includes('saveTwilioCredential')
-        ? 'ssot_write'
+        ? 'credential_save'
         : 'unknown';
 
       log.error('ManagedTelephony', 'Provisioning failed (unexpected error)', {
@@ -610,7 +637,7 @@ export class ManagedTelephonyService {
       });
 
       // If this was an SSOT write failure, escalate to Sentry
-      if (failurePoint === 'ssot_write') {
+      if (failurePoint === 'credential_save') {
         log.error('ManagedTelephony', 'CRITICAL: SSOT write failure detected - number will be invisible', {
           orgId,
           error: err.message,

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Search, ChevronDown, ChevronUp, Volume2, Info } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, ChevronDown, ChevronUp, Volume2, Info, Play, Loader2, Square } from 'lucide-react';
 
 interface Voice {
   id: string;
@@ -22,8 +22,11 @@ interface VoiceSelectorProps {
   voices: Voice[];
   selected: string;
   onSelect: (voiceId: string, provider: string) => void;
+  onPreviewVoice?: (voiceId: string, provider: string) => void;
   className?: string;
 }
+
+type PreviewState = 'idle' | 'loading' | 'playing';
 
 /**
  * Professional Voice Selector Component
@@ -36,17 +39,63 @@ interface VoiceSelectorProps {
  * - Clear "API Key Required" badges for premium voices
  * - Mobile-friendly interface
  */
-export function VoiceSelector({ voices, selected, onSelect, className = '' }: VoiceSelectorProps) {
+export function VoiceSelector({ voices, selected, onSelect, onPreviewVoice, className = '' }: VoiceSelectorProps) {
   const [search, setSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [genderFilter, setGenderFilter] = useState<string>('all');
   const [simpleMode, setSimpleMode] = useState(true);
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set(['vapi']));
   const [isMounted, setIsMounted] = useState(false);
+  const [previewState, setPreviewState] = useState<PreviewState>('idle');
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
+    return () => {
+      // Stop any playing audio on unmount
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, []);
+
+  const handlePreviewClick = (e: React.MouseEvent, voice: Voice) => {
+    e.stopPropagation(); // Don't also trigger voice selection
+
+    // If already playing this voice, stop it
+    if (previewingVoiceId === voice.id && previewState === 'playing') {
+      audioRef.current?.pause();
+      setPreviewState('idle');
+      setPreviewingVoiceId(null);
+      return;
+    }
+
+    // Stop any current preview first
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    setPreviewingVoiceId(voice.id);
+    setPreviewState('loading');
+
+    if (onPreviewVoice) {
+      onPreviewVoice(voice.id, voice.provider);
+    }
+  };
+
+  // Called by parent to deliver the audio blob URL after fetching
+  // We expose a method via the previewState + a callback pattern
+  const stopPreview = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setPreviewState('idle');
+    setPreviewingVoiceId(null);
+  };
 
   // Filter voices based on criteria
   const filteredVoices = useMemo(() => {
@@ -108,23 +157,46 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
         </button>
       </div>
 
-      {/* Simple Mode: Dropdown */}
+      {/* Simple Mode: Dropdown + preview button for selected voice */}
       {simpleMode ? (
-        <select
-          value={selected}
-          onChange={(e) => {
-            const voice = voices.find(v => v.id === e.target.value);
-            if (voice) onSelect(voice.id, voice.provider);
-          }}
-          className="w-full px-3 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-        >
-          <option value="">Select a voice...</option>
-          {voices.map(v => (
-            <option key={`${v.provider}-${v.id}`} value={v.id}>
-              {v.name} ({v.gender}) - {v.provider}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-2">
+          <select
+            value={selected}
+            onChange={(e) => {
+              const voice = voices.find(v => v.id === e.target.value);
+              if (voice) onSelect(voice.id, voice.provider);
+            }}
+            className="w-full px-3 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+          >
+            <option value="">Select a voice...</option>
+            {voices.map(v => (
+              <option key={`${v.provider}-${v.id}`} value={v.id}>
+                {v.name} ({v.gender}) - {v.provider}
+              </option>
+            ))}
+          </select>
+          {/* Preview button for selected voice */}
+          {selected && onPreviewVoice && (() => {
+            const selectedVoice = voices.find(v => v.id === selected);
+            if (!selectedVoice) return null;
+            const isThisPreviewing = previewingVoiceId === selected;
+            return (
+              <button
+                onClick={(e) => handlePreviewClick(e, selectedVoice)}
+                disabled={previewState === 'loading' && !isThisPreviewing}
+                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-50"
+              >
+                {isThisPreviewing && previewState === 'loading' ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating preview…</>
+                ) : isThisPreviewing && previewState === 'playing' ? (
+                  <><Square className="w-3.5 h-3.5 fill-current" /> Stop preview</>
+                ) : (
+                  <><Play className="w-3.5 h-3.5 fill-current" /> Preview voice</>
+                )}
+              </button>
+            );
+          })()}
+        </div>
       ) : (
         /* Advanced Mode: Search & Filters */
         <div className="space-y-3">
@@ -203,7 +275,7 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
                           <div className="flex items-start gap-2">
                             <Volume2 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${selected === v.id ? 'text-blue-600' : 'text-gray-400'}`} />
                             <div className="flex-1 min-w-0">
-                              {/* Voice Name with Badges */}
+                              {/* Voice Name with Badges + Preview Button */}
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="font-medium text-gray-900 truncate">
                                   {v.name}
@@ -217,6 +289,21 @@ export function VoiceSelector({ voices, selected, onSelect, className = '' }: Vo
                                   <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full whitespace-nowrap">
                                     API Key
                                   </span>
+                                )}
+                                {onPreviewVoice && (
+                                  <button
+                                    onClick={(e) => handlePreviewClick(e, v)}
+                                    disabled={previewState === 'loading' && previewingVoiceId !== v.id}
+                                    className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-40 flex-shrink-0"
+                                  >
+                                    {previewingVoiceId === v.id && previewState === 'loading' ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : previewingVoiceId === v.id && previewState === 'playing' ? (
+                                      <Square className="w-3 h-3 fill-current" />
+                                    ) : (
+                                      <Play className="w-3 h-3 fill-current" />
+                                    )}
+                                  </button>
                                 )}
                               </div>
 

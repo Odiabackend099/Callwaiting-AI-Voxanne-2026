@@ -4,6 +4,9 @@ export interface PromptTemplate {
     description: string;
     systemPrompt: string;
     firstMessage: string;
+    icon: string;
+    tagline: string;
+    persona: string;
 }
 
 export const PROMPT_TEMPLATES: PromptTemplate[] = [
@@ -11,6 +14,9 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
         id: 'healthcare-general',
         name: 'General Healthcare',
         description: 'Compassionate coordinator for medical practices (Robin)',
+        icon: '🩺',
+        tagline: 'Warm & thorough — best for multi-specialty clinics',
+        persona: 'Robin',
         firstMessage: "Thank you for calling Wellness Alliance Medical Group. This is Robin, your healthcare coordinator. This call is protected under HIPAA privacy regulations. How may I help you today?",
         systemPrompt: `# Identity & Purpose
 You are Robin, a healthcare coordination voice assistant for Wellness Alliance Medical Group. Your primary purpose is to help patients schedule medical appointments, answer general health questions, provide pre-visit guidance, help with prescription refills, and coordinate care services while maintaining strict HIPAA compliance.
@@ -43,6 +49,9 @@ You are Robin, a healthcare coordination voice assistant for Wellness Alliance M
         id: 'medspa-aesthetic',
         name: 'Medspa & Aesthetics',
         description: 'Luxury concierge for beauty and wellness clinics',
+        icon: '✨',
+        tagline: 'Sophisticated & uplifting — built for beauty brands',
+        persona: 'Aura',
         firstMessage: "Thank you for calling Serenity Medspa. This is Aura, your aesthetic concierge. How may I assist you with your beauty and wellness journey today?",
         systemPrompt: `# Identity & Purpose
 You are Aura, a front desk concierge for Serenity Medspa. Your goal is to schedule aesthetic treatments, answer questions about services (Botox, fillers, facials), and provide a luxury booking experience.
@@ -72,6 +81,9 @@ You are Aura, a front desk concierge for Serenity Medspa. Your goal is to schedu
         id: 'dental-clinic',
         name: 'Dental Clinic',
         description: 'Friendly scheduler for dentistry and oral health',
+        icon: '🦷',
+        tagline: 'Bright & reassuring — perfect for anxious patients',
+        persona: 'Alex',
         firstMessage: "Thank you for calling Bright Smile Dental. This is Alex. Are you calling to schedule an appointment or do you have a dental concern I can help with?",
         systemPrompt: `# Identity & Purpose
 You are Alex, the scheduling coordinator for Bright Smile Dental. You assist with booking cleanings, exams, and emergency dental visits, and answer basic insurance/billing questions.
@@ -98,6 +110,9 @@ You are Alex, the scheduling coordinator for Bright Smile Dental. You assist wit
         id: 'plastic-surgery',
         name: 'Plastic Surgery',
         description: 'Private coordinator for cosmetic and reconstructive surgery',
+        icon: '💎',
+        tagline: 'Discreet & empathetic — designed for elective procedures',
+        persona: 'Sarah',
         firstMessage: "Thank you for calling The Aesthetic Institute. This is Sarah, your patient care coordinator. How may I assist you privately today?",
         systemPrompt: `# Identity & Purpose
 You are Sarah, a Patient Care Coordinator for The Aesthetic Institute used by a Board Certified Plastic Surgeon. You handle inquiries about surgical procedures, consultations, and post-op care with the utmost discretion and empathy.
@@ -128,6 +143,9 @@ export const OUTBOUND_PROMPT_TEMPLATES: PromptTemplate[] = [
         id: 'healthcare-outbound',
         name: 'Healthcare Reminder',
         description: 'Appointment reminders and pre-visit instructions (Robin)',
+        icon: '📅',
+        tagline: 'Warm & professional — reduces no-shows by up to 30%',
+        persona: 'Robin',
         firstMessage: "Hello, this is Robin calling from Wellness Alliance Medical Group. I'm calling to confirm an upcoming appointment. Am I speaking with the patient?",
         systemPrompt: `# Identity & Purpose
 You are Robin, the outbound care coordinator for Wellness Alliance Medical Group. Your goal is to confirm appointments, provide pre-visit instructions, and answer basic logistical questions.
@@ -151,6 +169,9 @@ You are Robin, the outbound care coordinator for Wellness Alliance Medical Group
         id: 'medspa-outbound',
         name: 'Medspa Follow-up',
         description: 'Post-treatment check-in and promo outreach (Aura)',
+        icon: '💆',
+        tagline: 'Caring & luxurious — turns patients into loyal clients',
+        persona: 'Aura',
         firstMessage: "Hi, this is Aura from Serenity Medspa. I hope you're having a wonderful day! I'm calling to check in on how you're feeling after your recent visit.",
         systemPrompt: `# Identity & Purpose
 You are Aura, the client relations concierge for Serenity Medspa. You call clients for post-treatment follow-ups or to share exclusive seasonal offers.
@@ -174,6 +195,9 @@ You are Aura, the client relations concierge for Serenity Medspa. You call clien
         id: 'dental-outbound',
         name: 'Dental Recall',
         description: 'Routine cleaning and check-up scheduling (Alex)',
+        icon: '😁',
+        tagline: 'Friendly & persistent — fills your hygiene schedule fast',
+        persona: 'Alex',
         firstMessage: "Hi there, this is Alex from Bright Smile Dental. I'm calling because it looks like you're due for your 6-month cleaning and check-up.",
         systemPrompt: `# Identity & Purpose
 You are Alex, the recall coordinator for Bright Smile Dental. Your job is to get patients back on the schedule for their routine hygiene appointments.
@@ -196,6 +220,9 @@ You are Alex, the recall coordinator for Bright Smile Dental. Your job is to get
         id: 'plastic-surgery-outbound',
         name: 'Consultation Follow-up',
         description: 'Warm lead follow-up for inquiries (Sarah)',
+        icon: '🌸',
+        tagline: 'Soft-sell & empathetic — converts inquiries to consults',
+        persona: 'Sarah',
         firstMessage: "Hello, this is Sarah from The Aesthetic Institute. I'm following up on your recent inquiry about our cosmetic procedures. Do you have a moment?",
         systemPrompt: `# Identity & Purpose
 You are Sarah, the patient coordinator for The Aesthetic Institute. You follow up with potential patients who requested information online but haven't booked a consultation yet.

@@ -35,6 +35,23 @@ export const callCreationLimiter = rateLimit({
     }
 });
 
+// Rate limiter for voice preview — calls ElevenLabs API (per-character cost).
+// Tighter than agentConfigLimiter: 5 requests per minute per IP.
+export const voicePreviewLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 5,
+    message: 'Too many voice preview requests. Please wait a moment before previewing again.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req: Request, res: Response) => {
+        res.status(429).json({
+            error: 'Too many requests',
+            message: 'Too many voice preview requests. Please wait a moment before previewing again.',
+            retryAfter: 60
+        });
+    }
+});
+
 // General API rate limiter
 // Allows 100 requests per minute per IP
 export const generalLimiter = rateLimit({

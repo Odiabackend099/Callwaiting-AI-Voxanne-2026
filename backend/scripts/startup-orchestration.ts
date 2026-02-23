@@ -720,7 +720,7 @@ async function main() {
     await sleep(2000);
 
     // Step 1: Start ngrok tunnel
-    log('INFO', 'STEP 1/8: Starting ngrok tunnel');
+    log('INFO', 'STEP 1/9: Starting ngrok tunnel');
     const ngrokStarted = await startNgrok();
     if (!ngrokStarted) {
       log('ERROR', 'Failed to start ngrok tunnel');
@@ -731,7 +731,7 @@ async function main() {
     await sleep(2000);
 
     // Step 2: Update .env with ngrok URL (NEW)
-    log('INFO', 'STEP 2/8: Updating .env with ngrok URL');
+    log('INFO', 'STEP 2/9: Updating .env with ngrok URL');
     try {
       await updateEnvWithNgrokUrl(ngrokPublicUrl);
     } catch (error) {
@@ -742,7 +742,7 @@ async function main() {
     await sleep(1000);
 
     // Step 3: Start backend
-    log('INFO', 'STEP 3/8: Starting backend server');
+    log('INFO', 'STEP 3/9: Starting backend server');
     const backendStarted = await startBackend();
     if (!backendStarted) {
       log('WARN', 'Backend may not have fully started');
@@ -752,7 +752,7 @@ async function main() {
     await sleep(2000);
 
     // Step 4: Start frontend
-    log('INFO', 'STEP 4/8: Starting frontend server');
+    log('INFO', 'STEP 4/9: Starting frontend server');
     const frontendStarted = await startFrontend();
     if (!frontendStarted) {
       log('WARN', 'Frontend may not have fully started');
@@ -762,25 +762,36 @@ async function main() {
     await sleep(3000);
 
     // Step 5: Update Vapi webhooks (NEW)
-    log('INFO', 'STEP 5/8: Updating Vapi assistant webhooks');
+    log('INFO', 'STEP 5/9: Updating Vapi assistant webhooks');
     const webhookResult = await updateVapiWebhooks(ngrokPublicUrl);
     log('INFO', `Webhook update result: ${webhookResult.updated}/${webhookResult.total} updated`);
 
     // Step 6: Configure webhook (existing)
-    log('INFO', 'STEP 6/8: Configuring VAPI webhook');
+    log('INFO', 'STEP 6/9: Configuring VAPI webhook');
     const webhookConfigured = await configureVapiWebhook();
     if (!webhookConfigured) {
       log('WARN', 'Webhook configuration may need manual verification');
     }
 
     // Step 7: Run pre-flight checks (NEW)
-    log('INFO', 'STEP 7/8: Running pre-flight validation');
+    log('INFO', 'STEP 7/9: Running pre-flight validation');
     await runPreflightChecks(ngrokPublicUrl);
 
     // Step 8: Verify systems
-    log('INFO', 'STEP 8/8: Verifying all systems');
+    log('INFO', 'STEP 8/9: Verifying all systems');
     await sleep(2000);
     const allHealthy = await verifyAllSystems();
+
+    // Verify demo accounts are provisioned (non-blocking — warns but does not fail startup)
+    log('INFO', 'STEP 9/9: Verifying demo account provisioning');
+    try {
+      const { execSync } = require('child_process');
+      execSync('npm run verify:demo', { cwd: path.resolve(__dirname, '..'), stdio: 'pipe' });
+      log('SUCCESS', '✓ Demo accounts healthy (test@demo.com, peter@demo.com)');
+    } catch {
+      log('WARN', '⚠️  One or more demo accounts need repair.');
+      log('WARN', '    Run: cd backend && npm run seed:demo');
+    }
 
     // Final status
     log('INFO', '================================');

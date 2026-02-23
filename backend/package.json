@@ -23,6 +23,8 @@
     "agent:diagnostic": "ts-node scripts/run-diagnostic-agent-groq.ts",
     "agent:diagnostic:groq": "ts-node scripts/run-diagnostic-agent-groq.ts",
     "agent:database": "ts-node scripts/run-database-agent.ts",
+    "seed:demo": "ts-node src/scripts/create-peter-demo.ts",
+    "verify:demo": "ts-node src/scripts/verify-demo-users.ts",
     "setup:vapi": "ts-node scripts/setup-vapi-production.ts",
     "setup:stripe-webhooks": "ts-node src/scripts/setup-stripe-webhooks.ts",
     "test:webhook-delivery": "ts-node src/scripts/test-stripe-webhook-delivery.ts",

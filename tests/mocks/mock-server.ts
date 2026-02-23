@@ -21,7 +21,7 @@ const PORT = process.env.MOCK_SERVER_PORT || 3001;
 // MIDDLEWARE
 // ============================================
 
-app.use(cors());
+app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(express.json());
 
 // Simulate network latency
@@ -58,6 +58,47 @@ interface RateLimitEntry {
 const verifiedNumbers = new Map<string, VerifiedNumber>();
 const rateLimits = new Map<string, RateLimitEntry>();
 const forwardingConfigs = new Map<string, any>();
+
+// ============================================
+// MOCK ENDPOINTS FOR DASHBOARD
+// ============================================
+
+app.get('/health', (req: any, res: any) => {
+  res.json({ status: 'ok' });
+});
+
+app.get('/api/billing/wallet', (req: any, res: any) => {
+  res.json({
+    balance: 0,
+    currency: 'GBP',
+    credits: 0
+  });
+});
+
+app.get('/api/analytics/dashboard-pulse', (req: any, res: any) => {
+  res.json({
+    total_calls: 0,
+    inbound_calls: 0,
+    outbound_calls: 0,
+    avg_duration: 0,
+    appointments_booked: 0,
+    avg_sentiment: 0,
+    pipeline_value: 0
+  });
+});
+
+app.get('/api/analytics/recent-activity', (req: any, res: any) => {
+  res.json({
+    activities: []
+  });
+});
+
+app.get('/orgs/validate/:orgId', (req: any, res: any) => {
+  res.json({
+    valid: true,
+    org_id: req.params.orgId
+  });
+});
 
 // ============================================
 // HELPER FUNCTIONS
