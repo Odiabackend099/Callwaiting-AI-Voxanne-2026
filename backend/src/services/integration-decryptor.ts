@@ -1002,6 +1002,7 @@ export class IntegrationDecryptor {
    * @param creds.authToken - Twilio Auth Token
    * @param creds.phoneNumber - Phone number in E.164 format
    * @param creds.source - 'byoc' or 'managed'
+   * @param creds.type - 'inbound' or 'outbound' (default: 'inbound')
    */
   static async saveTwilioCredential(
     orgId: string,
@@ -1012,9 +1013,10 @@ export class IntegrationDecryptor {
       source: 'byoc' | 'managed';
       vapiPhoneId?: string;
       vapiCredentialId?: string;
+      type?: 'inbound' | 'outbound';
     }
   ): Promise<{ vapiCredentialId: string | null }> {
-    const { accountSid, authToken, phoneNumber, source, vapiPhoneId, vapiCredentialId } = creds;
+    const { accountSid, authToken, phoneNumber, source, vapiPhoneId, vapiCredentialId, type = 'inbound' } = creds;
 
     log.info('IntegrationDecryptor', 'saveTwilioCredential: starting', {
       orgId,
@@ -1034,7 +1036,7 @@ export class IntegrationDecryptor {
       vapiCredentialId: vapiCredentialId || undefined,
     });
 
-    // 2. UPSERT into org_credentials (single-slot — UNIQUE on org_id,provider)
+    // 2. UPSERT into org_credentials (direction-aware — UNIQUE on org_id,provider,type)
     const { error: upsertError } = await supabase
       .from('org_credentials')
       .upsert(
@@ -1042,12 +1044,13 @@ export class IntegrationDecryptor {
           org_id: orgId,
           provider: 'twilio' as const,
           is_active: true,
-          is_managed: source === 'managed', // NEW: Set is_managed flag
+          is_managed: source === 'managed',
+          type,
           encrypted_config: encryptedConfig,
           metadata: { accountSid, phoneNumber, vapiPhoneId },
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'org_id,provider' }
+        { onConflict: 'org_id,provider,type' }
       );
 
     if (upsertError) {

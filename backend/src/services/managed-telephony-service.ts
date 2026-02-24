@@ -421,11 +421,51 @@ export class ManagedTelephonyService {
       const selectedNumber = searchResults[0].phoneNumber;
       log.info('ManagedTelephony', 'Number selected', { orgId, number: redactPhone(selectedNumber) });
 
+      // Step 4.5: For countries requiring regulatory address (UK, DE, FR, AU, etc.),
+      // create or reuse a Twilio Address resource before purchasing.
+      let addressSid: string | undefined;
+      const countriesRequiringAddress = ['GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'AU'];
+
+      if (countriesRequiringAddress.includes(country)) {
+        try {
+          const existingAddresses = await subClient.addresses.list({ limit: 1 });
+          if (existingAddresses.length > 0) {
+            addressSid = existingAddresses[0].sid;
+            log.info('ManagedTelephony', 'Reusing existing address resource', { orgId, addressSid, country });
+          } else {
+            const cityMap: Record<string, string> = { GB: 'London', AU: 'Sydney', DE: 'Berlin', FR: 'Paris', ES: 'Madrid', IT: 'Rome', NL: 'Amsterdam' };
+            const postalMap: Record<string, string> = { GB: 'EC1A 1BB', AU: '2000', DE: '10115', FR: '75001', ES: '28001', IT: '00100', NL: '1011' };
+            const regionMap: Record<string, string> = { GB: 'England', AU: 'NSW', DE: '', FR: '', ES: '', IT: '', NL: '' };
+            const address = await subClient.addresses.create({
+              customerName: org.name || 'Business',
+              street: 'Address Required',
+              city: cityMap[country] || 'London',
+              region: regionMap[country] ?? '',
+              postalCode: postalMap[country] || 'EC1A 1BB',
+              isoCountry: country,
+              friendlyName: `${org.name || 'Voxanne'} - Managed Number Address`,
+            });
+            addressSid = address.sid;
+            log.info('ManagedTelephony', 'Created address resource', { orgId, addressSid, country });
+          }
+        } catch (addrErr: any) {
+          log.error('ManagedTelephony', 'Failed to create/fetch address resource', { orgId, error: addrErr.message, country });
+          return {
+            success: false,
+            error: `Address creation required for ${country} numbers: ${addrErr.message}`,
+            failedStep: 'purchase',
+            canRetry: true,
+            userMessage: `Phone numbers in ${country} require a registered business address. Please contact support to set up your address before purchasing.`,
+          };
+        }
+      }
+
       // Step 5: Purchase the number in the subaccount
       let purchasedNumber: any;
       try {
         purchasedNumber = await subClient.incomingPhoneNumbers.create({
           phoneNumber: selectedNumber,
+          ...(addressSid ? { addressSid } : {}),
         });
       } catch (buyErr: any) {
         log.error('ManagedTelephony', 'Failed to purchase number', { orgId, error: buyErr.message });
@@ -561,61 +601,25 @@ export class ManagedTelephonyService {
         outboundAgentUpdated: atomicResult.outbound_agent_updated
       });
 
-      // Step 9: Conditional SSOT write to org_credentials.
-      // Only needed for the FIRST managed number — subaccount credentials (SID/AuthToken)
-      // are shared across all numbers and only need to be stored once.
-      // For subsequent numbers, managed_phone_numbers is the SSOT for number-specific data
-      // (phone_number, vapi_phone_id, routing_direction) and /api/integrations/vapi/numbers
-      // now reads from there directly.
-      // Calling saveTwilioCredential for a second number would:
-      //   1. Overwrite the first number's vapiPhoneId in org_credentials (data corruption)
-      //   2. Call syncVapiCredential which fails — Vapi credential for this subaccount already exists
-      const { data: existingManagedCred, error: credCheckError } = await supabaseAdmin
-        .from('org_credentials')
-        .select('id')
-        .eq('org_id', orgId)
-        .eq('provider', 'twilio')
-        .eq('is_managed', true)
-        .maybeSingle();
-
-      if (credCheckError) {
-        // Fail closed: cannot confirm whether a managed credential already exists.
-        // Skip saveTwilioCredential to avoid corrupting org_credentials if this is
-        // actually a second managed number and the DB check failed transiently.
-        // The number is already in managed_phone_numbers (Steps 7-8), so
-        // /api/integrations/vapi/numbers will still return it correctly.
-        log.warn('ManagedTelephony', 'Could not verify existing managed credential — skipping org_credentials write (fail-closed)', {
-          orgId,
-          error: credCheckError.message,
-          newPhoneNumber: redactPhone(purchasedNumber.phoneNumber),
-        });
-      } else if (!existingManagedCred) {
-        // First managed number: create the org_credentials entry (subaccount creds + initial number)
-        log.info('ManagedTelephony', 'First managed number — writing subaccount creds to org_credentials', {
-          orgId,
-          phoneNumber: redactPhone(purchasedNumber.phoneNumber),
-          vapiPhoneId,
-        });
-        // Do NOT catch this error — let it bubble up to the inner catch in provisionManagedNumber
-        await IntegrationDecryptor.saveTwilioCredential(orgId, {
-          accountSid: subaccountSid,
-          authToken: subToken,
-          phoneNumber: purchasedNumber.phoneNumber,
-          source: 'managed',
-          vapiPhoneId: vapiPhoneId,
-          vapiCredentialId: vapiCredentialId || undefined,
-        });
-        log.info('ManagedTelephony', 'org_credentials write complete', { orgId, vapiPhoneId });
-      } else {
-        // Second+ managed number: org_credentials already has subaccount creds — skip UPSERT.
-        // managed_phone_numbers already has this number's vapiPhoneId (inserted in Steps 7-8).
-        log.info('ManagedTelephony', 'Subsequent managed number — skipping org_credentials write (subaccount creds already exist)', {
-          orgId,
-          existingCredId: existingManagedCred.id,
-          newPhoneNumber: redactPhone(purchasedNumber.phoneNumber),
-          newVapiPhoneId: vapiPhoneId,
-        });
-      }
+      // Step 9: Write to org_credentials with direction type.
+      // org_credentials now supports per-direction rows: UNIQUE(org_id, provider, type).
+      // Each direction (inbound/outbound) gets its own row with its own vapiPhoneId.
+      log.info('ManagedTelephony', 'Writing managed creds to org_credentials', {
+        orgId,
+        direction,
+        phoneNumber: redactPhone(purchasedNumber.phoneNumber),
+        vapiPhoneId,
+      });
+      await IntegrationDecryptor.saveTwilioCredential(orgId, {
+        accountSid: subaccountSid,
+        authToken: subToken,
+        phoneNumber: purchasedNumber.phoneNumber,
+        source: 'managed',
+        vapiPhoneId: vapiPhoneId,
+        vapiCredentialId: vapiCredentialId || undefined,
+        type: direction as 'inbound' | 'outbound',
+      });
+      log.info('ManagedTelephony', 'org_credentials write complete', { orgId, direction, vapiPhoneId });
 
       return {
         success: true,
