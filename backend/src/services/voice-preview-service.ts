@@ -33,8 +33,12 @@ export class VoicePreviewService {
 
   constructor() {
     // Samples live in the project root's public/ directory (Next.js public folder).
-    // The backend runs from backend/, so resolve one level up.
-    this.samplesDir = path.resolve(process.cwd(), '..', 'public', 'voice-samples');
+    // tsconfig.json: rootDir=./src, outDir=./dist
+    // So both source and compiled paths are the same relative structure:
+    //   - Source: /backend/src/services/voice-preview-service.ts
+    //   - Compiled: /backend/dist/services/voice-preview-service.js (rootDir strips src/)
+    // From either location: ../../../ gets us to project root, then public/voice-samples
+    this.samplesDir = path.resolve(__dirname, '../../../public/voice-samples');
   }
 
   /**

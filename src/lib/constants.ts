@@ -1,4 +1,10 @@
 
+export const AGENT_CONFIG_CONSTRAINTS = {
+    MIN_DURATION_SECONDS: 60,
+    MAX_DURATION_SECONDS: 3600,
+    DEFAULT_DURATION_SECONDS: 300
+};
+
 export const PHONE_NUMBER_PRICING = {
   costDisplay: '£10.00',
   costType: 'one-time setup',

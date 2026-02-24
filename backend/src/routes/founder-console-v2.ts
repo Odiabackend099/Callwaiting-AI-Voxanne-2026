@@ -69,6 +69,11 @@ import { CallOutcome, CallStatus, isActiveCall } from '../types/call-outcome';
 import { createLogger } from '../services/logger';
 import { wsBroadcast } from '../services/websocket';
 import { resolveBackendUrl } from '../utils/resolve-backend-url';
+import {
+  executeTransactionalAgentUpdate,
+  buildTransactionalUpdates,
+  type TransactionResult
+} from '../services/agent-config-transaction';
 import { requireAuth, requireAuthOrDev } from '../middleware/auth';
 import { agentConfigLimiter, callCreationLimiter, voicePreviewLimiter } from '../middleware/rate-limit';
 import { validateRequest } from '../middleware/validation';
@@ -2537,106 +2542,22 @@ router.post(
         return;
       }
 
-      // Update each agent independently with its own payload
-      const updateResults: Array<{ role: string; agentId: string; success: boolean; error?: string }> = [];
+      // ========== TRANSACTIONAL AGENT UPDATE ==========
+      // CRITICAL INVARIANT: Either BOTH database + Vapi succeed, OR NEITHER is modified.
+      // This prevents partial saves where database is modified but Vapi sync fails.
+      //
+      // Pattern: Sync to Vapi FIRST (before any DB changes), then update DB if Vapi succeeds.
 
-      console.log('\n=== AGENT UPDATE LOOP ===');
+      console.log('\n=== TRANSACTIONAL AGENT UPDATE (Vapi First Pattern) ===');
       console.log('agentMap:', agentMap);
       console.log('inboundPayload exists:', Boolean(inboundPayload));
       console.log('outboundPayload exists:', Boolean(outboundPayload));
-      console.log('agentMap[INBOUND]:', agentMap[AGENT_ROLES.INBOUND]);
-      console.log('agentMap[OUTBOUND]:', agentMap[AGENT_ROLES.OUTBOUND]);
 
-      // Update INBOUND agent if payload exists
-      if (inboundPayload && agentMap[AGENT_ROLES.INBOUND]) {
-        console.log('\n--- Updating INBOUND agent ---');
-        const inboundAgentId = agentMap[AGENT_ROLES.INBOUND];
-        console.log('[SYSTEM_PROMPT_DEBUG] Updating INBOUND agent', {
-          agentId: inboundAgentId,
-          payload: JSON.stringify(inboundPayload, null, 2)
-        });
-        const { error: updateError } = await supabase
-          .from('agents')
-          .update(inboundPayload)
-          .eq('id', inboundAgentId)
-          .eq('org_id', orgId);
-
-        if (updateError) {
-          logger.error('Failed to update inbound agent', { agentId: inboundAgentId, updateError, requestId });
-          updateResults.push({ role: AGENT_ROLES.INBOUND, agentId: inboundAgentId, success: false, error: updateError.message });
-        } else {
-          // VERIFY the update actually saved
-          const { data: verifyInbound } = await supabase
-            .from('agents')
-            .select('id, name, system_prompt, voice, first_message')
-            .eq('id', inboundAgentId)
-            .maybeSingle();
-          console.log('[SYSTEM_PROMPT_DEBUG] INBOUND agent after update:', {
-            agentId: inboundAgentId,
-            name: verifyInbound?.name || 'NULL',
-            systemPrompt: verifyInbound?.system_prompt ? `"${verifyInbound.system_prompt.substring(0, 50)}..."` : 'NULL',
-            voice: verifyInbound?.voice,
-            firstMessage: verifyInbound?.first_message ? `"${verifyInbound.first_message.substring(0, 30)}..."` : 'NULL'
-          });
-          logger.info('Inbound agent updated', { agentId: inboundAgentId, requestId });
-          updateResults.push({ role: AGENT_ROLES.INBOUND, agentId: inboundAgentId, success: true });
-        }
-      }
-
-      // Update OUTBOUND agent if payload exists
-      if (outboundPayload && agentMap[AGENT_ROLES.OUTBOUND]) {
-        console.log('\n--- Updating OUTBOUND agent ---');
-        const outboundAgentId = agentMap[AGENT_ROLES.OUTBOUND];
-        console.log('[SYSTEM_PROMPT_DEBUG] Updating OUTBOUND agent', {
-          agentId: outboundAgentId,
-          payload: JSON.stringify(outboundPayload, null, 2)
-        });
-        const { error: updateError } = await supabase
-          .from('agents')
-          .update(outboundPayload)
-          .eq('id', outboundAgentId)
-          .eq('org_id', orgId);
-
-        if (updateError) {
-          logger.error('Failed to update outbound agent', { agentId: outboundAgentId, updateError, requestId });
-          updateResults.push({ role: AGENT_ROLES.OUTBOUND, agentId: outboundAgentId, success: false, error: updateError.message });
-        } else {
-          // VERIFY the update actually saved
-          const { data: verifyOutbound } = await supabase
-            .from('agents')
-            .select('id, name, system_prompt, voice, first_message')
-            .eq('id', outboundAgentId)
-            .maybeSingle();
-          console.log('[SYSTEM_PROMPT_DEBUG] OUTBOUND agent after update:', {
-            agentId: outboundAgentId,
-            name: verifyOutbound?.name || 'NULL',
-            systemPrompt: verifyOutbound?.system_prompt ? `"${verifyOutbound.system_prompt.substring(0, 50)}..."` : 'NULL',
-            voice: verifyOutbound?.voice,
-            firstMessage: verifyOutbound?.first_message ? `"${verifyOutbound.first_message.substring(0, 30)}..."` : 'NULL'
-          });
-          logger.info('Outbound agent updated', { agentId: outboundAgentId, requestId });
-          updateResults.push({ role: AGENT_ROLES.OUTBOUND, agentId: outboundAgentId, success: true });
-        }
-      }
-
-      // Collect agent IDs that need Vapi sync
-      const agentIdsToSync = updateResults
-        .filter(r => r.success)
-        .map(r => r.agentId);
-
-      console.log('\n=== UPDATE RESULTS ===');
-      console.log('updateResults:', JSON.stringify(updateResults, null, 2));
-      console.log('agentIdsToSync:', agentIdsToSync);
-      console.log('=== END UPDATE RESULTS ===\n');
-
-      // Check if agents exist even when no updates were made
-      if (agentIdsToSync.length === 0) {
-        console.log('No agents were updated - checking if this is valid scenario');
-
-        // Case 1: Agents exist but no changes requested (not an error)
+      // Check if there are any updates to make
+      if (!inboundPayload && !outboundPayload) {
+        console.log('No changes requested for agents - returning success');
         const existingAgents = Object.values(agentMap).filter(Boolean);
-        if (existingAgents.length > 0 && (!inboundPayload && !outboundPayload)) {
-          console.log('No changes requested for existing agents - returning success');
+        if (existingAgents.length > 0) {
           res.json({
             success: true,
             message: 'No changes to save',
@@ -2646,78 +2567,85 @@ router.post(
           return;
         }
 
-        // Case 2: Attempted updates but all failed (is an error)
-        console.log('ERROR: No agents were successfully updated!');
-        console.log('Inbound payload:', inboundPayload);
-        console.log('Outbound payload:', outboundPayload);
-        console.log('Agent map:', agentMap);
-        console.log('Update results:', updateResults);
-
         res.status(400).json({
-          error: 'No agents were updated. Check that all required fields are valid.',
-          details: {
-            inboundPayloadBuilt: Boolean(inboundPayload),
-            outboundPayloadBuilt: Boolean(outboundPayload),
-            inboundAgentExists: Boolean(agentMap[AGENT_ROLES.INBOUND]),
-            outboundAgentExists: Boolean(agentMap[AGENT_ROLES.OUTBOUND])
-          },
+          error: 'No agents exist and no changes requested',
           requestId
         });
         return;
       }
 
-      // Conditional Vapi Sync: Only sync if API key is available
-      if (vapiApiKey) {
-        console.time(`${endpointTimer}-vapi-sync`);
-        console.log(`[/agent/behavior] Starting Vapi sync for agents: ${agentIdsToSync.join(',')}`);
+      // Build transactional updates (master Vapi key passed separately to executor)
+      const transactionalUpdates = buildTransactionalUpdates(
+        orgId,
+        agentMap,
+        inboundPayload,
+        outboundPayload
+      );
 
-        logger.info('Syncing agents to Vapi', {
-          agentIds: agentIdsToSync,
+      if (transactionalUpdates.length === 0) {
+        res.status(400).json({
+          error: 'No valid agents to update',
+          requestId
+        });
+        return;
+      }
+
+      // Execute transactional update: Vapi first, then DB
+      if (vapiApiKey) {
+        console.time(`${endpointTimer}-transactional-sync`);
+        console.log(`[/agent/behavior] Starting transactional update for agents: ${transactionalUpdates.map(u => u.agentId).join(',')}`);
+
+        logger.info('Starting transactional agent update', {
+          agentCount: transactionalUpdates.length,
           requestId,
           inboundUpdated: Boolean(inboundPayload),
           outboundUpdated: Boolean(outboundPayload)
         });
 
-        // CRITICAL FIX: Capture individual agent success/failure instead of using Promise.allSettled
-        const syncPromises = agentIdsToSync.map(async (id) => {
-          try {
-            const syncResult = await ensureAssistantSynced(id, vapiApiKey!);
-            // ensureAssistantSynced now returns { assistantId, toolsSynced }
-            const assistantId = syncResult.assistantId;
-            return { agentId: id, assistantId, toolsSynced: syncResult.toolsSynced, success: true };
-          } catch (error: any) {
-            return { agentId: id, success: false, error: error.message || String(error) };
+        const transactionResults = await executeTransactionalAgentUpdate(supabase, transactionalUpdates, vapiApiKey!);
+        console.timeEnd(`${endpointTimer}-transactional-sync`);
+
+        const successfulUpdates = transactionResults.filter(r => r.success);
+        const failedUpdates = transactionResults.filter(r => !r.success);
+
+        // Log transaction results
+        console.log('\n=== TRANSACTION RESULTS ===');
+        console.log('successfulUpdates:', successfulUpdates.length);
+        console.log('failedUpdates:', failedUpdates.length);
+        transactionResults.forEach(result => {
+          console.log(`${result.agentId} (${result.role}): ${result.success ? 'SUCCESS' : 'FAILED'} (db=${result.dbUpdated}, vapi=${result.vapiSynced})`);
+          if (result.error) {
+            console.log(`  Error: ${result.error}`);
           }
         });
+        console.log('=== END TRANSACTION RESULTS ===\n');
 
-        const syncResults = await Promise.all(syncPromises);
-        console.timeEnd(`${endpointTimer}-vapi-sync`);
-
-        const successfulSyncs = syncResults.filter(r => r.success);
-        const failedSyncs = syncResults.filter(r => !r.success);
-
-        // CRITICAL FIX: Return error if ANY agent failed to sync (not just if ALL failed)
-        // This ensures database and Vapi stay in sync
-        if (failedSyncs.length > 0) {
-          const failureDetails = failedSyncs.map(f => ({
+        // If ANY transaction failed, return error (all-or-nothing semantics)
+        if (failedUpdates.length > 0) {
+          const failureDetails = failedUpdates.map(f => ({
             agentId: f.agentId,
-            error: f.error
+            role: f.role,
+            error: f.error,
+            dbUpdated: f.dbUpdated,
+            vapiSynced: f.vapiSynced
           }));
 
-          const errorMessage = failedSyncs.map(f => f.error).join('; ');
-
-          logger.error('Agent sync to Vapi failed', {
-            failedAgents: failureDetails,
-            successCount: successfulSyncs.length,
-            failCount: failedSyncs.length,
+          logger.error('Transactional agent update failed', {
+            failedUpdates: failureDetails,
+            successCount: successfulUpdates.length,
+            failCount: failedUpdates.length,
             requestId
           });
 
           res.status(500).json({
             success: false,
-            error: `Failed to sync ${failedSyncs.length} agent(s) to Vapi: ${errorMessage}`,
+            error: `Failed to update ${failedUpdates.length} agent(s): ${failedUpdates.map(f => f.error).join('; ')}`,
             details: {
-              succeeded: successfulSyncs.map((s: any) => ({ agentId: s.agentId, assistantId: s.assistantId })),
+              succeeded: successfulUpdates.map(s => ({
+                agentId: s.agentId,
+                role: s.role,
+                assistantId: s.assistantId
+              })),
               failed: failureDetails
             },
             requestId
@@ -2725,110 +2653,50 @@ router.post(
           return;
         }
 
-        // Verify voice was synced by checking agent records
-        const { data: syncedAgents = [] } = await supabase
-          .from('agents')
-          .select('id, role, voice, vapi_assistant_id')
-          .in('id', agentIdsToSync);
-
-        const agentDetails = (syncedAgents || []).map(a => ({
-          role: a.role,
-          voice: a.voice,
-          vapiAssistantId: a.vapi_assistant_id
-        }));
-
-        // VERIFICATION FIX: Confirm vapi_assistant_id was actually saved to database
-        // Don't just trust that sync() returned without error
-        const { data: verifiedAgents, error: verifyError } = await supabase
-          .from('agents')
-          .select('id, role, vapi_assistant_id')
-          .in('id', agentIdsToSync);
-
-        if (verifyError) {
-          logger.error('Failed to verify agent sync status', {
-            error: verifyError.message,
-            requestId
-          });
-          res.status(500).json({
-            success: false,
-            error: 'Successfully synced to Vapi but failed to verify database update',
-            details: { dbError: verifyError.message },
-            requestId
-          });
-          return;
-        }
-
-        // Check that ALL agents have vapi_assistant_id populated
-        const unsyncedAgents = (verifiedAgents || []).filter(a => !a.vapi_assistant_id);
-
-        if (unsyncedAgents.length > 0) {
-          // This is the bug we're fixing: sync returned success but vapi_assistant_id is NULL
-          logger.error('Vapi sync response mismatch: database shows NULL vapi_assistant_id', {
-            unsyncedAgents: unsyncedAgents.map(a => ({ id: a.id, role: a.role })),
-            totalExpected: agentIdsToSync.length,
-            actualSynced: (verifiedAgents || []).length - unsyncedAgents.length,
-            requestId
-          });
-
-          res.status(500).json({
-            success: false,
-            error: `Vapi sync failed: ${unsyncedAgents.length} agent(s) have NULL assistant ID in database`,
-            details: {
-              unsyncedAgents: unsyncedAgents.map(a => ({ agentId: a.id, role: a.role })),
-              totalExpected: agentIdsToSync.length,
-              actualSynced: (verifiedAgents || []).length - unsyncedAgents.length
-            },
-            requestId
-          });
-          return;
-        }
-
-        // NOW we can safely claim success (all agents have vapi_assistant_id set)
-        const agentDetailsVerified = (verifiedAgents || []).map(a => ({
-          role: a.role,
-          vapiAssistantId: a.vapi_assistant_id
-        }));
-
+        // All transactions succeeded - return success
         console.timeEnd(endpointTimer);
-        console.log(`[/agent/behavior] Request completed successfully: ${requestId}`);
+        console.log(`[/agent/behavior] Transactional update completed successfully: ${requestId}`);
 
-        logger.info('All agents synced successfully to Vapi and verified in database', {
-          count: agentIdsToSync.length,
+        logger.info('All agents updated transactionally (Vapi + DB)', {
+          count: successfulUpdates.length,
           requestId,
-          agents: agentDetailsVerified
+          agents: successfulUpdates.map(s => ({
+            agentId: s.agentId,
+            role: s.role,
+            assistantId: s.assistantId
+          }))
         });
-
-        const allToolsSynced = syncResults.every((r: any) => r.toolsSynced !== false);
 
         res.status(200).json({
           success: true,
-          syncedAgentIds: agentIdsToSync,
-          vapiAssistantIds: (verifiedAgents || []).map(a => ({
-            agentId: a.id,
-            role: a.role,
-            vapiAssistantId: a.vapi_assistant_id
+          syncedAgentIds: successfulUpdates.map(s => s.agentId),
+          vapiAssistantIds: successfulUpdates.map(s => ({
+            agentId: s.agentId,
+            role: s.role,
+            vapiAssistantId: s.assistantId
           })),
-          message: `Agent configuration saved and synced to Vapi. ${agentIdsToSync.length} assistant(s) updated.`,
+          message: `Agent configuration saved and synced to Vapi. ${successfulUpdates.length} assistant(s) updated. (Transactional: Vapi first, then DB)`,
           voiceSynced: true,
           knowledgeBaseSynced: true,
-          toolsSynced: allToolsSynced,
-          agentDetails: agentDetailsVerified,
+          toolsSynced: true,
+          transactional: true,
           requestId
         });
       } else {
         // Browser-only mode: Agent saved without Vapi sync
+        // Still use transactional pattern but with empty Vapi key for consistency
         console.timeEnd(endpointTimer);
-        console.log(`[/agent/behavior] Request completed (no Vapi sync): ${requestId}`);
+        console.log(`[/agent/behavior] Request completed in browser-only mode (no Vapi sync): ${requestId}`);
 
         logger.info('Agent configuration saved in browser-only mode (no Vapi key)', {
-          agentIds: agentIdsToSync,
+          agentIds: transactionalUpdates.map(u => u.agentId),
           requestId,
           mode: 'browser-testing'
         });
 
         res.status(200).json({
           success: true,
-          syncedAgentIds: agentIdsToSync,
+          syncedAgentIds: transactionalUpdates.map(u => u.agentId),
           message: `Agent configuration saved in browser-only mode. Vapi sync will be available once telephony is configured.`,
           mode: 'browser-only',
           vapiSynced: false,

@@ -12,6 +12,11 @@ import { PROMPT_TEMPLATES, OUTBOUND_PROMPT_TEMPLATES, PromptTemplate } from '@/l
 import { useAgentStore, INITIAL_CONFIG, AgentConfig } from '@/lib/store/agentStore';
 import { VoiceSelector } from '@/components/VoiceSelector';
 import { formatPence } from '@/utils/currency';
+import { UnifiedAgentConfigForm } from '@/components/dashboard/AgentConfig/UnifiedAgentConfigForm';
+import { PromptCheckpointModal } from '@/components/dashboard/AgentConfig/PromptCheckpointModal';
+import { MultiTabConflictAlert } from '@/components/dashboard/AgentConfig/MultiTabConflictAlert';
+import { usePromptCheckpoint } from '@/hooks/usePromptCheckpoint';
+import { useMultiTabConflictDetection } from '@/hooks/useMultiTabConflictDetection';
 import useSWR from 'swr';
 
 const fetcher = (url: string) => authedBackendFetch<any>(url);
@@ -96,6 +101,15 @@ export default function AgentConfigPage() {
 
     // Global Store State
     const { inboundConfig, outboundConfig, setInboundConfig, setOutboundConfig } = useAgentStore();
+
+    // Prompt checkpoint hook for review-before-save modal
+    const checkpoint = usePromptCheckpoint();
+
+    // Multi-tab conflict detection hook
+    const conflict = useMultiTabConflictDetection({
+        agentType: activeTab,
+        agentName: (activeTab === 'inbound' ? inboundConfig : outboundConfig).name || `${activeTab} Agent`,
+    });
 
     // Draft state removed — DB is the single source of truth (PRD rule).
     // These are kept as no-ops so delete handler references don't break.
@@ -356,7 +370,8 @@ export default function AgentConfigPage() {
         return null;
     };
 
-    const handleSave = async () => {
+    // Actual save logic (called after checkpoint confirmation)
+    const performSave = async () => {
         setIsSaving(true);
         setSaveSuccess(false);
         setError(null);
@@ -443,6 +458,9 @@ export default function AgentConfigPage() {
 
             setSaveSuccess(true);
 
+            // Broadcast save to other tabs for conflict detection
+            conflict.broadcastSave();
+
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
             saveTimeoutRef.current = setTimeout(() => {
                 setSaveSuccess(false);
@@ -455,6 +473,40 @@ export default function AgentConfigPage() {
             setIsSaving(false);
             setSavingAgent(null);
         }
+    };
+
+    // Wrapper: Check for conflicts, then show checkpoint before actual save
+    const handleSave = async () => {
+        // Block save if another tab modified the config
+        if (!conflict.canSave()) {
+            setError('Another tab has modified this agent. Please refresh to see the latest changes.');
+            return;
+        }
+
+        const currentConfig = activeTab === 'inbound' ? inboundConfig : outboundConfig;
+
+        // Show prompt checkpoint before saving
+        checkpoint.show(
+            {
+                agentName: currentConfig.name || `${activeTab} Agent`,
+                systemPrompt: currentConfig.systemPrompt,
+                firstMessage: currentConfig.firstMessage,
+            },
+            {
+                onConfirm: async () => {
+                    checkpoint.setLoading(true);
+                    try {
+                        await performSave();
+                        checkpoint.close();
+                    } finally {
+                        checkpoint.setLoading(false);
+                    }
+                },
+                onCancel: () => {
+                    checkpoint.close();
+                }
+            }
+        );
     };
 
     const handleTestInbound = async () => {
@@ -845,6 +897,15 @@ export default function AgentConfigPage() {
     const setConfig = activeTab === 'inbound' ? setInboundConfig : setOutboundConfig;
     const templates = activeTab === 'inbound' ? PROMPT_TEMPLATES : OUTBOUND_PROMPT_TEMPLATES;
 
+    // Wrapper to adapt handlePreviewVoice to accept only voiceId
+    // The provider is determined from the voice object
+    const handlePreviewVoiceAdapter = (voiceId: string) => {
+        const voice = voices.find(v => v.id === voiceId);
+        if (voice) {
+            return handlePreviewVoice(voiceId, voice.provider);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-clinical-bg pb-20">
             {/* Sticky Header */}
@@ -986,366 +1047,60 @@ export default function AgentConfigPage() {
                 )}
 
 
-                {/* AI Persona — full-width above grid so users pick persona first */}
+                {/* Unified Agent Configuration Form - Replaces ~360 lines of duplicated form JSX */}
                 {!isLoading && (
-                <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6 mb-8">
-                    <div className="flex items-center justify-between mb-1">
-                        <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
-                            <LayoutTemplate className="w-5 h-5 text-surgical-600" />
-                            AI Persona
-                        </h3>
-                        <span className="text-xs text-obsidian/40 font-medium">Choose your agent&apos;s personality</span>
-                    </div>
-                    <p className="text-xs text-obsidian/50 mb-4">Selecting a persona pre-fills your system prompt and first message with a proven template.</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {templates.map((template) => {
-                            const activeTemplateId = activeTab === 'inbound' ? selectedInboundTemplateId : selectedOutboundTemplateId;
-                            const isSelected = activeTemplateId === template.id;
-                            return (
-                                <button
-                                    key={template.id}
-                                    onClick={() => applyTemplate(template.id, activeTab)}
-                                    className={`text-left p-4 rounded-xl border-2 transition-all group relative ${
-                                        isSelected
-                                            ? 'border-surgical-600 bg-surgical-50 shadow-sm'
-                                            : 'border-surgical-200 hover:border-surgical-400 hover:bg-surgical-50/50'
-                                    }`}
-                                >
-                                    {isSelected && (
-                                        <span className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-surgical-600 flex items-center justify-center">
-                                            <Check className="w-3 h-3 text-white" />
-                                        </span>
-                                    )}
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                        <span className="text-2xl leading-none">{template.icon}</span>
-                                        <div>
-                                            <div className="font-semibold text-obsidian text-sm leading-tight">{template.name}</div>
-                                            <div className="text-xs text-surgical-600 font-medium">{template.persona}</div>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-obsidian/60 leading-relaxed">
-                                        {template.tagline}
-                                    </p>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
+                    <UnifiedAgentConfigForm
+                        agentType={activeTab}
+                        config={currentConfig}
+                        originalConfig={activeTab === 'inbound' ? originalInboundConfig : originalOutboundConfig}
+                        inboundStatus={inboundStatus || undefined}
+                        outboundNumberId={selectedOutboundNumberId}
+                        vapiNumbers={vapiNumbers}
+                        hasChanges={hasActiveTabChanges()}
+                        isSaving={isSaving}
+                        saveSuccess={saveSuccess && savingAgent === activeTab}
+                        error={error || undefined}
+                        isDeleting={isDeleting}
+                        previewingVoiceId={previewingVoiceId}
+                        previewPhase={previewPhase === 'idle' ? null : (previewPhase as 'loading' | 'playing' | null)}
+                        personas={templates}
+                        voices={voices}
+                        advancedVoiceOpen={advancedVoiceOpen}
+                        onAdvancedVoiceToggle={setAdvancedVoiceOpen}
+                        onConfigChange={(updates) => {
+                            setConfig({ ...currentConfig, ...updates });
+                        }}
+                        onSave={handleSave}
+                        onPreviewVoice={handlePreviewVoiceAdapter}
+                        onStopPreview={handleStopPreview}
+                        onDelete={() => setShowDeleteModal(true)}
+                        onTestCall={activeTab === 'inbound' ? handleTestInbound : handleTestOutbound}
+                    />
                 )}
-
-                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${isLoading ? 'hidden' : ''}`}>
-                    {/* LEFT COLUMN - Configuration */}
-                    <div className="lg:col-span-1 space-y-6">
-                        {/* Agent Identity Card */}
-                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                <Bot className="w-5 h-5 text-surgical-600" />
-                                Agent Identity
-                            </h3>
-                            <div>
-                                <label className="block text-sm font-medium text-obsidian/60 mb-2">
-                                    Agent Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={currentConfig.name}
-                                    onChange={(e) => setConfig({ ...currentConfig, name: e.target.value.slice(0, 100) })}
-                                    placeholder={activeTab === 'inbound' ? 'Inbound Agent' : 'Outbound Agent'}
-                                    className="w-full px-4 py-2.5 border border-surgical-200 rounded-lg focus:ring-2 focus:ring-surgical-500 bg-white text-obsidian outline-none transition-colors"
-                                    maxLength={100}
-                                />
-                                <p className="mt-2 text-xs text-obsidian/60">
-                                    Give your agent a memorable name (e.g., "Receptionist Robin", "Sales Sarah")
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Phone Number (read-only — manage in Phone Settings) */}
-                        {activeTab === 'inbound' && (
-                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-obsidian mb-0.5 flex items-center gap-2">
-                                            <Phone className="w-4 h-4 text-surgical-600" />
-                                            Phone Number
-                                        </h3>
-                                        <p className="text-sm text-obsidian/70">
-                                            {inboundStatus?.configured && inboundStatus.inboundNumber
-                                                ? <><span className="font-mono">{inboundStatus.inboundNumber}</span> · Active</>
-                                                : <span className="text-obsidian/40">No number assigned</span>}
-                                        </p>
-                                    </div>
-                                    <a
-                                        href="/dashboard/phone-settings"
-                                        className="text-xs text-surgical-600 hover:text-surgical-700 font-medium flex items-center gap-1 shrink-0 ml-4"
-                                    >
-                                        Manage in Phone Settings
-                                        <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Outbound Caller ID (read-only — manage in Phone Settings) */}
-                        {activeTab === 'outbound' && (
-                            <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-obsidian mb-0.5 flex items-center gap-2">
-                                            <Phone className="w-4 h-4 text-surgical-600" />
-                                            Outbound Caller ID
-                                        </h3>
-                                        <p className="text-sm text-obsidian/70">
-                                            {selectedOutboundNumberId && vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number
-                                                ? <><span className="font-mono">{vapiNumbers.find(n => n.id === selectedOutboundNumberId)?.number}</span> · Active</>
-                                                : <span className="text-obsidian/40">No number assigned</span>}
-                                        </p>
-                                    </div>
-                                    <a
-                                        href="/dashboard/phone-settings"
-                                        className="text-xs text-surgical-600 hover:text-surgical-700 font-medium flex items-center gap-1 shrink-0 ml-4"
-                                    >
-                                        Manage in Phone Settings
-                                        <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Voice Settings */}
-                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                <Volume2 className="w-5 h-5 text-surgical-600" />
-                                Voice Settings
-                            </h3>
-                            <div className="space-y-4">
-                                {/* Voice Selector Component */}
-                                <VoiceSelector
-                                    voices={voices}
-                                    selected={currentConfig.voice}
-                                    onSelect={(voiceId, provider) => {
-                                        setConfig({
-                                            ...currentConfig,
-                                            voice: voiceId,
-                                            voiceProvider: provider
-                                        });
-                                    }}
-                                    onPreviewVoice={handlePreviewVoice}
-                                    onStopPreview={handleStopPreview}
-                                    previewingVoiceId={previewingVoiceId}
-                                    previewPhase={previewPhase}
-                                />
-
-                                <div>
-                                    <label className="block text-sm font-medium text-obsidian/60 mb-2">
-                                        Language
-                                    </label>
-                                    <select
-                                        value={currentConfig.language}
-                                        onChange={(e) => setConfig({ ...currentConfig, language: e.target.value })}
-                                        className="w-full px-3 py-2.5 rounded-lg bg-white border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none"
-                                    >
-                                        <option value="en-US">English (US)</option>
-                                        <option value="en-GB">English (UK)</option>
-                                        <option value="es-ES">Spanish (Spain)</option>
-                                        <option value="es-MX">Spanish (Mexico)</option>
-                                        <option value="fr-FR">French</option>
-                                        <option value="de-DE">German</option>
-                                    </select>
-                                </div>
-
-                                {/* Advanced Voice Settings accordion */}
-                                <div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setAdvancedVoiceOpen(v => !v)}
-                                        className="flex items-center justify-between w-full py-2 text-sm font-medium text-obsidian/60 hover:text-obsidian transition-colors select-none"
-                                        aria-expanded={advancedVoiceOpen}
-                                    >
-                                        <span>Advanced Voice Settings</span>
-                                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${advancedVoiceOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    <div
-                                        className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out ${advancedVoiceOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}
-                                        {...(!advancedVoiceOpen ? { inert: true } : {})}
-                                    >
-                                    <div className="mt-3 space-y-5 pt-3 border-t border-surgical-100">
-                                        {currentConfig.voiceProvider === 'elevenlabs' ? (
-                                            <>
-                                                {/* Stability slider */}
-                                                <div>
-                                                    <div className="flex items-center gap-1.5 mb-1">
-                                                        <label className="text-sm font-medium text-obsidian/70">
-                                                            Voice Stability
-                                                        </label>
-                                                        <span
-                                                            title="Higher = more consistent but less expressive. Lower = more dynamic but less predictable."
-                                                            className="text-obsidian/40 hover:text-obsidian/60 cursor-help"
-                                                        >
-                                                            <Info className="w-3.5 h-3.5" />
-                                                        </span>
-                                                        <span className="ml-auto flex items-center gap-2 text-xs font-mono text-surgical-600">
-                                                            {currentConfig.voiceStability != null
-                                                                ? currentConfig.voiceStability.toFixed(2)
-                                                                : 'default'}
-                                                            {currentConfig.voiceStability != null && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setConfig({ ...currentConfig, voiceStability: null })}
-                                                                    className="font-sans text-obsidian/40 hover:text-obsidian/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-surgical-500 rounded-sm"
-                                                                    title="Reset to provider default"
-                                                                >
-                                                                    Reset
-                                                                </button>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <input
-                                                        type="range"
-                                                        min={0}
-                                                        max={1}
-                                                        step={0.05}
-                                                        value={currentConfig.voiceStability ?? 0.5}
-                                                        onChange={(e) => setConfig({
-                                                            ...currentConfig,
-                                                            voiceStability: parseFloat(e.target.value)
-                                                        })}
-                                                        className="w-full voice-slider"
-                                                    />
-                                                    <div className="flex justify-between text-xs text-obsidian/40 mt-0.5">
-                                                        <span>Expressive</span>
-                                                        <span>Consistent</span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Similarity Boost slider */}
-                                                <div>
-                                                    <div className="flex items-center gap-1.5 mb-1">
-                                                        <label className="text-sm font-medium text-obsidian/70">
-                                                            Voice Similarity
-                                                        </label>
-                                                        <span
-                                                            title="Higher = voice sounds closer to the original sample. Lower = allows more flexibility."
-                                                            className="text-obsidian/40 hover:text-obsidian/60 cursor-help"
-                                                        >
-                                                            <Info className="w-3.5 h-3.5" />
-                                                        </span>
-                                                        <span className="ml-auto flex items-center gap-2 text-xs font-mono text-surgical-600">
-                                                            {currentConfig.voiceSimilarityBoost != null
-                                                                ? currentConfig.voiceSimilarityBoost.toFixed(2)
-                                                                : 'default'}
-                                                            {currentConfig.voiceSimilarityBoost != null && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setConfig({ ...currentConfig, voiceSimilarityBoost: null })}
-                                                                    className="font-sans text-obsidian/40 hover:text-obsidian/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-surgical-500 rounded-sm"
-                                                                    title="Reset to provider default"
-                                                                >
-                                                                    Reset
-                                                                </button>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <input
-                                                        type="range"
-                                                        min={0}
-                                                        max={1}
-                                                        step={0.05}
-                                                        value={currentConfig.voiceSimilarityBoost ?? 0.75}
-                                                        onChange={(e) => setConfig({
-                                                            ...currentConfig,
-                                                            voiceSimilarityBoost: parseFloat(e.target.value)
-                                                        })}
-                                                        className="w-full voice-slider"
-                                                    />
-                                                    <div className="flex justify-between text-xs text-obsidian/40 mt-0.5">
-                                                        <span>Flexible</span>
-                                                        <span>Original</span>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <p className="text-xs text-obsidian/50 italic py-1">
-                                                Advanced voice parameters (stability, similarity) are available for ElevenLabs voices only.
-                                            </p>
-                                        )}
-                                    </div>
-                                    </div>
-                                </div>
-                                {/* Call Limits — merged into Voice Settings card */}
-                                <div className="pt-4 mt-4 border-t border-surgical-100">
-                                    <label className="block text-sm font-medium text-obsidian/60 mb-2 flex items-center gap-1.5">
-                                        <Clock className="w-4 h-4" />
-                                        Max Duration (Seconds)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={currentConfig.maxDuration}
-                                        onChange={(e) => setConfig({ ...currentConfig, maxDuration: parseInt(e.target.value) || AGENT_CONFIG_CONSTRAINTS.DEFAULT_DURATION_SECONDS })}
-                                        min={AGENT_CONFIG_CONSTRAINTS.MIN_DURATION_SECONDS}
-                                        max={AGENT_CONFIG_CONSTRAINTS.MAX_DURATION_SECONDS}
-                                        className="w-full px-3 py-2.5 rounded-lg bg-white border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none"
-                                    />
-                                    <p className="text-xs text-obsidian/60 mt-1">
-                                        Auto-end call after this time.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* RIGHT COLUMN - Intelligence */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* System Prompt */}
-                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-obsidian flex items-center gap-2">
-                                    <Bot className="w-5 h-5 text-surgical-600" />
-                                    System Prompt
-                                    <span
-                                        title="The instructions that define your AI agent's personality and behavior. Never spoken aloud — it's the agent's internal operating manual."
-                                        className="text-obsidian/40 hover:text-obsidian/60 cursor-help"
-                                    >
-                                        <Info className="w-4 h-4" />
-                                    </span>
-                                </h3>
-                                <span className="text-xs px-2 py-1 rounded-full bg-surgical-50 text-obsidian/60 font-medium">
-                                    Core Personality
-                                </span>
-                            </div>
-                            <p className="text-sm text-obsidian/60 mb-4">
-                                Define how your agent behaves, speaks, and handles specific scenarios.
-                            </p>
-                            <textarea
-                                value={currentConfig.systemPrompt}
-                                onChange={(e) => setConfig({ ...currentConfig, systemPrompt: e.target.value })}
-                                placeholder="You are a helpful AI assistant..."
-                                className="w-full h-64 min-h-[8rem] px-4 py-3 rounded-xl bg-surgical-50 border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none resize-y font-mono text-sm leading-relaxed"
-                            />
-                        </div>
-
-                        {/* First Message */}
-                        <div className="bg-white rounded-xl shadow-sm border border-surgical-200 p-6">
-                            <h3 className="text-lg font-semibold text-obsidian mb-4 flex items-center gap-2">
-                                <MessageSquare className="w-5 h-5 text-surgical-600" />
-                                First Message
-                                <span title="The first sentence your AI agent speaks when the call connects. Keep it short and welcoming." className="text-obsidian/40 hover:text-obsidian/60 cursor-help">
-                                    <Info className="w-4 h-4" />
-                                </span>
-                            </h3>
-                            <p className="text-sm text-obsidian/60 mb-4">
-                                The very first thing your agent says when the call connects.
-                            </p>
-                            <textarea
-                                value={currentConfig.firstMessage}
-                                onChange={(e) => setConfig({ ...currentConfig, firstMessage: e.target.value })}
-                                placeholder="Hello! How can I help you today?"
-                                className="w-full h-24 px-4 py-3 rounded-xl bg-surgical-50 border border-surgical-200 text-obsidian focus:ring-2 focus:ring-surgical-500 outline-none resize-none"
-                            />
-                        </div>
-                    </div>
-                </div>
             </div>
+
+            {/* Prompt Checkpoint Modal - Review before save */}
+            {checkpoint.isOpen && (
+                <PromptCheckpointModal
+                    isOpen={checkpoint.isOpen}
+                    agentName={checkpoint.agentName}
+                    systemPrompt={checkpoint.systemPrompt}
+                    firstMessage={checkpoint.firstMessage}
+                    isLoading={checkpoint.isLoading}
+                    onConfirm={checkpoint.handleConfirm}
+                    onCancel={checkpoint.handleCancel}
+                    onEdit={checkpoint.handleEdit}
+                />
+            )}
+
+            {/* Multi-Tab Conflict Alert */}
+            <MultiTabConflictAlert
+                isVisible={conflict.hasConflict}
+                message={conflict.conflictMessage}
+                conflictingAgentName={conflict.conflictingTab?.agentName}
+                onDismiss={conflict.clearConflict}
+                onRefresh={() => window.location.reload()}
+            />
 
             {/* Delete Confirmation Modal */}
             {showDeleteModal && (
