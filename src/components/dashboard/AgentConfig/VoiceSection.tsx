@@ -29,7 +29,7 @@ interface VoiceSectionProps {
   maxDuration: number;
   voices: Voice[];
   previewingVoiceId: string | null;
-  previewPhase: 'loading' | 'playing' | 'complete' | null;
+  previewPhase: 'idle' | 'loading' | 'playing';
   advancedVoiceOpen: boolean;
   onVoiceChange: (voiceId: string, provider: string) => void;
   onLanguageChange: (language: string) => void;

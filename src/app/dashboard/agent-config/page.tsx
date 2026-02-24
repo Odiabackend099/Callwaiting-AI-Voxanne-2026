@@ -1062,7 +1062,7 @@ export default function AgentConfigPage() {
                         error={error || undefined}
                         isDeleting={isDeleting}
                         previewingVoiceId={previewingVoiceId}
-                        previewPhase={previewPhase === 'idle' ? null : (previewPhase as 'loading' | 'playing' | null)}
+                        previewPhase={previewPhase}
                         personas={templates}
                         voices={voices}
                         advancedVoiceOpen={advancedVoiceOpen}

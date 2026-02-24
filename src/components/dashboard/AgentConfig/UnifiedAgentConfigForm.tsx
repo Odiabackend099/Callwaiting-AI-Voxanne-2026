@@ -57,7 +57,7 @@ interface UnifiedAgentConfigFormProps {
 
   // Voice preview
   previewingVoiceId: string | null;
-  previewPhase: 'loading' | 'playing' | 'complete' | null;
+  previewPhase: 'idle' | 'loading' | 'playing';
 
   // Data
   personas: PromptTemplate[];
@@ -150,7 +150,7 @@ export const UnifiedAgentConfigForm: React.FC<UnifiedAgentConfigFormProps> = ({
             maxDuration={config.maxDuration || 300}
             voices={voices}
             previewingVoiceId={previewingVoiceId}
-            previewPhase={previewPhase === 'idle' ? null : (previewPhase as 'loading' | 'playing' | 'complete' | null)}
+            previewPhase={previewPhase}
             advancedVoiceOpen={advancedVoiceOpen}
             onVoiceChange={(voiceId, provider) =>
               setConfig({ voice: voiceId, voiceProvider: provider })
@@ -175,7 +175,7 @@ export const UnifiedAgentConfigForm: React.FC<UnifiedAgentConfigFormProps> = ({
         <div className="lg:col-span-2 space-y-6">
           <PersonaSection
             templates={personas}
-            selectedTemplateId={undefined}
+            selectedTemplateId={null}
             onSelectTemplate={(templateId) => {
               const template = personas.find((p) => p.id === templateId);
               if (template) {
