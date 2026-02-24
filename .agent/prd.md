@@ -1,21 +1,125 @@
 # Voxanne AI – Product Requirements Document (PRD)
 
-**Version:** 2026.37.0
-**Last Updated:** 2026-02-22 UTC
-**Status:** ✅ PRODUCTION READY - Error Sanitization Security Hardening Deployed
-**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅
-**Verification Status:** ✅ ALL PHASES OPERATIONAL - 132+ error exposures fixed, 0 technical details exposed to users, Vercel deployment live
+**Version:** 2026.38.0
+**Last Updated:** 2026-02-24 UTC
+**Status:** ✅ PRODUCTION READY - Multi-Number Support + Error Sanitization
+**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅ + **Multi-Number Support** ✅
+**Verification Status:** ✅ ALL PHASES OPERATIONAL - 132+ error exposures fixed, multi-number support verified (outbound +16812711486 purchased), 0 technical details exposed to users, Vercel deployment live
+
+---
+
+## CRITICAL ARCHITECTURE RULES (TIER 1: Non-Negotiable Truths)
+
+These rules NEVER change and are enforced by the database and RLS policies:
+
+1. **Backend is Sole Vapi Provider**
+   - ONE Vapi API key in backend `.env`
+   - ALL organizations share single Vapi credential (NO per-org Vapi credentials)
+   - Tools registered globally, linked to each org's assistants
+   - Reference: SSOT.md Section 2.1
+
+2. **Multi-Tenant Isolation via org_id**
+   - JWT `app_metadata.org_id` = single source of truth for org
+   - Every query filters by `org_id` FIRST
+   - RLS policies enforce at database level (CHECK org_id = auth.uid()... via jwt_extract_org_id)
+   - Reference: SSOT.md Section 2.2
+
+3. **Wallet Balance Must Be Enforced**
+   - Check balance BEFORE deducting
+   - Deduct ATOMICALLY (use RPC with row locks, never separate SELECT + UPDATE)
+   - Negative balances trigger kill switch (automatic call termination)
+   - Reference: SSOT.md Section 5 + Real-Time Prepaid Billing Engine (Section 2.5 below)
+
+4. **Multi-Number Support: 1 Inbound + 1 Outbound per Org** ✅ NEW (2026-02-24)
+   - `org_credentials` constraint: `UNIQUE(org_id, provider, type)` — not `UNIQUE(org_id, provider)`
+   - Each direction (inbound/outbound) stored separately with independent `vapi_phone_id`
+   - RPC parameter: `p_routing_direction` (not `p_type`) determines column for insertion
+   - Service ALWAYS writes org_credentials (no skip logic for 2nd number)
+   - Reference: SSOT.md Section 9 + PRD_UPDATE_2026_02_24.md
 
 ---
 
 ## 1. Purpose & Scope
-Voxanne AI delivers a production-ready AI receptionist for healthcare practices. This PRD is the single source of truth for:
 
-1. Product capabilities and business outcomes
-2. Technical architecture (voice pipeline, billing, analytics)
-3. Verification status and operational checklists
+Voxanne AI delivers a production-ready AI receptionist for healthcare practices. This PRD is organized into 3 tiers:
 
-It intentionally removes legacy tiered pricing, stale troubleshooting notes, and duplicative implementation logs so new contributors can ramp quickly.
+- **TIER 1:** Non-negotiable business & security truths (above ⬆️)
+- **TIER 2:** Current system architecture (features, capabilities, deployment)
+- **TIER 3:** Operational details (reference SSOT.md, don't duplicate here)
+
+New contributors should:
+1. Read TIER 1 first (understand immutable rules)
+2. Read SSOT.md (technical authority for database schema)
+3. Read TIER 2 (understand current features and capabilities)
+4. Refer to SSOT.md for technical implementation details (Tier 3)
+
+---
+
+## CURRENT ARCHITECTURE (TIER 2: Reference this, then check SSOT.md for details)
+
+### What's Changed Since Last Release (2026-02-24)
+
+**Bug 3 - Multi-Number Support: ✅ FIXED**
+- **Issue:** Outbound number provisioning failed due to:
+  - RPC parameter mismatch (`p_type` vs `p_routing_direction` column)
+  - Overly strict constraint `UNIQUE(org_id, provider)` blocking any 2nd Twilio row
+  - Service code skipping org_credentials write for 2nd number → credential not in SSOT
+- **Fix Applied:**
+  - Changed constraint to `UNIQUE(org_id, provider, type)` → allows 1 inbound + 1 outbound
+  - Updated RPC to use `p_routing_direction` parameter (matches unique index)
+  - Service now ALWAYS writes org_credentials with direction type (no skip logic)
+- **Result:** ✅ Outbound number +16812711486 purchased successfully (2026-02-24 verified in production)
+- **Reference:** PRD_UPDATE_2026_02_24.md (detailed breakdown + verification queries)
+
+### TIER 2: Core Feature Set
+
+1. **Managed Telephony — 1 Inbound + 1 Outbound per Organization** ✅ (Just Fixed)
+   - Purchase Twilio subaccount numbers via dashboard
+   - Store in `org_credentials` AND `managed_phone_numbers` (dual-write required)
+   - `org_credentials` is SSOT for credential discovery in dropdowns
+   - Each direction (inbound/outbound) stored as separate row with `type` column
+   - Inbound → receives calls via phone_number_mapping
+   - Outbound → agent uses vapi_phone_id for caller ID on outbound calls
+   - Cannot exceed 1 active number per direction per org (DB unique index enforces)
+   - Reference: SSOT.md Section 9 (Managed Phone Numbers — Lifecycle & Dual-Write)
+
+2. **Real-Time Prepaid Billing Engine** — Phase 1-3 Deployed & Verified
+   - Atomic asset billing (RPC with FOR UPDATE locks, prevents TOCTOU)
+   - Credit reservation during calls (5-min default hold, auto-release when call ends)
+   - Kill switch: auto-terminate calls when balance ≤ 0 (checked every 60s)
+   - Fixed rate: 56 pence/min GBP
+   - Reference: SSOT.md Section 5 + Section 2.5 (below) for business impact
+
+3. **Dashboard & Analytics** — Golden Record SSOT
+   - All call data (cost, appointment linkage, tools used, ended reason) in `calls` table
+   - Sentiment analysis, lead scoring, pipeline value tracking
+   - Multi-tenant isolation (every query filters org_id via JWT)
+   - Reference: SSOT.md Section 7 (Dashboard & Call Analytics) for schema details
+
+4. **Webhook Architecture** — Single Production Endpoint
+   - `/api/vapi/webhook` (vapi-webhook.ts) = production endpoint
+   - `/api/webhooks/vapi` (webhooks.ts) = unused legacy (do not modify)
+   - Retries via BullMQ queue, idempotency via processed_webhook_events table
+   - Reference: SSOT.md Section 11 (Webhook Architecture) for full details
+
+5. **Security & Compliance** — RLS Enforced on All Tables
+   - JWT `org_id` extraction from `app_metadata`
+   - RLS policies on 20+ tables
+   - Error sanitization: 132+ info disclosure fixes applied
+   - Reference: SSOT.md Section 2 (Authentication & Multi-Tenancy) for detailed policies
+
+### TIER 2.5: Where to Find Technical Details
+
+**DON'T duplicate in this PRD. Instead, REFERENCE:**
+| Topic | Location |
+|-------|----------|
+| Database schema | SSOT.md Section 3-6 (tables, columns, constraints, indexes) |
+| RPC functions | SSOT.md Section 8 (function signatures, error handling) |
+| Multi-number architecture | SSOT.md Section 9 + PRD_UPDATE_2026_02_24.md Section 1-4 |
+| Webhook delivery | SSOT.md Section 11 (delivery log, retry logic, idempotency) |
+| Critical invariants | SSOT.md Section 13 (rules that must never break) |
+| Phone number handling | SSOT.md Section 9 + Invariant 9 (dual-write, deletion cleanup) |
+| Compliance logging | SSOT.md Section 12 (audit logs, retention, HIPAA compliance) |
 
 ---
 
@@ -223,7 +327,7 @@ Reservation committed: ✅ YES
    - **Phase 3 (Kill Switch):** Real-time balance monitoring every 60 seconds, automatic call termination when balance reaches zero
    - **Enforcement:** Zero-debt for assets, £5.00 (500 pence) max debt for calls, all-or-nothing atomic transactions
 4. **Wallet Billing** – Stripe Checkout top-ups (£25 minimum), auto-recharge, credit ledger, webhook verification, and fixed-rate per-minute deductions (56 pence/min GBP).
-5. **Managed Telephony** – Purchase Twilio subaccount numbers, surface in Agent Config, enforce one-number-per-org, support manual AI Forwarding.
+5. **Managed Telephony** – Purchase Twilio subaccount numbers (1 inbound + 1 outbound per org), surface in Agent Config, support manual AI Forwarding.
 6. **Dashboards & Leads** – Production dashboards for call stats (Total Calls, Appointments, Average Sentiment, Avg Duration), call log filters (status, date range, search with clear), call detail modal (cost, appointment ID, tools used), activity click-through to call detail, appointment-to-call linkage, lead enrichment, conversion tracking, and Geo/SEO telemetry.
 7. **Onboarding Form** – Intake form at `/start` collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support team. Stores submissions in `onboarding_submissions` table with full audit trail.
 8. **Verified Caller ID** – Outbound caller ID verification via Twilio validation API. Pre-checks existing verifications to prevent errors, displays validation codes in UI, supports delete/unverify workflow. Works in both managed and BYOC telephony modes with automatic credential resolution.
@@ -253,6 +357,7 @@ Supporting services: wallet auto-recharge processor, webhook verification API, a
 
 | Date (UTC) | Release | Key Outcomes |
 |------------|---------|--------------|
+| 2026-02-24 | **Multi-Number Support (Bug 3 Fix)** | Outbound number provisioning now works. Fixed RPC parameter mismatch (p_type → p_routing_direction), changed constraint from UNIQUE(org_id, provider) to UNIQUE(org_id, provider, type), and removed "skip for 2nd number" logic. Verified: +16812711486 purchased successfully, stored as separate rows in org_credentials + managed_phone_numbers with type='outbound', agent dropdown shows outbound number. Reference: PRD_UPDATE_2026_02_24.md (detailed architecture + migration). |
 | 2026-02-22 | **Error Sanitization - Security Hardening Deployed** | Fixed 132+ raw error.message exposures across 18 route files. Centralized error-sanitizer.ts utility prevents information disclosure (database schema enumeration, validation rule leakage, implementation details). All errors now return user-friendly messages; full technical details logged internally in Sentry for debugging. Deployed to production via Vercel auto-triggered on main branch merge. Frontend + Backend verified healthy. Zero technical details exposed to API users. |
 | 2026-02-21 | **Dashboard E2E Test Fixes (TestSprite)** | Fixed 8 TestSprite E2E test failures across 7 files. Backend: Extended `/api/analytics/dashboard-pulse` with `appointments_booked` and `avg_sentiment` fields. Frontend: ClinicalPulse rewritten with 4 metric cards (Total Calls, Appointments, Avg Sentiment, Avg Duration); call detail modal shows Cost, Appointment ID, Tools Used; call logs page gains Status + Date Range filter dropdowns and search clear button (X + Escape); dashboard activity items clickable for call events (navigates to call detail via `?callId=` param); appointment detail modal shows Linked Call section with call direction, duration, and "View Call Details" link. Backend connectivity resilience improved: WebSocket MAX_RECONNECT_ATTEMPTS 5→15, BASE_RECONNECT_DELAY 2000→1000ms; BackendStatusBanner timeout 5s→10s with retry-once logic. Next.js build verified clean. |
 | 2026-02-14 | **Real-Time Prepaid Billing Engine - Production Deployment** | All 3 phases deployed to production Supabase: Phase 1 (Atomic Asset Billing) with TOCTOU prevention via FOR UPDATE locks + idempotency; Phase 2 (Credit Reservation) with 5-minute call holds and credit release; Phase 3 (Kill Switch) with 60-second balance monitoring and automatic call termination. Database migrations applied and verified. All RPC functions operational. 100% test coverage (11 unit + 10 E2E + 3 load tests all passing). Zero revenue leaks remaining. |
@@ -270,6 +375,15 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 ---
 
 ## 6. Functional Requirements
+
+**NOTE: TIER 3 - OPERATIONAL DETAILS**
+
+For technical details on database schema, RPC functions, and implementation specifics, refer to **SSOT.md** (Single Source of Truth). This section focuses on business-level requirements. SSOT.md is the authoritative reference for:
+- Table schemas, columns, constraints
+- RPC function signatures and error handling
+- Webhook delivery, retry logic, idempotency patterns
+- Critical invariants that must never break
+- Reference: SSOT.md Section 3-13
 ### 6.1 AI Call Handling
 - Voice agent must execute tools in order: `checkAvailability` → `bookClinicAppointment` → `transferCall`/`endCall`.  
 - `queryKnowledgeBase` is mandatory for answering content questions (no hallucinated answers).  
@@ -303,10 +417,15 @@ All releases validated via manual E2E tests, automated scripts (wallet/billing, 
 - Wallet deductions use fixed rate of 56 pence/min GBP (stored in database as integer pence values).
 
 ### 6.4 Telephony & AI Forwarding
-- Managed number provisioning purchases via Twilio subaccounts and **must import into Vapi using subaccount credentials**.  
-- `phone_number_mapping`, `managed_phone_numbers`, `twilio_subaccounts` tables required with RLS enabled.  
-- Agent Config dropdown shows managed numbers with badges and enforces one active managed number per org (DB unique index + frontend guard).  
-- AI Forwarding wizard generates GSM codes for supported carriers and verifies Twilio caller ID ownership before enabling.
+- Managed number provisioning purchases via Twilio subaccounts and **must import into Vapi using subaccount credentials**.
+- **Multi-number support:** Organizations can hold 1 inbound number + 1 outbound number (managed independently with separate `type` column in `org_credentials`)
+- All managed numbers stored in `managed_phone_numbers` with `routing_direction` (inbound/outbound), and credential SSOT tracked in `org_credentials` with `type` column
+- Agent Config dropdown shows managed numbers with badges per direction
+- Database constraint `UNIQUE(org_id, provider, type)` prevents duplicate numbers in same direction
+- Inbound numbers receive calls via `phone_number_mapping` table
+- Outbound numbers linked to agents' `vapi_phone_number_id` for caller ID on outbound calls
+- AI Forwarding wizard generates GSM codes for supported carriers and verifies Twilio caller ID ownership before enabling
+- **Reference:** SSOT.md Section 9 (Managed Phone Numbers) + PRD_UPDATE_2026_02_24.md (detailed multi-number architecture)
 
 ### 6.5 Onboarding Intake Form
 - Form page at `/src/app/start/page.tsx` accepts company name, email, phone (E.164), greeting script, voice preference, optional pricing PDF.
@@ -604,18 +723,22 @@ Sentry.withScope((scope) => {
 
 1. ~~Implement onboarding form intake~~ ✅ **COMPLETE** (2026-02-13) – Form submission, email delivery, and verification all operational.
 2. ~~Deploy Real-Time Prepaid Billing Engine~~ ✅ **COMPLETE** (2026-02-14) – All 3 phases deployed, tested, and verified in production.
-3. Configure Vapi status webhook for Kill Switch (manual configuration required for each deployment).
-4. Surface webhook verification status in frontend wallet success screen.
-5. Expand AI Forwarding carrier library beyond current presets.
-6. Build monitoring dashboard for prepaid billing metrics (reservation hold duration, kill switch triggers, credit release efficiency).
-7. Add automated regression testing around prepaid billing race conditions.
-8. Add Slack alerts for high-priority prepaid billing events (reservation failures, kill switch activation).
+3. ~~Support Multi-Number Telephony (1 Inbound + 1 Outbound per Org)~~ ✅ **COMPLETE** (2026-02-24) – Bug 3 fixed. RPC parameter corrected, constraint changed to allow per-direction rows, skip logic removed. Verified: outbound +16812711486 purchased & stored correctly.
+4. Configure Vapi status webhook for Kill Switch (manual configuration required for each deployment).
+5. Surface webhook verification status in frontend wallet success screen.
+6. Expand AI Forwarding carrier library beyond current presets.
+7. Build monitoring dashboard for prepaid billing metrics (reservation hold duration, kill switch triggers, credit release efficiency).
+8. Add automated regression testing around prepaid billing race conditions.
+9. Add Slack alerts for high-priority prepaid billing events (reservation failures, kill switch activation).
+10. Implement phone number deletion/release flow (6-step cleanup: both tables + agents + mappings + RLS + audit).
 
 ---
 
 ## 10. Acceptance Criteria Checklist
 - [x] Wallet top-up increases balance, ledger entry recorded, backend + Stripe logs confirmed.
-- [x] Managed telephony provisioning surfaces new numbers immediately and blocks duplicates.
+- [x] Managed telephony provisioning surfaces new numbers immediately.
+- [x] Multi-number support: 1 inbound + 1 outbound per org (constraint enforces per-direction, verified with +16812711486).
+- [x] Outbound numbers appear in Agent Config dropdown with separate type field.
 - [x] Golden Record data visible in dashboard + analytics endpoints.
 - [x] JWT auth never falls back to default org.
 - [x] Webhook verification API deployed and queryable.
@@ -629,4 +752,45 @@ Sentry.withScope((scope) => {
 - [x] Dashboard activity items navigate to call detail on click.
 - [x] Appointment detail modal shows Linked Call section with navigation to call detail.
 - [x] WebSocket reconnection resilient (15 attempts, 1s base delay) and health check retries before showing banner.
+
+---
+
+## 11. Quick Reference: Where to Find Information
+
+**This PRD covers:**
+- ✅ TIER 1: Non-negotiable business & security truths (rules that never change)
+- ✅ TIER 2: Current system capabilities and recent releases
+- ✅ Operational procedures and runbooks
+- ✅ Test accounts and verification checklists
+
+**For TIER 3 (Technical Details), refer to SSOT.md:**
+- Database schema, columns, constraints, indexes
+- RPC function signatures, error handling, transaction logic
+- Webhook delivery patterns, retry logic, idempotency
+- Multi-tenant RLS policy implementation
+- Phone number architecture (dual-write, deletion cleanup)
+- Critical invariants that must never break
+
+**Quick Links:**
+| Document | Purpose |
+|----------|---------|
+| **SSOT.md** | Technical authority for database, RPCs, webhooks, compliance |
+| **PRD_UPDATE_2026_02_24.md** | Detailed explanation of Bug 3 fix (multi-number support) |
+| **PRD_CURRENT_STATE_2026_02_24.md** | High-level guide to PRD structure and tier system |
+| **This PRD (.agent/prd.md)** | Business capabilities, releases, operational procedures |
+
+**For New Developers (Ramp-Up Guide):**
+1. Read TIER 1 above (understand immutable rules, 5 mins)
+2. Read SSOT.md Sections 1-2 (auth & multi-tenancy, 15 mins)
+3. Read TIER 2 (Current Architecture) above (system overview, 10 mins)
+4. Read SSOT.md Section 9 (managed phone numbers, 20 mins)
+5. Read relevant sections of SSOT.md for your task
+6. Reference this PRD for business context and runbooks
+
+**For Contributors (Before Modifying Code):**
+- Always reference SSOT.md Section 13 (Critical Invariants) first
+- Check if your change affects: org_id filtering, multi-tenant isolation, wallet enforcement, phone number handling
+- When modifying managed_phone_numbers or org_credentials, ensure dual-write/dual-delete
+- When adding endpoints, apply error sanitization pattern (use `error-sanitizer.ts`)
+- When touching RPC functions, verify transaction semantics with "All-or-nothing" constraint
 
