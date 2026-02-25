@@ -133,6 +133,7 @@ export default function PhoneSettingsPage() {
 
   // Delete confirmations
   const [confirmDeleteManaged, setConfirmDeleteManaged] = useState(false);
+  const [confirmDeleteManagedOutbound, setConfirmDeleteManagedOutbound] = useState(false);
   const [confirmDeleteVerified, setConfirmDeleteVerified] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -338,6 +339,25 @@ export default function PhoneSettingsPage() {
 
       // Success confirmation (Stripe pattern)
       showSuccessToast(`${status.inbound.managedNumber} successfully deleted`, 3000);
+    } catch (err: any) {
+      showErrorToast(err.message || 'Failed to delete number');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteManagedOutbound = async () => {
+    if (!status?.outbound.managedOutboundNumber) return;
+
+    try {
+      setDeleting(true);
+      await authedBackendFetch(
+        `/api/managed-telephony/numbers/${encodeURIComponent(status.outbound.managedOutboundNumber)}`,
+        { method: 'DELETE' }
+      );
+      setConfirmDeleteManagedOutbound(false);
+      await fetchPhoneSettings();
+      showSuccessToast(`${status.outbound.managedOutboundNumber} successfully deleted`, 3000);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to delete number');
     } finally {
@@ -604,6 +624,14 @@ export default function PhoneSettingsPage() {
                   </div>
                 </div>
               )}
+
+              <button
+                onClick={() => setConfirmDeleteManagedOutbound(true)}
+                className="w-full px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Outbound Number
+              </button>
             </div>
           ) : (
             <div className="mb-6">
@@ -980,6 +1008,36 @@ export default function PhoneSettingsPage() {
               </button>
               <button
                 onClick={handleDeleteManaged}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete Number'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Outbound Managed Number Confirmation */}
+      {confirmDeleteManagedOutbound && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-obsidian mb-2">
+              Delete Outbound Number?
+            </h3>
+            <p className="text-sm text-obsidian/60 mb-4">
+              This will release {status?.outbound.managedOutboundNumber} and disconnect it from outbound calls. Your agent will need a new number configured before making calls.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteManagedOutbound(false)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 border border-surgical-200 text-obsidian rounded-lg hover:bg-surgical-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteManagedOutbound}
                 disabled={deleting}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50"
               >

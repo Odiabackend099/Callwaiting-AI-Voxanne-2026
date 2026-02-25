@@ -15,6 +15,7 @@
 import { supabase } from './supabase-client';
 import { log } from './logger';
 import { enqueueAutoRechargeJob } from '../config/wallet-queue';
+import { sendSlackAlert } from './slack-alerts';
 import { config } from '../config';
 
 // ============================================
@@ -249,6 +250,15 @@ export async function deductCallCredits(
         message: rpcResult.message,
       });
 
+      sendSlackAlert('🚨 Debt Limit Exceeded — Call Not Billed', {
+        orgId,
+        callId,
+        balancePence: rpcResult.current_balance,
+        debtLimitPence: rpcResult.debt_limit,
+        attemptedPence: rpcResult.attempted_deduction,
+        note: 'Org wallet is in debt beyond limit. Auto-recharge may be needed.',
+      }).catch(() => {});
+
       // Trigger auto-recharge immediately if configured
       const balance = await checkBalance(orgId);
       if (balance?.autoRechargeEnabled && balance?.hasPaymentMethod) {
@@ -297,20 +307,17 @@ export async function deductCallCredits(
     config.WALLET_LOW_BALANCE_WARNING_CENTS * parseFloat(config.USD_TO_GBP_RATE)
   );
   if (rpcResult.balance_after < lowBalanceThresholdPence) {
-    try {
-      // TODO: Implement sendLowBalanceWarning(orgId, rpcResult.balance_after)
-      // Non-blocking email via Resend API
-      log.warn('WalletService', 'Low balance warning needed', {
-        orgId,
-        balancePence: rpcResult.balance_after,
-        thresholdPence: lowBalanceThresholdPence,
-      });
-    } catch (err) {
-      log.warn('WalletService', 'Failed to send low balance email (non-blocking)', {
-        orgId,
-        error: (err as Error).message,
-      });
-    }
+    log.warn('WalletService', 'Low balance warning', {
+      orgId,
+      balancePence: rpcResult.balance_after,
+      thresholdPence: lowBalanceThresholdPence,
+    });
+    sendSlackAlert('⚠️ Low Wallet Balance', {
+      orgId,
+      balancePence: rpcResult.balance_after,
+      thresholdPence: lowBalanceThresholdPence,
+      note: `Balance £${(rpcResult.balance_after / 100).toFixed(2)} is below the warning threshold.`,
+    }).catch(() => {});
   }
 
   // Trigger auto-recharge if needed
@@ -503,6 +510,14 @@ export async function deductAssetCost(
         requiredPence: result?.required_pence,
         shortfallPence: result?.shortfall_pence,
       });
+      sendSlackAlert('🚫 Asset Purchase Rejected — Insufficient Funds', {
+        orgId,
+        assetType,
+        balancePence: result?.balance_pence,
+        requiredPence: result?.required_pence,
+        shortfallPence: result?.shortfall_pence,
+        note: `Org tried to purchase ${assetType} but wallet balance is too low.`,
+      }).catch(() => {});
     }
 
     return {
