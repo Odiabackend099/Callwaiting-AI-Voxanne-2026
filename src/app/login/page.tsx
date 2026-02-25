@@ -111,7 +111,7 @@ function LoginContent() {
 
                     <form onSubmit={handleSignIn} className="space-y-6">
                         {queryError && !error && (
-                            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm space-y-2">
+                            <div role="status" aria-live="polite" className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm space-y-2">
                                 <p>{queryError}</p>
                                 {errorCode === 'no_org' && (
                                     <button
@@ -128,7 +128,7 @@ function LoginContent() {
                             </div>
                         )}
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+                            <div role="alert" aria-live="assertive" className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
                                 {error}
                             </div>
                         )}
@@ -165,6 +165,7 @@ function LoginContent() {
                                 />
                                 <button
                                     type="button"
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-obsidian/40 hover:text-obsidian/60 transition-colors"
                                     disabled={loading}

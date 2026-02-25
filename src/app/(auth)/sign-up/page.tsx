@@ -37,6 +37,7 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorLink, setErrorLink] = useState<{ label: string; href: string } | null>(null);
 
   const strength = password.length > 0 ? getPasswordStrength(password) : null;
   const { lockedOut, timerLabel, recordFailure, reset } = useAuthRateLimit('signup');
@@ -44,6 +45,7 @@ export default function SignUpPage() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorLink(null);
 
     if (!strength || strength.score < 2) {
       setError(strength?.score === 0
@@ -76,12 +78,15 @@ export default function SignUpPage() {
           // Tailor the message if the account was created via a social provider.
           const providers = result.provider ?? [];
           if (providers.includes('google')) {
-            setError('This email is linked to a Google account. Use "Continue with Google" to sign in.');
+            setError('This email is linked to a Google account.');
+            setErrorLink({ label: 'Sign in with Google', href: '/login' });
           } else {
-            setError('An account with this email already exists. Please sign in instead.');
+            setError('An account with this email already exists.');
+            setErrorLink({ label: 'Sign in instead', href: '/login' });
           }
         } else {
           setError(result.error ?? 'Failed to create account. Please try again.');
+          setErrorLink(null);
           recordFailure();
         }
         setLoading(false);
@@ -99,6 +104,7 @@ export default function SignUpPage() {
       if (signInError || !signInData.session) {
         // Account was created but auto sign-in failed — send user to login.
         setError('Account created! Please sign in to continue.');
+        setErrorLink(null);
         setLoading(false);
         router.push('/login');
         return;
@@ -108,6 +114,7 @@ export default function SignUpPage() {
       router.push('/dashboard/onboarding');
     } catch {
       setError('An unexpected error occurred. Please try again.');
+      setErrorLink(null);
       recordFailure();
       setLoading(false);
     }
@@ -116,6 +123,7 @@ export default function SignUpPage() {
   const handleGoogleSignUp = async () => {
     setLoading(true);
     setError(null);
+    setErrorLink(null);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -162,8 +170,13 @@ export default function SignUpPage() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm mb-6">
-              {error}
+            <div role="alert" aria-live="assertive" className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm mb-6">
+              {error}{' '}
+              {errorLink && (
+                <Link href={errorLink.href} className="font-semibold underline hover:no-underline">
+                  {errorLink.label} →
+                </Link>
+              )}
             </div>
           )}
 
@@ -259,11 +272,13 @@ export default function SignUpPage() {
                   placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  aria-describedby={password.length > 0 ? 'password-strength' : undefined}
                   required
                   disabled={loading}
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-obsidian/40 hover:text-obsidian/60 transition-colors"
                   disabled={loading}
@@ -272,7 +287,14 @@ export default function SignUpPage() {
                 </button>
               </div>
               {strength && (
-                <div className="mt-1.5 space-y-1">
+                <div
+                  role="progressbar"
+                  aria-valuenow={strength.score}
+                  aria-valuemin={0}
+                  aria-valuemax={4}
+                  aria-label="Password strength"
+                  className="mt-1.5 space-y-1"
+                >
                   <div className="flex gap-1 h-1">
                     {[1, 2, 3, 4].map((i) => (
                       <div
@@ -283,10 +305,22 @@ export default function SignUpPage() {
                       />
                     ))}
                   </div>
-                  <p className="text-xs text-obsidian/50">{strength.label}</p>
+                  <p id="password-strength" className="text-xs text-obsidian/50">{strength.label}</p>
                 </div>
               )}
             </div>
+
+            {lockedOut && (
+              <p className="text-sm text-center text-obsidian/60 mb-3">
+                Too many attempts. Retry in {timerLabel}, or{' '}
+                <a
+                  href="mailto:support@voxanne.ai"
+                  className="font-medium text-surgical-600 underline hover:no-underline"
+                >
+                  contact support
+                </a>.
+              </p>
+            )}
 
             <Button
               type="submit"
@@ -306,7 +340,7 @@ export default function SignUpPage() {
                   Creating Account...
                 </>
               ) : lockedOut ? (
-                `Too many attempts — retry in ${timerLabel}`
+                'Try again later'
               ) : (
                 'Create Account →'
               )}
