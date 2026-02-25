@@ -170,19 +170,14 @@ const nextConfig = {
                 permanent: true,
             },
             {
-                source: '/sign-up',
-                destination: '/login',
-                permanent: false,
-            },
-            {
                 source: '/auth/sign-up',
-                destination: '/login',
-                permanent: false,
+                destination: '/sign-up',
+                permanent: true,
             },
             {
                 source: '/auth/signup',
-                destination: '/login',
-                permanent: false,
+                destination: '/sign-up',
+                permanent: true,
             },
             {
                 source: '/privacy-policy',

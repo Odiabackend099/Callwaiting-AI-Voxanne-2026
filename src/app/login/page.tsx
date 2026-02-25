@@ -10,12 +10,13 @@ import FadeIn from "@/components/ui/FadeIn";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuthRateLimit } from "@/hooks/useAuthRateLimit";
 
 const ERROR_MESSAGES: Record<string, string> = {
-    'no_org': 'Your account does not have an organization assigned. Please contact your administrator.',
-    'no_org_id': 'Your account does not have an organization assigned. Please contact your administrator.',
-    'invalid_org_id': 'Your organization ID is invalid. Please contact your administrator.',
-    'validation_failed': 'Organization validation failed. Please try signing in again.',
+    'no_org': 'Your account setup is incomplete — your workspace was not created correctly. Please sign out and sign up again, or contact support@voxanne.ai.',
+    'no_org_id': 'Your account setup is incomplete. Please sign out and sign up again, or contact support@voxanne.ai.',
+    'invalid_org_id': 'Your organization ID is invalid. Please sign out and sign up again, or contact support@voxanne.ai.',
+    'validation_failed': 'Account validation failed. Please try signing in again.',
 };
 
 function LoginContent() {
@@ -31,6 +32,7 @@ function LoginContent() {
     const queryError = errorCode
         ? (ERROR_MESSAGES[errorCode] || `Authentication error: ${errorCode}`)
         : null;
+    const { lockedOut, timerLabel, recordFailure, reset } = useAuthRateLimit('login');
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -45,10 +47,12 @@ function LoginContent() {
 
             if (error) {
                 setError(error.message);
+                recordFailure();
                 setLoading(false);
                 return;
             }
 
+            reset();
             router.push("/dashboard");
             router.refresh();
         } catch (err) {
@@ -107,8 +111,20 @@ function LoginContent() {
 
                     <form onSubmit={handleSignIn} className="space-y-6">
                         {queryError && !error && (
-                            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
-                                {queryError}
+                            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm space-y-2">
+                                <p>{queryError}</p>
+                                {errorCode === 'no_org' && (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            await supabase.auth.signOut();
+                                            window.location.href = '/sign-up';
+                                        }}
+                                        className="underline font-medium hover:text-amber-900 transition-colors"
+                                    >
+                                        Sign out and start over →
+                                    </button>
+                                )}
                             </div>
                         )}
                         {error && (
@@ -161,13 +177,15 @@ function LoginContent() {
                         <Button
                             type="submit"
                             className="w-full h-12 text-base font-semibold bg-surgical-600 text-white rounded-xl shadow-lg shadow-surgical-600/25 hover:shadow-xl hover:shadow-surgical-600/35 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-100 focus:outline-none focus:ring-2 focus:ring-surgical-600/50 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
-                            disabled={loading}
+                            disabled={loading || lockedOut}
                         >
                             {loading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Signing In...
                                 </>
+                            ) : lockedOut ? (
+                                `Too many attempts — retry in ${timerLabel}`
                             ) : (
                                 "Sign In"
                             )}
@@ -217,8 +235,8 @@ function LoginContent() {
 
                     <p className="mt-8 text-center text-sm text-obsidian/60">
                         Don&apos;t have an account?{" "}
-                        <Link href="https://calendly.com/austyneguale/30min" target="_blank" className="font-medium text-surgical-600 hover:text-surgical-700">
-                            Book a Demo
+                        <Link href="/sign-up" className="font-medium text-surgical-600 hover:text-surgical-700">
+                            Sign Up
                         </Link>
                     </p>
                 </FadeIn>

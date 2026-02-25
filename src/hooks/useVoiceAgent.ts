@@ -39,6 +39,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         transcripts: [],
         error: null,
         session: null,
+        activeVolume: 0,
     });
 
     const { user, session } = useAuth();
@@ -197,6 +198,16 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
         };
     }, []);
 
+    // Throttled volume handler — updates React state at ~20fps to avoid excessive re-renders
+    const volumeUpdateThrottleRef = useRef(0);
+    const handleVolumeChange = useCallback((volume: number) => {
+        const now = performance.now();
+        if (now - volumeUpdateThrottleRef.current >= 50) {
+            volumeUpdateThrottleRef.current = now;
+            setState(prev => ({ ...prev, activeVolume: volume }));
+        }
+    }, []);
+
     const startRecording = useCallback(async () => {
         try {
             // **FIX #1: Check WebSocket is actually open before starting recorder**
@@ -215,7 +226,7 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 // Propagate recorder errors to UI
                 setState(prev => ({ ...prev, error: errorMsg }));
                 options.onError?.(errorMsg);
-            });
+            }, handleVolumeChange);
 
             await recorder.start();
             recorderRef.current = recorder;
@@ -229,14 +240,14 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             options.onError?.(errorMessage);
             throw error;  // Re-throw so caller knows it failed
         }
-    }, [options]);
+    }, [options, handleVolumeChange]);
 
     const stopRecording = useCallback(() => {
         if (recorderRef.current) {
             recorderRef.current.stop();
             recorderRef.current = null;
         }
-        setState(prev => ({ ...prev, isRecording: false }));
+        setState(prev => ({ ...prev, isRecording: false, activeVolume: 0 }));
         if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] Recording stopped');
     }, []);
 

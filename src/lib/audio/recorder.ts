@@ -9,14 +9,18 @@ export class AudioRecorder {
     private mediaStream: MediaStream | null = null;
     private sourceNode: MediaStreamAudioSourceNode | null = null;
     private workletNode: AudioWorkletNode | null = null;
+    private analyserNode: AnalyserNode | null = null;
+    private volumePollHandle: number | null = null;
     private ws: WebSocket;
     private isRecording = false;
     private chunkCount = 0;
     private onError?: (error: string) => void;
+    private onVolumeChange?: (volume: number) => void;
 
-    constructor(websocket: WebSocket, onError?: (error: string) => void) {
+    constructor(websocket: WebSocket, onError?: (error: string) => void, onVolumeChange?: (volume: number) => void) {
         this.ws = websocket;
         this.onError = onError;
+        this.onVolumeChange = onVolumeChange;
     }
 
     async start(): Promise<void> {
@@ -52,6 +56,28 @@ export class AudioRecorder {
 
             // Create source
             this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+            // Parallel AnalyserNode tap for VAD volume measurement (read-only, does not affect send path)
+            if (this.onVolumeChange) {
+                this.analyserNode = this.audioContext.createAnalyser();
+                this.analyserNode.fftSize = 512;
+                this.analyserNode.smoothingTimeConstant = 0.8;
+                this.sourceNode.connect(this.analyserNode);
+
+                const frequencyData = new Uint8Array(this.analyserNode.frequencyBinCount);
+                const pollVolume = () => {
+                    if (!this.isRecording || !this.analyserNode) {
+                        this.volumePollHandle = null;
+                        return;
+                    }
+                    this.analyserNode.getByteFrequencyData(frequencyData);
+                    const sum = frequencyData.reduce((a, b) => a + b, 0);
+                    const avg = sum / frequencyData.length / 255; // normalize to 0.0–1.0
+                    this.onVolumeChange!(avg);
+                    this.volumePollHandle = requestAnimationFrame(pollVolume);
+                };
+                this.volumePollHandle = requestAnimationFrame(pollVolume);
+            }
 
             // Create AudioWorkletNode
             this.workletNode = new AudioWorkletNode(this.audioContext, 'audio-processor');
@@ -93,6 +119,17 @@ export class AudioRecorder {
         console.log(`🎤 Stopping recording (${this.chunkCount} chunks sent)...`);
 
         this.isRecording = false;
+
+        // Cancel volume polling RAF loop
+        if (this.volumePollHandle !== null) {
+            cancelAnimationFrame(this.volumePollHandle);
+            this.volumePollHandle = null;
+        }
+
+        if (this.analyserNode) {
+            this.analyserNode.disconnect();
+            this.analyserNode = null;
+        }
 
         if (this.sourceNode) {
             this.sourceNode.disconnect();

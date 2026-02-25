@@ -15,6 +15,7 @@ function VerifyEmailContent() {
     const [message, setMessage] = useState('');
     const [code, setCode] = useState('');
     const [email, setEmail] = useState('');
+    const isExpired = searchParams.get('expired') === 'true';
     const [resendLoading, setResendLoading] = useState(false);
     const [showCodeInput, setShowCodeInput] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -49,8 +50,10 @@ function VerifyEmailContent() {
                     return;
                 }
 
+                // No token_hash — user arrived directly (e.g., from dashboard banner or grace expiry).
+                // Show the OTP code input so they can enter the 6-digit code from their email.
                 setStatus('pending');
-                setShowCodeInput(false);
+                setShowCodeInput(true);
             } catch (err) {
                 console.error('Verification error:', err);
                 setStatus('error');
@@ -70,8 +73,9 @@ function VerifyEmailContent() {
             setStatus('loading');
             const { error } = await supabase.auth.verifyOtp({
                 type: 'signup',
+                email: email.trim(),
                 token: code,
-            } as any);
+            });
 
             if (error) {
                 setStatus('error');
@@ -176,10 +180,12 @@ function VerifyEmailContent() {
                                 <Mail className="w-6 h-6 text-cyan-400" />
                             </div>
                             <h1 className="text-2xl font-bold text-white mb-2">
-                                Verify Your Email
+                                {isExpired ? 'Verification Required' : 'Verify Your Email'}
                             </h1>
                             <p className="text-slate-400 mb-6">
-                                Enter the verification code from your email
+                                {isExpired
+                                    ? 'Your 7-day grace period has ended. Please verify your email to continue using the dashboard.'
+                                    : 'Enter the 6-digit code from your verification email.'}
                             </p>
                         </>
                     )}

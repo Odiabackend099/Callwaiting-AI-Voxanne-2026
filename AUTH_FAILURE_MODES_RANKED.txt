@@ -1,0 +1,400 @@
+════════════════════════════════════════════════════════════════════════════════
+VOXANNE AI: AUTHENTICATION FAILURE MODE ANALYSIS
+Devil's Advocate / QA Engineer Report
+Date: 2026-02-25
+════════════════════════════════════════════════════════════════════════════════
+
+SCENARIO RANKING (Worst to Best)
+
+══════════════════════════════════════════════════════════════════════════════
+🔴 RANK 1: SCENARIO 3 - AUTO-ORG TRIGGER FAILS SILENTLY
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User signs up → trigger creates org → BUT JWT update fails silently
+  → user.auth created ✅, org created ✅, profile created ✅
+  → BUT user.app_metadata.org_id is NULL ❌
+  → User can login BUT middleware rejects them
+  → Redirected to /login?error=no_org
+  → /login doesn't display the error (BUG)
+  → User sees blank login form
+  → User is stuck in limbo forever
+
+SEVERITY: 🔴 CRITICAL
+  - User completely stuck (can't use app)
+  - No error message to understand why
+  - No way to recover without support intervention
+  - Data integrity broken (org exists but unreachable)
+
+STUCK STATE: YES - requires admin fix to update JWT
+
+ROOT CAUSE:
+  1. Trigger can partially succeed (org created, JWT not updated)
+  2. No error handling on /login for no_org error code
+  3. No monitoring for orphaned users
+
+RECOMMENDED FIX:
+  1. Add error display for error=no_org on /login page
+  2. Make trigger atomically fail if any step fails
+  3. Add orphaned user detection job
+
+TIME TO FIX: 1-3 hours
+
+══════════════════════════════════════════════════════════════════════════════
+🔴 RANK 2: SCENARIO 2 - EMAIL NEVER CONFIRMED (USER TRAPPED)
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User signs up: alice@clinic.com
+  → Email sent "Click to verify"
+  → User closes browser (doesn't click)
+  → Verification link expires after 24 hours
+  → User returns 30 days later, tries to login
+  → Gets error: "Email not confirmed"
+  → Can't sign in (email unconfirmed)
+  → Can't sign up again (email already exists)
+  → Can't resend verification (no mechanism)
+  → User is permanently locked out
+
+SEVERITY: 🔴 CRITICAL
+  - User permanently stuck
+  - No self-service recovery option
+  - Orphaned org exists in database
+  - User lost forever
+
+STUCK STATE: YES - requires admin reset or email resend mechanism
+
+ROOT CAUSE:
+  1. Trigger creates org BEFORE email confirmed
+  2. No "resend verification" button in signup flow
+  3. Verification link expires after 24h
+  4. No cleanup of unconfirmed users
+
+RECOMMENDED FIX:
+  1. Defer org creation until email confirmed
+  2. Add resend verification endpoint
+  3. Add email/org cleanup job for unconfirmed users after 7 days
+
+TIME TO FIX: 2-3 hours
+
+══════════════════════════════════════════════════════════════════════════════
+🟡 RANK 3: SCENARIO 6 - NETWORK DROPS DURING SIGNUP
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User clicks "Create Account"
+  → Network drops (WiFi cuts out)
+  → Request times out after 30s
+  → Frontend shows: "An unexpected error occurred"
+  → User thinks signup failed
+  → BUT user might have been created on Supabase side!
+  → User tries to sign up again
+  → Gets: "User already registered"
+  → User is confused (error said "unexpected", now says "already registered")
+
+SEVERITY: 🟡 HIGH
+  - User partially stuck (confusion about status)
+  - Actual signup might have succeeded (user can sign in)
+  - But user doesn't know that
+  - Poor error messaging leads to confusion
+
+STUCK STATE: PARTIALLY - user might actually be created, but doesn't know
+
+ROOT CAUSE:
+  1. Generic error message doesn't indicate if user was created
+  2. Network errors not distinguished from API errors
+  3. No indication to "check email" or "try signing in"
+
+RECOMMENDED FIX:
+  Improve error message:
+    "Connection lost. Your account may have been created.
+     Check your email or try signing in."
+
+TIME TO FIX: 1 hour
+
+══════════════════════════════════════════════════════════════════════════════
+🟡 RANK 4: SCENARIO 10 - SUPABASE DOWN DURING SIGNUP
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User clicks "Create Account"
+  → Supabase region outage (AWS down)
+  → Request timeout (503 Service Unavailable)
+  → Frontend shows: "An unexpected error occurred"
+  → User thinks they did something wrong
+  → Doesn't know it's a service outage
+
+SEVERITY: 🟡 MEDIUM
+  - Not user's fault (service issue, not signup issue)
+  - But error message implies user error
+  - User is confused, might try again immediately
+
+STUCK STATE: NO - works fine once service recovers
+
+ROOT CAUSE:
+  1. Generic error message doesn't indicate service status
+  2. No distinction between user errors and service errors
+
+RECOMMENDED FIX:
+  Detect 503/502 status and show:
+    "Service temporarily unavailable. Please try again in a few minutes."
+
+TIME TO FIX: 1 hour
+
+══════════════════════════════════════════════════════════════════════════════
+🟡 RANK 5: SCENARIO 7 - PKCE MISMATCH (DIFFERENT BROWSER)
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User clicks "Continue with Google" on Desktop
+  → Gets redirected to Google OAuth
+  → Clicks link on Mobile device instead of Desktop
+  → code_verifier stored on Desktop, not on Mobile
+  → PKCE validation fails
+  → Gets error redirected to /login?error=bad_code_verifier
+  → /login doesn't display error
+  → User sees blank login form
+  → User is confused
+
+SEVERITY: 🟡 MEDIUM
+  - User stuck (but knows to try again)
+  - Error message is hidden
+  - Rare scenario (user would need to switch browsers mid-OAuth)
+
+STUCK STATE: NO - user can restart flow on same browser
+
+ROOT CAUSE:
+  1. PKCE code_verifier stored per-browser
+  2. No error message when PKCE fails
+  3. User doesn't know to retry on same browser
+
+RECOMMENDED FIX:
+  Display error on /login:
+    "Authentication expired. Please click Google again on same device."
+
+TIME TO FIX: 2 hours
+
+══════════════════════════════════════════════════════════════════════════════
+🟢 RANK 6: SCENARIO 1 - EMAIL ALREADY EXISTS
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User tries to sign up with alice@clinic.com
+  → Email already registered
+  → Supabase returns error: "User already registered"
+  → Frontend displays error message
+  → User sees "Back to Sign In" button
+  → User clicks and signs in
+
+SEVERITY: 🟢 LOW
+  - Error is clear and displayed
+  - User has obvious next action (sign in)
+  - No stuck state
+
+STUCK STATE: NO - user can immediately sign in
+
+ROOT CAUSE:
+  Database constraint (unique email) prevents duplicate
+
+RECOMMENDED FIX:
+  Improve error message to suggest: "Try signing in instead."
+
+TIME TO FIX: 0.5 hours
+
+══════════════════════════════════════════════════════════════════════════════
+🟢 RANK 7: SCENARIO 9 - TWO TABS SIMULTANEOUSLY
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User opens /sign-up in Tab A
+  → User opens /sign-up in Tab B (same browser)
+  → Both tabs submit signup for alice@clinic.com
+  → Tab A succeeds: "Check your email"
+  → Tab B fails: "User already registered"
+
+SEVERITY: 🟢 LOW (ACTUALLY GOOD BEHAVIOR)
+  - Database constraint prevents duplicate
+  - Error message is clear
+  - User only signed up once (correct)
+  - This is the desired behavior!
+
+STUCK STATE: NO
+
+ROOT CAUSE:
+  Database unique constraint on email (prevents race condition)
+
+RECOMMENDED FIX:
+  None - this is working correctly!
+
+TIME TO FIX: 0 hours
+
+══════════════════════════════════════════════════════════════════════════════
+✅ RANK 8: SCENARIO 5 - WRONG GOOGLE ACCOUNT SELECTED
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User is logged into Google as bob@gmail.com
+  → Clicks "Continue with Google"
+  → Google shows account picker (prompt: 'consent')
+  → User clicks alice@clinic.com instead
+  → OAuth completes for alice@clinic.com
+  → Account created correctly for alice@clinic.com
+
+SEVERITY: ✅ NO ISSUE
+  - This is correct behavior
+  - Google account picker prevents confusion
+  - User gets correct account created
+
+STUCK STATE: NO
+
+ROOT CAUSE:
+  query_param: { prompt: 'consent' } forces account picker
+
+RECOMMENDED FIX:
+  None - working as intended
+
+TIME TO FIX: 0 hours
+
+══════════════════════════════════════════════════════════════════════════════
+✅ RANK 9: SCENARIO 4 - PAYMENT FAILS (OUT OF SCOPE)
+══════════════════════════════════════════════════════════════════════════════
+
+Note: This occurs after signup, during onboarding.
+Not part of authentication flow.
+Mentioned for completeness but handled elsewhere.
+
+TIME TO FIX: N/A (different system)
+
+══════════════════════════════════════════════════════════════════════════════
+✅ RANK 10: SCENARIO 8 - ORG_ID MISSING FROM JWT
+══════════════════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS:
+  User confirms email
+  → Migration updates JWT with org_id
+  → Email verification complete
+  → User redirects to dashboard
+  → But what if org_id was lost?
+
+SEVERITY: ✅ LOW (DEFENSIVE IMPROVEMENT)
+  - Unlikely to happen (Supabase doesn't overwrite metadata)
+  - Even if it did, middleware catches it and redirects to /login
+  - User would see no_org error (which should be fixed per Rank 1)
+
+STUCK STATE: NO (middleware handles this)
+
+ROOT CAUSE:
+  Theoretical issue (unlikely in practice)
+
+RECOMMENDED FIX:
+  Add org_id validation after email verification (defensive programming)
+
+TIME TO FIX: 0.5 hours
+
+════════════════════════════════════════════════════════════════════════════════
+
+CRITICAL ISSUES SUMMARY
+════════════════════════════════════════════════════════════════════════════════
+
+🔴 CRITICAL (Users Permanently Stuck):
+  1. Scenario 3: Trigger fails, JWT not updated → no_org silent redirect
+  2. Scenario 2: Unconfirmed email → user locked out forever
+
+🟡 HIGH/MEDIUM (Users Confused or Partially Stuck):
+  3. Scenario 6: Network drops → ambiguous error message
+  4. Scenario 10: Supabase down → generic error
+  5. Scenario 7: PKCE mismatch → hidden error
+
+🟢 LOW/OK (No User Impact):
+  6-10: All have graceful handling or are correct behavior
+
+════════════════════════════════════════════════════════════════════════════════
+
+TOP 5 FIXES (Priority Order)
+════════════════════════════════════════════════════════════════════════════════
+
+PRIORITY 1: Add no_org Error Display (Fix Rank #1)
+  Impact: Prevent users from getting stuck
+  Time: 1 hour
+  Files: src/app/(auth)/verify-email/page.tsx
+  Status: CRITICAL
+
+PRIORITY 2: Defer Org Creation Until Email Confirmed (Fix Rank #2)
+  Impact: Prevent unconfirmed users from getting trapped
+  Time: 2 hours
+  Files: backend/supabase/migrations/20260209_fix_auto_org_trigger.sql
+  Status: CRITICAL
+
+PRIORITY 3: Improve Network Error Messages (Fix Rank #3)
+  Impact: Reduce user confusion during network issues
+  Time: 1.5 hours
+  Files: src/app/(auth)/sign-up/page.tsx
+  Status: HIGH
+
+PRIORITY 4: Display Auth Errors on All Pages (Fix Rank #5)
+  Impact: Show PKCE/OAuth errors instead of blank page
+  Time: 2 hours
+  Files: src/app/(auth)/verify-email/page.tsx, login page
+  Status: MEDIUM
+
+PRIORITY 5: Add Orphaned User Detection (Fix Rank #1 Prevention)
+  Impact: Detect and alert on broken signups
+  Time: 3 hours
+  Files: backend/src/routes/admin-health.ts
+  Status: MEDIUM (monitoring/prevention)
+
+════════════════════════════════════════════════════════════════════════════════
+
+IMPLEMENTATION TIMELINE
+════════════════════════════════════════════════════════════════════════════════
+
+PHASE 1 (Day 1, 4 hours) - Quick Wins
+  ✓ Priority 1: Add no_org display
+  ✓ Priority 3: Improve error messages
+  ✓ Priority 4: Display error banner
+  → Deploy to staging and test
+
+PHASE 2 (Day 2, 2 hours) - Trigger Refactor
+  ✓ Priority 2: Defer org creation
+  → Deploy to staging
+  → Run full email verification tests
+
+PHASE 3 (Day 3, 3 hours) - Monitoring
+  ✓ Priority 5: Orphaned user detection
+  → Deploy monitoring
+  → Set up Slack alerts
+
+TOTAL: 9 hours to implement all 5 fixes
+
+════════════════════════════════════════════════════════════════════════════════
+
+TESTING CHECKLIST
+════════════════════════════════════════════════════════════════════════════════
+
+Before Launch:
+  [ ] Signup with network off → error says "may have been created"
+  [ ] Signup with Supabase offline → error says "service unavailable"
+  [ ] OAuth from different browser → error displayed
+  [ ] Sign up, don't confirm email → can resend verification
+  [ ] Email confirmation → org created after verification
+  [ ] Trigger failure (manual DB error) → user not created, error displayed
+  [ ] Orphaned user detection → Slack alert fires
+
+════════════════════════════════════════════════════════════════════════════════
+
+CONFIDENCE ASSESSMENT
+════════════════════════════════════════════════════════════════════════════════
+
+Code Review Confidence: 95%
+  - Analyzed 5 key files in detail
+  - Traced all 10 scenarios through code paths
+  - Verified database schema and RLS
+
+Risk Assessment:
+  - CRITICAL issues: 2 scenarios (Ranks 1, 2)
+  - Can trap users permanently if not fixed
+  - Current state is PRODUCTION RISK
+
+Recommended: Fix PRIORITY 1-4 before launch to any paying customers
+
+════════════════════════════════════════════════════════════════════════════════

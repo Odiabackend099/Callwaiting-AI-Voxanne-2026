@@ -60,4 +60,5 @@ export interface VoiceAgentState {
     transcripts: TranscriptMessage[];
     error: string | null;
     session: VoiceSession | null;
+    activeVolume: number; // 0.0–1.0, driven by AnalyserNode on the mic input
 }

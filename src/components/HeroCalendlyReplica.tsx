@@ -137,7 +137,7 @@ export function HeroCalendlyReplica() {
 
                         {/* CTA Buttons */}
                         <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4">
-                            <Link href="/start">
+                            <Link href="/sign-up">
                                 <motion.button
                                     whileHover={{ scale: 1.04, boxShadow: '0 8px 30px rgba(29,78,216,0.35)' }}
                                     whileTap={{ scale: 0.97 }}

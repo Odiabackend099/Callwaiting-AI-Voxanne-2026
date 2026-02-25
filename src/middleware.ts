@@ -78,8 +78,24 @@ export async function middleware(req: NextRequest) {
         }
     }
 
-    // If authenticated and on /login, redirect to dashboard
-    if (user && pathname === '/login') {
+    // 7-day email verification grace period — redirect to /verify-email after grace expires
+    // Only enforced once Supabase "Email confirmations" is enabled (email_confirmed_at will be null for unverified users).
+    // With confirmations OFF, email_confirmed_at is always set immediately; this block becomes a no-op.
+    if (user && pathname.startsWith('/dashboard')) {
+        const emailConfirmedAt = (user as any).email_confirmed_at as string | null;
+        if (!emailConfirmedAt) {
+            const createdAt = new Date((user as any).created_at ?? Date.now());
+            if (Date.now() - createdAt.getTime() > 7 * 24 * 60 * 60 * 1000) {
+                return NextResponse.redirect(new URL('/verify-email?expired=true', req.url));
+            }
+        }
+    }
+
+    // If authenticated and on /login or /sign-up, redirect to dashboard
+    // Exception: if redirected to /login with ?error=no_org, let the user see the error
+    // (otherwise they get an infinite loop: dashboard → login → dashboard → ...)
+    const loginError = req.nextUrl.searchParams.get('error');
+    if (user && (pathname === '/login' || pathname === '/sign-up') && loginError !== 'no_org') {
         const dashboardUrl = new URL('/dashboard', req.url);
         return NextResponse.redirect(dashboardUrl);
     }

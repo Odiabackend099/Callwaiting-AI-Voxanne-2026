@@ -89,16 +89,22 @@ const TestAgentPageContent = () => {
     const {
         isConnected,
         isRecording,
+        isSpeaking,
         transcripts,
         error: voiceError,
         startCall,
         stopCall,
         startRecording,
-        stopRecording
+        stopRecording,
+        activeVolume,
     } = useVoiceAgentContext();
 
-    const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
+    // Typed call status — maps to the CTO directive's 'inactive' | 'loading' | 'active' contract
     const [callInitiating, setCallInitiating] = useState(false);
+    const callStatus: 'inactive' | 'loading' | 'active' =
+        callInitiating ? 'loading' : isConnected ? 'active' : 'inactive';
+
+    const [displayTranscripts, setDisplayTranscripts] = useState<any[]>([]);
     const [isMuted, setIsMuted] = useState(false);
     const [showScrollButton, setShowScrollButton] = useState(false);
     const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -448,16 +454,26 @@ const TestAgentPageContent = () => {
 
                         if (data.type === 'transcript') {
                             const speaker = data.speaker === 'agent' ? 'agent' : 'user';
+                            const isFinal = data.is_final === true;
                             const newTranscript = {
                                 id: `${outboundTrackingId}_${Date.now()}_${Math.random()}`,
                                 speaker,
                                 text: data.text,
-                                isFinal: data.is_final === true,
+                                isFinal,
                                 confidence: data.confidence || 0.95,
                                 timestamp: new Date()
                             };
 
-                            setOutboundTranscripts(prev => [...prev, newTranscript].slice(-100));
+                            setOutboundTranscripts(prev => {
+                                const last = prev[prev.length - 1];
+                                // Update existing partial for same speaker instead of appending
+                                if (!isFinal && last && last.speaker === speaker && !last.isFinal) {
+                                    const updated = [...prev];
+                                    updated[updated.length - 1] = { ...last, text: data.text };
+                                    return updated;
+                                }
+                                return [...prev, newTranscript].slice(-100);
+                            });
                             // Auto-scroll with requestAnimationFrame for smooth scrolling
                             requestAnimationFrame(() => {
                                 outboundTranscriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -627,27 +643,40 @@ const TestAgentPageContent = () => {
                                 {isMuted ? <MicOff className="w-5 h-5 relative z-10" /> : <Mic className="w-5 h-5 relative z-10" />}
                             </motion.button>
 
-                            {/* Primary Call Button */}
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={handleToggleWebCall}
-                                disabled={callInitiating}
-                                aria-label={isConnected ? 'End call' : 'Start call'}
-                                title={isConnected ? 'End session' : 'Start session'}
-                                className={`w-12 h-12 rounded-full transition-all flex items-center justify-center ${isConnected
-                                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                                    : 'bg-surgical-600 hover:bg-surgical-700 text-white'
-                                    } disabled:opacity-50 disabled:cursor-not-allowed shadow-sm`}
-                            >
-                                {callInitiating ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : isConnected ? (
-                                    <StopCircle className="w-5 h-5" />
-                                ) : (
-                                    <Phone className="w-5 h-5" />
-                                )}
-                            </motion.button>
+                            {/* Primary Call Button + VAD Visualizer Ring */}
+                            <div className="relative flex items-center justify-center">
+                                {/* VAD pulse ring — scales with mic volume when active */}
+                                <div
+                                    className="absolute rounded-full bg-surgical-400/30 pointer-events-none"
+                                    style={{
+                                        width: 48,
+                                        height: 48,
+                                        transform: `scale(${callStatus === 'active' && isRecording && !isSpeaking ? 1 + activeVolume * 1.5 : 1})`,
+                                        opacity: callStatus === 'active' && isRecording && !isSpeaking ? 0.5 + activeVolume * 0.5 : 0,
+                                        transition: 'transform 80ms ease-out, opacity 80ms ease-out',
+                                    }}
+                                />
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={handleToggleWebCall}
+                                    disabled={callInitiating}
+                                    aria-label={isConnected ? 'End call' : 'Start call'}
+                                    title={isConnected ? 'End session' : 'Start session'}
+                                    className={`w-12 h-12 rounded-full transition-all flex items-center justify-center relative z-10 ${isConnected
+                                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                                        : 'bg-surgical-600 hover:bg-surgical-700 text-white'
+                                        } disabled:opacity-50 disabled:cursor-not-allowed shadow-sm`}
+                                >
+                                    {callInitiating ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : isConnected ? (
+                                        <StopCircle className="w-5 h-5" />
+                                    ) : (
+                                        <Phone className="w-5 h-5" />
+                                    )}
+                                </motion.button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -656,121 +685,108 @@ const TestAgentPageContent = () => {
                 {activeTab === 'phone' && (
                     <div className="flex flex-col h-full bg-white">
                         <div className="p-8 max-w-xl mx-auto w-full flex-1 flex flex-col justify-center">
+
+                            {/* Header — always visible */}
                             <div className="text-center mb-8">
                                 <div className="w-16 h-16 bg-surgical-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                                     <Phone className="w-8 h-8 text-white" />
                                 </div>
-                                <h2 className="text-2xl font-semibold text-obsidian mb-2">Live Call Test</h2>
-                                <p className="text-sm text-obsidian/70">Enter your phone number to receive a test call from your agent.</p>
+                                <h2 className="text-2xl font-semibold text-obsidian mb-2">Try a Live Call</h2>
+                                <p className="text-sm text-obsidian/70">Enter your number and your AI agent will call you instantly.</p>
 
-                                <div className="mt-4 p-4 bg-surgical-50 border border-surgical-200 rounded-lg text-left">
-                                    <p className="text-xs text-obsidian/60 font-semibold uppercase tracking-wider">From Number / Caller ID</p>
-                                    <p className="text-lg font-mono font-bold text-obsidian mt-1">
-                                        {outboundCallerIdNumber && outboundCallerIdNumber !== 'Auto-assigned at call time'
-                                            ? outboundCallerIdNumber
-                                            : inboundStatus?.configured && inboundStatus.inboundNumber
-                                                ? inboundStatus.inboundNumber
-                                                : 'Auto-assigned at call time'}
-                                    </p>
-                                    <p className="text-xs text-obsidian/60 mt-2">
-                                        {(!outboundCallerIdNumber || outboundCallerIdNumber === 'Auto-assigned at call time') && !(inboundStatus?.configured && inboundStatus.inboundNumber)
-                                            ? 'A phone number will be automatically selected from your account when the call is placed.'
-                                            : 'This number will appear as the caller ID on outbound calls.'}
-                                    </p>
-                                </div>
-
-                                {/* WebSocket Connection Status */}
-                                {outboundTrackingId && (
-                                    <div className="mt-4 flex items-center justify-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${wsConnectionStatus === 'connected' ? 'bg-surgical-500 shadow-lg shadow-surgical-500/50' : wsConnectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-surgical-200'}`} />
-                                        <span className="text-xs text-obsidian/60 tracking-tight">
-                                            {wsConnectionStatus === 'connected' ? 'Live transcript connected' : wsConnectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                                {/* Caller ID — shown only when a number is known */}
+                                {(outboundCallerIdNumber && outboundCallerIdNumber !== 'Auto-assigned at call time') || (inboundStatus?.configured && inboundStatus.inboundNumber) ? (
+                                    <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-surgical-50 border border-surgical-200 rounded-full">
+                                        <Phone className="w-3.5 h-3.5 text-surgical-500 flex-shrink-0" />
+                                        <span className="text-sm text-obsidian/70">Your agent will call from </span>
+                                        <span className="text-sm font-semibold text-obsidian font-mono">
+                                            {outboundCallerIdNumber && outboundCallerIdNumber !== 'Auto-assigned at call time'
+                                                ? outboundCallerIdNumber
+                                                : inboundStatus!.inboundNumber}
                                         </span>
+                                    </div>
+                                ) : null}
+
+                                {/* Live indicator — only while call is active */}
+                                {outboundTrackingId && wsConnectionStatus === 'connected' && (
+                                    <div className="mt-3 flex items-center justify-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-surgical-500 shadow-lg shadow-surgical-500/50 animate-pulse" />
+                                        <span className="text-xs text-obsidian/50">Live</span>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Config Loading State */}
+                            {/* Loading — agent warming up */}
                             {outboundConfigLoading && (
-                                <div className="text-center space-y-4">
+                                <div className="text-center space-y-3">
                                     <Loader2 className="w-8 h-8 text-surgical-500 animate-spin mx-auto" />
-                                    <p className="text-sm text-obsidian/60 tracking-tight">Loading outbound configuration...</p>
+                                    <p className="text-sm text-obsidian/60">Getting your agent ready…</p>
                                 </div>
                             )}
 
-                            {/* Config Error State */}
+                            {/* Setup incomplete */}
                             {!outboundConfigLoading && outboundConfigError && !outboundTrackingId && !callSummary && (
                                 <div className="space-y-4">
-                                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-                                        <div className="flex items-start gap-3">
-                                            <AlertCircle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" />
-                                            <div className="flex-1">
-                                                <p className="font-medium text-red-700 text-sm tracking-tight">{outboundConfigError}</p>
-                                                {outboundConfigMissingFields.length > 0 && (
-                                                    <div className="mt-2">
-                                                        <p className="text-xs text-red-700">Missing fields:</p>
-                                                        <ul className="list-disc list-inside text-xs text-red-700 mt-1">
-                                                            {outboundConfigMissingFields.map((field, idx) => (
-                                                                <li key={idx}>{field}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                            </div>
+                                    <div className="p-5 bg-surgical-50 border border-surgical-200 rounded-2xl text-center">
+                                        <div className="w-12 h-12 bg-white border border-surgical-200 rounded-xl flex items-center justify-center mx-auto mb-3">
+                                            <AlertCircle className="w-6 h-6 text-surgical-500" />
                                         </div>
+                                        <p className="font-semibold text-obsidian text-sm mb-1">Your agent isn't ready yet</p>
+                                        <p className="text-xs text-obsidian/60 leading-relaxed">
+                                            Finish setting up your AI agent before placing a test call.
+                                        </p>
                                     </div>
                                     <button
                                         onClick={() => router.push('/dashboard/agent-config')}
                                         className="w-full py-3 rounded-xl bg-surgical-600 hover:bg-surgical-700 text-white font-medium transition-all shadow-sm tracking-tight"
                                     >
-                                        Go to Agent Configuration
+                                        Finish Setup
                                     </button>
                                 </div>
                             )}
 
-                            {/* Call Summary (Post-Call) */}
+                            {/* Post-call summary */}
                             {callSummary && !outboundTrackingId && (
                                 <div className="space-y-4">
                                     <div className="p-6 bg-white rounded-2xl border border-surgical-200 shadow-sm">
-                                        <h3 className="text-lg font-semibold text-obsidian mb-4 tracking-tight">Call Summary</h3>
-                                        <div className="space-y-3">
-                                            <div>
-                                                <p className="text-xs text-obsidian/60 font-medium uppercase tracking-wider">Status</p>
-                                                <p className="text-sm text-obsidian capitalize mt-1">{callSummary.status || 'Completed'}</p>
+                                        <div className="flex items-center gap-3 mb-5">
+                                            <div className="w-10 h-10 rounded-xl bg-surgical-50 border border-surgical-200 flex items-center justify-center flex-shrink-0">
+                                                <Phone className="w-5 h-5 text-surgical-600" />
                                             </div>
-                                            {callSummary.durationSeconds && (
-                                                <div>
-                                                    <p className="text-xs text-obsidian/60 font-medium uppercase tracking-wider">Duration</p>
-                                                    <p className="text-sm text-obsidian mt-1">{Math.floor(callSummary.durationSeconds / 60)}m {callSummary.durationSeconds % 60}s</p>
-                                                </div>
-                                            )}
                                             <div>
-                                                <p className="text-xs text-obsidian/60 font-medium uppercase tracking-wider">Tracking ID</p>
-                                                <p className="text-sm text-obsidian font-mono mt-1">{callSummary.trackingId}</p>
+                                                <h3 className="text-base font-semibold text-obsidian tracking-tight">Call complete</h3>
+                                                {callSummary.durationSeconds ? (
+                                                    <p className="text-xs text-obsidian/50 mt-0.5">
+                                                        {Math.floor(callSummary.durationSeconds / 60)}m {callSummary.durationSeconds % 60}s
+                                                    </p>
+                                                ) : null}
                                             </div>
-                                            {callSummary.transcripts && callSummary.transcripts.length > 0 && (
-                                                <div>
-                                                    <p className="text-xs text-obsidian/60 font-medium uppercase tracking-wider mb-2">Last Transcript Lines</p>
-                                                    <div className="space-y-2">
-                                                        {callSummary.transcripts.slice(-5).map((t: any, idx: number) => (
-                                                            <div key={idx} className="text-sm">
-                                                                <span className={`font-semibold ${t.speaker === 'agent' ? 'text-surgical-600' : 'text-obsidian/60'}`}>
-                                                                    {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
-                                                                </span>
-                                                                <span className="text-obsidian">{t.text}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
+
+                                        {callSummary.transcripts && callSummary.transcripts.length > 0 && (
+                                            <div className="border-t border-surgical-100 pt-4">
+                                                <p className="text-xs text-obsidian/50 font-medium mb-3 uppercase tracking-wider">How it went</p>
+                                                <div className="space-y-2">
+                                                    {callSummary.transcripts.slice(-5).map((t: any, idx: number) => (
+                                                        <div key={idx} className={`flex ${t.speaker === 'agent' ? 'justify-start' : 'justify-end'}`}>
+                                                            <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${t.speaker === 'agent'
+                                                                ? 'bg-surgical-50 text-obsidian border border-surgical-200'
+                                                                : 'bg-surgical-600 text-white'
+                                                            }`}>
+                                                                {t.text}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => router.push('/dashboard/calls?tab=outbound')}
                                             className="flex-1 py-3 rounded-xl bg-surgical-600 hover:bg-surgical-700 text-white font-medium transition-all shadow-sm tracking-tight"
                                         >
-                                            View in Calls Dashboard
+                                            View Full Transcript
                                         </button>
                                         <button
                                             onClick={() => {
@@ -780,17 +796,17 @@ const TestAgentPageContent = () => {
                                             }}
                                             className="px-6 py-3 rounded-xl border border-surgical-200 text-obsidian/60 hover:bg-surgical-50 font-medium transition-all tracking-tight"
                                         >
-                                            New Test
+                                            Call Again
                                         </button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Call Initiation Form */}
+                            {/* Call initiation form */}
                             {!outboundConfigLoading && !outboundConfigError && !outboundTrackingId && !callSummary && (
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-obsidian/60 mb-2 tracking-tight">Phone Number</label>
+                                        <label className="block text-sm font-medium text-obsidian mb-2">Your phone number</label>
                                         <input
                                             type="tel"
                                             value={phoneNumber}
@@ -798,86 +814,82 @@ const TestAgentPageContent = () => {
                                                 setPhoneNumber(e.target.value);
                                                 setPhoneValidationError(null);
                                             }}
-                                            placeholder="+15551234567"
+                                            placeholder="+1 (555) 000-0000"
                                             className={`w-full px-4 py-3 rounded-xl border bg-white text-obsidian placeholder-obsidian/40 focus:ring-2 focus:ring-surgical-500 focus:border-surgical-500 outline-none text-lg transition-all ${phoneValidationError ? 'border-red-500' : 'border-surgical-200'}`}
                                         />
                                         {phoneValidationError && (
-                                            <p className="text-xs text-red-700 mt-2">{phoneValidationError}</p>
+                                            <p className="text-xs text-red-600 mt-2">{phoneValidationError}</p>
                                         )}
                                         {!phoneValidationError && (
-                                            <p className="text-xs text-obsidian/40 mt-2 tracking-tight">Enter the phone number you want the AI agent to call</p>
+                                            <p className="text-xs text-obsidian/40 mt-2">Include your country code, e.g. +1 for the US</p>
                                         )}
                                     </div>
-
-                                    {/* Outbound Caller ID Display */}
-                                    {outboundCallerIdNumber && (
-                                        <div className="p-4 bg-surgical-50 border border-surgical-200 rounded-xl">
-                                            <p className="text-xs text-obsidian/60 font-medium uppercase tracking-wider">Outbound Caller ID</p>
-                                            <p className="text-sm text-obsidian mt-1 font-mono">
-                                                {outboundCallerIdNumber}
-                                            </p>
-                                            <p className="text-xs text-obsidian/40 mt-2">
-                                                This number will appear as the caller ID to the recipient
-                                            </p>
-                                        </div>
-                                    )}
 
                                     <button
                                         onClick={handleInitiateCall}
                                         disabled={isCallingPhone || !phoneNumber}
-                                        className="w-full px-6 py-3 rounded-lg bg-surgical-600 hover:bg-surgical-700 text-white font-medium shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        className="w-full px-6 py-4 rounded-xl bg-surgical-600 hover:bg-surgical-700 text-white font-semibold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-base"
                                     >
                                         {isCallingPhone ? (
                                             <>
                                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                                Initiating Call...
+                                                Calling you…
                                             </>
                                         ) : (
                                             <>
                                                 <Phone className="w-5 h-5" />
-                                                Start Outbound Call
+                                                Call Me Now
                                             </>
                                         )}
                                     </button>
                                 </div>
                             )}
 
-                            {/* Active Call State */}
+                            {/* Active call view */}
                             {outboundTrackingId && !callSummary && (
                                 <div className="flex flex-col h-full">
-                                    {/* Fixed header section */}
-                                    <div className="flex-none p-6">
+                                    <div className="flex-none">
                                         <div className="p-6 bg-surgical-50 rounded-2xl border border-surgical-200 text-center">
-                                            <Activity className="w-12 h-12 text-surgical-600 mx-auto mb-3 animate-pulse" />
-                                            <h3 className="text-lg font-semibold text-surgical-600 tracking-tight">Call In Progress</h3>
-                                            <p className="text-sm text-obsidian/60">Check your phone!</p>
+                                            {/* Pulsing ring animation */}
+                                            <div className="relative w-16 h-16 mx-auto mb-4">
+                                                <div className="absolute inset-0 rounded-full bg-surgical-400/30 animate-ping" />
+                                                <div className="relative w-16 h-16 rounded-full bg-surgical-600 flex items-center justify-center shadow-lg">
+                                                    <Phone className="w-7 h-7 text-white" />
+                                                </div>
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-obsidian tracking-tight">Your phone is ringing</h3>
+                                            <p className="text-sm text-obsidian/60 mt-1">Pick up and start talking to your AI agent.</p>
                                         </div>
 
                                         <button
                                             onClick={handleEndPhoneCall}
-                                            className="mt-6 w-full px-8 py-3 rounded-xl border border-surgical-200 text-obsidian/60 hover:bg-surgical-50 font-medium transition-all tracking-tight"
+                                            className="mt-4 w-full px-8 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 font-medium transition-all tracking-tight"
                                         >
-                                            End Test Session
+                                            End Call
                                         </button>
                                     </div>
 
-                                    {/* Scrollable transcript section */}
+                                    {/* Live conversation */}
                                     {outboundTranscripts.length > 0 && (
-                                        <div className="flex-1 min-h-0 px-6 pb-6">
-                                            <div className="h-full bg-surgical-50 rounded-xl p-4 border border-surgical-200 flex flex-col">
-                                                <p className="text-xs font-semibold text-obsidian/60 uppercase tracking-widest mb-3 flex-none">Live Transcript</p>
-                                                <div className="flex-1 overflow-y-auto min-h-0">
-                                                    <div className="space-y-3">
-                                                        {outboundTranscripts.map((t, i) => (
-                                                            <div key={i} className="text-sm">
-                                                                <span className={`font-semibold ${t.speaker === 'agent' ? 'text-surgical-600' : 'text-obsidian/60'}`}>
-                                                                    {t.speaker === 'agent' ? 'Agent: ' : 'You: '}
-                                                                </span>
-                                                                <span className="text-obsidian">{t.text}</span>
+                                        <div className="flex-1 min-h-0 mt-4">
+                                            <div className="h-full bg-white rounded-xl border border-surgical-200 flex flex-col overflow-hidden">
+                                                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surgical-100 flex-none">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-surgical-500 animate-pulse" />
+                                                    <p className="text-xs font-medium text-obsidian/60">Live conversation</p>
+                                                </div>
+                                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                                    {outboundTranscripts.map((t, i) => (
+                                                        <div key={i} className={`flex ${t.speaker === 'agent' ? 'justify-start' : 'justify-end'}`}>
+                                                            <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${t.speaker === 'agent'
+                                                                ? 'bg-surgical-50 text-obsidian border border-surgical-200'
+                                                                : 'bg-surgical-600 text-white'
+                                                            }`}>
+                                                                {t.text}
+                                                                {!t.isFinal && <span className="animate-pulse opacity-60"> …</span>}
                                                             </div>
-                                                        ))}
-                                                        <div ref={outboundTranscriptEndRef} />
-                                                    </div>
+                                                        </div>
+                                                    ))}
+                                                    <div ref={outboundTranscriptEndRef} />
                                                 </div>
                                             </div>
                                         </div>
@@ -896,10 +908,11 @@ const TestAgentPageContent = () => {
                             animate={{ opacity: 1, scale: 1 }}
                             className="bg-white border border-surgical-200 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl"
                         >
-                            <h3 className="text-xl font-semibold text-obsidian mb-2 tracking-tight">Confirm Test Call</h3>
-                            <p className="text-sm text-obsidian/60 mb-6 tracking-tight">
-                                Are you sure you want to place a test call to <span className="font-mono font-semibold text-surgical-600">{phoneNumber}</span>?
+                            <h3 className="text-xl font-semibold text-obsidian mb-2 tracking-tight">Ready to call?</h3>
+                            <p className="text-sm text-obsidian/60 mb-1 tracking-tight">
+                                Your AI agent will call <span className="font-semibold text-obsidian">{phoneNumber}</span> right now.
                             </p>
+                            <p className="text-xs text-obsidian/40 mb-6">Make sure you're available to answer.</p>
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setShowConfirmDialog(false)}
@@ -911,7 +924,7 @@ const TestAgentPageContent = () => {
                                     onClick={handleConfirmCall}
                                     className="flex-1 px-4 py-2.5 rounded-xl bg-surgical-600 hover:bg-surgical-700 text-white font-medium transition-all shadow-sm tracking-tight"
                                 >
-                                    Confirm Call
+                                    Yes, Call Me
                                 </button>
                             </div>
                         </motion.div>

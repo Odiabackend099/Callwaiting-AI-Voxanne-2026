@@ -7,6 +7,7 @@ import { DashboardWebSocketProvider } from '@/contexts/DashboardWebSocketContext
 import LeftSidebar from '@/components/dashboard/LeftSidebar';
 import CommandPalette from '@/components/dashboard/CommandPalette';
 import { BackendStatusBanner } from '@/components/dashboard/BackendStatusBanner';
+import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificationBanner';
 
 export const metadata: Metadata = {
     title: "Voxanne AI - Voice Agent Dashboard",
@@ -46,6 +47,7 @@ export default async function DashboardLayout({
                             <BackendStatusBanner />
 
                             <main className="flex-1 overflow-y-auto overflow-x-hidden pt-16 md:pt-4 pr-4 pb-4 bg-clinical-bg">
+                                <EmailVerificationBanner />
                                 {children}
                             </main>
                         </div>

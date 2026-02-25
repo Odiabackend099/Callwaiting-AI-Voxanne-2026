@@ -65,11 +65,11 @@ export default function NavbarRedesigned() {
                     >
                         Sign In
                     </Link>
-                    <Link href="/start" className="inline-block">
+                    <Link href="/sign-up" className="inline-block">
                         <button
                             className="btn-fill px-8 py-2.5 bg-surgical-600 text-white font-semibold rounded-lg hover:text-white transition-all duration-500 text-sm tracking-wide uppercase"
                         >
-                            Book Demo
+                            Start Free Trial
                         </button>
                     </Link>
                 </div>
@@ -117,11 +117,11 @@ export default function NavbarRedesigned() {
                                 >
                                     Sign In
                                 </Link>
-                                <Link href="/start" className="block w-full" onClick={() => setIsOpen(false)}>
+                                <Link href="/sign-up" className="block w-full" onClick={() => setIsOpen(false)}>
                                     <button
                                         className="px-6 py-2 bg-surgical-600 text-white font-semibold rounded-lg hover:bg-surgical-700 transition-all duration-300 w-full"
                                     >
-                                        Book Demo
+                                        Start Free Trial
                                     </button>
                                 </Link>
                             </div>
