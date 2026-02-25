@@ -134,6 +134,7 @@ import { processStripeWebhook } from './jobs/stripe-webhook-processor';
 import stripeWebhooksRouter from './routes/stripe-webhooks';
 import billingApiRouter from './routes/billing-api';
 import billingReconciliationRouter from './routes/billing-reconciliation'; // default export
+import billingMonitoringRouter from './routes/billing-monitoring'; // Operator aggregate billing metrics
 import webhookVerificationRouter from './routes/webhook-verification'; // default export - Webhook processing verification
 import calendlyWebhookRouter from './routes/calendly-webhook';
 import contactFormRouter from './routes/contact-form';
@@ -341,6 +342,7 @@ app.use('/api/onboarding', onboardingRouter); // Onboarding wizard (telemetry, s
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
 app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
+app.use('/api/billing/monitoring', billingMonitoringRouter); // Operator aggregate billing metrics (admin only)
 app.use('/api/billing/reconciliation', billingReconciliationRouter); // P0-5: Vapi call reconciliation
 app.use('/api/webhook-verification', webhookVerificationRouter); // Webhook processing verification (Fix #3)
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
