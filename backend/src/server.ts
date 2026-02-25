@@ -108,6 +108,8 @@ import complianceRouter from './routes/compliance'; // default export - GDPR/HIP
 import agentDiagnosticsRouter from './routes/agent-diagnostics'; // default export - Agent configuration diagnostics
 import circuitBreakerDebugRouter from './routes/circuit-breaker-debug'; // default export - Circuit breaker diagnostics and SMS troubleshooting
 import billingDebugRouter from './routes/billing-debug'; // default export - Billing pipeline diagnostics (Phase 1 fix)
+import onboardingRouter from './routes/onboarding'; // default export - Onboarding wizard API
+import { scheduleAbandonmentEmails } from './jobs/onboarding-abandonment'; // Cart abandonment email job
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
   initializeWebhookQueue,
@@ -335,6 +337,7 @@ app.use('/api/debug', circuitBreakerDebugRouter); // Circuit breaker diagnostics
 app.use('/api/webhook-metrics', webhookMetricsRouter); // Webhook delivery monitoring and retry management
 app.use('/api/compliance', complianceRouter); // GDPR/HIPAA compliance (data export, deletion requests)
 app.use('/api/billing-debug', billingDebugRouter); // Billing pipeline diagnostics (inspect call billing status)
+app.use('/api/onboarding', onboardingRouter); // Onboarding wizard (telemetry, status, completion, provisioning)
 app.use('/api/webhooks', stripeWebhooksRouter); // Stripe billing webhooks
 app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
@@ -852,6 +855,13 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('   Revenue protection: Recovers 2-5% of missed webhooks (~$108-1080/year)');
     } catch (error: any) {
       console.warn('Failed to schedule Vapi reconciliation job:', error.message);
+    }
+
+    try {
+      scheduleAbandonmentEmails();
+      console.log('Onboarding abandonment email job scheduled (every 15 minutes)');
+    } catch (error: any) {
+      console.warn('Failed to schedule abandonment email job:', error.message);
     }
 
     // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture

@@ -1,10 +1,10 @@
 # Voxanne AI – Product Requirements Document (PRD)
 
-**Version:** 2026.38.0
-**Last Updated:** 2026-02-24 UTC
-**Status:** ✅ PRODUCTION READY - Multi-Number Support + Error Sanitization
-**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅ + **Multi-Number Support** ✅
-**Verification Status:** ✅ ALL PHASES OPERATIONAL - 132+ error exposures fixed, multi-number support verified (outbound +16812711486 purchased), 0 technical details exposed to users, Vercel deployment live
+**Version:** 2026.39.0
+**Last Updated:** 2026-02-25 UTC
+**Status:** ✅ PRODUCTION READY - New User Onboarding Wizard + Multi-Number Support + Error Sanitization
+**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅ + **Multi-Number Support** ✅ + **Onboarding Wizard** ✅
+**Verification Status:** ✅ ALL PHASES OPERATIONAL - Onboarding wizard live (5-step, cart abandonment, telemetry), 132+ error exposures fixed, multi-number support verified (outbound +16812711486 purchased), 0 technical details exposed to users, Vercel deployment live
 
 ---
 
@@ -57,7 +57,19 @@ New contributors should:
 
 ## CURRENT ARCHITECTURE (TIER 2: Reference this, then check SSOT.md for details)
 
-### What's Changed Since Last Release (2026-02-24)
+### What's Changed Since Last Release (2026-02-25)
+
+**New User Onboarding Wizard: ✅ DEPLOYED**
+- 5-step conversion wizard for newly registered users at `/dashboard/onboarding` (distinct from the pre-sales intake form at `/start`)
+- Flow: Clinic Name (0) → Specialty (1) → Payment / Stripe Checkout (2) → Celebration + auto-provision phone number (3) → Aha Moment / test call CTA (4)
+- Zustand store with `sessionStorage` persistence survives Stripe redirect without losing state
+- Dashboard home page detects `onboarding_completed_at = NULL` and auto-redirects new users
+- Cart abandonment: 3-email sequence at 1hr/24hr/48hr — 3rd email applies £10 credit (idempotent: insert-before-credit pattern prevents double application)
+- Telemetry: 6 funnel event types tracked in `onboarding_events` table (session-grouped for funnel analysis)
+- Migration `20260225_onboarding_wizard.sql`: 2 new tables (`onboarding_events`, `abandonment_emails`) + 3 new `organizations` columns (`onboarding_completed_at`, `clinic_name`, `specialty`)
+- Reference: SSOT.md (onboarding_events + abandonment_emails table schemas)
+
+### Previous Release (2026-02-24)
 
 **Bug 3 - Multi-Number Support: ✅ FIXED**
 - **Issue:** Outbound number provisioning failed due to:
@@ -329,10 +341,11 @@ Reservation committed: ✅ YES
 4. **Wallet Billing** – Stripe Checkout top-ups (£25 minimum), auto-recharge, credit ledger, webhook verification, and fixed-rate per-minute deductions (56 pence/min GBP).
 5. **Managed Telephony** – Purchase Twilio subaccount numbers (1 inbound + 1 outbound per org), surface in Agent Config, support manual AI Forwarding.
 6. **Dashboards & Leads** – Production dashboards for call stats (Total Calls, Appointments, Average Sentiment, Avg Duration), call log filters (status, date range, search with clear), call detail modal (cost, appointment ID, tools used), activity click-through to call detail, appointment-to-call linkage, lead enrichment, conversion tracking, and Geo/SEO telemetry.
-7. **Onboarding Form** – Intake form at `/start` collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support team. Stores submissions in `onboarding_submissions` table with full audit trail.
-8. **Verified Caller ID** – Outbound caller ID verification via Twilio validation API. Pre-checks existing verifications to prevent errors, displays validation codes in UI, supports delete/unverify workflow. Works in both managed and BYOC telephony modes with automatic credential resolution.
-9. **Security & Compliance** – JWT middleware using `jwt-decode`, Supabase RLS on all tenant tables, hardened functions (`search_path` pinned to `public`), HIPAA-ready infrastructure.
-10. **Error Sanitization & Observability** – All API errors sanitized to prevent information disclosure (database schema, validation rules, implementation details). Centralized error utility (`error-sanitizer.ts`) ensures user-friendly messages while full technical details logged to Sentry for debugging. 132+ error exposures fixed (2026-02-22). Production deployment verified with zero technical leakage.
+7. **Pre-Sales Lead Intake Form** – Public intake form at `/start` (unauthenticated, marketing-facing) for prospects who have not yet signed up. Collects company info, greeting script, voice preference, and optional pricing PDF. Auto-sends confirmation email to user and support notification to support@voxanne.ai. Stores submissions in `onboarding_submissions` table. ⚠️ **This is NOT the New User Onboarding Wizard** — it is a lead-capture form for pre-signup prospects only.
+8. **New User Onboarding Wizard** – 5-step conversion wizard at `/dashboard/onboarding` for newly registered authenticated users. Flow: (0) Clinic Name → (1) Specialty → (2) Stripe payment → (3) Celebration + phone number auto-provisioned → (4) Aha Moment (test call CTA). Zustand store persisted to `sessionStorage` for Stripe redirect resilience. Dashboard home page auto-redirects users with `onboarding_completed_at = NULL`. Cart abandonment emails (3-step: 1hr soft nudge / 24hr pain reminder / 48hr £10 credit). Funnel telemetry via `onboarding_events` table. ⚠️ **This is NOT the pre-sales form at `/start`** — it is the post-signup conversion flow for authenticated users.
+9. **Verified Caller ID** – Outbound caller ID verification via Twilio validation API. Pre-checks existing verifications to prevent errors, displays validation codes in UI, supports delete/unverify workflow. Works in both managed and BYOC telephony modes with automatic credential resolution.
+10. **Security & Compliance** – JWT middleware using `jwt-decode`, Supabase RLS on all tenant tables, hardened functions (`search_path` pinned to `public`), HIPAA-ready infrastructure.
+11. **Error Sanitization & Observability** – All API errors sanitized to prevent information disclosure (database schema, validation rules, implementation details). Centralized error utility (`error-sanitizer.ts`) ensures user-friendly messages while full technical details logged to Sentry for debugging. 132+ error exposures fixed (2026-02-22). Production deployment verified with zero technical leakage.
 
 ---
 
@@ -357,6 +370,7 @@ Supporting services: wallet auto-recharge processor, webhook verification API, a
 
 | Date (UTC) | Release | Key Outcomes |
 |------------|---------|--------------|
+| 2026-02-25 | **New User Onboarding Wizard** | 5-step post-signup conversion wizard at `/dashboard/onboarding`. Distinct from pre-sales intake at `/start`. Features: Zustand+sessionStorage for Stripe redirect resilience; auto-provisions inbound phone number post-payment; confetti celebration (blue palette, brand-safe); Aha Moment test-call CTA; `onboarding_completed_at` flag gates re-entry; dashboard auto-redirects new users. Cart abandonment: 3-email sequence (1hr/24hr/48hr) — email 3 applies £10 credit with idempotent insert-before-credit guard. Telemetry: 6 event types in `onboarding_events` for funnel analytics. Migration `20260225_onboarding_wizard.sql`: 2 new tables + 3 org columns. All 14 senior engineer review findings resolved prior to shipping. |
 | 2026-02-24 | **Multi-Number Support (Bug 3 Fix)** | Outbound number provisioning now works. Fixed RPC parameter mismatch (p_type → p_routing_direction), changed constraint from UNIQUE(org_id, provider) to UNIQUE(org_id, provider, type), and removed "skip for 2nd number" logic. Verified: +16812711486 purchased successfully, stored as separate rows in org_credentials + managed_phone_numbers with type='outbound', agent dropdown shows outbound number. Reference: PRD_UPDATE_2026_02_24.md (detailed architecture + migration). |
 | 2026-02-22 | **Error Sanitization - Security Hardening Deployed** | Fixed 132+ raw error.message exposures across 18 route files. Centralized error-sanitizer.ts utility prevents information disclosure (database schema enumeration, validation rule leakage, implementation details). All errors now return user-friendly messages; full technical details logged internally in Sentry for debugging. Deployed to production via Vercel auto-triggered on main branch merge. Frontend + Backend verified healthy. Zero technical details exposed to API users. |
 | 2026-02-21 | **Dashboard E2E Test Fixes (TestSprite)** | Fixed 8 TestSprite E2E test failures across 7 files. Backend: Extended `/api/analytics/dashboard-pulse` with `appointments_booked` and `avg_sentiment` fields. Frontend: ClinicalPulse rewritten with 4 metric cards (Total Calls, Appointments, Avg Sentiment, Avg Duration); call detail modal shows Cost, Appointment ID, Tools Used; call logs page gains Status + Date Range filter dropdowns and search clear button (X + Escape); dashboard activity items clickable for call events (navigates to call detail via `?callId=` param); appointment detail modal shows Linked Call section with call direction, duration, and "View Call Details" link. Backend connectivity resilience improved: WebSocket MAX_RECONNECT_ATTEMPTS 5→15, BASE_RECONNECT_DELAY 2000→1000ms; BackendStatusBanner timeout 5s→10s with retry-once logic. Next.js build verified clean. |
@@ -427,8 +441,11 @@ For technical details on database schema, RPC functions, and implementation spec
 - AI Forwarding wizard generates GSM codes for supported carriers and verifies Twilio caller ID ownership before enabling
 - **Reference:** SSOT.md Section 9 (Managed Phone Numbers) + PRD_UPDATE_2026_02_24.md (detailed multi-number architecture)
 
-### 6.5 Onboarding Intake Form
-- Form page at `/src/app/start/page.tsx` accepts company name, email, phone (E.164), greeting script, voice preference, optional pricing PDF.
+### 6.5 Pre-Sales Lead Intake Form (Marketing — `/start`)
+
+> ⚠️ **NAMING CLARITY:** This section describes the **public marketing intake form** at `/start` for unauthenticated prospects who have not yet created an account. It is **completely separate** from the New User Onboarding Wizard (Section 6.10), which runs at `/dashboard/onboarding` after signup. Do not confuse `onboarding_submissions` (this form's table) with `onboarding_events` (the wizard's telemetry table).
+
+- Form page at `src/app/start/page.tsx` accepts company name, email, phone (E.164), greeting script, voice preference, optional pricing PDF.
 - Form submission validates required fields and submits FormData (multipart) to `POST /api/onboarding-intake`.
 - Backend route `backend/src/routes/onboarding-intake.ts` stores submission to `onboarding_submissions` table with full details, UTM attribution, and timestamps.
 - Auto-sends confirmation email to user's email address (via Resend) and support notification to support@voxanne.ai.
@@ -565,6 +582,56 @@ Sentry.withScope((scope) => {
 - [ ] User-friendly fallback message provided
 - [ ] Sentry context includes org_id + request_id for debugging
 - [ ] Error tested with curl/Postman to verify no technical leakage
+
+### 6.10 New User Onboarding Wizard (Post-Signup — `/dashboard/onboarding`)
+
+> ⚠️ **NAMING CLARITY:** This section describes the **post-signup conversion wizard** for authenticated new users. It is **completely separate** from the Pre-Sales Lead Intake Form (Section 6.5) at `/start`. The wizard runs inside the authenticated dashboard and gates access via `onboarding_completed_at` on the `organizations` table.
+
+**Overview:** 5-step animated wizard (Framer Motion `AnimatePresence`) that covers the authenticated dashboard with a `fixed inset-0 z-50` overlay. State is managed in Zustand and persisted to `sessionStorage` (survives Stripe redirect).
+
+**Steps:**
+| Step | Component | Key Action |
+|------|-----------|------------|
+| 0 | `StepWelcome` | Clinic name input → stored as `clinic_name` on `organizations` |
+| 1 | `StepSpecialty` | 6-card specialty picker, auto-advances after 400ms → `specialty` on `organizations` |
+| 2 | `StepPaywall` | Value props + area code input + "Get My AI Number" → Stripe Checkout via `/api/billing/wallet/topup` with `return_url=/dashboard/onboarding` |
+| 3 | `StepCelebration` | Detects `?topup=success` on return → confetti (blue palette only) + auto-provisions phone number via `POST /api/onboarding/provision-number` |
+| 4 | `StepAhaMoment` | Shows provisioned number in large mono text → "Call this number" CTA → on completion: `POST /api/onboarding/complete`, redirect to `/dashboard` |
+
+**API Endpoints (all require `requireAuth`):**
+- `POST /api/onboarding/event` — Fire-and-forget telemetry (always returns 200, never blocks user)
+- `GET /api/onboarding/status` — Returns `{ needs_onboarding: boolean, completed_at: string|null }`
+- `POST /api/onboarding/complete` — Sets `onboarding_completed_at = NOW()`, writes `clinic_name` + `specialty` to org
+- `POST /api/onboarding/provision-number` — Atomically deducts £10 from wallet, provisions Twilio inbound number, refunds on failure
+
+**New-User Detection:**
+- Dashboard home page (`src/app/dashboard/page.tsx`) SWR-fetches `/api/onboarding/status`
+- If `needs_onboarding = true`, `router.push('/dashboard/onboarding')` (only fires on `/dashboard`, not deep links)
+- After wizard completes, `/dashboard` visit no longer redirects
+
+**Cart Abandonment (automated job, every 15 minutes):**
+- Detects orgs with `payment_viewed` event but no `payment_success` event, and `onboarding_completed_at IS NULL`
+- Email 1 (≥1hr): Soft nudge — "Your AI receptionist is almost ready"
+- Email 2 (≥24hr): Pain reminder — "How many calls did you miss today?"
+- Email 3 (≥48hr): Objection killer — £10 credit applied + email notification
+- **Idempotency:** `recordEmailSent` runs BEFORE `addCredits` — UNIQUE constraint on `(org_id, sequence_number)` in `abandonment_emails` table prevents double-credit on retry
+- File: `backend/src/jobs/onboarding-abandonment.ts`
+
+**Telemetry (6 event types):**
+All events fire-and-forget to `POST /api/onboarding/event`. Never block wizard progression.
+`started` → `clinic_named` → `specialty_chosen` → `payment_viewed` → `payment_success` → `test_call_completed`
+
+**Design Constraints:**
+- No semantic colors in wizard UI (no green/red/yellow) — monochromatic blue palette only
+- Confetti uses only: #1D4ED8, #3B82F6, #BFDBFE, #FFFFFF (brand-safe)
+- All currency in GBP pence (£10 credit = 1000 pence)
+- `sessionStorage` (not `localStorage`) — clears when tab closes
+
+**Critical Invariants:**
+1. `onboarding_completed_at` on `organizations` is the single gate — only set by `POST /api/onboarding/complete` or the "Skip for now" flow
+2. `abandonment_emails.UNIQUE(org_id, sequence_number)` prevents duplicate emails and double credit — never remove this constraint
+3. The Stripe return URL must decode `?topup=success` and advance to step 3 — ensure `billing-api.ts` allows `/dashboard/onboarding` as a valid `return_url`
+4. `provision-number` must refund with `addCredits` on Twilio failure — wallet must never be left debited after a failed provisioning
 
 ---
 
@@ -721,16 +788,17 @@ Sentry.withScope((scope) => {
 
 ## 9. Backlog / Open Questions
 
-1. ~~Implement onboarding form intake~~ ✅ **COMPLETE** (2026-02-13) – Form submission, email delivery, and verification all operational.
+1. ~~Implement pre-sales lead intake form~~ ✅ **COMPLETE** (2026-02-13) – Form submission at `/start`, email delivery, and verification all operational. Stores to `onboarding_submissions`.
 2. ~~Deploy Real-Time Prepaid Billing Engine~~ ✅ **COMPLETE** (2026-02-14) – All 3 phases deployed, tested, and verified in production.
 3. ~~Support Multi-Number Telephony (1 Inbound + 1 Outbound per Org)~~ ✅ **COMPLETE** (2026-02-24) – Bug 3 fixed. RPC parameter corrected, constraint changed to allow per-direction rows, skip logic removed. Verified: outbound +16812711486 purchased & stored correctly.
-4. Configure Vapi status webhook for Kill Switch (manual configuration required for each deployment).
-5. Surface webhook verification status in frontend wallet success screen.
-6. Expand AI Forwarding carrier library beyond current presets.
-7. Build monitoring dashboard for prepaid billing metrics (reservation hold duration, kill switch triggers, credit release efficiency).
-8. Add automated regression testing around prepaid billing race conditions.
-9. Add Slack alerts for high-priority prepaid billing events (reservation failures, kill switch activation).
-10. Implement phone number deletion/release flow (6-step cleanup: both tables + agents + mappings + RLS + audit).
+4. ~~Implement New User Onboarding Wizard~~ ✅ **COMPLETE** (2026-02-25) – 5-step post-signup wizard at `/dashboard/onboarding`. Includes Stripe payment, auto-provisioning, confetti, cart abandonment (3 emails + £10 credit), funnel telemetry. 14 senior engineer review findings resolved. Migration `20260225_onboarding_wizard.sql` applied.
+5. Configure Vapi status webhook for Kill Switch (manual configuration required for each deployment).
+6. Surface webhook verification status in frontend wallet success screen.
+7. Expand AI Forwarding carrier library beyond current presets.
+8. Build monitoring dashboard for prepaid billing metrics (reservation hold duration, kill switch triggers, credit release efficiency).
+9. Add automated regression testing around prepaid billing race conditions.
+10. Add Slack alerts for high-priority prepaid billing events (reservation failures, kill switch activation).
+11. Implement phone number deletion/release flow (6-step cleanup: both tables + agents + mappings + RLS + audit).
 
 ---
 
@@ -752,6 +820,16 @@ Sentry.withScope((scope) => {
 - [x] Dashboard activity items navigate to call detail on click.
 - [x] Appointment detail modal shows Linked Call section with navigation to call detail.
 - [x] WebSocket reconnection resilient (15 attempts, 1s base delay) and health check retries before showing banner.
+- [x] New authenticated users with `onboarding_completed_at = NULL` are auto-redirected to `/dashboard/onboarding`.
+- [x] Wizard state (clinic name, specialty, area code, phone number) persists across Stripe redirect via sessionStorage.
+- [x] Confetti animation uses only brand-approved blue palette (no green/red/yellow).
+- [x] Phone number auto-provisioned after payment, displayed in Aha Moment step.
+- [x] `POST /api/onboarding/complete` sets `onboarding_completed_at`, writes clinic_name + specialty to org.
+- [x] Revisiting `/dashboard` after wizard completion does NOT redirect again.
+- [x] Cart abandonment job runs every 15 minutes; sends at most 1 email per sequence slot per org (UNIQUE constraint enforced).
+- [x] Email 3 applies £10 (1000 pence) credit exactly once per org (insert-before-credit idempotency guard).
+- [x] All 6 funnel events tracked in `onboarding_events` table; fire-and-forget (never block user flow).
+- [x] Wallet refunded via `addCredits` if phone provisioning fails after `deductAssetCost` succeeds.
 
 ---
 

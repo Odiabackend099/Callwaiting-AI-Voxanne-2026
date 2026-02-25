@@ -763,6 +763,282 @@ Received: ${data.timestamp}
       };
     }
   }
+
+  // ============================================================================
+  // Onboarding Cart Abandonment Emails (3-email sequence)
+  // ============================================================================
+
+  /**
+   * Escapes HTML special characters in user-supplied strings before embedding
+   * them in HTML email bodies to prevent injection (Fix 4).
+   */
+  private static escHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Email 1 (>=1hr): Soft nudge — warm, non-pushy
+   */
+  static async sendAbandonmentSoftNudge(
+    email: string,
+    clinicName: string
+  ): Promise<SendEmailResult> {
+    try {
+      const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #F0F9FF; }
+    .container { background-color: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .logo { text-align: center; margin-bottom: 30px; font-size: 20px; font-weight: 700; color: #1D4ED8; }
+    h1 { color: #020412; font-size: 22px; margin-bottom: 8px; }
+    .cta { display: inline-block; background-color: #1D4ED8; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #BFDBFE; text-align: center; color: #6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">Voxanne AI</div>
+    <h1>Your AI receptionist is almost ready.</h1>
+    <p>Hi there,</p>
+    <p>You started setting up an AI receptionist for <strong>${EmailServiceV2.escHtml(clinicName)}</strong> but didn't finish the last step.</p>
+    <p>Your personalized setup is still saved — just pick up where you left off. It takes less than 60 seconds to activate.</p>
+    <p style="text-align: center;">
+      <a href="https://app.voxanne.ai/dashboard/onboarding" class="cta">Complete Setup</a>
+    </p>
+    <p style="color: #6b7280; font-size: 14px;">No pressure — your progress is saved whenever you're ready.</p>
+    <div class="footer">
+      <p>Voxanne AI — Your 24/7 AI Receptionist</p>
+      <p style="font-size:11px;margin-top:8px;">Don't want these emails? <a href="https://app.voxanne.ai/unsubscribe" style="color:#9ca3af;">Unsubscribe</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const textBody = `Your AI receptionist is almost ready.
+
+Hi there,
+
+You started setting up an AI receptionist for ${clinicName} but didn't finish the last step.
+
+Your personalized setup is still saved — just pick up where you left off:
+https://app.voxanne.ai/dashboard/onboarding
+
+No pressure — your progress is saved whenever you're ready.
+
+— Voxanne AI`;
+
+      const response = await resend.emails.send({
+        from: `Voxanne AI <${FROM_EMAIL}>`,
+        to: email,
+        subject: 'Your AI receptionist is almost ready',
+        html: htmlBody,
+        text: textBody,
+        tags: [
+          { name: 'category', value: 'abandonment' },
+          { name: 'sequence', value: '1' },
+        ],
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, id: response.data?.id };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to send abandonment email 1' };
+    }
+  }
+
+  /**
+   * Email 2 (>=24hr): Pain reminder — pain-focused with stats
+   */
+  static async sendAbandonmentPainReminder(
+    email: string,
+    clinicName: string
+  ): Promise<SendEmailResult> {
+    try {
+      const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #F0F9FF; }
+    .container { background-color: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .logo { text-align: center; margin-bottom: 30px; font-size: 20px; font-weight: 700; color: #1D4ED8; }
+    h1 { color: #020412; font-size: 22px; margin-bottom: 8px; }
+    .stat-box { background-color: #F0F9FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center; }
+    .stat-number { font-size: 32px; font-weight: 700; color: #1D4ED8; }
+    .stat-label { font-size: 14px; color: #6b7280; margin-top: 4px; }
+    .cta { display: inline-block; background-color: #1D4ED8; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #BFDBFE; text-align: center; color: #6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">Voxanne AI</div>
+    <h1>How many calls did ${EmailServiceV2.escHtml(clinicName)} miss today?</h1>
+    <p>The average medical practice misses <strong>30% of incoming calls</strong>. Each missed call is a patient going to a competitor.</p>
+    <div class="stat-box">
+      <div class="stat-number">$150–$400</div>
+      <div class="stat-label">Average revenue lost per missed call</div>
+    </div>
+    <p>Your AI receptionist answers every call in 2 seconds, 24/7 — including nights, weekends, and lunch breaks. No hold music. No voicemail.</p>
+    <p style="text-align: center;">
+      <a href="https://app.voxanne.ai/dashboard/onboarding" class="cta">Activate Your AI Receptionist</a>
+    </p>
+    <p style="color: #6b7280; font-size: 14px;">Setup takes less than 60 seconds. Your progress is still saved.</p>
+    <div class="footer">
+      <p>Voxanne AI — Your 24/7 AI Receptionist</p>
+      <p style="font-size:11px;margin-top:8px;">Don't want these emails? <a href="https://app.voxanne.ai/unsubscribe" style="color:#9ca3af;">Unsubscribe</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const textBody = `How many calls did ${clinicName} miss today?
+
+The average medical practice misses 30% of incoming calls. Each missed call is a patient going to a competitor.
+
+$150-$400 — Average revenue lost per missed call.
+
+Your AI receptionist answers every call in 2 seconds, 24/7 — including nights, weekends, and lunch breaks.
+
+Activate your AI receptionist:
+https://app.voxanne.ai/dashboard/onboarding
+
+Setup takes less than 60 seconds. Your progress is still saved.
+
+— Voxanne AI`;
+
+      const response = await resend.emails.send({
+        from: `Voxanne AI <${FROM_EMAIL}>`,
+        to: email,
+        subject: `How many calls did ${clinicName} miss today?`,
+        html: htmlBody,
+        text: textBody,
+        tags: [
+          { name: 'category', value: 'abandonment' },
+          { name: 'sequence', value: '2' },
+        ],
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, id: response.data?.id };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to send abandonment email 2' };
+    }
+  }
+
+  /**
+   * Email 3 (>=48hr): Objection killer — £10 credit offer
+   */
+  static async sendAbandonmentObjectionKiller(
+    email: string,
+    clinicName: string
+  ): Promise<SendEmailResult> {
+    try {
+      const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #F0F9FF; }
+    .container { background-color: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .logo { text-align: center; margin-bottom: 30px; font-size: 20px; font-weight: 700; color: #1D4ED8; }
+    h1 { color: #020412; font-size: 22px; margin-bottom: 8px; }
+    .credit-box { background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center; color: white; }
+    .credit-amount { font-size: 36px; font-weight: 700; }
+    .credit-label { font-size: 14px; opacity: 0.9; margin-top: 4px; }
+    .cta { display: inline-block; background-color: #1D4ED8; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #BFDBFE; text-align: center; color: #6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">Voxanne AI</div>
+    <h1>We added £10 to your account.</h1>
+    <p>Hi there,</p>
+    <p>We know trying something new for ${EmailServiceV2.escHtml(clinicName)} is a big decision. So we've added a £10 credit to your Voxanne account — no strings attached.</p>
+    <div class="credit-box">
+      <div class="credit-amount">£10.00</div>
+      <div class="credit-label">Credit applied to your account</div>
+    </div>
+    <p>Use it toward your AI phone number and first call credits. That's enough to cover your first week of AI-powered call handling.</p>
+    <p><strong>What you get:</strong></p>
+    <ul>
+      <li>A dedicated local phone number patients trust</li>
+      <li>24/7 AI receptionist that never puts callers on hold</li>
+      <li>Automatic appointment booking into your calendar</li>
+      <li>SMS follow-ups that reduce no-shows</li>
+    </ul>
+    <p style="text-align: center;">
+      <a href="https://app.voxanne.ai/dashboard/onboarding" class="cta">Claim Your £10 Credit</a>
+    </p>
+    <p style="color: #6b7280; font-size: 14px;">This credit expires in 30 days. Your setup progress is still saved.</p>
+    <div class="footer">
+      <p>Voxanne AI — Your 24/7 AI Receptionist</p>
+      <p style="font-size:11px;margin-top:8px;">Don't want these emails? <a href="https://app.voxanne.ai/unsubscribe" style="color:#9ca3af;">Unsubscribe</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const textBody = `We added £10 to your account.
+
+Hi there,
+
+We know trying something new for ${clinicName} is a big decision. So we've added a £10 credit to your Voxanne account — no strings attached.
+
+£10.00 Credit applied to your account
+
+Use it toward your AI phone number and first call credits. That's enough to cover your first week of AI-powered call handling.
+
+What you get:
+- A dedicated local phone number patients trust
+- 24/7 AI receptionist that never puts callers on hold
+- Automatic appointment booking into your calendar
+- SMS follow-ups that reduce no-shows
+
+Claim your credit:
+https://app.voxanne.ai/dashboard/onboarding
+
+This credit expires in 30 days. Your setup progress is still saved.
+
+— Voxanne AI`;
+
+      const response = await resend.emails.send({
+        from: `Voxanne AI <${FROM_EMAIL}>`,
+        to: email,
+        subject: 'We added £10 to your account',
+        html: htmlBody,
+        text: textBody,
+        tags: [
+          { name: 'category', value: 'abandonment' },
+          { name: 'sequence', value: '3' },
+        ],
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, id: response.data?.id };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to send abandonment email 3' };
+    }
+  }
 }
 
 /**

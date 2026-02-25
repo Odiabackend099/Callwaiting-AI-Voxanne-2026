@@ -39,6 +39,13 @@ export default function CallWaitingAIDashboard() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
 
+    // Check if user needs onboarding
+    const { data: onboardingStatus } = useSWR(
+        user ? '/api/onboarding/status' : null,
+        fetcher,
+        { revalidateOnMount: true }
+    );
+
     // Use SWR for recent activity
     const { data: recentActivityData, isLoading: swrLoading, mutate: mutateActivity } = useSWR(
         user ? '/api/analytics/recent-activity' : null,
@@ -56,6 +63,13 @@ export default function CallWaitingAIDashboard() {
             router.push('/login');
         }
     }, [user, authLoading, router]);
+
+    // Redirect new users to onboarding wizard
+    useEffect(() => {
+        if (onboardingStatus?.needs_onboarding) {
+            router.push('/dashboard/onboarding');
+        }
+    }, [onboardingStatus, router]);
 
     // Real-time updates via shared WebSocket context
     const { subscribe } = useDashboardWebSocket();

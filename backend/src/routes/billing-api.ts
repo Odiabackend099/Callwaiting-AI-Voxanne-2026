@@ -458,7 +458,7 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
     }
 
     const minTopUp = parseInt(process.env.WALLET_MIN_TOPUP_PENCE || '2500', 10);
-    const { amount_pence } = req.body;
+    const { amount_pence, return_url } = req.body;
 
     // SECURITY FIX: Comprehensive amount validation (prevents billing manipulation)
     // Protects against: negative amounts, zero amounts, NaN, Infinity, non-integers
@@ -547,6 +547,12 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
 
     customerId = await ensureValidCustomer();
 
+    // Allow onboarding wizard to redirect back to its own page after payment
+    const ALLOWED_RETURN_PATHS = ['/dashboard/wallet', '/dashboard/onboarding'];
+    const returnPath = (return_url && ALLOWED_RETURN_PATHS.includes(return_url))
+      ? return_url
+      : '/dashboard/wallet';
+
     const createCheckoutSession = async (customer: string) => stripe.checkout.sessions.create({
       customer,
       client_reference_id: orgId, // CRITICAL: Stripe best practice for reconciliation
@@ -577,8 +583,8 @@ router.post('/wallet/topup', requireAuth, async (req: Request, res: Response) =>
           estimated_credits: String(estimated_credits),
         },
       },
-      success_url: `${frontendUrl}/dashboard/wallet?topup=success`,
-      cancel_url: `${frontendUrl}/dashboard/wallet?topup=canceled`,
+      success_url: `${frontendUrl}${returnPath}?topup=success`,
+      cancel_url: `${frontendUrl}${returnPath}?topup=canceled`,
       metadata: {
         type: 'wallet_topup',
         org_id: orgId,
