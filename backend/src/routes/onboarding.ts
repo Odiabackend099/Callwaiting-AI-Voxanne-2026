@@ -189,14 +189,16 @@ router.post('/provision-number', async (req: Request, res: Response): Promise<vo
     return;
   }
 
+  // Declare OUTSIDE try so the catch block can read it for the refund guard
+  let walletDebited = false;
+  const PHONE_NUMBER_COST_PENCE = 1000; // £10.00
+
   try {
     const { area_code } = req.body;
-    const direction = 'inbound';
+    const direction: 'inbound' = 'inbound';
 
-    // Validate master Twilio credentials
-    const masterSid = process.env.TWILIO_MASTER_ACCOUNT_SID;
-    const masterToken = process.env.TWILIO_MASTER_AUTH_TOKEN;
-    if (!masterSid || !masterToken) {
+    // Validate master Twilio credentials (fast fail before touching billing)
+    if (!process.env.TWILIO_MASTER_ACCOUNT_SID || !process.env.TWILIO_MASTER_AUTH_TOKEN) {
       logger.error('Missing master Twilio credentials for onboarding provisioning', { orgId });
       res.status(500).json({ error: 'Phone provisioning not available. Please contact support.' });
       return;
@@ -218,12 +220,8 @@ router.post('/provision-number', async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Atomic billing: check balance and deduct phone cost
-    const PHONE_NUMBER_COST_PENCE = 1000; // £10.00
+    // Atomic billing: deduct phone cost before provisioning
     const idempotencyKey = `onboarding-provision-${orgId}-${Date.now()}`;
-
-    // Track whether the wallet was debited so the outer catch can refund on any throw
-    let walletDebited = false;
 
     const deductResult = await deductAssetCost(
       orgId,
@@ -247,9 +245,8 @@ router.post('/provision-number', async (req: Request, res: Response): Promise<vo
     // Wallet is now debited — any subsequent throw must be caught and refunded
     walletDebited = true;
 
-    // Provision the number
-    const service = new ManagedTelephonyService(masterSid, masterToken);
-    const result = await service.provisionNumber({
+    // Provision the number via the static managed-telephony service
+    const result = await ManagedTelephonyService.provisionManagedNumber({
       orgId,
       country: 'US',
       numberType: 'local',
