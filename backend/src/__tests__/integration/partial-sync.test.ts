@@ -44,7 +44,8 @@ jest.mock('../../services/logger', () => ({
 jest.mock('../../middleware/rate-limit', () => ({
     agentConfigLimiter: (req: any, res: any, next: any) => next(),
     configRateLimiter: (req: any, res: any, next: any) => next(),
-    callCreationLimiter: (req: any, res: any, next: any) => next()
+    callCreationLimiter: (req: any, res: any, next: any) => next(),
+    voicePreviewLimiter: (req: any, res: any, next: any) => next()
 }));
 
 jest.mock('../../services/web-voice-bridge', () => ({

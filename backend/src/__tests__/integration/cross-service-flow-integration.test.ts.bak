@@ -69,7 +69,6 @@ describe('Integration: Cross-Service Data Flow', () => {
 
   describe('Onboarding Event → Status Flow', () => {
     it('should record onboarding event and query status in same flow', async () => {
-      if (skipAllTests) return;
       // Step 1: Record a telemetry event
       const eventResponse = await fetchApi('/api/onboarding/event', {
         method: 'POST',
