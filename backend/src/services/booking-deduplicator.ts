@@ -169,7 +169,9 @@ class BookingDeduplicator {
 // Export singleton instance
 export const bookingDeduplicator = new BookingDeduplicator();
 
-// Auto-cleanup expired entries every minute
-setInterval(() => {
-  bookingDeduplicator.cleanupExpired();
-}, 60 * 1000);
+// Auto-cleanup expired entries every minute (only in non-test environment)
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(() => {
+    bookingDeduplicator.cleanupExpired();
+  }, 60 * 1000);
+}
