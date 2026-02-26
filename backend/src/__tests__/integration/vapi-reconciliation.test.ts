@@ -23,7 +23,7 @@ const mockSlackWebhook = jest.fn();
 
 describe('Vapi Call Reconciliation (P0-5)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
 
     // Set environment variables
     process.env.VAPI_PRIVATE_KEY = 'test-vapi-key';
@@ -31,7 +31,7 @@ describe('Vapi Call Reconciliation (P0-5)', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('fetchVapiCalls', () => {

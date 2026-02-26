@@ -11,7 +11,7 @@ module.exports = {
     setupFilesAfterEnv: ['<rootDir>/src/tests/integration/setup.ts'],
     displayName: 'integration',
     transformIgnorePatterns: [
-        'node_modules/(?!(uuid)/)'
+        'node_modules/(?!(uuid|nanoid|@supabase)/)'
     ],
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',

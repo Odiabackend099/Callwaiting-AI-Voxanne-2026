@@ -73,26 +73,55 @@ export async function seedUser(options: {
 
   // Insert profile WITHOUT the org_id foreign key constraint
   // We store clinic reference in a different way for testing
-  const { data, error } = await db
-    .from('profiles')
-    .insert({
-      id: user.id, // Use the real auth.users.id
-      email: userEmail,
-      // Note: org_id foreign key requires organizations table to exist
-      // For testing, we store clinic reference in metadata or bypass it
-    })
-    .select()
-    .single();
+  let profileData;
 
-  if (error) {
-    // Clean up the auth user if profile creation fails
-    await db.auth.admin.deleteUser(user.id);
-    throw new Error(`Failed to create profile: ${error.message}`);
+  try {
+    // First try to insert - will fail if profile already exists
+    const { data, error } = await db
+      .from('profiles')
+      .insert({
+        id: user.id, // Use the real auth.users.id
+        email: userEmail,
+        // Note: org_id foreign key requires organizations table to exist
+        // For testing, we store clinic reference in metadata or bypass it
+      })
+      .select()
+      .single();
+
+    if (error && error.code === '23505') { // UNIQUE constraint violation
+      // Profile already exists, fetch it instead
+      const { data: existingProfile, error: fetchError } = await db
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (fetchError) {
+        // Clean up auth user if we can't find the profile
+        await db.auth.admin.deleteUser(user.id);
+        throw new Error(`Failed to fetch existing profile: ${fetchError.message}`);
+      }
+      profileData = existingProfile;
+    } else if (error) {
+      // Clean up the auth user if profile creation fails for other reasons
+      await db.auth.admin.deleteUser(user.id);
+      throw new Error(`Failed to create profile: ${error.message}`);
+    } else {
+      profileData = data;
+    }
+  } catch (err: any) {
+    // Clean up auth user on any error
+    try {
+      await db.auth.admin.deleteUser(user.id);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    throw err;
   }
 
   return {
-    id: data.id,
-    email: data.email,
+    id: profileData.id,
+    email: profileData.email,
     clinicId: clinicId, // Return clinic reference (not stored in DB for this test)
     role: userRole,
   };
