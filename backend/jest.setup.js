@@ -5,6 +5,24 @@
 
 require('dotenv').config();
 
+// Mock logger globally for all tests
+jest.mock('./src/config/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    log: jest.fn()
+  }
+}));
+
+// Mock Sentry globally for all tests
+jest.mock('@sentry/node', () => ({
+  captureException: jest.fn(),
+  captureMessage: jest.fn(),
+  withScope: (callback) => callback({ setContext: jest.fn(), setLevel: jest.fn() })
+}));
+
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://lbjymlodxprzqgtyqtcq.supabase.co';

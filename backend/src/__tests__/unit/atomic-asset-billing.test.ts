@@ -8,33 +8,31 @@
  * 3. Duplicate idempotency key returns duplicate flag
  * 4. Supabase RPC errors are handled gracefully
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-const mocks = vi.hoisted(() => {
-    return {
-        rpc: vi.fn(),
-    };
-});
 
 // Mock supabase client
-vi.mock('../../services/supabase-client', () => ({
+jest.mock('../../services/supabase-client', () => ({
     supabase: {
-        rpc: mocks.rpc,
+        rpc: jest.fn(),
     },
 }));
 
 // Mock logger
-vi.mock('../../services/logger', () => ({
+jest.mock('../../services/logger', () => ({
     log: {
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
     },
 }));
 
 // Import after mocks
 import { deductAssetCost } from '../../services/wallet-service';
+import { supabase } from '../../services/supabase-client';
+
+const mocks = {
+    rpc: supabase.rpc as jest.Mock,
+};
 
 describe('deductAssetCost (Phase 1 - Atomic Asset Billing)', () => {
     const ORG_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -44,7 +42,7 @@ describe('deductAssetCost (Phase 1 - Atomic Asset Billing)', () => {
     const IDEMPOTENCY_KEY = 'provision-550e8400-1707868800-abc123';
 
     beforeEach(() => {
-        vi.clearAllMocks();
+        jest.clearAllMocks();
     });
 
     it('should deduct successfully when balance is sufficient', async () => {

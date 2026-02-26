@@ -10,30 +10,36 @@
  * - All edge cases (missing, disabled, corrupt credentials)
  */
 
+// Mock Supabase client - declare before using in jest.mock
+let mockSupabaseResponse: any = { data: null, error: null };
+let chainMock: any;
+let mockSupabaseClient: any;
+
+jest.mock('@supabase/supabase-js', () => {
+  chainMock = {
+    select: jest.fn(function(this: any) {
+      // For listProviders, select() is the terminal operation
+      this.then = (resolve: any) => resolve(mockSupabaseResponse);
+      this.catch = (reject: any) => this;
+      return this;
+    }),
+    eq: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn(() => Promise.resolve(mockSupabaseResponse))
+  };
+
+  mockSupabaseClient = {
+    from: jest.fn(() => chainMock)
+  };
+
+  return {
+    createClient: jest.fn(() => mockSupabaseClient)
+  };
+});
+
+// Now import after mocks are set up
 import { CredentialService } from '../../services/credential-service';
 import { EncryptionService } from '../../services/encryption';
 import { log } from '../../services/logger';
-
-// Mock Supabase client
-let mockSupabaseResponse: any = { data: null, error: null };
-
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => {
-    const chainMock = {
-      select: jest.fn(function(this: any) {
-        // For listProviders, select() is the terminal operation
-        this.then = (resolve: any) => resolve(mockSupabaseResponse);
-        this.catch = (reject: any) => this;
-        return this;
-      }),
-      eq: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn(() => Promise.resolve(mockSupabaseResponse))
-    };
-    return {
-      from: jest.fn(() => chainMock)
-    };
-  })
-}));
 
 // Mock EncryptionService
 jest.mock('../../services/encryption');
@@ -237,8 +243,6 @@ describe('CredentialService', () => {
       // ARRANGE
       const org_a_id = 'org-a-123';
       const org_b_id = 'org-b-456';
-      const { createClient } = require('@supabase/supabase-js');
-      const mockSupabase = createClient();
 
       // Mock response for org_a
       mockSupabaseResponse = {
@@ -258,7 +262,7 @@ describe('CredentialService', () => {
       expect(result).toEqual(mockDecryptedCreds);
 
       // Verify the query filtered by org_id
-      expect(mockSupabase.from).toHaveBeenCalledWith('org_credentials');
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('org_credentials');
     });
   });
 
@@ -325,9 +329,7 @@ describe('CredentialService', () => {
 
     test('should filter only active credentials (is_active = true)', async () => {
       // ARRANGE
-      const { createClient } = require('@supabase/supabase-js');
-      const mockSupabase = createClient();
-      mockSupabase.from().maybeSingle = jest.fn().mockResolvedValue({
+      chainMock.maybeSingle = jest.fn().mockResolvedValue({
         data: null, // No active credentials
         error: null
       });
@@ -336,11 +338,11 @@ describe('CredentialService', () => {
       await CredentialService.exists(orgId, provider);
 
       // ASSERT - Verify the query filters is_active = true
-      const supabaseCall = mockSupabase.from('org_credentials');
-      expect(supabaseCall.select).toHaveBeenCalled();
-      expect(supabaseCall.eq).toHaveBeenCalledWith('org_id', orgId);
-      expect(supabaseCall.eq).toHaveBeenCalledWith('provider', provider);
-      expect(supabaseCall.eq).toHaveBeenCalledWith('is_active', true);
+      const supabaseCall = mockSupabaseClient.from('org_credentials');
+      expect(chainMock.select).toHaveBeenCalled();
+      expect(chainMock.eq).toHaveBeenCalledWith('org_id', orgId);
+      expect(chainMock.eq).toHaveBeenCalledWith('provider', provider);
+      expect(chainMock.eq).toHaveBeenCalledWith('is_active', true);
     });
   });
 
@@ -393,9 +395,7 @@ describe('CredentialService', () => {
 
     test('should return null when database error occurs', async () => {
       // ARRANGE
-      const { createClient } = require('@supabase/supabase-js');
-      const mockSupabase = createClient();
-      mockSupabase.from().maybeSingle = jest.fn().mockResolvedValue({
+      chainMock.maybeSingle = jest.fn().mockResolvedValue({
         data: null,
         error: { message: 'Database error' }
       });

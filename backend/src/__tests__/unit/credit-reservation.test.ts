@@ -2,36 +2,34 @@
  * Phase 2: Credit Reservation Pattern Unit Tests
  * Tests: reserveCallCredits() and commitReservedCredits() in wallet-service.ts
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mocks = vi.hoisted(() => {
-    return {
-        rpc: vi.fn(),
-        from: vi.fn(),
-    };
-});
-
-vi.mock('../../services/supabase-client', () => ({
+jest.mock('../../services/supabase-client', () => ({
     supabase: {
-        rpc: mocks.rpc,
-        from: mocks.from,
+        rpc: jest.fn(),
+        from: jest.fn(),
     },
 }));
 
-vi.mock('../../services/logger', () => ({
+jest.mock('../../services/logger', () => ({
     log: {
-        info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+        info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
     },
 }));
 
 import { reserveCallCredits, commitReservedCredits } from '../../services/wallet-service';
+import { supabase } from '../../services/supabase-client';
+
+const mocks = {
+    rpc: supabase.rpc as jest.Mock,
+    from: supabase.from as jest.Mock,
+};
 
 describe('reserveCallCredits (Phase 2)', () => {
     const ORG_ID = '550e8400-e29b-41d4-a716-446655440000';
     const CALL_ID = 'call-test-001';
     const VAPI_CALL_ID = 'vapi-call-001';
 
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => jest.clearAllMocks());
 
     it('should reserve credits successfully', async () => {
         mocks.rpc.mockResolvedValue({
@@ -83,7 +81,7 @@ describe('reserveCallCredits (Phase 2)', () => {
 describe('commitReservedCredits (Phase 2)', () => {
     const CALL_ID = 'call-test-001';
 
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => jest.clearAllMocks());
 
     it('should commit actual usage and release unused credits', async () => {
         mocks.rpc.mockResolvedValue({
