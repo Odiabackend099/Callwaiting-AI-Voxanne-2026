@@ -10,15 +10,15 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { supabase } from '../../services/supabase-client';
 import { ensureOrgExists, validateUserOrgExists } from '../../services/ensure-org-exists';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 describe('Org Auto-Creation Service (CRITICAL FIX)', () => {
   let testUserId: string;
   let testOrgId: string;
 
   beforeAll(async () => {
-    testUserId = uuidv4();
-    testOrgId = uuidv4();
+    testUserId = randomUUID();
+    testOrgId = randomUUID();
   });
 
   it('should auto-create organization if user has no org', async () => {
@@ -56,7 +56,7 @@ describe('Org Auto-Creation Service (CRITICAL FIX)', () => {
 
   it('should return existing organization if it already exists', async () => {
     // Create a test user with an org
-    const existingOrgId = uuidv4();
+    const existingOrgId = randomUUID();
 
     // First create the org
     await supabase.from('organizations').insert({
@@ -66,7 +66,7 @@ describe('Org Auto-Creation Service (CRITICAL FIX)', () => {
     });
 
     // Create user linked to org
-    const userId = uuidv4();
+    const userId = randomUUID();
     await supabase.from('profiles').upsert({
       id: userId,
       org_id: existingOrgId,
@@ -83,8 +83,8 @@ describe('Org Auto-Creation Service (CRITICAL FIX)', () => {
 
   it('should fix inconsistent state (org deleted, profile still references it)', async () => {
     // Create org and user
-    const orgId = uuidv4();
-    const userId = uuidv4();
+    const orgId = randomUUID();
+    const userId = randomUUID();
 
     await supabase.from('organizations').insert({
       id: orgId,
@@ -123,8 +123,8 @@ describe('Org Auto-Creation Service (CRITICAL FIX)', () => {
   });
 
   it('should validate that user and org exist together', async () => {
-    const orgId = uuidv4();
-    const userId = uuidv4();
+    const orgId = randomUUID();
+    const userId = randomUUID();
 
     // Create org
     await supabase.from('organizations').insert({
@@ -144,11 +144,11 @@ describe('Org Auto-Creation Service (CRITICAL FIX)', () => {
     expect(isValid).toBe(true);
 
     // Should fail with different org
-    const isInvalid = await validateUserOrgExists(userId, uuidv4());
+    const isInvalid = await validateUserOrgExists(userId, randomUUID());
     expect(isInvalid).toBe(false);
 
     // Should fail with different user
-    const isInvalid2 = await validateUserOrgExists(uuidv4(), orgId);
+    const isInvalid2 = await validateUserOrgExists(randomUUID(), orgId);
     expect(isInvalid2).toBe(false);
   });
 
