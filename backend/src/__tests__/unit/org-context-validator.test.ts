@@ -8,6 +8,16 @@
  * Bug Reference: Browser test was querying random org instead of authenticated user's org
  */
 
+// Mock logger before importing middleware
+jest.mock('../../config/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+  }
+}));
+
 import { Request, Response, NextFunction } from 'express';
 import {
   assertOrgContext,

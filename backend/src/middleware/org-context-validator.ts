@@ -137,15 +137,16 @@ export function validateOrgScopedQuery(query: any, expectedOrgId: string): boole
  * Throws error if attempting to use the broken pattern
  */
 export function preventRandomOrgQuery(queryDescription: string): void {
+  const correctPattern = '.eq("org_id", orgId).limit(1).single()';
   const error = new Error(
     `BLOCKED: Attempted to use .limit(1).single() pattern without org filter in ${queryDescription}. ` +
     'This returns a RANDOM organization and causes data leakage bugs. ' +
-    'ALWAYS filter by org_id BEFORE using .limit(1).single()'
+    `ALWAYS filter by org_id BEFORE using .limit(1).single(). Correct pattern: ${correctPattern}`
   );
   logger.error('Prevented dangerous query pattern', {
     queryDescription,
     stack: error.stack,
-    correctPattern: '.eq("org_id", orgId).limit(1).single()'
+    correctPattern
   });
   throw error;
 }
