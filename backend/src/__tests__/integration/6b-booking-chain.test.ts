@@ -1,4 +1,4 @@
-jest.setTimeout(30000); // 30 second timeout for integration tests
+jest.setTimeout(90000); // 90 second timeout for integration tests (auth operations can be slow)
 
 import crypto from 'crypto';
 import {

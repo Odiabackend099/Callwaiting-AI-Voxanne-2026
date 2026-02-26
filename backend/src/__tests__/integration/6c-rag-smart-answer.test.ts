@@ -7,7 +7,7 @@
  * Success: AI uses ONLY verified KB data, never hallucinated
  */
 
-jest.setTimeout(30000); // 30 second timeout for integration tests
+jest.setTimeout(90000); // 90 second timeout for integration tests (RAG operations can be slow)
 
 import { createClient } from '@supabase/supabase-js';
 import { OpenAI } from 'openai';
