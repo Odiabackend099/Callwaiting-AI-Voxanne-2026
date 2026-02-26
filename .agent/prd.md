@@ -1,10 +1,10 @@
 # Voxanne AI – Product Requirements Document (PRD)
 
-**Version:** 2026.39.0
-**Last Updated:** 2026-02-25 UTC
-**Status:** ✅ PRODUCTION READY - New User Onboarding Wizard + Multi-Number Support + Error Sanitization
-**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅ + **Multi-Number Support** ✅ + **Onboarding Wizard** ✅
-**Verification Status:** ✅ ALL PHASES OPERATIONAL - Onboarding wizard live (5-step, cart abandonment, telemetry), 132+ error exposures fixed, multi-number support verified (outbound +16812711486 purchased), 0 technical details exposed to users, Vercel deployment live
+**Version:** 2026.40.0
+**Last Updated:** 2026-02-26 UTC
+**Status:** ✅ PRODUCTION READY - Signup API on Render + CSRF HMAC Security + Auth Hardening
+**Production Deployment:** Phase 1 (Atomic Asset Billing) ✅ + Phase 2 (Credit Reservation) ✅ + Phase 3 (Kill Switch) ✅ + **Billing Schema Fix** ✅ + **Dashboard E2E Fixes** ✅ + **Error Sanitization** ✅ + **Multi-Number Support** ✅ + **Onboarding Wizard** ✅ + **Signup API Migration** ✅ + **Security Hardening** ✅
+**Verification Status:** ✅ ALL PHASES OPERATIONAL - Signup endpoint live on Render backend (SUPABASE_SERVICE_ROLE_KEY removed from Vercel), CSRF upgraded to real HMAC-SHA256 tokens, 10 security review findings resolved, Vercel build passes without service role key
 
 ---
 
