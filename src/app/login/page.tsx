@@ -175,6 +175,19 @@ function LoginContent() {
                             </div>
                         </div>
 
+                        {lockedOut && (
+                            <p className="text-sm text-center text-obsidian/60 mb-4" role="status" aria-live="polite" aria-atomic="true">
+                                Too many attempts. Retry in {timerLabel}, or{' '}
+                                <a
+                                    href="mailto:support@voxanne.ai"
+                                    className="font-medium text-surgical-600 underline hover:no-underline"
+                                >
+                                    contact support
+                                </a>
+                                .
+                            </p>
+                        )}
+
                         <Button
                             type="submit"
                             className="w-full h-12 text-base font-semibold bg-surgical-600 text-white rounded-xl shadow-lg shadow-surgical-600/25 hover:shadow-xl hover:shadow-surgical-600/35 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-100 focus:outline-none focus:ring-2 focus:ring-surgical-600/50 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
@@ -186,7 +199,7 @@ function LoginContent() {
                                     Signing In...
                                 </>
                             ) : lockedOut ? (
-                                `Too many attempts — retry in ${timerLabel}`
+                                "Try again later"
                             ) : (
                                 "Sign In"
                             )}

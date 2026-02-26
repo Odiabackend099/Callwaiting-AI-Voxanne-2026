@@ -138,6 +138,8 @@ export default function SignUpPage() {
       if (error) throw error;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
+      setErrorLink(null);
+      recordFailure();
       setLoading(false);
     }
   };
@@ -324,6 +326,7 @@ export default function SignUpPage() {
 
             <Button
               type="submit"
+              aria-label={lockedOut ? `Try again later, locked out for ${timerLabel}` : undefined}
               className="w-full h-12 text-base font-semibold bg-surgical-600 text-white rounded-xl shadow-lg shadow-surgical-600/25 hover:shadow-xl hover:shadow-surgical-600/35 hover:scale-[1.02] hover:-translate-y-0.5 active:scale-100 focus:outline-none focus:ring-2 focus:ring-surgical-600/50 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
               disabled={
                 loading ||
