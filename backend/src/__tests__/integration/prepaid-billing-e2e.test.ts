@@ -5,7 +5,7 @@
  * Full workflow from phone provisioning → call reservation → call commit → balance termination
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import axios from 'axios';
 
 const BASE_URL = process.env.BACKEND_URL || 'http://localhost:3001';
