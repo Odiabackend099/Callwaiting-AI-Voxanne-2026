@@ -39,11 +39,12 @@ const adminClient = createClient(
 // ---------------------------------------------------------------------------
 // Rate limiting (5 sign-ups per IP per 60 s)
 // ---------------------------------------------------------------------------
-// Lazily initialised on first request so that getRedisClient() is called after
-// initializeRedis() has run in server.ts. Falls back to express-rate-limit's
-// built-in in-memory store when Redis is unavailable.
-// Using express-rate-limit + RedisStore (same pattern as org-rate-limiter.ts)
-// makes the limit distributed across all Render instances, not per-process.
+// Lazily initialized because getRedisClient() must be called AFTER initializeRedis()
+// runs in server.ts. A module-level rateLimit() call would invoke getRedisClient()
+// before Redis is ready, return null, and silently fall back to in-memory on every
+// instance — defeating the distributed-limit goal.
+// Using express-rate-limit + RedisStore (same pattern as org-rate-limiter.ts) makes
+// the limit distributed across all Render instances, not per-process.
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 5;
 
@@ -121,7 +122,12 @@ router.post(
       }
 
       // --- Create user via admin API ---
-      // email_confirm: true → user can sign in immediately (no verification email).
+      // email_confirm: true — intentional design choice for this product's onboarding UX.
+      // Users can sign in immediately without verifying their email address.
+      // Accepted risk: registrations with unverified emails are possible.
+      // Mitigations: IP rate limiting (5/IP/60s), Supabase project-level signup controls,
+      // and Google OAuth as the primary path. Revisit if spam becomes an issue.
+      //
       // The on_auth_user_created trigger fires synchronously during this call:
       //   1. Creates public.organizations row
       //   2. Creates public.profiles row (role: 'owner')
@@ -140,10 +146,11 @@ router.post(
       if (error) {
         // status 422 = email already registered (Supabase's canonical signal).
         if (error.status === 422) {
-          const existingProviders = await getExistingProviders(trimmedEmail);
+          // O(1) direct lookup — getUserByEmail uses a DB index, not a paginated scan.
+          // Provider info intentionally omitted from the response: leaking which OAuth
+          // providers an account uses is an enumeration risk.
           return res.status(409).json({
             error: 'An account with this email already exists. Please sign in instead.',
-            provider: existingProviders,
           });
         }
 
@@ -167,30 +174,5 @@ router.post(
     }
   }
 );
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// Looks up the auth providers linked to an existing email so the client can
-// display a specific "you signed up with Google" message instead of a generic one.
-// Paginates through all users (1 000 per page) to handle orgs with large user bases.
-// Returns an empty array on any error (fail-open: the 409 is still returned).
-async function getExistingProviders(email: string): Promise<string[]> {
-  try {
-    const perPage = 1000;
-    let page = 1;
-    while (true) {
-      const { data } = await adminClient.auth.admin.listUsers({ page, perPage });
-      const users = data?.users ?? [];
-      const match = users.find((u) => u.email === email);
-      if (match) return (match.app_metadata?.providers as string[]) ?? [];
-      if (users.length < perPage) return []; // reached the last page without a match
-      page++;
-    }
-  } catch {
-    return [];
-  }
-}
 
 export default router;

@@ -61,8 +61,15 @@ export default function SignUpPage() {
       // Step 1: Create account via server-side API.
       // Uses admin.createUser() which bypasses the Supabase "Allow new users to sign up"
       // project-level restriction. The DB trigger creates org + profile + JWT metadata.
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-      const res = await fetch(`${backendUrl}/api/auth/signup`, {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+      if (!backendUrl && isProduction) {
+        setError('Service configuration error. Please contact support@voxanne.ai.');
+        setLoading(false);
+        return;
+      }
+      const resolvedBackendUrl = backendUrl || 'http://localhost:3001';
+      const res = await fetch(`${resolvedBackendUrl}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,19 +80,12 @@ export default function SignUpPage() {
         }),
       });
 
-      const result: { success?: boolean; error?: string; provider?: string[] } = await res.json();
+      const result: { success?: boolean; error?: string } = await res.json();
 
       if (!res.ok) {
         if (res.status === 409) {
-          // Tailor the message if the account was created via a social provider.
-          const providers = result.provider ?? [];
-          if (providers.includes('google')) {
-            setError('This email is linked to a Google account.');
-            setErrorLink({ label: 'Sign in with Google', href: '/login' });
-          } else {
-            setError('An account with this email already exists.');
-            setErrorLink({ label: 'Sign in instead', href: '/login' });
-          }
+          setError('An account with this email already exists.');
+          setErrorLink({ label: 'Sign in instead', href: '/login' });
         } else {
           setError(result.error ?? 'Failed to create account. Please try again.');
           setErrorLink(null);

@@ -7,6 +7,7 @@
     "validate-env": "npx tsx scripts/validate-env.ts",
     "dev": "npm run validate-env && NODE_ENV=development tsx src/server.ts",
     "build": "tsc --skipLibCheck true --noEmit false || echo 'Build completed with warnings'",
+    "typecheck": "tsc --noEmit",
     "start": "npm run validate-env && tsx src/server.ts",
     "test": "jest",
     "test:unit": "jest --testPathPatterns='src/__tests__/unit'",
@@ -149,7 +150,6 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.1",
-    "tsx": "^4.21.0",
     "vitest": "^4.0.17"
   }
 }
