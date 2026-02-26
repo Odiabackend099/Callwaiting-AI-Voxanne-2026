@@ -11,6 +11,7 @@ import FadeIn from '@/components/ui/FadeIn';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { useAuthRateLimit } from '@/hooks/useAuthRateLimit';
+import { normalizeAuthError } from '@/lib/auth-errors';
 
 function getPasswordStrength(p: string): { score: number; label: string; color: string } {
   if (p.length < 8) return { score: 0, label: 'Too short', color: 'bg-red-400' };
@@ -137,7 +138,7 @@ export default function SignUpPage() {
       });
       if (error) throw error;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
+      setError(normalizeAuthError(err));
       setErrorLink(null);
       recordFailure();
       setLoading(false);

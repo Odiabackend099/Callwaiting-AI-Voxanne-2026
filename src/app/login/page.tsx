@@ -11,6 +11,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthRateLimit } from "@/hooks/useAuthRateLimit";
+import { normalizeAuthError } from "@/lib/auth-errors";
 
 const ERROR_MESSAGES: Record<string, string> = {
     'no_org': 'Your account setup is incomplete — your workspace was not created correctly. Please sign out and sign up again, or contact support@voxanne.ai.',
@@ -30,7 +31,7 @@ function LoginContent() {
 
     const errorCode = searchParams.get('error');
     const queryError = errorCode
-        ? (ERROR_MESSAGES[errorCode] || `Authentication error: ${errorCode}`)
+        ? (ERROR_MESSAGES[errorCode] || 'Sign-in failed. Please try again or contact support@voxanne.ai.')
         : null;
     const { lockedOut, timerLabel, recordFailure, reset } = useAuthRateLimit('login');
 
@@ -46,7 +47,7 @@ function LoginContent() {
             });
 
             if (error) {
-                setError(error.message);
+                setError(normalizeAuthError(error));
                 recordFailure();
                 setLoading(false);
                 return;
@@ -77,7 +78,7 @@ function LoginContent() {
             });
             if (error) throw error;
         } catch (err: any) {
-            setError(err.message);
+            setError(normalizeAuthError(err));
             setLoading(false);
         }
     };

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { getRedirectUrl } from '@/lib/auth-redirect';
+import { normalizeAuthError } from '@/lib/auth-errors';
 import { Mail, CheckCircle, AlertCircle, Loader, Copy } from 'lucide-react';
 
 function VerifyEmailContent() {
@@ -108,7 +109,9 @@ function VerifyEmailContent() {
 
             if (error) {
                 setStatus('error');
-                setMessage(error.message || 'Failed to resend verification email.');
+                // Always show the same message regardless of whether the email exists,
+                // to prevent enumeration of registered email addresses.
+                setMessage('If this email is registered and unverified, a new link has been sent. Please check your inbox.');
                 return;
             }
 
