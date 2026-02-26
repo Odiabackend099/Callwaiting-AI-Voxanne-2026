@@ -30,20 +30,20 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Click the 'Sign In' link on the homepage to open the login page.
+        # -> Click the 'Sign In' link to open the login page (use interactive element index 77).
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Type credentials into email and password fields and click the 'Sign In' button to log in (use test@demo.com / demo123).
+        # -> Fill the email and password fields and click the 'Sign In' button to submit the login form.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -55,17 +55,17 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Click the 'Sign In' button on the login page to attempt to sign in and reach the dashboard.
+        # -> Click the 'Reload' button (index 75) to retry loading the /login page and recover from the ERR_EMPTY_RESPONSE.
         frame = context.pages[-1]
         # Click element
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/button').nth(0)
+        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div[2]/div/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill the email and password fields again and click the 'Sign In' button (attempt #2) to try to reach the dashboard.
+        # -> Fill the email (index 3) with ceo@demo.com, fill the password (index 4) with demo123, then click the Sign In button (index 6) to submit the login form.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -75,29 +75,66 @@ async def run_test():
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Fill the email (index 308) with ceo@demo.com, fill the password (index 316) with demo123, then click the Sign In button (index 321).
+        frame = context.pages[-1]
+        # Input text
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
+        
+        frame = context.pages[-1]
+        # Input text
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('demo123')
+        
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the 'Call Logs' navigation link to open the Calls/Call Logs page (interactive element index 610).
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[2]/nav/div[1]/div/a[2]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Open the full activity/call list so a specific call row can be selected (click 'View All Activity'). Then locate a visible unique value from the first call row to search or open.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[4]/div[1]/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Type 'Michael Chen' into the call search field (index 1095), press Enter to run the search, open the first matching call row (index 1423), then click the Delete call button for that row (index 1223).
+        frame = context.pages[-1]
+        # Input text
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[4]/div/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('Michael Chen')
+        
+        # -> Click the first matching call row to open its details (click element index 1633).
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[5]/div/table/tbody/tr[1]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the 'Delete call' button for the opened call (interactive element index 1624) to open the confirmation dialog.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[5]/div/table/tbody/tr[2]/td[7]/div/button[2]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the 'Delete' (confirm) button in the confirmation dialog to confirm deletion (interactive element index 1672).
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div[3]/div/div[3]/button[2]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
         # --> Assertions to verify final state
         frame = context.pages[-1]
-        frame = context.pages[-1]
-        # Assert email input is visible
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        assert await elem.is_visible()
-        # Assert password input is visible
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
-        assert await elem.is_visible()
-        # Assert 'Forgot password?' link is visible
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[1]/a').nth(0)
-        assert await elem.is_visible()
-        # Assert 'Continue with Google' button is visible
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/button').nth(0)
-        assert await elem.is_visible()
-        # Assert 'OR' text is visible
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/div[2]/div[2]/span').nth(0)
-        assert await elem.is_visible()
-        # The Calls feature / dashboard is not present on this page; mark task as done
-        assert '/dashboard' not in frame.url
-        print('Calls feature not present on current page; task marked as done.')
+        assert '/dashboard' in frame.url
+        await expect(frame.locator('text=Michael Chen').first).to_be_visible(timeout=3000)
+        await expect(frame.locator('text=Confirm').first).to_be_visible(timeout=3000)
+        await expect(frame.locator('text=Deleted').first).to_be_visible(timeout=3000)
         await asyncio.sleep(5)
 
     finally:

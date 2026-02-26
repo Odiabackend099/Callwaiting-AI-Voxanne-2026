@@ -54,8 +54,7 @@ function LoginContent() {
             }
 
             reset();
-            router.push("/dashboard");
-            router.refresh();
+            window.location.href = '/dashboard';
         } catch (err) {
             setError("An unexpected error occurred");
             setLoading(false);

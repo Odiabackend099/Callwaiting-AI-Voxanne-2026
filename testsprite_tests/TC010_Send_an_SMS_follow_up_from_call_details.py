@@ -30,39 +30,20 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Navigate to /login (use exact path http://localhost:3000/login as the test step requires).
-        await page.goto("http://localhost:3000/login", wait_until="commit", timeout=10000)
-        
-        # -> Fill the email field with test@demo.com, fill the password field with demo123, then click the 'Sign In' button to log in.
-        frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
-        
-        frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('demo123')
-        
+        # -> Click the 'Sign In' link in the page header to navigate to the login page (/login).
         frame = context.pages[-1]
         # Click element
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
-        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
-        
-        # -> Retry clicking the 'Sign In' button to attempt login again (click element index 1465).
-        frame = context.pages[-1]
-        # Click element
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/div[2]/div[2]/button').nth(0)
+        elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
         # --> Assertions to verify final state
         frame = context.pages[-1]
         assert '/dashboard' in frame.url
-        await expect(frame.locator('xpath=//*[contains(normalize-space(.),"Call details")]').first).to_be_visible(timeout=3000)
-        await expect(frame.locator('xpath=//*[contains(normalize-space(.),"SMS message")]').first).to_be_visible(timeout=3000)
+        await expect(frame.locator('text=Call details').first).to_be_visible(timeout=3000)
+        await expect(frame.locator('text=SMS message').first).to_be_visible(timeout=3000)
         await expect(frame.locator('text=SMS sent').first).to_be_visible(timeout=3000)
         await asyncio.sleep(5)
 

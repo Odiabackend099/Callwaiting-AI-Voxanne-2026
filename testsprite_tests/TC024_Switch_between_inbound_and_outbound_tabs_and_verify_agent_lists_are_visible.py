@@ -36,11 +36,11 @@ async def run_test():
         # -> Navigate to /login (use explicit navigate to http://localhost:3000/login as required by the test)
         await page.goto("http://localhost:3000/login", wait_until="commit", timeout=10000)
         
-        # -> Type the email (test@demo.com) into the email field (index 1272) as the immediate action.
+        # -> Type the email (ceo@demo.com) into the email field (index 1272) as the immediate action.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -56,7 +56,7 @@ async def run_test():
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text

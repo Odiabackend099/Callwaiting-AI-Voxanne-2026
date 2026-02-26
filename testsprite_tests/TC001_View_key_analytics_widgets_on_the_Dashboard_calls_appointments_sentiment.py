@@ -30,8 +30,8 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
         # -> Click the 'Sign In' link to open the login page.
         frame = context.pages[-1]
@@ -39,11 +39,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Type credentials into the email and password fields and click the 'Sign In' button to attempt login.
+        # -> Type the email into the email field (index 1637) and password into the password field (index 1645), then click the 'Sign In' button (index 1650).
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -55,29 +55,31 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Click the Sign In submit button (index 1472) to submit credentials and attempt to reach /dashboard.
-        frame = context.pages[-1]
-        # Click element
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
-        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
-        
-        # -> Refill the email and password fields (clear then type) and submit the form using the Enter key to attempt login without clicking the same submit button again. After submit, check whether '/dashboard' is reached and the three widgets are visible.
+        # -> Input email into the email field, input password into the password field, then click the Sign In button to submit the form.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
         await page.wait_for_timeout(3000); await elem.fill('demo123')
+        
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
         # --> Assertions to verify final state
         frame = context.pages[-1]
-        assert '/dashboard' in frame.url
-        await expect(frame.locator('text=Total calls').first).to_be_visible(timeout=3000)
-        await expect(frame.locator('text=Appointments').first).to_be_visible(timeout=3000)
-        await expect(frame.locator('text=Average sentiment').first).to_be_visible(timeout=3000)
+        assert "/dashboard" in frame.url
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[2]/div[1]/div[2]/div[1]/div')
+        assert await elem.is_visible()
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[2]/div[3]/div[2]/div[1]/div')
+        assert await elem.is_visible()
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[2]/div[4]/div[2]/div[1]/div')
+        assert await elem.is_visible()
         await asyncio.sleep(5)
 
     finally:

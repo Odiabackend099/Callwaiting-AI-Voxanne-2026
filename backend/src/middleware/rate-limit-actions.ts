@@ -104,22 +104,24 @@ export function rateLimitAction(action: string) {
 
 /**
  * Cleanup old entries periodically (prevent memory leak)
- * Run every 5 minutes
+ * Run every 5 minutes (skip in test environment to prevent timeout)
  */
-setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
 
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (now >= entry.resetTime) {
-      rateLimitStore.delete(key);
-      cleaned++;
+    for (const [key, entry] of rateLimitStore.entries()) {
+      if (now >= entry.resetTime) {
+        rateLimitStore.delete(key);
+        cleaned++;
+      }
     }
-  }
 
-  if (cleaned > 0) {
-    log.info('RateLimit', 'Cleaned up expired entries', { cleaned });
-  }
-}, 5 * 60 * 1000);
+    if (cleaned > 0) {
+      log.info('RateLimit', 'Cleaned up expired entries', { cleaned });
+    }
+  }, 5 * 60 * 1000);
+}
 
 export { rateLimitStore };

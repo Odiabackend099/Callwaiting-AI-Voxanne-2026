@@ -40,7 +40,7 @@ async def run_test():
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -52,11 +52,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill the email and password fields again and click 'Sign In' to attempt login (inputs: test@demo.com / demo123).
+        # -> Fill the email and password fields again and click 'Sign In' to attempt login (inputs: ceo@demo.com / demo123).
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text

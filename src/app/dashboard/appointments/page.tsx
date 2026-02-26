@@ -61,6 +61,9 @@ const AppointmentsDashboardContent = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [showRescheduleForm, setShowRescheduleForm] = useState(false);
+    const [rescheduleDate, setRescheduleDate] = useState('');
+    const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
     const appointmentsPerPage = 20;
 
@@ -149,20 +152,38 @@ const AppointmentsDashboardContent = () => {
         }
     };
 
-    const handleReschedule = async () => {
-        const newTime = prompt('Enter new appointment time (YYYY-MM-DD HH:MM):');
-        if (!newTime || !selectedAppointment) return;
+    const handleReschedule = () => {
+        setRescheduleDate('');
+        setRescheduleError(null);
+        setShowRescheduleForm(true);
+    };
+
+    const handleRescheduleSubmit = async () => {
+        if (!rescheduleDate || !selectedAppointment) return;
+
+        // Validate date format
+        const parsed = new Date(rescheduleDate);
+        if (isNaN(parsed.getTime())) {
+            setRescheduleError('Invalid date. Please enter a valid date and time.');
+            return;
+        }
+        if (parsed <= new Date()) {
+            setRescheduleError('New date must be in the future.');
+            return;
+        }
 
         try {
             await authedBackendFetch(`/api/appointments/${selectedAppointment.id}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ scheduled_at: newTime })
+                body: JSON.stringify({ scheduled_at: parsed.toISOString() })
             });
+            setShowRescheduleForm(false);
+            setRescheduleDate('');
             setShowDetailModal(false);
             await fetchAppointments();
             success('Appointment rescheduled successfully');
         } catch (err: any) {
-            setError(err?.message || 'Failed to reschedule appointment');
+            setRescheduleError(err?.message || 'Failed to reschedule appointment');
         }
     };
 
@@ -515,6 +536,7 @@ const AppointmentsDashboardContent = () => {
                                 {/* Modal Header */}
                                 <div className="sticky top-0 bg-white border-b border-surgical-200 px-6 py-4 flex items-center justify-between">
                                     <div>
+                                        <p className="text-xs font-semibold text-surgical-600 uppercase tracking-wider mb-1">Appointment Details</p>
                                         <h2 className="text-2xl font-bold text-obsidian">{selectedAppointment.contact_name}</h2>
                                         <p className="text-sm text-obsidian/60">{selectedAppointment.service_type}</p>
                                     </div>
@@ -623,6 +645,37 @@ const AppointmentsDashboardContent = () => {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Inline Reschedule Form */}
+                                {showRescheduleForm && (
+                                    <div className="border-t border-surgical-200 px-6 py-4 space-y-3">
+                                        <p className="text-sm font-medium text-obsidian">New date and time</p>
+                                        <input
+                                            type="datetime-local"
+                                            value={rescheduleDate}
+                                            onChange={(e) => { setRescheduleDate(e.target.value); setRescheduleError(null); }}
+                                            className="w-full border border-surgical-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-surgical-600/30"
+                                            aria-label="New date"
+                                        />
+                                        {rescheduleError && (
+                                            <p className="text-xs text-red-600">{rescheduleError}</p>
+                                        )}
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleRescheduleSubmit}
+                                                className="px-4 py-2 bg-surgical-600 text-white rounded-lg text-sm font-medium hover:bg-surgical-700 transition-colors"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                onClick={() => setShowRescheduleForm(false)}
+                                                className="px-4 py-2 border border-surgical-200 rounded-lg text-sm font-medium text-obsidian/60 hover:bg-surgical-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Modal Footer */}
                                 <div className="border-t border-surgical-200 px-6 py-4 flex items-center justify-end gap-3">

@@ -181,7 +181,7 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
         // Fetch recent hot lead alerts
         const { data: hotLeads, error: hotLeadsError } = await supabase
             .from('hot_lead_alerts')
-            .select('id, created_at, lead_name, lead_phone, service_interest, lead_score')
+            .select('id, created_at, lead_name, lead_phone, service_interest, lead_score, call_id')
             .eq('org_id', orgId)
             .order('created_at', { ascending: false })
             .limit(5);
@@ -239,7 +239,8 @@ analyticsRouter.get('/recent-activity', requireAuth, async (req: Request, res: R
                         lead_name: lead.lead_name,
                         lead_phone: lead.lead_phone,
                         service_interest: lead.service_interest,
-                        lead_score: lead.lead_score
+                        lead_score: lead.lead_score,
+                        call_id: lead.call_id
                     }
                 });
             });

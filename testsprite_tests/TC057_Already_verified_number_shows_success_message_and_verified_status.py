@@ -36,11 +36,11 @@ async def run_test():
         # -> Navigate to /login (http://localhost:3000/login) to begin login flow.
         await page.goto("http://localhost:3000/login", wait_until="commit", timeout=10000)
         
-        # -> Fill the email and password fields and click 'Sign In' to attempt login (use test@demo.com / demo123).
+        # -> Fill the email and password fields and click 'Sign In' to attempt login (use ceo@demo.com / demo123).
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -68,7 +68,7 @@ async def run_test():
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -80,11 +80,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill email (index 1678) and password (index 1686) with test@demo.com / demo123, click Sign In (index 1691), then wait for the dashboard to load and check that the URL contains '/dashboard'.
+        # -> Fill email (index 1678) and password (index 1686) with ceo@demo.com / demo123, click Sign In (index 1691), then wait for the dashboard to load and check that the URL contains '/dashboard'.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -96,11 +96,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill email (index 1861) and password (index 1869) with test@demo.com / demo123, click Sign In (index 1870), wait for the dashboard to load and then verify that the URL contains '/dashboard'.
+        # -> Fill email (index 1861) and password (index 1869) with ceo@demo.com / demo123, click Sign In (index 1870), wait for the dashboard to load and then verify that the URL contains '/dashboard'.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text

@@ -30,20 +30,20 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Click the 'Sign In' link (element 77) to navigate to the login page.
+        # -> Click the "Sign In" link on the landing page to open the login page (use element index 87).
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill the login form with test credentials and submit (enter email, enter password, click Sign In).
+        # -> Type the provided email into the email field (index 1585), type the provided password into the password field (index 1593), then click the Sign In button (index 1598).
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -55,30 +55,67 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Retry submitting the login form by clicking the Sign In button again to attempt to reach the dashboard.
+        # -> Click 'Accept All' on the cookie consent banner (index 1719) to clear the overlay so dashboard navigation can be accessed, then locate the 'Appointments' navigation item.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[3]/div/div/div[2]/button[3]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Fill the email and password fields again and click the Sign In button to attempt login.
+        frame = context.pages[-1]
+        # Input text
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
+        
+        frame = context.pages[-1]
+        # Input text
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[3]/div[2]/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('demo123')
+        
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill the email and password fields again (clear+type) and submit the login form using the Enter key (alternative submit) to attempt reaching the dashboard.
+        # -> Click the 'Appointments' navigation item in the sidebar (index 1945).
         frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[2]/nav/div[1]/div/a[3]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
+        # -> Click the first appointment in the appointments list (the appointment entry starting '📅 Appointment for Michael Chen ...').
         frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('demo123')
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[4]/div[2]/div/div[2]/div/div[1]/div[1]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the Edit button for the Michael Chen appointment to open the reschedule/edit form (use element index 2608).
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[3]/div/table/tbody/tr[3]/td[7]/div/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Attempt to open the reschedule/edit form for the Michael Chen appointment by clicking the appointment's action container (index 2609) to reveal the form.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[3]/div/table/tbody/tr[3]/td[7]/div').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the 'Reschedule' button in the appointment modal to open the reschedule form (index 2721).
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[4]/div/div[3]/button[1]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Open the reschedule form so the 'New date' input appears (click the Reschedule button again if necessary), then enter '2030-01-15' into the date field and save. Immediate action: attempt to open the reschedule form by clicking the Reschedule button.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[4]/div/div[3]/button[1]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
         # --> Assertions to verify final state
         frame = context.pages[-1]
-        frame = context.pages[-1]
-        assert "/login" in frame.url
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
-        assert await elem.is_visible(), "Sign In button is not visible; unexpected page state"
-        raise AssertionError("Reschedule feature not found: reschedule form or 'Rescheduled' confirmation is not present on this page.")
+        await expect(frame.locator('text=Rescheduled').first).to_be_visible(timeout=3000)
         await asyncio.sleep(5)
 
     finally:

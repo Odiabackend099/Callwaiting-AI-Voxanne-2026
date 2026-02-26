@@ -30,20 +30,20 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Click the 'Sign In' link to navigate to the login page.
+        # -> Click the 'Sign In' link to open the login page (use element index 77).
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Enter email into the email field (index 1276) and password into the password field (index 1284), then click the Sign In button (index 1289).
+        # -> Type email and password into the login form and click the 'Sign In' submit button to sign in
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -55,27 +55,17 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Retry signing in by entering email and password, then clicking the 'Sign In' button (indexes: email 1460, password 1468, Sign In 1473).
-        frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
-        
-        frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('demo123')
-        
+        # -> Click the Reload button (index 75) to retry loading the /login page.
         frame = context.pages[-1]
         # Click element
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
+        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div[2]/div/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Enter email into input index 1643 and password into input index 1651, then click the Sign In button at index 1656 (attempting sign in).
+        # -> Attempt sign-in again by filling the email and password fields on the visible login form (inputs index 3 and 4) and clicking the 'Sign In' button (index 6). ASSERTION: Email input (index 3), Password input (index 4), and Sign In button (index 6) are visible before submitting.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -89,13 +79,7 @@ async def run_test():
         
         # --> Assertions to verify final state
         frame = context.pages[-1]
-        frame = context.pages[-1]
-        # The appointments/cancel feature is not present on the current page (no Appointments navigation or Cancel button found). Marking task as done.
-        await page.wait_for_timeout(1000)
-        assert await frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').is_visible()
-        assert await frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').is_visible()
-        assert await frame.locator('xpath=/html/body/div[1]/div[1]/div/button').is_visible()
-        assert '/login' in frame.url
+        await expect(frame.locator('text=Cancelled').first).to_be_visible(timeout=3000)
         await asyncio.sleep(5)
 
     finally:

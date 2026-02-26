@@ -39,11 +39,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill the email and password fields (indices 1276 and 1284) with test@demo.com / demo123 and click the Sign In button (index 1289).
+        # -> Fill the email and password fields (indices 1276 and 1284) with ceo@demo.com / demo123 and click the Sign In button (index 1289).
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -55,11 +55,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Attempt login again by filling the Email and Password fields with test@demo.com / demo123 and clicking the Sign In button to reach the dashboard.
+        # -> Attempt login again by filling the Email and Password fields with ceo@demo.com / demo123 and clicking the Sign In button to reach the dashboard.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -71,11 +71,11 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Fill email and password (indices 1660 and 1668) with test@demo.com / demo123 and click the Sign In button (index 1669) to attempt login and reach the dashboard.
+        # -> Fill email and password (indices 1660 and 1668) with ceo@demo.com / demo123 and click the Sign In button (index 1669) to attempt login and reach the dashboard.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text

@@ -30,36 +30,39 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Click the 'Sign In' link to navigate to the login page (use interactive element index 77).
-        frame = context.pages[-1]
-        # Click element
-        elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
-        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        # -> Navigate to /login (explicit test step)
+        await page.goto("http://localhost:3000/login", wait_until="commit", timeout=10000)
         
-        # -> Type the email into the email field (index 1277), then type the password into the password field (index 1285), then click the 'Sign In' button (index 1290).
+        # -> Type the provided email into the email field (element [82]) and the password into the password field (element [90]), then click the Sign In button (element [95]).
         frame = context.pages[-1]
         # Input text
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/div[2]/div[2]/input').nth(0)
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
         await page.wait_for_timeout(3000); await elem.fill('demo123')
         
         frame = context.pages[-1]
         # Click element
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/button').nth(0)
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Attempt login again by filling the email and password fields and clicking 'Sign In' (use interactive element indexes 1455, 1463, then click 1470).
+        # -> Attempt to submit the login form again by clicking the 'Sign In' button (element [279]) to trigger navigation to the dashboard.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Fill the email and password fields with provided credentials and click the Sign In button to submit the form and trigger navigation to the dashboard.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
@@ -73,9 +76,15 @@ async def run_test():
         
         # --> Assertions to verify final state
         frame = context.pages[-1]
-        assert '/dashboard' in frame.url
-        await expect(frame.locator('text=Dashboard stats').first).to_be_visible(timeout=3000)
-        await expect(frame.locator('text=re-authenticate').first).not_to_be_visible(timeout=3000)
+        # -> Final assertions appended to the test
+        frame = context.pages[-1]
+        # Verify URL contains "/dashboard"
+        assert "/dashboard" in frame.url
+        # Verify Dashboard stats section is visible (element [695])
+        assert await frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[2]/div[1]/div[2]/div[1]/div').is_visible()
+        # The page does not contain any element in the provided list with the text "re-authenticate".
+        # According to the test plan, if a feature/element does not exist we must report the issue and stop.
+        raise RuntimeError("Element with text 're-authenticate' not found in the available elements; cannot assert its invisibility. Test marked as done.")
         await asyncio.sleep(5)
 
     finally:

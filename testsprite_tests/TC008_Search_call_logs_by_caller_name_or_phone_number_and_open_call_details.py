@@ -30,19 +30,18 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Navigate to /login (explicit test step).
+        # -> Navigate to /login (required test step: use explicit navigate to /login as instructed).
         await page.goto("http://localhost:3000/login", wait_until="commit", timeout=10000)
         
-        # -> Type the login email into the email field (index 1272) using credentials test@demo.com
+        # -> Fill the email field with 'ceo@demo.com', fill the password field with 'demo123', then click the 'Sign In' button.
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
-        # -> Type the password 'demo123' into the password field (index 1280) and click the 'Sign In' button (index 1285).
         frame = context.pages[-1]
         # Input text
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
@@ -53,17 +52,7 @@ async def run_test():
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Retry login on the current page by entering credentials into the visible email and password fields and clicking the Sign In button (use indices on this page).
-        frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
-        
-        frame = context.pages[-1]
-        # Input text
-        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('demo123')
-        
+        # -> Retry signing in by clicking the 'Sign In' button again to trigger the login request and wait for a redirect to /dashboard.
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
@@ -73,7 +62,7 @@ async def run_test():
         frame = context.pages[-1]
         assert '/dashboard' in frame.url
         await expect(frame.locator('text=John Doe').first).to_be_visible(timeout=3000)
-        await expect(frame.locator('xpath=//*[text()="Call details"]').first).to_be_visible(timeout=3000)
+        await expect(frame.locator('text=Call details').first).to_be_visible(timeout=3000)
         await asyncio.sleep(5)
 
     finally:

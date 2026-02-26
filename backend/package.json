@@ -11,7 +11,7 @@
     "start": "npm run validate-env && tsx src/server.ts",
     "test": "jest",
     "test:unit": "jest --testPathPatterns='src/__tests__/unit'",
-    "test:integration": "jest --testPathPattern='integration'",
+    "test:integration": "jest --testPathPatterns='integration' --config jest.integration.config.js",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:backend": "vitest",

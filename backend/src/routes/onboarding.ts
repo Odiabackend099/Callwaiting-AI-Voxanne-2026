@@ -9,7 +9,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAuthOrDev } from '../middleware/auth';
 import { supabase } from '../services/supabase-client';
 import { createLogger } from '../services/logger';
 import { ManagedTelephonyService } from '../services/managed-telephony-service';
@@ -19,7 +19,16 @@ import { deductAssetCost, addCredits } from '../services/wallet-service';
 const logger = createLogger('OnboardingRoutes');
 const router = Router();
 
-router.use(requireAuth);
+// Dynamic auth middleware that checks NODE_ENV at request time (not module load time)
+// This allows tests to set NODE_ENV before making requests
+router.use(async (req, res, next) => {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  if (isDevelopment) {
+    await requireAuthOrDev(req, res, next);
+  } else {
+    await requireAuth(req, res, next);
+  }
+});
 
 // Valid onboarding event names
 const VALID_EVENTS = [

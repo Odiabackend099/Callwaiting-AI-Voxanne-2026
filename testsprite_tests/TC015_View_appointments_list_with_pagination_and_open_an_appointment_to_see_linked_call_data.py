@@ -30,35 +30,55 @@ async def run_test():
         page = await context.new_page()
 
         # Interact with the page elements to simulate user flow
-        # -> Navigate to http://localhost:3000/
-        await page.goto("http://localhost:3000/", wait_until="commit", timeout=10000)
+        # -> Navigate to http://localhost:3000
+        await page.goto("http://localhost:3000", wait_until="commit", timeout=10000)
         
-        # -> Click the 'Sign In' link to go to the login page (element index 77)
+        # -> Click the 'Sign In' link in the page header to open the login page (click element index 89).
         frame = context.pages[-1]
         # Click element
         elem = frame.locator('xpath=/html/body/main/nav/div/div[2]/a[1]').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # -> Enter email and password into the login form and click the 'Sign In' button.
+        # -> Click the 'Reload' button (element index 74) to retry loading the /login page.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div[2]/div/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Fill the email and password fields on the /login page and click the Sign In button.
         frame = context.pages[-1]
         # Input text
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/div[1]/input').nth(0)
-        await page.wait_for_timeout(3000); await elem.fill('test@demo.com')
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[1]/input').nth(0)
+        await page.wait_for_timeout(3000); await elem.fill('ceo@demo.com')
         
         frame = context.pages[-1]
         # Input text
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/div[2]/div[2]/input').nth(0)
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/div[2]/div[2]/input').nth(0)
         await page.wait_for_timeout(3000); await elem.fill('demo123')
         
         frame = context.pages[-1]
         # Click element
-        elem = frame.locator('xpath=/html/body/div[2]/div[1]/div/form/button').nth(0)
+        elem = frame.locator('xpath=/html/body/div[1]/div[1]/div/form/button').nth(0)
         await page.wait_for_timeout(3000); await elem.click(timeout=5000)
         
-        # --> Assertions to verify final state
+        # -> Click the 'Appointments' navigation item in the dashboard (interactive element index 386).
         frame = context.pages[-1]
-        await expect(frame.locator('text=Appointments').first).to_be_visible(timeout=3000)
-        await expect(frame.locator("xpath=//table[contains(., 'Appointments') or contains(., 'Appointment')]").first).to_be_visible(timeout=3000)
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[2]/nav/div[1]/div/a[3]').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the first appointment's Edit button to open the appointment details panel and then check the details for linked call information (e.g., call link, call record, or related call metadata). If the details panel doesn't show linked call info, report the missing feature.
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[3]/div/table/tbody/tr[1]/td[7]/div/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
+        # -> Click the first appointment's Edit button to open the appointment details panel and then inspect the panel for linked call information (call link, call record, or related call metadata).
+        frame = context.pages[-1]
+        # Click element
+        elem = frame.locator('xpath=/html/body/div[1]/div[3]/main/div/div/div[3]/div/table/tbody/tr[1]/td[7]/div/button').nth(0)
+        await page.wait_for_timeout(3000); await elem.click(timeout=5000)
+        
         await asyncio.sleep(5)
 
     finally:

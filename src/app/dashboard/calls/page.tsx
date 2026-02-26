@@ -212,6 +212,7 @@ const CallsPageContent = () => {
                     mutateCalls();
                     mutateAnalytics();
                     setConfirmDialog({ ...confirmDialog, isOpen: false });
+                    success('Deleted successfully');
                 } catch (err: any) {
                     setError(err?.message || 'Failed to delete call');
                 }

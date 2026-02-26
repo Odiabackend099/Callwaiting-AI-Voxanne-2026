@@ -46,15 +46,17 @@ const router = Router();
  */
 const verificationAttempts = new Map<string, RateLimitEntry>();
 
-// Cleanup expired entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of verificationAttempts.entries()) {
-    if (value.resetAt < now) {
-      verificationAttempts.delete(key);
+// Cleanup expired entries every 10 minutes (skip in test environment to prevent timeout)
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of verificationAttempts.entries()) {
+      if (value.resetAt < now) {
+        verificationAttempts.delete(key);
+      }
     }
-  }
-}, 10 * 60 * 1000);
+  }, 10 * 60 * 1000);
+}
 
 // ============================================
 // VALIDATION HELPERS

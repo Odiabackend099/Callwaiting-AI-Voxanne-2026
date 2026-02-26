@@ -27,6 +27,7 @@ interface ActivityEvent {
         lead_phone?: string;
         service_interest?: string;
         lead_score?: number;
+        call_id?: string;
         customer_name?: string;
         scheduled_at?: string;
         contact_phone?: string;
@@ -163,11 +164,13 @@ export default function CallWaitingAIDashboard() {
                             {recentEvents.map((event) => (
                                 <div
                                     key={event.id}
-                                    className={`px-6 py-4 hover:bg-surgical-50 transition-colors ${event.type === 'call_completed' ? 'cursor-pointer' : ''}`}
+                                    className={`px-6 py-4 hover:bg-surgical-50 transition-colors ${(event.type === 'call_completed' || (event.type === 'hot_lead_detected' && event.metadata?.call_id)) ? 'cursor-pointer' : ''}`}
                                     onClick={() => {
                                         if (event.type === 'call_completed') {
                                             const callId = event.id.replace('call_', '');
                                             router.push(`/dashboard/calls?callId=${callId}`);
+                                        } else if (event.type === 'hot_lead_detected' && event.metadata?.call_id) {
+                                            router.push(`/dashboard/calls?callId=${event.metadata.call_id}`);
                                         }
                                     }}
                                 >

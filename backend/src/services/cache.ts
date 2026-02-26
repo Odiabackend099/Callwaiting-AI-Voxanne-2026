@@ -16,8 +16,10 @@ export class InMemoryCache {
   private misses: number = 0;
 
   constructor() {
-    // Cleanup expired entries every 5 minutes
-    this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
+    // Cleanup expired entries every 5 minutes (skip in test environment to prevent timeout)
+    if (process.env.NODE_ENV !== 'test') {
+      this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
+    }
   }
 
   /**

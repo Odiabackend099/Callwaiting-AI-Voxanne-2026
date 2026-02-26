@@ -49,8 +49,10 @@ export async function sendSlackAlert(title: string, details: any): Promise<void>
   }
 }
 
-// Reset the error count every minute
-setInterval(() => {
-  errorCount = 0;
-  lastResetTime = Date.now();
-}, 60 * 1000);
+// Reset the error count every minute (skip in test environment to prevent timeout)
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(() => {
+    errorCount = 0;
+    lastResetTime = Date.now();
+  }, 60 * 1000);
+}

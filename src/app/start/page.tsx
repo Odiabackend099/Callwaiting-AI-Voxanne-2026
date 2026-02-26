@@ -187,7 +187,7 @@ function OnboardingForm() {
     if (!phone.trim()) {
       errors.phone = 'Phone number is required';
     } else if (!validatePhoneNumber(phone)) {
-      errors.phone = 'Please enter a valid international phone number (e.g., +1 555 123 4567)';
+      errors.phone = 'Please enter a valid phone number in E.164 format (e.g., +1 555 123 4567)';
     }
 
     if (!greetingScript.trim()) {
