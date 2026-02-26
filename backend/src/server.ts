@@ -141,6 +141,7 @@ import contactFormRouter from './routes/contact-form';
 import emailTestingRouter from './routes/email-testing';
 import chatWidgetRouter from './routes/chat-widget';
 import onboardingIntakeRouter from './routes/onboarding-intake';
+import authSignupRouter from './routes/auth-signup'; // default export - Public signup (moved from Vercel API route)
 import { initializeSmsQueue, shutdownSmsQueue } from './queues/sms-queue';
 
 // Initialize logger
@@ -345,6 +346,7 @@ app.use('/api/billing', billingApiRouter); // Billing API (usage, history, check
 app.use('/api/billing/monitoring', billingMonitoringRouter); // Operator aggregate billing metrics (admin only)
 app.use('/api/billing/reconciliation', billingReconciliationRouter); // P0-5: Vapi call reconciliation
 app.use('/api/webhook-verification', webhookVerificationRouter); // Webhook processing verification (Fix #3)
+app.use('/api/auth', authSignupRouter); // Public signup (no auth required, has IP rate limiting)
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
 app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
 app.use('/api/onboarding-intake', onboardingIntakeRouter); // Onboarding intake form

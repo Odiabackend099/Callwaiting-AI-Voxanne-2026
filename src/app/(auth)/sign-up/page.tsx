@@ -61,7 +61,8 @@ export default function SignUpPage() {
       // Step 1: Create account via server-side API.
       // Uses admin.createUser() which bypasses the Supabase "Allow new users to sign up"
       // project-level restriction. The DB trigger creates org + profile + JWT metadata.
-      const res = await fetch('/api/auth/signup', {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
