@@ -14,7 +14,7 @@
  */
 
 import { supabase } from './supabase-client';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 export interface EnsureOrgResult {
   orgId: string;
@@ -88,7 +88,7 @@ export async function ensureOrgExists(
   // - Profile has NULL org_id
   // - Org was deleted
 
-  const newOrgId = uuidv4();
+  const newOrgId = randomUUID();
   const orgName = `Organization ${newOrgId.substring(0, 8)}`;
 
   // Create the organization
