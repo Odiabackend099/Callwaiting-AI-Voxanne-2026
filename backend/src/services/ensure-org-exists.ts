@@ -90,6 +90,7 @@ export async function ensureOrgExists(
 
   const newOrgId = randomUUID();
   const orgName = `Organization ${newOrgId.substring(0, 8)}`;
+  const orgEmail = `org-${newOrgId.substring(0, 8)}@voxanne.internal`;
 
   // Create the organization
   const { error: orgError } = await supabase
@@ -97,6 +98,7 @@ export async function ensureOrgExists(
     .insert({
       id: newOrgId,
       name: orgName,
+      email: orgEmail,
       status: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -147,22 +149,22 @@ export async function validateUserOrgExists(userId: string, orgId: string): Prom
     return false;
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('id, org_id')
     .eq('id', userId)
     .eq('org_id', orgId)
-    .single();
+    .maybeSingle();
 
-  if (!profile) {
+  if (profileError || !profile) {
     return false;
   }
 
-  const { data: org } = await supabase
+  const { data: org, error: orgError } = await supabase
     .from('organizations')
     .select('id')
     .eq('id', orgId)
-    .single();
+    .maybeSingle();
 
-  return !!org;
+  return !orgError && !!org;
 }
