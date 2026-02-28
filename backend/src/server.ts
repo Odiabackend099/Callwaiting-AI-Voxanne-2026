@@ -132,6 +132,7 @@ import stripeWebhooksRouter from './routes/stripe-webhooks';
 import billingApiRouter from './routes/billing-api';
 import billingReconciliationRouter from './routes/billing-reconciliation'; // default export
 import webhookVerificationRouter from './routes/webhook-verification'; // default export - Webhook processing verification
+import authSignupRouter from './routes/auth-signup'; // default export - Public signup (no auth required, IP rate limited)
 import calendlyWebhookRouter from './routes/calendly-webhook';
 import contactFormRouter from './routes/contact-form';
 import emailTestingRouter from './routes/email-testing';
@@ -336,6 +337,7 @@ app.use('/api/webhooks', calendlyWebhookRouter); // Calendly webhook events
 app.use('/api/billing', billingApiRouter); // Billing API (usage, history, checkout)
 app.use('/api/billing/reconciliation', billingReconciliationRouter); // P0-5: Vapi call reconciliation
 app.use('/api/webhook-verification', webhookVerificationRouter); // Webhook processing verification (Fix #3)
+app.use('/api/auth', authSignupRouter); // Public signup (no auth required, has IP rate limiting)
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
 app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
 app.use('/api/onboarding-intake', onboardingIntakeRouter); // Onboarding intake form
