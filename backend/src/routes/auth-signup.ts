@@ -12,7 +12,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { config } from '../config';
@@ -21,20 +21,26 @@ import { getRedisClient } from '../config/redis';
 
 const router = Router();
 
-// Fail loudly at module load if credentials are absent — surfaces in Render deployment logs
-// rather than silently failing on every signup request with a cryptic auth error.
-if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('[auth-signup] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-}
+// ---------------------------------------------------------------------------
+// Lazy-initialized, memoized admin client
+// ---------------------------------------------------------------------------
+// Not created at module level because:
+// 1. A module-level throw crashes the import if credentials are absent, causing
+//    authSignupRouter = undefined in server.ts and Express silently not registering
+//    the route (→ 404 on production Render if SUPABASE_SERVICE_ROLE_KEY is not set).
+// 2. Memoizing avoids creating a new client on every signup request.
+let _adminClient: SupabaseClient | null = null;
 
-// Admin client — module-level, stateless (no session, no token refresh).
-// Uses service role key. Runs server-side ONLY.
-// Bypasses the Supabase project-level "Allow new users to sign up" restriction.
-const adminClient = createClient(
-  config.SUPABASE_URL,
-  config.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+function getAdminClient(): SupabaseClient | null {
+  if (_adminClient) return _adminClient;
+  if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_ROLE_KEY) return null;
+  _adminClient = createClient(
+    config.SUPABASE_URL,
+    config.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  return _adminClient;
+}
 
 // ---------------------------------------------------------------------------
 // Rate limiting (5 sign-ups per IP per 60 s)
@@ -53,6 +59,9 @@ let _rateLimiter: ReturnType<typeof rateLimit> | null = null;
 function getSignupRateLimiter() {
   if (!_rateLimiter) {
     const redis = getRedisClient();
+    if (!redis) {
+      log.warn('AuthSignup', 'Redis unavailable — signup rate limiter is in-memory (not distributed). Set REDIS_URL on Render to enable distributed limiting.');
+    }
     _rateLimiter = rateLimit({
       windowMs: WINDOW_MS,
       max: MAX_PER_WINDOW,
@@ -79,6 +88,18 @@ function getSignupRateLimiter() {
 }
 
 // ---------------------------------------------------------------------------
+// Sanitize display names — strip HTML/script tags and dangerous chars.
+// Prevents XSS if first_name/last_name are ever rendered as raw HTML in
+// dashboards, email templates, or webhook payloads.
+// ---------------------------------------------------------------------------
+function sanitizeName(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, '')       // strip HTML tags
+    .replace(/[<>"'`]/g, '')       // strip remaining dangerous chars
+    .slice(0, 50);
+}
+
+// ---------------------------------------------------------------------------
 // POST /signup
 // ---------------------------------------------------------------------------
 router.post(
@@ -87,6 +108,17 @@ router.post(
   (req: Request, res: Response, next) => getSignupRateLimiter()(req, res, next),
   async (req: Request, res: Response) => {
     try {
+      // Guard: return 503 instead of crashing if credentials are missing.
+      // This keeps the route registered even when env vars are absent, so
+      // the problem is surfaced as a clear 503 rather than a silent 404.
+      const adminClient = getAdminClient();
+      if (!adminClient) {
+        log.error('AuthSignup', 'Admin client unavailable — SUPABASE_SERVICE_ROLE_KEY is not set');
+        return res.status(503).json({
+          error: 'Service temporarily unavailable. Please contact support@voxanne.ai.',
+        });
+      }
+
       const body = req.body;
 
       if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -123,6 +155,7 @@ router.post(
 
       // Mirror the frontend strength scoring (getPasswordStrength) — reject score < 2.
       // Prevents direct API calls from bypassing the frontend's strength requirement.
+      // Keep in sync with getPasswordStrength() in src/app/(auth)/sign-up/page.tsx.
       let strengthScore = 1; // baseline: >= 8 chars
       if (password.length >= 12 || (/[A-Z]/.test(password) && /[a-z]/.test(password))) strengthScore++;
       if (/[0-9]/.test(password)) strengthScore++;
@@ -133,6 +166,12 @@ router.post(
           error: 'Password is too weak — use 8+ characters with a mix of letters and numbers.',
         });
       }
+
+      // Sanitize names before storing — strip HTML/script tags to prevent XSS
+      // if user_metadata is ever rendered as raw HTML downstream.
+      const safeFirst = sanitizeName(trimmedFirst);
+      const safeLast = sanitizeName(trimmedLast);
+      const safeFullName = `${safeFirst} ${safeLast}`.trim();
 
       // --- Create user via admin API ---
       // email_confirm: true — intentional design choice for this product's onboarding UX.
@@ -150,9 +189,9 @@ router.post(
         password,
         email_confirm: true,
         user_metadata: {
-          first_name: trimmedFirst,
-          last_name: trimmedLast,
-          full_name: `${trimmedFirst} ${trimmedLast}`.trim(),
+          first_name: safeFirst,
+          last_name: safeLast,
+          full_name: safeFullName,
         },
       });
 

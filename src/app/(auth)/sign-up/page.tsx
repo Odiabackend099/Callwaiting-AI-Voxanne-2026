@@ -251,6 +251,7 @@ export default function SignUpPage() {
                 <Input
                   id="firstName"
                   type="text"
+                  autoComplete="given-name"
                   placeholder="Jane"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
@@ -265,6 +266,7 @@ export default function SignUpPage() {
                 <Input
                   id="lastName"
                   type="text"
+                  autoComplete="family-name"
                   placeholder="Smith"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
@@ -281,6 +283,7 @@ export default function SignUpPage() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="you@clinic.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -297,6 +300,7 @@ export default function SignUpPage() {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -428,9 +432,9 @@ export default function SignUpPage() {
                   { name: 'Twilio', logo: '/integrations/twilio.png' },
                   { name: 'Vapi', logo: '/integrations/vapi.png' },
                   { name: 'Google Calendar', logo: '/integrations/google-calendar.png' },
-                ].map((integration, i) => (
+                ].map((integration) => (
                   <div
-                    key={i}
+                    key={integration.name}
                     className="h-12 w-12 rounded-full border-2 border-obsidian bg-white overflow-hidden relative flex items-center justify-center p-2"
                   >
                     <Image
