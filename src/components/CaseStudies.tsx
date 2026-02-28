@@ -254,9 +254,11 @@ export default function CaseStudies() {
 
         {/* CTA */}
         <div className="mt-12 text-center">
-          <button className="inline-flex items-center px-8 py-4 bg-surgical-600 hover:bg-surgical-700 text-white font-bold rounded-lg transition-colors">
-            Book Your Demo <ChevronRight className="w-5 h-5 ml-2" />
-          </button>
+          <a href="/start">
+            <button className="inline-flex items-center px-8 py-4 bg-surgical-600 hover:bg-surgical-700 text-white font-bold rounded-lg transition-colors">
+              Book Your Demo <ChevronRight className="w-5 h-5 ml-2" />
+            </button>
+          </a>
           <p className="text-obsidian/70 text-sm mt-4">
             See how CallWaiting AI can work for your practice
           </p>

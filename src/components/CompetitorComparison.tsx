@@ -151,9 +151,11 @@ export default function CompetitorComparison() {
                             <p className="text-white font-semibold mb-4">
                                 Ready to see the difference?
                             </p>
-                            <button className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
-                                Book a Demo Call
-                            </button>
+                            <a href="/start">
+                                <button className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
+                                    Book a Demo Call
+                                </button>
+                            </a>
                         </div>
                     </div>
                 </motion.div>

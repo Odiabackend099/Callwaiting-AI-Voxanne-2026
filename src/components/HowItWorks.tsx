@@ -203,7 +203,7 @@ export default function HowItWorks() {
                             <p className="text-obsidian/70 mb-6 font-body">
                                 Ready to start capturing every lead?
                             </p>
-                            <a href="https://calendly.com/austyneguale/30min" target="_blank" rel="noopener noreferrer" className="inline-block">
+                            <a href="/start" className="inline-block">
                                 <button className="px-8 py-4 rounded-full bg-surgical-600 text-white font-bold text-lg hover:bg-surgical-700 hover:shadow-xl hover:shadow-surgical-500/20 transition-all flex items-center gap-2 mx-auto font-display transform hover:scale-105">
                                     Book Your Demo
                                     <ArrowRight className="w-5 h-5" />

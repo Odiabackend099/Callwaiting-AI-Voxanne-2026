@@ -58,7 +58,7 @@ const TIERS = [
             "SLA Guarantees",
         ],
         cta: "Contact Sales",
-        href: "/start",
+        href: "/contact-sales",
         variant: "ghost" as const,
         gradientTop: "from-surgical-300/20 to-transparent",
     },

@@ -65,9 +65,11 @@ export function HeroCalendlyStyle() {
 
                     {/* CTAs */}
                     <div className="flex flex-col gap-4 sm:flex-row">
-                        <Button size="lg" className="bg-gradient-to-r from-[#006BFF] to-[#4169FF] text-white hover:opacity-90">
-                            Get Your AI Receptionist
-                        </Button>
+                        <a href="/sign-up">
+                            <Button size="lg" className="bg-gradient-to-r from-[#006BFF] to-[#4169FF] text-white hover:opacity-90">
+                                Get Your AI Receptionist
+                            </Button>
+                        </a>
                         <Button
                             size="lg"
                             variant="outline"

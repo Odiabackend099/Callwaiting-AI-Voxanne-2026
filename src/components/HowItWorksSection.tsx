@@ -93,10 +93,12 @@ export default function HowItWorksSection() {
           <p className="text-slate-400 mb-6">
             Ready to transform your practice? See it in action.
           </p>
-          <button className="px-8 py-4 bg-white text-black rounded-full font-bold text-lg hover:bg-slate-200 transition-all duration-300 flex items-center gap-2 mx-auto shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]">
-            Watch Demo
-            <ArrowRight className="w-5 h-5" />
-          </button>
+          <a href="/demo-workflow">
+            <button className="px-8 py-4 bg-white text-black rounded-full font-bold text-lg hover:bg-slate-200 transition-all duration-300 flex items-center gap-2 mx-auto shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]">
+              Watch Demo
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </a>
         </motion.div>
       </div>
     </section>

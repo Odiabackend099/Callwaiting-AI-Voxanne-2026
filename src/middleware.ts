@@ -93,9 +93,11 @@ export async function middleware(req: NextRequest) {
 
     // If authenticated and on /login or /sign-up, redirect to dashboard
     // Exception: if redirected to /login with ?error=no_org, let the user see the error
+    // AND allow navigation from /login to /sign-up and vice versa when error exists
     // (otherwise they get an infinite loop: dashboard → login → dashboard → ...)
     const loginError = req.nextUrl.searchParams.get('error');
-    if (user && (pathname === '/login' || pathname === '/sign-up') && loginError !== 'no_org') {
+    const hasError = loginError !== null;
+    if (user && (pathname === '/login' || pathname === '/sign-up') && !hasError) {
         const dashboardUrl = new URL('/dashboard', req.url);
         return NextResponse.redirect(dashboardUrl);
     }

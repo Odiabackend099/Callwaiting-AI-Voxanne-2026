@@ -217,7 +217,7 @@ export default function ContactPage() {
                   <span className="text-slate-400 group-hover:text-surgical-600">→</span>
                 </a>
                 <a
-                  href="/demo-workflow"
+                  href="/start"
                   className="flex items-center justify-between p-4 rounded-lg hover:bg-slate-50 transition-colors group"
                 >
                   <span className="text-slate-700 group-hover:text-surgical-600">Schedule a Demo</span>
