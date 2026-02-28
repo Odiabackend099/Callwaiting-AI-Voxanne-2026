@@ -97,7 +97,7 @@ export async function middleware(req: NextRequest) {
     // (otherwise they get an infinite loop: dashboard → login → dashboard → ...)
     const loginError = req.nextUrl.searchParams.get('error');
     const hasError = loginError !== null;
-    if (user && (pathname === '/login' || pathname === '/sign-up') && !hasError) {
+    if (user && pathname === '/login' && !hasError) {
         const dashboardUrl = new URL('/dashboard', req.url);
         return NextResponse.redirect(dashboardUrl);
     }
