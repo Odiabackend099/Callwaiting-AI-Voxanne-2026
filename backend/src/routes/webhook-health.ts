@@ -36,7 +36,7 @@ router.get('/status', (req: Request, res: Response) => {
   const checks = {
     database: !!process.env.SUPABASE_URL,
     vapi: !!process.env.VAPI_PRIVATE_KEY,
-    twilio: !!process.env.TWILIO_ACCOUNT_SID,
+    twilio: !!process.env.TWILIO_MASTER_ACCOUNT_SID,
     google: !!process.env.GOOGLE_CLIENT_ID,
     encryption: !!process.env.ENCRYPTION_KEY
   };

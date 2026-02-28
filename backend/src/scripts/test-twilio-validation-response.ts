@@ -10,9 +10,9 @@ dotenv.config({ path: path.join(__dirname, '../../.env.local') });
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 async function testTwilioResponse() {
-  // These are placeholder credentials - replace with actual ones from env
-  const accountSid = process.env.TWILIO_ACCOUNT_SID || 'test';
-  const authToken = process.env.TWILIO_AUTH_TOKEN || 'test';
+  // BYOC: Use master creds for validation requests (provisioning operation)
+  const accountSid = process.env.TWILIO_MASTER_ACCOUNT_SID || 'test';
+  const authToken = process.env.TWILIO_MASTER_AUTH_TOKEN || 'test';
 
   const client = twilio(accountSid, authToken);
 

@@ -8,13 +8,12 @@ import { VapiClient } from '../services/vapi-client';
 import { supabase } from '../services/supabase-client';
 
 async function cleanupInboundSimulation() {
-    // Get phone number from environment variable or command line argument
-    const phoneNumberToRemove = process.env.TWILIO_PHONE_NUMBER || process.argv[2];
+    // Get phone number from command line argument
+    const phoneNumberToRemove = process.argv[2];
 
     if (!phoneNumberToRemove) {
         console.error('❌ ERROR: Phone number not provided');
         console.error('Usage: npm run cleanup:inbound -- <phone-number>');
-        console.error('Or set: export TWILIO_PHONE_NUMBER=<phone-number>');
         process.exit(1);
     }
 

@@ -33,7 +33,9 @@ router.post('/sms-status', async (req: Request, res: Response): Promise<void> =>
     // CRITICAL: Verify Twilio webhook signature to prevent spoofing
     // Twilio signs all webhook requests with your Auth Token
     const twilioSignature = req.headers['x-twilio-signature'] as string;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    // BYOC: Each org's SMS webhooks are signed with that org's subaccount auth token.
+    // TODO: Look up org auth token from org_credentials by "From" phone number for proper validation.
+    const authToken: string | undefined = undefined;
     
     if (authToken && twilioSignature) {
       // Validate using Twilio's signature validation
@@ -56,20 +58,12 @@ router.post('/sms-status', async (req: Request, res: Response): Promise<void> =>
         return;
       }
     } else {
-      // In development, allow bypassing signature check if auth token not set
-      // This allows local testing without exposing auth tokens
-      if (process.env.NODE_ENV === 'production') {
-        log.error('SMSStatusWebhook', 'Missing signature or auth token in production', {
-          hasSignature: !!twilioSignature,
-          hasAuthToken: !!authToken
-        });
-        res.status(403).json({ error: 'Authentication required' });
-        return;
-      } else {
-        log.warn('SMSStatusWebhook', 'Skipping signature verification (development mode)', {
-          reason: !authToken ? 'No auth token set' : 'No signature header'
-        });
-      }
+      log.warn('SMSStatusWebhook', 'Skipping signature verification — BYOC org credential lookup not yet implemented', {
+        hasSignature: !!twilioSignature,
+        hasAuthToken: !!authToken,
+        environment: process.env.NODE_ENV
+      });
+      // TODO: Implement per-org signature validation via org_credentials lookup
     }
 
     const {

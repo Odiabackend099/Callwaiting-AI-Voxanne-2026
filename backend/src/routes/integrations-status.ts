@@ -48,9 +48,9 @@ function getIntegrationStatus() {
       // OpenAI Integration
       openai: isSecretConfigured(process.env.OPENAI_API_KEY),
       
-      // Twilio Integration
-      twilio: isSecretConfigured(process.env.TWILIO_AUTH_TOKEN) && 
-              isSecretConfigured(process.env.TWILIO_ACCOUNT_SID),
+      // Twilio Master Credentials (BYOC provisioning capability)
+      twilio: isSecretConfigured(process.env.TWILIO_MASTER_AUTH_TOKEN) &&
+              isSecretConfigured(process.env.TWILIO_MASTER_ACCOUNT_SID),
       
       // Supabase (public credentials are okay, but service role key is secret)
       supabase: isSecretConfigured(process.env.NEXT_PUBLIC_SUPABASE_URL) &&

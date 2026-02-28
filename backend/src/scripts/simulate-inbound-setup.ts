@@ -9,20 +9,29 @@ import { VapiClient } from '../services/vapi-client';
 async function simulateInboundSetup() {
     // Validate all required credentials are provided via environment variables
     // Never hardcode credentials in source code
-    const requiredEnvVars = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER', 'VAPI_PRIVATE_KEY'];
+    // BYOC: Inbound setup uses master creds (provisioning operation)
+    const requiredEnvVars = ['TWILIO_MASTER_ACCOUNT_SID', 'TWILIO_MASTER_AUTH_TOKEN', 'VAPI_PRIVATE_KEY'];
     const missingVars = requiredEnvVars.filter(v => !process.env[v]);
 
     if (missingVars.length > 0) {
         console.error('❌ CRITICAL: Missing required environment variables:');
         missingVars.forEach(v => console.error(`   - ${v}`));
         console.error('\nPlease set these variables in your .env file before running this script.');
+        console.error('Note: Pass phone number as CLI argument: npm run simulate:inbound -- +1234567890');
+        process.exit(1);
+    }
+
+    const phoneNumber = process.argv[2];
+    if (!phoneNumber) {
+        console.error('❌ CRITICAL: Phone number must be provided as CLI argument');
+        console.error('Usage: npm run simulate:inbound -- +1234567890');
         process.exit(1);
     }
 
     const twilioConfig = {
-        accountSid: process.env.TWILIO_ACCOUNT_SID!,
-        authToken: process.env.TWILIO_AUTH_TOKEN!,
-        phoneNumber: process.env.TWILIO_PHONE_NUMBER!
+        accountSid: process.env.TWILIO_MASTER_ACCOUNT_SID!,
+        authToken: process.env.TWILIO_MASTER_AUTH_TOKEN!,
+        phoneNumber
     };
 
     console.log('--- Simulating Inbound Setup (Platform Provider Model) ---');

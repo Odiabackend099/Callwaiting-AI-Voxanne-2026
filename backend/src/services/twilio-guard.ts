@@ -181,17 +181,13 @@ function getTwilioClient(credentials?: TwilioGuardCredentials): Twilio {
   let accountSid: string | undefined;
   let authToken: string | undefined;
 
-  // Use provided credentials, or fall back to environment variables
+  // BYOC: Organization credentials are required — no env var fallback.
+  // Per-org Twilio subaccount credentials come from org_credentials table.
   if (credentials) {
     accountSid = credentials.accountSid;
     authToken = credentials.authToken;
   } else {
-    accountSid = process.env.TWILIO_ACCOUNT_SID;
-    authToken = process.env.TWILIO_AUTH_TOKEN;
-  }
-
-  if (!accountSid || !authToken) {
-    throw new Error('Missing Twilio credentials: provide credentials parameter or set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN environment variables');
+    throw new Error('Organization Twilio credentials required. Configure credentials in Agent Settings.');
   }
 
   return new Twilio(accountSid, authToken);
@@ -255,11 +251,11 @@ export async function sendSmsWithGuard(
   try {
     client = getTwilioClient(credentials);
 
-    // Use org-specific phone number if credentials provided, otherwise fall back to env var
+    // BYOC: Phone number must come from org credentials
     if (credentials) {
       fromPhoneNumber = credentials.phoneNumber;
     } else {
-      fromPhoneNumber = process.env.TWILIO_PHONE_NUMBER || '';
+      fromPhoneNumber = '';  // Will throw 'No Twilio phone number configured' below
     }
 
     if (!fromPhoneNumber) {
