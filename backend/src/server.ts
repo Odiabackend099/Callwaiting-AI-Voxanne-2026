@@ -138,6 +138,8 @@ import contactFormRouter from './routes/contact-form';
 import emailTestingRouter from './routes/email-testing';
 import chatWidgetRouter from './routes/chat-widget';
 import onboardingIntakeRouter from './routes/onboarding-intake';
+import onboardingRouter from './routes/onboarding'; // Onboarding wizard API (provision-number, status, complete, telemetry)
+import { scheduleAbandonmentEmails } from './jobs/onboarding-abandonment'; // Cart abandonment email job
 import { initializeSmsQueue, shutdownSmsQueue } from './queues/sms-queue';
 
 // Initialize logger
@@ -341,6 +343,7 @@ app.use('/api/auth', authSignupRouter); // Public signup (no auth required, has 
 app.use('/api/contact-form', contactFormRouter); // Contact form submissions
 app.use('/api/chat-widget', chatWidgetRouter); // AI chat widget
 app.use('/api/onboarding-intake', onboardingIntakeRouter); // Onboarding intake form
+app.use('/api/onboarding', onboardingRouter); // Onboarding wizard (telemetry, status, completion, provisioning)
 app.use('/api/email-testing', emailTestingRouter); // Email testing & verification (DEBUG only)
 app.use('/api/orgs', orgsRouter); // Organization validation routes
 app.use('/api/internal', internalApiRoutes); // Internal API routes (webhook configuration, etc.)
@@ -840,6 +843,13 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('GDPR data retention cleanup job scheduled (daily at 5 AM UTC)');
     } catch (error: any) {
       console.warn('Failed to schedule GDPR cleanup job:', error.message);
+    }
+
+    try {
+      scheduleAbandonmentEmails();
+      console.log('✅ Onboarding abandonment email job scheduled (1hr, 24hr, 48hr sequences)');
+    } catch (error: any) {
+      console.warn('Failed to schedule abandonment email job:', error.message);
     }
 
     try {
