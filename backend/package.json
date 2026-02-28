@@ -12,6 +12,7 @@
     "test": "jest",
     "test:unit": "jest --testPathPatterns='src/__tests__/unit'",
     "test:integration": "jest --testPathPatterns='integration' --config jest.integration.config.js",
+    "test:system": "jest --config jest.system.config.js --runInBand --verbose --forceExit",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:backend": "vitest",

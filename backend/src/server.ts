@@ -110,6 +110,7 @@ import circuitBreakerDebugRouter from './routes/circuit-breaker-debug'; // defau
 import billingDebugRouter from './routes/billing-debug'; // default export - Billing pipeline diagnostics (Phase 1 fix)
 import onboardingRouter from './routes/onboarding'; // default export - Onboarding wizard API
 import { scheduleAbandonmentEmails } from './jobs/onboarding-abandonment'; // Cart abandonment email job
+import { scheduleTwilioSubaccountHealth } from './jobs/twilio-subaccount-health'; // Twilio subaccount health monitor
 import { orgRateLimit } from './middleware/org-rate-limiter';
 import {
   initializeWebhookQueue,
@@ -868,6 +869,13 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('Onboarding abandonment email job scheduled (every 15 minutes)');
     } catch (error: any) {
       console.warn('Failed to schedule abandonment email job:', error.message);
+    }
+
+    try {
+      scheduleTwilioSubaccountHealth();
+      console.log('✅ Twilio subaccount health monitor scheduled (every 6 hours)');
+    } catch (error: any) {
+      console.warn('Failed to schedule Twilio subaccount health monitor:', error.message);
     }
 
     // DISABLED: Vapi and Twilio pollers removed in favor of webhook-only architecture
