@@ -110,14 +110,9 @@ async function validateTwilioMasterCredentials(): Promise<void> {
   const masterToken = process.env.TWILIO_MASTER_AUTH_TOKEN;
 
   if (!masterSid || !masterToken) {
-    if (process.env.NODE_ENV === 'production') {
-      logError('TWILIO_MASTER_*: Missing (required for BYOC telephony provisioning in production)');
-      logInfo('Set TWILIO_MASTER_ACCOUNT_SID and TWILIO_MASTER_AUTH_TOKEN in Render environment');
-      logInfo('Required for: Provisioning numbers, creating subaccounts, Vapi imports');
-    } else {
-      logWarning('TWILIO_MASTER_*: Not configured (provisioning disabled in development)');
-      logInfo('Set in Render for production. Locally optional — provisioning features unavailable.');
-    }
+    logWarning('TWILIO_MASTER_*: Not configured — telephony provisioning disabled');
+    logInfo('Set TWILIO_MASTER_ACCOUNT_SID and TWILIO_MASTER_AUTH_TOKEN in Render to enable provisioning');
+    logInfo('Existing orgs with credentials in database continue to work normally');
     return;
   }
 
@@ -416,7 +411,6 @@ function printSummary(): void {
  * Main validation flow
  */
 async function main() {
-  console.clear();
   logHeader('VOXANNE AI BACKEND - ENVIRONMENT VALIDATION');
   logInfo('Validating backend configuration before startup...');
   logInfo('Reference: CONFIGURATION_CRITICAL_INVARIANTS.md');

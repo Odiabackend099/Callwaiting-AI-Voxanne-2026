@@ -106,16 +106,18 @@ export const config = {
   WEBHOOK_URL: getOptional('WEBHOOK_URL'),
 
   // ========================================================================
-  // TWILIO SMS SERVICE - APPROVED PRODUCTION CREDENTIALS
+  // TWILIO - BYOC ARCHITECTURE
   // ========================================================================
-  // ========================================================================
-  // TWILIO SMS SERVICE - APPROVED PRODUCTION CREDENTIALS
-  // ========================================================================
-  // REQUIRED: Critical for managed telephony (provisioning Vapi numbers for clients)
-  TWILIO_ACCOUNT_SID: getRequired('TWILIO_ACCOUNT_SID'),
-  TWILIO_AUTH_TOKEN: getRequired('TWILIO_AUTH_TOKEN'),
-  TWILIO_PHONE_NUMBER: getRequired('TWILIO_PHONE_NUMBER'),
+  // Per-org credentials (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)
+  // belong in the org_credentials DB table, NOT as server env vars.
+  // These are kept as optional for backwards compatibility only.
+  TWILIO_ACCOUNT_SID: getOptional('TWILIO_ACCOUNT_SID'),
+  TWILIO_AUTH_TOKEN: getOptional('TWILIO_AUTH_TOKEN'),
+  TWILIO_PHONE_NUMBER: getOptional('TWILIO_PHONE_NUMBER'),
   TWILIO_WHATSAPP_NUMBER: getOptional('TWILIO_WHATSAPP_NUMBER'),
+  // Master credentials — for provisioning only (creating subaccounts, buying numbers)
+  TWILIO_MASTER_ACCOUNT_SID: getOptional('TWILIO_MASTER_ACCOUNT_SID'),
+  TWILIO_MASTER_AUTH_TOKEN: getOptional('TWILIO_MASTER_AUTH_TOKEN'),
 
   // ========================================================================
   // VAPI VOICE AI SERVICE - APPROVED PRODUCTION CREDENTIALS
@@ -291,14 +293,15 @@ export const config = {
     const critical = [
       'SUPABASE_URL',
       'SUPABASE_SERVICE_ROLE_KEY',
-      'TWILIO_ACCOUNT_SID',      // REQUIRED for managed telephony (provisioning Vapi numbers)
-      'TWILIO_AUTH_TOKEN',       // REQUIRED for managed telephony (provisioning Vapi numbers)
-      'TWILIO_PHONE_NUMBER',     // REQUIRED for managed telephony (provisioning Vapi numbers)
+      // BYOC: Per-org Twilio creds are in org_credentials DB table, NOT env vars.
+      // 'TWILIO_ACCOUNT_SID',
+      // 'TWILIO_AUTH_TOKEN',
+      // 'TWILIO_PHONE_NUMBER',
       'VAPI_PRIVATE_KEY',
       // 'GOOGLE_CLIENT_ID',      // No longer required globally
       // 'GOOGLE_CLIENT_SECRET',  // No longer required globally
       // 'GOOGLE_ENCRYPTION_KEY'  // No longer required globally
-      'ENCRYPTION_KEY'            // Added as critical
+      'ENCRYPTION_KEY'
     ];
 
     const missing = critical.filter(key => !process.env[key] && key !== 'SUPABASE_SERVICE_KEY');
