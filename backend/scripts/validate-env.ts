@@ -399,6 +399,9 @@ function printSummary(): void {
  * Main validation flow
  */
 async function main() {
+  // Version marker — confirms which code version is deployed on Render
+  console.log('[validate-env v2] Checks: 1,2,4,5,6,7,8 (CHECK 3 removed, CHECK 2 format-only)');
+
   logHeader('VOXANNE AI BACKEND - ENVIRONMENT VALIDATION');
   logInfo('Validating backend configuration before startup...');
   logInfo('Reference: CONFIGURATION_CRITICAL_INVARIANTS.md');
