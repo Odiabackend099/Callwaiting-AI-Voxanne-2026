@@ -35,18 +35,13 @@
       "permanent": true
     },
     {
-      "source": "/sign-up",
-      "destination": "/login",
-      "permanent": false
-    },
-    {
       "source": "/auth/sign-up",
-      "destination": "/login",
+      "destination": "/sign-up",
       "permanent": false
     },
     {
       "source": "/auth/signup",
-      "destination": "/login",
+      "destination": "/sign-up",
       "permanent": false
     },
     {
