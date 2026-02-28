@@ -100,6 +100,13 @@ function sanitizeName(raw: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// GET /ping — diagnostic endpoint to confirm this router is mounted
+// ---------------------------------------------------------------------------
+router.get('/ping', (_req: Request, res: Response) => {
+  res.json({ ok: true, route: 'auth-signup', ts: Date.now() });
+});
+
+// ---------------------------------------------------------------------------
 // POST /signup
 // ---------------------------------------------------------------------------
 router.post(
