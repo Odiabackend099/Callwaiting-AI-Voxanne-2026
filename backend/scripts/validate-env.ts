@@ -142,7 +142,9 @@ async function validateTwilioMasterCredentials(): Promise<void> {
 
     logSuccess('Twilio Master Account: API connection successful');
   } catch (error: any) {
-    logError(`Twilio Master Account: Connection failed`);
+    // Non-blocking: format validation above is the real guard.
+    // Network connectivity can fail transiently during Render deploys.
+    logWarning(`Twilio Master Account: Connection test failed (non-blocking)`);
     logInfo(`Error: ${error.message}`);
     logInfo('Verify credentials at: https://console.twilio.com');
   }
