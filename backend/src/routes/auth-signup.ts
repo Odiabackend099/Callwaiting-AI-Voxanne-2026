@@ -121,6 +121,19 @@ router.post(
         return res.status(400).json({ error: 'Password must be 128 characters or fewer.' });
       }
 
+      // Mirror the frontend strength scoring (getPasswordStrength) — reject score < 2.
+      // Prevents direct API calls from bypassing the frontend's strength requirement.
+      let strengthScore = 1; // baseline: >= 8 chars
+      if (password.length >= 12 || (/[A-Z]/.test(password) && /[a-z]/.test(password))) strengthScore++;
+      if (/[0-9]/.test(password)) strengthScore++;
+      if (/[^A-Za-z0-9]/.test(password)) strengthScore++;
+      strengthScore = Math.min(strengthScore, 4);
+      if (strengthScore < 2) {
+        return res.status(400).json({
+          error: 'Password is too weak — use 8+ characters with a mix of letters and numbers.',
+        });
+      }
+
       // --- Create user via admin API ---
       // email_confirm: true — intentional design choice for this product's onboarding UX.
       // Users can sign in immediately without verifying their email address.

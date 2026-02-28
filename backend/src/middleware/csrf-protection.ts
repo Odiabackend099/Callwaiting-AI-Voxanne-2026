@@ -85,7 +85,8 @@ export function validateCsrfToken(req: Request, res: Response, next: NextFunctio
     '/api/assistants/sync', // Tool sync endpoint (administrative, called by scripts)
     '/api/chat-widget', // Public chat widget endpoint (has rate limiting + input validation)
     '/api/founder-console/agent/voice-preview', // READ-only: serves static audio samples, protected by JWT
-    '/api/auth/signup', // Public signup endpoint (has its own IP rate limiting)
+    // NOTE: /api/auth/signup is intentionally NOT listed here.
+    // The frontend fetches a CSRF token before submitting signup and sends it in X-CSRF-Token.
   ];
 
   if (skipPaths.some(path => req.path.startsWith(path))) {

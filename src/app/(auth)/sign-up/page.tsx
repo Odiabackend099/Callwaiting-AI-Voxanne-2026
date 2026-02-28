@@ -69,9 +69,33 @@ export default function SignUpPage() {
         return;
       }
       const resolvedBackendUrl = backendUrl || 'http://localhost:3001';
+
+      // Fetch CSRF token before submitting — required by backend CSRF protection.
+      let csrfToken: string | null = null;
+      try {
+        const csrfRes = await fetch(`${resolvedBackendUrl}/api/csrf-token`);
+        if (csrfRes.ok) {
+          const csrfData = await csrfRes.json();
+          csrfToken = csrfData.csrfToken ?? null;
+        }
+      } catch {
+        // Network error fetching CSRF token
+        setError('Unable to reach the server. Please check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+      if (!csrfToken) {
+        setError('Unable to reach the server. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch(`${resolvedBackendUrl}/api/auth/signup`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
         body: JSON.stringify({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
@@ -104,11 +128,11 @@ export default function SignUpPage() {
       });
 
       if (signInError || !signInData.session) {
-        // Account was created but auto sign-in failed — send user to login.
-        setError('Account created! Please sign in to continue.');
-        setErrorLink(null);
+        // Account was created but auto sign-in failed — show inline message with login link.
+        // Do NOT auto-redirect: the user would land on /login with no context.
+        setError('Account created! Auto sign-in failed — please sign in manually.');
+        setErrorLink({ label: 'Sign in now →', href: '/login' });
         setLoading(false);
-        router.push('/login');
         return;
       }
 

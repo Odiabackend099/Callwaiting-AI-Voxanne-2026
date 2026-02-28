@@ -102,7 +102,8 @@ async function getCsrfToken(): Promise<string | null> {
       const response = await fetch(`${baseUrl}/api/csrf-token`);
       if (response.ok) {
         const data = await response.json();
-        cachedCsrfToken = data.csrfToken;
+        cachedCsrfToken = data.csrfToken ?? null;
+        csrfTokenFetching = null; // Clear in-flight reference once resolved
         return cachedCsrfToken;
       }
     } catch (err) {
