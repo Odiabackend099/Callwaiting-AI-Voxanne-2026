@@ -110,45 +110,33 @@ async function validateTwilioMasterCredentials(): Promise<void> {
   const masterToken = process.env.TWILIO_MASTER_AUTH_TOKEN;
 
   if (!masterSid || !masterToken) {
-    logWarning('TWILIO_MASTER_*: Not configured — telephony provisioning disabled');
+    logInfo('TWILIO_MASTER_*: Not configured — telephony provisioning disabled');
     logInfo('Set TWILIO_MASTER_ACCOUNT_SID and TWILIO_MASTER_AUTH_TOKEN in Render to enable provisioning');
     logInfo('Existing orgs with credentials in database continue to work normally');
     return;
   }
 
-  // Validate format
-  if (!masterSid.startsWith('AC') || masterSid.length !== 34) {
-    logError(`TWILIO_MASTER_ACCOUNT_SID: Invalid format (should start with AC, 34 chars)`);
-    logInfo(`Current: ${masterSid}`);
-    return;
+  // Validate format — informational only.
+  // BYOC architecture: master creds are for provisioning only (optional feature).
+  // Wrong format = provisioning will fail at runtime, but server starts normally.
+  const sidFormatOk = masterSid.startsWith('AC') && masterSid.length === 34;
+  const tokenFormatOk = masterToken.length === 32;
+
+  if (sidFormatOk) {
+    logSuccess(`TWILIO_MASTER_ACCOUNT_SID: Valid format (${masterSid.substring(0, 10)}...)`);
+  } else {
+    logInfo(`TWILIO_MASTER_ACCOUNT_SID: Non-standard format — provisioning may fail`);
+    logInfo(`Current: ${masterSid.substring(0, 10)}... (expected: AC + 32 hex chars, 34 total)`);
   }
 
-  if (masterToken.length !== 32) {
-    logError(`TWILIO_MASTER_AUTH_TOKEN: Invalid length (should be 32 chars)`);
-    logInfo(`Current length: ${masterToken.length}`);
-    return;
+  if (tokenFormatOk) {
+    logSuccess(`TWILIO_MASTER_AUTH_TOKEN: Valid format (${masterToken.substring(0, 8)}...)`);
+  } else {
+    logInfo(`TWILIO_MASTER_AUTH_TOKEN: Non-standard length (${masterToken.length} chars, expected 32) — provisioning may fail`);
   }
 
-  logSuccess(`TWILIO_MASTER_ACCOUNT_SID: Valid format (${masterSid.substring(0, 10)}...)`);
-  logSuccess(`TWILIO_MASTER_AUTH_TOKEN: Valid format (${masterToken.substring(0, 8)}...)`);
-
-  // Test connectivity (optional, requires network)
-  try {
-    logInfo('Testing Twilio API connectivity...');
-    const twilio = require('twilio');
-    const client = twilio(masterSid, masterToken);
-
-    // Simple API call to verify credentials
-    await client.api.accounts(masterSid).fetch();
-
-    logSuccess('Twilio Master Account: API connection successful');
-  } catch (error: any) {
-    // Non-blocking: format validation above is the real guard.
-    // Network connectivity can fail transiently during Render deploys.
-    logWarning(`Twilio Master Account: Connection test failed (non-blocking)`);
-    logInfo(`Error: ${error.message}`);
-    logInfo('Verify credentials at: https://console.twilio.com');
-  }
+  // Connectivity test removed: format check is sufficient.
+  // Provisioning errors surface at runtime with clear Twilio API error messages.
 }
 
 // CHECK 3 REMOVED: Per-org Twilio SMS credentials (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
