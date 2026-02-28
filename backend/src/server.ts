@@ -197,11 +197,13 @@ app.use(cors({
       'https://www.voxanne.ai',
       'https://callwaitingai.dev',
       'https://www.callwaitingai.dev',
-      'https://voxanne-frontend-h0pv6jv68-odia-backends-projects.vercel.app',
-      // Production Vercel deployment
-      'https://callwaiting-ai-voxanne-2026.vercel.app',
-      'https://callwaiting-ai-voxanne-2026-d49b2ejye-odia-backends-projects.vercel.app'
     ];
+
+    // Allow any Vercel preview/production deployment for this project.
+    // Vercel assigns new per-deployment URLs on every push; hardcoding them
+    // would require a backend redeploy for every frontend deploy. Instead,
+    // we match the stable project-slug prefix via regex.
+    const vercelProjectPattern = /^https:\/\/callwaiting-ai-voxanne-2026(-[a-z0-9]+-odia-backends-projects)?\.vercel\.app$/;
 
     // Get additional origins from environment variable
     const envOrigins = (process.env.CORS_ORIGIN || '')
@@ -221,8 +223,8 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Allow if origin is in allowed list
-    if (allowed.includes(origin)) {
+    // Allow if origin is in allowed list or matches Vercel project pattern
+    if (allowed.includes(origin) || vercelProjectPattern.test(origin)) {
       return callback(null, true);
     }
 
@@ -286,8 +288,8 @@ app.use(tenantResolver);
 // CSRF Protection Middleware
 import { csrfTokenGenerator, validateCsrfToken, csrfTokenEndpoint } from './middleware/csrf-protection';
 app.use(csrfTokenGenerator); // Generate token on every request
-// Disable CSRF validation in development for easier testing
-if (process.env.NODE_ENV !== 'development') {
+// Disable CSRF validation in development and test (production only, matching server.listen guard)
+if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   app.use(validateCsrfToken); // Validate on state-changing requests (production only)
 }
 
@@ -655,7 +657,7 @@ webTestWss.on('connection', (ws, req) => {
       } catch {
         // ignore
       }
-    }, 3000);
+    }, 5000);
 
     ws.on('message', (raw) => {
       try {

@@ -1,24 +1,38 @@
 /**
  * Simple in-memory cache for MVP performance
  * No external dependencies (Redis not required for MVP)
- * Thread-safe with TTL support
+ * Thread-safe with TTL support, LRU eviction, and stampede prevention
  */
 
+import { log } from './logger';
+
 interface CacheEntry<T> {
-  value: T;
+  value: T | Promise<T>;
   expiresAt: number;
 }
+
+const DEFAULT_MAX_SIZE = 10_000;
 
 export class InMemoryCache {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
   private hits: number = 0;
   private misses: number = 0;
+  private readonly maxSize: number;
 
-  constructor() {
+  constructor(maxSize: number = DEFAULT_MAX_SIZE) {
+    this.maxSize = maxSize;
     // Cleanup expired entries every 5 minutes (skip in test environment to prevent timeout)
     if (process.env.NODE_ENV !== 'test') {
       this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
+      // Allow Node.js to exit cleanly — unref the interval
+      this.cleanupInterval.unref();
+    }
+
+    // Graceful shutdown — stop setInterval keeping event loop alive
+    if (process.env.NODE_ENV !== 'test') {
+      process.once('SIGTERM', () => this.destroy());
+      process.once('SIGINT', () => this.destroy());
     }
   }
 
@@ -46,14 +60,53 @@ export class InMemoryCache {
   }
 
   /**
-   * Set value in cache
+   * Set value in cache with LRU eviction when at capacity
    * @param key Cache key
    * @param value Value to cache
    * @param ttlSeconds Time to live in seconds (default: 5 minutes)
    */
   set<T>(key: string, value: T, ttlSeconds: number = 300): void {
+    // Evict oldest inserted entry when at capacity (Map preserves insertion order in V8)
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.cache.set(key, { value, expiresAt });
+  }
+
+  /**
+   * Atomically get-or-fetch a value, preventing cache stampede (thundering herd).
+   * Multiple concurrent callers for the same key share a single in-flight Promise.
+   * @param key Cache key
+   * @param fetchFn Async function to fetch the value on cache miss
+   * @param ttlSeconds TTL in seconds (default: 300)
+   */
+  async getOrSet<T>(key: string, fetchFn: () => Promise<T>, ttlSeconds: number = 300): Promise<T> {
+    const existing = this.cache.get(key);
+    if (existing && Date.now() <= existing.expiresAt) {
+      this.hits++;
+      return existing.value as T;
+    }
+
+    // Store the Promise itself as the cached value so concurrent callers await it
+    const fetchPromise = fetchFn().then((value) => {
+      // Replace the Promise with the resolved value on completion
+      this.set(key, value, ttlSeconds);
+      return value;
+    }).catch((err) => {
+      // On error, evict the pending entry so next caller retries
+      this.cache.delete(key);
+      throw err;
+    });
+
+    this.misses++;
+    // Cache the in-flight Promise immediately (prevents parallel DB calls)
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+    this.cache.set(key, { value: fetchPromise, expiresAt });
+    return fetchPromise;
   }
 
   /**
@@ -82,10 +135,11 @@ export class InMemoryCache {
    * Get cache performance statistics
    * @returns Cache stats including hit/miss rates
    */
-  getStats(): { size: number; hits: number; misses: number; hitRate: number } {
+  getStats(): { size: number; maxSize: number; hits: number; misses: number; hitRate: number } {
     const total = this.hits + this.misses;
     return {
       size: this.cache.size,
+      maxSize: this.maxSize,
       hits: this.hits,
       misses: this.misses,
       hitRate: total > 0 ? Math.round((this.hits / total) * 10000) / 100 : 0 // Percentage with 2 decimal places
@@ -115,7 +169,7 @@ export class InMemoryCache {
     }
 
     if (removed > 0) {
-      console.log(`[Cache] Cleaned up ${removed} expired entries`);
+      log.info('Cache', 'Expired entries removed', { removed });
     }
   }
 
@@ -166,11 +220,12 @@ export function clearCache(): void {
  * Get cache statistics including performance metrics
  * @returns Cache stats with hit/miss rates
  */
-export function getCacheStats(): { size: number; hits: number; misses: number; hitRate: number } {
+export function getCacheStats(): { size: number; maxSize: number; hits: number; misses: number; hitRate: number } {
   return cache.getStats();
 }
 
-export default cache;
+// A23: No default export — use named helper functions (getCached, setCached, etc.)
+// export default intentionally removed; singleton remains internal to this module.
 
 // ============================================================================
 // HIGH-VALUE CACHE FUNCTIONS (Priority 6 Implementation)
@@ -185,21 +240,19 @@ import { supabase } from './supabase-client';
  * @returns Array of services or empty array
  */
 export async function getCachedServicePricing(orgId: string) {
-  const cacheKey = `services:${orgId}`;
-  const cached = getCached<any[]>(cacheKey);
-  if (cached) return cached;
-
-  const { data, error } = await supabase
-    .from('services')
-    .select('id, name, price, keywords, created_at')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  // Cache for 1 hour (services rarely change)
-  setCached(cacheKey, data || [], 3600);
-  return data || [];
+  return cache.getOrSet(
+    `services:${orgId}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name, price, keywords, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    3600 // 1 hour — services rarely change
+  );
 }
 
 /**
@@ -218,24 +271,19 @@ export function invalidateServiceCache(orgId: string): void {
  * @returns Inbound agent config or null
  */
 export async function getCachedInboundConfig(orgId: string) {
-  const cacheKey = `inbound-config:${orgId}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  const { data, error } = await supabase
-    .from('inbound_agent_config')
-    .select('id, twilio_phone_number, vapi_assistant_id')
-    .eq('org_id', orgId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    // PGRST116 = no rows returned (not an error, just no config yet)
-    throw error;
-  }
-
-  // Cache for 5 minutes (configs change infrequently but need to be fresh)
-  setCached(cacheKey, data || null, 300);
-  return data || null;
+  return cache.getOrSet(
+    `inbound-config:${orgId}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('inbound_agent_config')
+        .select('id, twilio_phone_number, vapi_assistant_id')
+        .eq('org_id', orgId)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+    300 // 5 minutes
+  );
 }
 
 /**
@@ -247,29 +295,26 @@ export function invalidateInboundConfigCache(orgId: string): void {
 }
 
 /**
- * Get cached organization settings
- * Eliminates repeated queries for integration settings
+ * Get cached organization settings (non-sensitive fields only)
+ * Sensitive credential fields must always go through IntegrationDecryptor
  * @param orgId Organization ID
- * @returns Organization settings or null
+ * @returns Organization settings (non-sensitive) or null
  */
 export async function getCachedOrgSettings(orgId: string) {
-  const cacheKey = `org-settings:${orgId}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  const { data, error } = await supabase
-    .from('integration_settings')
-    .select('*')
-    .eq('org_id', orgId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    throw error;
-  }
-
-  // Cache for 10 minutes (settings change infrequently)
-  setCached(cacheKey, data || null, 600);
-  return data || null;
+  return cache.getOrSet(
+    `org-settings:${orgId}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('integration_settings')
+        // Only cache non-sensitive fields — credentials go through IntegrationDecryptor
+        .select('id, org_id, calendar_type, timezone, working_hours, updated_at')
+        .eq('org_id', orgId)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+    600 // 10 minutes
+  );
 }
 
 /**
@@ -281,36 +326,40 @@ export function invalidateOrgSettingsCache(orgId: string): void {
 }
 
 /**
- * Get cached agent list for organization
- * Eliminates 50+ DB queries per hour for agent dropdowns
+ * Get cached agent role list for organization
+ * Returns role assignment records from user_org_roles (NOT agent configs from agents table)
  * @param orgId Organization ID
- * @returns Array of agents or empty array
+ * @returns Array of role assignments or empty array
  */
-export async function getCachedAgentList(orgId: string) {
-  const cacheKey = `agents:${orgId}`;
-  const cached = getCached<any[]>(cacheKey);
-  if (cached) return cached;
-
-  const { data, error } = await supabase
-    .from('user_org_roles')
-    .select('user_id, role, created_at')
-    .eq('org_id', orgId)
-    .eq('role', 'agent')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  // Cache for 10 minutes (agent list changes infrequently)
-  setCached(cacheKey, data || [], 600);
-  return data || [];
+export async function getCachedAgentRoles(orgId: string) {
+  return cache.getOrSet(
+    `agent-roles:${orgId}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('user_org_roles')
+        .select('user_id, role, created_at')
+        .eq('org_id', orgId)
+        .eq('role', 'agent')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    600 // 10 minutes
+  );
 }
 
 /**
- * Invalidate agent list cache when agents are added/removed
+ * @deprecated Use getCachedAgentRoles — this returns role records, not agent configs
+ */
+export const getCachedAgentList = getCachedAgentRoles;
+
+/**
+ * Invalidate agent role cache when agents are added/removed
  * @param orgId Organization ID
  */
 export function invalidateAgentCache(orgId: string): void {
-  deleteCached(`agents:${orgId}`);
+  deleteCached(`agent-roles:${orgId}`);
+  deleteCached(`agents:${orgId}`); // legacy key
 }
 
 /**
@@ -320,24 +369,19 @@ export function invalidateAgentCache(orgId: string): void {
  * @returns Phone mapping or null
  */
 export async function getCachedPhoneMapping(vapiPhoneId: string) {
-  const cacheKey = `phone-mapping:${vapiPhoneId}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  const { data, error } = await supabase
-    .from('phone_number_mapping')
-    .select('*')
-    .eq('vapi_phone_id', vapiPhoneId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    // PGRST116 = no rows returned (not an error, just no mapping yet)
-    throw error;
-  }
-
-  // Cache for 30 minutes (phone mappings rarely change)
-  setCached(cacheKey, data || null, 1800);
-  return data || null;
+  return cache.getOrSet(
+    `phone-mapping:${vapiPhoneId}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('phone_number_mapping')
+        .select('*')
+        .eq('vapi_phone_id', vapiPhoneId)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+    1800 // 30 minutes — phone mappings rarely change
+  );
 }
 
 /**
@@ -350,33 +394,33 @@ export function invalidatePhoneMappingCache(vapiPhoneId: string): void {
 
 /**
  * Get cached contact statistics for dashboard
- * Eliminates repeated full table scans for contact counts
+ * Uses single GROUP BY query instead of 4 parallel COUNT queries
  * @param orgId Organization ID
  * @returns Contact stats object
  */
 export async function getCachedContactStats(orgId: string) {
-  const cacheKey = `contact-stats:${orgId}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  return cache.getOrSet(
+    `contact-stats:${orgId}`,
+    async () => {
+      // Single query with GROUP BY replaces 4 parallel COUNT queries
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('lead_status')
+        .eq('org_id', orgId);
 
-  // Use database aggregation instead of JavaScript filtering (more efficient)
-  const [total, hot, warm, cold] = await Promise.all([
-    supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
-    supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('lead_status', 'hot'),
-    supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('lead_status', 'warm'),
-    supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('lead_status', 'cold')
-  ]);
+      if (error) throw error;
 
-  const stats = {
-    total_leads: total.count || 0,
-    hot_leads: hot.count || 0,
-    warm_leads: warm.count || 0,
-    cold_leads: cold.count || 0
-  };
-
-  // Cache for 5 minutes
-  setCached(cacheKey, stats, 300);
-  return stats;
+      const rows = data || [];
+      const stats = {
+        total_leads: rows.length,
+        hot_leads: rows.filter((r: any) => r.lead_status === 'hot').length,
+        warm_leads: rows.filter((r: any) => r.lead_status === 'warm').length,
+        cold_leads: rows.filter((r: any) => r.lead_status === 'cold').length
+      };
+      return stats;
+    },
+    300 // 5 minutes
+  );
 }
 
 /**
