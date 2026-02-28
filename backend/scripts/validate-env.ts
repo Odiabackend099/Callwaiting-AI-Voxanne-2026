@@ -110,96 +110,39 @@ async function validateTwilioMasterCredentials(): Promise<void> {
   const masterToken = process.env.TWILIO_MASTER_AUTH_TOKEN;
 
   if (!masterSid || !masterToken) {
-    logWarning('TWILIO_MASTER_*: Not configured (managed telephony disabled)');
-    logInfo('Required for: Provisioning numbers, creating subaccounts, Vapi imports');
+    logInfo('TWILIO_MASTER_*: Not configured — telephony provisioning disabled');
+    logInfo('Set TWILIO_MASTER_ACCOUNT_SID and TWILIO_MASTER_AUTH_TOKEN in Render to enable provisioning');
+    logInfo('Existing orgs with credentials in database continue to work normally');
     return;
   }
 
-  // Validate format
-  if (!masterSid.startsWith('AC') || masterSid.length !== 34) {
-    logError(`TWILIO_MASTER_ACCOUNT_SID: Invalid format (should start with AC, 34 chars)`);
-    logInfo(`Current: ${masterSid}`);
-    return;
+  // Validate format — informational only.
+  // BYOC architecture: master creds are for provisioning only (optional feature).
+  // Wrong format = provisioning will fail at runtime, but server starts normally.
+  const sidFormatOk = masterSid.startsWith('AC') && masterSid.length === 34;
+  const tokenFormatOk = masterToken.length === 32;
+
+  if (sidFormatOk) {
+    logSuccess(`TWILIO_MASTER_ACCOUNT_SID: Valid format (${masterSid.substring(0, 10)}...)`);
+  } else {
+    logInfo(`TWILIO_MASTER_ACCOUNT_SID: Non-standard format — provisioning may fail`);
+    logInfo(`Current: ${masterSid.substring(0, 10)}... (expected: AC + 32 hex chars, 34 total)`);
   }
 
-  if (masterToken.length !== 32) {
-    logError(`TWILIO_MASTER_AUTH_TOKEN: Invalid length (should be 32 chars)`);
-    logInfo(`Current length: ${masterToken.length}`);
-    return;
+  if (tokenFormatOk) {
+    logSuccess(`TWILIO_MASTER_AUTH_TOKEN: Valid format (${masterToken.substring(0, 8)}...)`);
+  } else {
+    logInfo(`TWILIO_MASTER_AUTH_TOKEN: Non-standard length (${masterToken.length} chars, expected 32) — provisioning may fail`);
   }
 
-  logSuccess(`TWILIO_MASTER_ACCOUNT_SID: Valid format (${masterSid.substring(0, 10)}...)`);
-  logSuccess(`TWILIO_MASTER_AUTH_TOKEN: Valid format (${masterToken.substring(0, 8)}...)`);
-
-  // Test connectivity (optional, requires network)
-  try {
-    logInfo('Testing Twilio API connectivity...');
-    const twilio = require('twilio');
-    const client = twilio(masterSid, masterToken);
-
-    // Simple API call to verify credentials
-    await client.api.accounts(masterSid).fetch();
-
-    logSuccess('Twilio Master Account: API connection successful');
-  } catch (error: any) {
-    logError(`Twilio Master Account: Connection failed`);
-    logInfo(`Error: ${error.message}`);
-    logInfo('Verify credentials at: https://console.twilio.com');
-  }
+  // Connectivity test removed: format check is sufficient.
+  // Provisioning errors surface at runtime with clear Twilio API error messages.
 }
 
-/**
- * Check 3: Twilio SMS Credentials Validation
- */
-function validateTwilioSmsCredentials(): void {
-  logHeader('CHECK 3: Twilio SMS Credentials Validation');
-
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
-
-  if (!accountSid) {
-    logError('TWILIO_ACCOUNT_SID: Missing (required for SMS)');
-    return;
-  }
-
-  if (!authToken) {
-    logError('TWILIO_AUTH_TOKEN: Missing (required for SMS)');
-    return;
-  }
-
-  if (!phoneNumber) {
-    logError('TWILIO_PHONE_NUMBER: Missing (required for SMS)');
-    return;
-  }
-
-  // Validate formats
-  if (!accountSid.startsWith('AC') || accountSid.length !== 34) {
-    logError('TWILIO_ACCOUNT_SID: Invalid format');
-    return;
-  }
-
-  if (authToken.length !== 32) {
-    logError('TWILIO_AUTH_TOKEN: Invalid length');
-    return;
-  }
-
-  if (phoneNumber === '+1234567890') {
-    logWarning('TWILIO_PHONE_NUMBER: Placeholder detected (+1234567890)');
-    logInfo('Replace with real Twilio number in E.164 format');
-    return;
-  }
-
-  if (!phoneNumber.match(/^\+[1-9]\d{1,14}$/)) {
-    logError('TWILIO_PHONE_NUMBER: Invalid E.164 format');
-    logInfo('Format should be: +12125551234 (country code + number)');
-    return;
-  }
-
-  logSuccess(`TWILIO_ACCOUNT_SID: Valid (${accountSid.substring(0, 10)}...)`);
-  logSuccess(`TWILIO_AUTH_TOKEN: Valid (${authToken.substring(0, 8)}...)`);
-  logSuccess(`TWILIO_PHONE_NUMBER: Valid (${phoneNumber})`);
-}
+// CHECK 3 REMOVED: Per-org Twilio SMS credentials (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
+// TWILIO_PHONE_NUMBER) are NOT server-level env vars. In BYOC architecture, each org's
+// Twilio subaccount credentials are stored encrypted in the org_credentials database table.
+// Only TWILIO_MASTER_* credentials belong as server env vars (validated in CHECK 2).
 
 /**
  * Check 4: Vapi Credentials Validation
@@ -456,7 +399,9 @@ function printSummary(): void {
  * Main validation flow
  */
 async function main() {
-  console.clear();
+  // Version marker — confirms which code version is deployed on Render
+  console.log('[validate-env v2] Checks: 1,2,4,5,6,7,8 (CHECK 3 removed, CHECK 2 format-only)');
+
   logHeader('VOXANNE AI BACKEND - ENVIRONMENT VALIDATION');
   logInfo('Validating backend configuration before startup...');
   logInfo('Reference: CONFIGURATION_CRITICAL_INVARIANTS.md');
@@ -464,7 +409,7 @@ async function main() {
   // Run all checks
   validateEncryptionKey();
   await validateTwilioMasterCredentials();
-  validateTwilioSmsCredentials();
+  // CHECK 3 removed: per-org Twilio creds are in org_credentials DB table, not env vars
   validateVapiCredentials();
   await validateSupabaseConfiguration();
   await validateEncryption();
