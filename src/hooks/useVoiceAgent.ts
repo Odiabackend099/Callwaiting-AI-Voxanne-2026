@@ -215,11 +215,17 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
                 throw new Error('Not connected to server. Please wait for connection to establish.');
             }
 
-            // **FIX #2: Initialize AudioPlayer first if not already done**
+            // **FIX #2: Initialize AudioPlayer if not already done (should already exist
+            // from connect() call during user gesture, but guard just in case)**
             if (!playerRef.current) {
                 playerRef.current = new AudioPlayer();
                 if (DEBUG_VOICE_AGENT) console.log('[VoiceAgent] AudioPlayer initialized');
             }
+
+            // Always try to resume the AudioContext here too — this is called from
+            // ws.onopen which still runs soon after the original user gesture, so
+            // resume() is more likely to succeed than in onmessage handlers.
+            playerRef.current.resume().catch(() => {});
 
             // **FIX #3: Create and start AudioRecorder with proper error handling**
             const recorder = new AudioRecorder(wsRef.current, (errorMsg: string) => {
@@ -267,6 +273,18 @@ export function useVoiceAgent(options: UseVoiceAgentOptions = {}) {
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;
+            }
+
+            // CRITICAL FIX: Create and resume AudioPlayer HERE, during the user-gesture
+            // callback (button click). If created later in ws.onopen (a network callback
+            // ~17s after the click), the browser's autoplay activation has expired and
+            // AudioContext stays 'suspended' — meaning audio chunks arrive but are never
+            // played. By creating it now, AudioContext starts in 'running' state.
+            if (!playerRef.current) {
+                playerRef.current = new AudioPlayer();
+                playerRef.current.resume().catch(() => {
+                    // Will retry on each playChunk call; ignore pre-gesture failures
+                });
             }
 
             const token = session?.access_token;

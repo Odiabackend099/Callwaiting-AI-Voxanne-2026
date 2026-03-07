@@ -560,13 +560,18 @@ server.on('upgrade', (request, socket, head) => {
     'http://127.0.0.1:3000',
     'https://voxanne.ai',
     'https://www.voxanne.ai',
-    'https://voxanne-frontend-7c8wg3jiv-odia-backends-projects.vercel.app',
     'https://callwaitingai.dev',
     'https://www.callwaitingai.dev',
-    process.env.FRONTEND_URL || ''
+    process.env.FRONTEND_URL || '',
+    // Support comma-separated list of additional allowed origins (e.g. Vercel preview URLs)
+    ...(process.env.ALLOWED_WS_ORIGINS || '').split(',').map(s => s.trim()),
   ].filter(Boolean);
 
-  const isOriginAllowed = !origin || origin === 'unknown' || allowedOrigins.some(allowed => origin === allowed);
+  // Allow any *.vercel.app origin (Vercel preview deployments — auth still required after upgrade)
+  const isVercelPreview = typeof origin === 'string' && /^https:\/\/[a-z0-9-]+-[a-z0-9]+-[a-z0-9-]+\.vercel\.app$/.test(origin);
+
+  const isOriginAllowed = !origin || origin === 'unknown' || isVercelPreview ||
+    allowedOrigins.some(allowed => origin === allowed);
 
   if (!isOriginAllowed) {
     console.error('[WebSocket] Origin not allowed', { origin, allowedOrigins });
