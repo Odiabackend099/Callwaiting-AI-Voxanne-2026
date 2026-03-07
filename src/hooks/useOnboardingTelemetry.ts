@@ -5,12 +5,29 @@ import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { useOnboardingStore } from '@/lib/store/onboardingStore';
 
 export type OnboardingEventName =
+  // Legacy events (keep for existing data)
   | 'started'
   | 'clinic_named'
   | 'specialty_chosen'
   | 'payment_viewed'
   | 'payment_success'
-  | 'test_call_completed';
+  | 'test_call_completed'
+  // New wizard events (v2)
+  | 'direction_chosen'
+  | 'number_searched'
+  | 'number_selected'
+  | 'number_provisioned'
+  | 'telecom_routing_viewed'
+  | 'forwarding_code_copied'
+  | 'caller_id_verified'
+  | 'telecom_routing_skipped'
+  | 'agent_persona_selected'
+  | 'agent_voice_selected'
+  | 'agent_configured'
+  | 'agent_syncing'
+  | 'agent_sync_complete'
+  | 'onboarding_complete'
+  | 'test_call_initiated';
 
 export function useOnboardingTelemetry() {
   const sessionId = useOnboardingStore((s) => s.sessionId);

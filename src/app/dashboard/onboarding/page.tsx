@@ -6,11 +6,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useOnboardingStore } from '@/lib/store/onboardingStore';
 import { useOnboardingTelemetry } from '@/hooks/useOnboardingTelemetry';
 import OnboardingProgress from '@/components/onboarding/OnboardingProgress';
-import StepWelcome from '@/components/onboarding/StepWelcome';
-import StepSpecialty from '@/components/onboarding/StepSpecialty';
-import StepPaywall from '@/components/onboarding/StepPaywall';
-import StepCelebration from '@/components/onboarding/StepCelebration';
-import StepAhaMoment from '@/components/onboarding/StepAhaMoment';
+import StepNumberSelection from '@/components/onboarding/StepNumberSelection';
+import StepPayment from '@/components/onboarding/StepPayment';
+import StepTelecomRouting from '@/components/onboarding/StepTelecomRouting';
+import StepAgentPersonality from '@/components/onboarding/StepAgentPersonality';
+import StepSyncAndAha from '@/components/onboarding/StepSyncAndAha';
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -27,24 +27,22 @@ const slideVariants = {
   }),
 };
 
-// Fix 11: derive from array so it never drifts out of sync
 const STEP_COMPONENTS = [
-  StepWelcome,
-  StepSpecialty,
-  StepPaywall,
-  StepCelebration,
-  StepAhaMoment,
+  StepNumberSelection,   // Step 0: Direction + number search
+  StepPayment,           // Step 1: Stripe checkout + auto-provision
+  StepTelecomRouting,    // Step 2: Call forwarding or caller ID
+  StepAgentPersonality,  // Step 3: Persona + voice + prompt
+  StepSyncAndAha,        // Step 4: Sync agent to phone + success
 ];
 const TOTAL_STEPS = STEP_COMPONENTS.length;
 
 /**
- * Inner component uses useSearchParams — must be wrapped in <Suspense> (Fix 2).
+ * Inner component uses useSearchParams — must be wrapped in <Suspense>.
  */
 function OnboardingPageInner() {
   const searchParams = useSearchParams();
-  const { currentStep, direction, goToStep, setPaymentComplete } = useOnboardingStore();
+  const { currentStep, slideDirection, goToStep, setPaymentComplete } = useOnboardingStore();
   const { track } = useOnboardingTelemetry();
-  // Refs prevent React Strict Mode's double-invocation of effects from firing duplicate events
   const hasTrackedStart = useRef(false);
   const hasHandledReturn = useRef(false);
 
@@ -56,7 +54,7 @@ function OnboardingPageInner() {
     }
   }, [track]);
 
-  // Detect Stripe return (?topup=success)
+  // Detect Stripe return (?topup=success) — payment is now Step 1
   useEffect(() => {
     if (hasHandledReturn.current) return;
 
@@ -64,11 +62,11 @@ function OnboardingPageInner() {
     if (topup === 'success') {
       hasHandledReturn.current = true;
       setPaymentComplete(true);
-      track('payment_success', 2);
-      // Jump to celebration step (step 3)
-      goToStep(3);
+      track('payment_success', 1);
+      // Jump to payment step (Step 1) — it will auto-provision the number
+      goToStep(1);
 
-      // Clean up URL params without reload — Fix 7: use url.toString() to preserve other params
+      // Clean up URL params without reload
       const url = new URL(window.location.href);
       url.searchParams.delete('topup');
       window.history.replaceState({}, '', url.toString());
@@ -78,7 +76,6 @@ function OnboardingPageInner() {
   const StepComponent = STEP_COMPONENTS[currentStep];
 
   return (
-    // Fix 13: bg-clinical-bg design token instead of hardcoded #F0F9FF
     <div className="fixed inset-0 z-50 bg-clinical-bg flex flex-col">
       {/* Progress bar at top */}
       <div className="pt-8 px-4">
@@ -87,10 +84,10 @@ function OnboardingPageInner() {
 
       {/* Step content */}
       <div className="flex-1 flex items-center justify-center px-4 pb-12 overflow-hidden">
-        <AnimatePresence mode="wait" custom={direction}>
+        <AnimatePresence mode="wait" custom={slideDirection}>
           <motion.div
             key={currentStep}
-            custom={direction}
+            custom={slideDirection}
             variants={slideVariants}
             initial="enter"
             animate="center"
@@ -110,8 +107,7 @@ function OnboardingPageInner() {
 }
 
 /**
- * Fix 2: Suspense boundary required by Next.js 15 for useSearchParams() in App Router.
- * The inner component is suspended during SSR; the wrapper renders immediately.
+ * Suspense boundary required by Next.js 15 for useSearchParams() in App Router.
  */
 export default function OnboardingPage() {
   return (

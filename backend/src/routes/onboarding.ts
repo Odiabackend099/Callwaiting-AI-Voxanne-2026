@@ -30,14 +30,31 @@ router.use(async (req, res, next) => {
   }
 });
 
-// Valid onboarding event names
+// Valid onboarding event names (v1 legacy + v2 new wizard)
 const VALID_EVENTS = [
+  // Legacy (v1 wizard)
   'started',
   'clinic_named',
   'specialty_chosen',
   'payment_viewed',
   'payment_success',
   'test_call_completed',
+  // New wizard (v2)
+  'direction_chosen',
+  'number_searched',
+  'number_selected',
+  'number_provisioned',
+  'telecom_routing_viewed',
+  'forwarding_code_copied',
+  'caller_id_verified',
+  'telecom_routing_skipped',
+  'agent_persona_selected',
+  'agent_voice_selected',
+  'agent_configured',
+  'agent_syncing',
+  'agent_sync_complete',
+  'onboarding_complete',
+  'test_call_initiated',
 ] as const;
 
 type OnboardingEventName = typeof VALID_EVENTS[number];
@@ -230,7 +247,7 @@ router.post('/provision-number', async (req: Request, res: Response): Promise<vo
     }
 
     // Atomic billing: deduct phone cost before provisioning
-    const idempotencyKey = `onboarding-provision-${orgId}-${Date.now()}`;
+    const idempotencyKey = `onboarding-provision-${orgId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     const deductResult = await deductAssetCost(
       orgId,
@@ -301,7 +318,7 @@ router.post('/provision-number', async (req: Request, res: Response): Promise<vo
       try {
         await addCredits(
           orgId,
-          1000, // PHONE_NUMBER_COST_PENCE — can't reference const from outer scope after throw
+          PHONE_NUMBER_COST_PENCE,
           'refund',
           undefined,
           undefined,

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Phone, Loader2, AlertCircle, Check, Search } from 'lucide-react';
 import { authedBackendFetch } from '@/lib/authed-backend-fetch';
 import { PHONE_NUMBER_PRICING } from '@/lib/constants';
+import { COUNTRIES } from '@/lib/phone-countries';
 
 interface BuyNumberModalProps {
   onClose: () => void;
@@ -20,41 +21,6 @@ interface AvailableNumber {
   locality?: string;
   region?: string;
 }
-
-// Country configuration with area code formats and regulatory readiness
-// ONLY 3 COUNTRIES SUPPORTED - Backend validates these in managed-telephony.ts line 65
-// Regulatory Bundle required for GB/CA (Phase 3 - not yet implemented)
-const COUNTRIES = [
-  {
-    code: 'US',
-    name: 'United States',
-    flag: '🇺🇸',
-    areaCodeFormat: '3 digits (e.g., 415, 212)',
-    areaCodeLength: 3,
-    regulatoryReady: true, // Can purchase immediately
-    approvalDays: null,
-  },
-  {
-    code: 'GB',
-    name: 'United Kingdom',
-    flag: '🇬🇧',
-    areaCodeFormat: '3-5 digits (e.g., 020, 0161)',
-    areaCodeLength: 5,
-    regulatoryReady: true, // Twilio handles Ofcom compliance
-    approvalDays: null,
-  },
-  {
-    code: 'CA',
-    name: 'Canada',
-    flag: '🇨🇦',
-    areaCodeFormat: '3 digits (e.g., 416, 514)',
-    areaCodeLength: 3,
-    regulatoryReady: false, // Requires CRTC approval
-    approvalDays: '7-14 days',
-    complianceInfo: 'Requires Canadian Business Registry number and CRTC approval',
-  },
-  // Removed AU (Australia) - not in backend carrier_forwarding_rules table
-] as const;
 
 export function BuyNumberModal({ onClose, onSuccess, currentMode, defaultDirection = 'inbound' }: BuyNumberModalProps) {
   const [step, setStep] = useState<Step>('search');
@@ -614,7 +580,11 @@ export function BuyNumberModal({ onClose, onSuccess, currentMode, defaultDirecti
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-red-800 mb-1">Purchase Failed</p>
+                    <p className="text-sm font-medium text-red-800 mb-1">
+                      {errorDetails?.failedStep === 'search' ? 'Search Failed'
+                        : errorDetails?.failedStep === 'validation' ? 'Validation Error'
+                        : 'Purchase Failed'}
+                    </p>
                     <p className="text-sm text-red-700">{error}</p>
                     {errorDetails?.canRetry && (
                       <button

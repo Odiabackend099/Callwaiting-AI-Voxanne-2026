@@ -2,16 +2,26 @@
  * Managed Telephony API Routes
  *
  * Endpoints for managed (reseller) phone number provisioning via Twilio Subaccounts.
- * All endpoints gated behind the `managed_telephony` feature flag.
  *
- * Endpoints:
- * - POST   /api/managed-telephony/provision          - One-click number provisioning
+ * Onboarding-accessible (no feature flag):
+ * - GET  /api/managed-telephony/available-numbers   - Search available numbers (Step 0)
+ * - POST /api/managed-telephony/provision           - One-click number provisioning (Step 1)
+ * - GET  /api/managed-telephony/phone-status        - Pre-check existing number (BuyNumberModal)
+ *
+ * Feature-flag gated (managed_telephony):
  * - DELETE /api/managed-telephony/numbers/:phoneNumber - Release a managed number
  * - GET    /api/managed-telephony/status              - Current managed telephony state
  * - POST   /api/managed-telephony/switch-mode         - Switch org between byoc/managed
- * - GET    /api/managed-telephony/available-numbers    - Search available numbers
  * - POST   /api/managed-telephony/a2p/register-brand  - A2P brand registration
  * - POST   /api/managed-telephony/a2p/register-campaign - A2P campaign registration
+ *
+ * Security rationale for onboarding-accessible routes:
+ *   New orgs have no feature_flag entries — gating /provision and /available-numbers
+ *   behind requireFeature returns 403 for every new signup, breaking onboarding entirely.
+ *   These routes are protected by real billing and duplicate-prevention guards:
+ *     • deductAssetCost (wallet) — prevents free number provisioning
+ *     • PhoneValidationService.validateCanProvision — prevents duplicate numbers
+ *     • Master Twilio credential check — fast fail if not configured
  *
  * @ai-invariant These routes do NOT modify BYOC flows or existing credential tables.
  */
@@ -29,15 +39,60 @@ import { sendSlackAlert } from '../services/slack-alerts';
 const logger = createLogger('ManagedTelephonyRoutes');
 const router = Router();
 
-// All endpoints require authentication + managed_telephony feature flag
+// Authentication required for all routes
 router.use(requireAuthOrDev);
-router.use(requireFeature('managed_telephony'));
+
+// ── Onboarding-accessible (no feature flag) ────────────────────────────────────
+// /available-numbers, /provision, and /phone-status are called during onboarding
+// before the managed_telephony feature flag is set on the org.
+
+// ============================================
+// GET /available-numbers - Search available numbers
+// ============================================
+router.get('/available-numbers', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.user?.orgId;
+    if (!orgId) {
+      res.status(401).json({ error: 'Unauthorized: missing org_id' });
+      return;
+    }
+
+    const country = (req.query.country as string) || 'US';
+    const areaCode = req.query.areaCode as string | undefined;
+    const numberType = (req.query.numberType as string) || 'local';
+    const limit = Math.min(parseInt(req.query.limit as string) || 5, 20);
+
+    const numbers = await ManagedTelephonyService.searchAvailableNumbers({
+      orgId,
+      country,
+      areaCode,
+      numberType,
+      limit,
+    });
+
+    res.json({ numbers });
+  } catch (err: any) {
+    logger.error('Available-numbers endpoint error', { error: err.message, stack: err.stack });
+
+    // Surface a meaningful message so the frontend (and logs) reveal the real cause
+    const isTwilioAuth = /authentication|credentials|unauthorized/i.test(err.message);
+    const userMessage = isTwilioAuth
+      ? 'Phone number search is temporarily unavailable. Please try again later or contact support.'
+      : err.message || 'Operation failed. Please try again.';
+
+    res.status(500).json({ error: userMessage });
+  }
+});
 
 // ============================================
 // POST /provision - One-click phone number provisioning
 // ============================================
 router.post('/provision', async (req: Request, res: Response): Promise<void> => {
   const orgId = req.user?.orgId;
+
+  // Declare outside try so the catch block can access them for the refund guard
+  const PHONE_NUMBER_COST_PENCE = 1000; // £10.00
+  let walletDebited = false;
 
   try {
     if (!orgId) {
@@ -105,11 +160,10 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
     logger.info('Validation passed - proceeding with provisioning', { orgId });
 
     // ===== PHASE 1: ATOMIC BILLING GATE - PREVENT FREE PHONE NUMBER PROVISIONING =====
-    // Phone numbers cost $10.00 (1000 pence). This gate enforces prepaid billing.
-    // CRITICAL FIX (2026-02-14): Uses atomic check_balance_and_deduct_asset_cost() RPC
-    // to eliminate TOCTOU race condition. A single FOR UPDATE lock prevents concurrent
-    // requests from both passing the balance check before either deducts.
-    const PHONE_NUMBER_COST_PENCE = 1000; // £10.00 = 1000 pence
+    // Phone numbers cost £10.00 (1000 pence). This gate enforces prepaid billing.
+    // Uses atomic check_balance_and_deduct_asset_cost() RPC to eliminate TOCTOU race
+    // condition. A single FOR UPDATE lock prevents concurrent requests from both
+    // passing the balance check before either deducts.
 
     // Generate idempotency key to prevent duplicate charges on retries
     const idempotencyKey = `provision-${orgId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -153,6 +207,9 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       });
       return;
     }
+
+    // Wallet is now debited — any subsequent throw must be caught and refunded
+    walletDebited = true;
 
     logger.info('Payment processed atomically (TOCTOU-safe)', {
       orgId,
@@ -221,14 +278,14 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
           refundError: refundResult.error,
           originalError: result.error,
         });
-        // Alert ops — customer was charged $10 but provisioning failed AND refund failed.
+        // Alert ops — customer was charged £10 but provisioning failed AND refund failed.
         // Manual credit required. Fire-and-forget: alert must not block the error response.
         sendSlackAlert('🚨 CRITICAL: Phone provisioning refund failed', {
           orgId,
           amountPence: PHONE_NUMBER_COST_PENCE,
           provisioningError: result.error,
           refundError: refundResult.error,
-          action: 'Manual credit of $10.00 required for this org',
+          action: 'Manual credit of £10.00 required for this org',
         }).catch((alertErr: any) => {
           logger.error('Slack alert failed for refund failure', { orgId, error: alertErr.message });
         });
@@ -273,6 +330,36 @@ router.post('/provision', async (req: Request, res: Response): Promise<void> => 
       name: err.name,
       code: err.code
     });
+
+    // If the wallet was already debited before the throw (e.g. Supabase BYOC-check query
+    // threw, or Twilio network timeout after deduction), refund immediately so the user
+    // is not left charged for a number they didn't receive.
+    if (walletDebited) {
+      try {
+        await addCredits(
+          orgId!,
+          PHONE_NUMBER_COST_PENCE,
+          'refund',
+          undefined,
+          undefined,
+          'Refund: provision threw unexpectedly after wallet deduction',
+          'system'
+        );
+        logger.info('Wallet refunded after unhandled provision error', { orgId });
+      } catch (refundErr: any) {
+        logger.error('CRITICAL: refund failed after unhandled provision error', {
+          orgId,
+          refundError: refundErr.message,
+        });
+        sendSlackAlert('🚨 CRITICAL: provision catch-block refund failed', {
+          orgId,
+          amountPence: PHONE_NUMBER_COST_PENCE,
+          originalError: err.message,
+          action: 'Manual credit of £10.00 required for this org',
+        }).catch(() => {});
+      }
+    }
+
     res.status(500).json({
       error: 'An unexpected error occurred. Please try again or contact support.',
       canRetry: true,
@@ -306,6 +393,11 @@ router.get('/phone-status', async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ── Post-onboarding management (feature-flag gated) ───────────────────────────
+// Routes below require the managed_telephony feature flag. This gates post-onboarding
+// number management to orgs explicitly enabled for the feature.
+router.use(requireFeature('managed_telephony'));
 
 // ============================================
 // DELETE /numbers/:phoneNumber - Release a managed number
@@ -415,37 +507,6 @@ router.post('/switch-mode', async (req: Request, res: Response): Promise<void> =
   } catch (err: any) {
     logger.error('Switch-mode endpoint error', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================
-// GET /available-numbers - Search available numbers
-// ============================================
-router.get('/available-numbers', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const orgId = req.user?.orgId;
-    if (!orgId) {
-      res.status(401).json({ error: 'Unauthorized: missing org_id' });
-      return;
-    }
-
-    const country = (req.query.country as string) || 'US';
-    const areaCode = req.query.areaCode as string | undefined;
-    const numberType = (req.query.numberType as string) || 'local';
-    const limit = Math.min(parseInt(req.query.limit as string) || 5, 20);
-
-    const numbers = await ManagedTelephonyService.searchAvailableNumbers({
-      orgId,
-      country,
-      areaCode,
-      numberType,
-      limit,
-    });
-
-    res.json({ numbers });
-  } catch (err: any) {
-    logger.error('Available-numbers endpoint error', { error: err.message });
-    res.status(500).json({ error: 'Operation failed. Please try again.' });
   }
 });
 

@@ -85,7 +85,7 @@ const withPWA = withPWAInit({
         },
         // API calls (NetworkFirst - prefer fresh data, fallback to cache)
         {
-            urlPattern: /^https:\/\/api\.voxanne\.ai\/api\/.*/i,
+            urlPattern: /^https:\/\/voxanneai\.onrender\.com\/api\/.*/i,
             handler: 'NetworkFirst',
             options: {
                 cacheName: 'api-cache',
@@ -214,7 +214,7 @@ const nextConfig = {
                     },
                     {
                         key: 'Content-Security-Policy',
-                        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.vapi.ai https://*.sentry.io https://voxanneai.onrender.com; frame-ancestors 'none';",
+                        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.vapi.ai https://*.sentry.io https://voxanneai.onrender.com wss://voxanneai.onrender.com; frame-ancestors 'none';",
                     },
                 ],
             },
